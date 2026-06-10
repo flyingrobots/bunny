@@ -1,0 +1,57 @@
+"""
+Bunny graphics contract schema.
+
+This schema belongs to Bunny. Downstream projects may generate their own
+language bindings from it, but Echo and Geordi must not become the owners of
+these primitive graphics contracts.
+"""
+schema {
+  query: BunnySchemaQuery
+}
+
+directive @bunnyInvariant(description: String!) on OBJECT | FIELD_DEFINITION | INPUT_OBJECT | SCALAR
+
+type BunnySchemaQuery {
+  version: String!
+}
+
+"""
+Finite deterministic scalar selected by the active Bunny numeric profile.
+"""
+scalar BunnyScalar @bunnyInvariant(description: "Bunny scalar values must be finite under the active numeric profile.")
+
+type BunnyVec2 {
+  x: BunnyScalar!
+  y: BunnyScalar!
+}
+
+type BunnyVec3 {
+  x: BunnyScalar!
+  y: BunnyScalar!
+  z: BunnyScalar!
+}
+
+type BunnyRay3 {
+  origin: BunnyVec3!
+  direction: BunnyVec3!
+}
+
+type BunnyAabb3 {
+  min: BunnyVec3!
+  max: BunnyVec3!
+}
+
+type BunnySphere3 {
+  center: BunnyVec3!
+  radius: BunnyScalar!
+}
+
+type BunnyContactPoint3 {
+  point: BunnyVec3!
+  normal: BunnyVec3!
+  depth: BunnyScalar
+}
+
+type BunnyContactPatch3 {
+  points: [BunnyContactPoint3!]!
+}

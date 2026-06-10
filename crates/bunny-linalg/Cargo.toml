@@ -1,0 +1,15 @@
+[package]
+name = "bunny-linalg"
+description = "Linear algebra primitives for Bunny graphics contracts."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+bunny-num = { path = "../bunny-num" }
+
+[lib]
+path = "src/lib.rs"
