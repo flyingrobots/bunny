@@ -80,9 +80,11 @@ The current generator emits:
 - TypeScript DTOs for downstream consumers
 - a manifest with the schema SHA-256 hash and output paths
 
-The current generator is a Bunny-owned bootstrap. A future slice should replace
-its local parser/emitter internals with the published Wesley crates where those
-crates provide the needed IR and emitter hooks.
+The generator extends published Wesley lowering:
+
+- `wesley-core` lowers Bunny SDL into Wesley IR.
+- Bunny maps Wesley IR into graphics-specific Rust and TypeScript DTOs.
+- Bunny records the Wesley core version in generated witnesses.
 
 ## Numeric Profiles
 

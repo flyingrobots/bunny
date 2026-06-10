@@ -2,15 +2,48 @@
 // source: schemas/bunny/v0/graphics.graphql
 
 pub const BUNNY_GRAPHICS_SCHEMA_SHA256: &str =
-    "d52688b77a01d1d4823d3f90444d7228b6e357918768ef6fc9ee1957a594e8c2";
+    "51ba0f00ac6a46e848cd9b91a5730ebfa95313be0f81f75ad7cf5f4214d619bf";
 
-pub type BunnyScalar = f32;
+pub const BUNNY_WESLEY_GENERATOR: &str = "bunny-wesley/0.1.0";
+pub const BUNNY_WESLEY_CORE_VERSION: &str = "0.0.5";
+
 #[allow(non_camel_case_types)]
 pub type BunnyFixedQ32_32Raw = i64;
+pub type BunnyScalar = f32;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BunnyAabb3 {
+    pub min: BunnyVec3,
+    pub max: BunnyVec3,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BunnyContactPatch3 {
+    pub points: Vec<BunnyContactPoint3>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BunnyContactPoint3 {
+    pub point: BunnyVec3,
+    pub normal: BunnyVec3,
+    pub depth: Option<BunnyScalar>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BunnyRay3 {
+    pub origin: BunnyVec3,
+    pub direction: BunnyVec3,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BunnySchemaQuery {
     pub version: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BunnySphere3 {
+    pub center: BunnyVec3,
+    pub radius: BunnyScalar,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,34 +57,4 @@ pub struct BunnyVec3 {
     pub x: BunnyScalar,
     pub y: BunnyScalar,
     pub z: BunnyScalar,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BunnyRay3 {
-    pub origin: BunnyVec3,
-    pub direction: BunnyVec3,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BunnyAabb3 {
-    pub min: BunnyVec3,
-    pub max: BunnyVec3,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BunnySphere3 {
-    pub center: BunnyVec3,
-    pub radius: BunnyScalar,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BunnyContactPoint3 {
-    pub point: BunnyVec3,
-    pub normal: BunnyVec3,
-    pub depth: Option<BunnyScalar>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BunnyContactPatch3 {
-    pub points: Vec<BunnyContactPoint3>,
 }

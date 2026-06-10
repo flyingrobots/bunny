@@ -61,18 +61,17 @@ maps it to `bigint`.
 
 ## Wesley Status
 
-The current `bunny-wesley` crate is a bootstrap generator, not the final Wesley
-extension.
+The current `bunny-wesley` crate is a Bunny-specific Wesley extension:
 
-Bunny should migrate that generator toward published Wesley crates when the
-required parser, IR, and emitter hooks are available:
+- `wesley-core` lowers Bunny SDL and computes the registry hash.
+- Bunny maps the resulting Wesley IR into graphics-specific Rust and
+  TypeScript DTOs.
+- Generated witnesses record both the Bunny generator id and Wesley core
+  version.
 
-- `wesley-core`
-- `wesley-emit-rust`
-- `wesley-emit-typescript`
-
-Until then, Bunny still owns the SDL, generated witnesses, and schema hash
-manifest.
+Bunny may later move more emitter logic to published Wesley emitter crates when
+those emitters expose the required DTO hooks. Bunny still owns the SDL,
+generated witnesses, and graphics-specific scalar mapping.
 
 ## Validation
 
