@@ -5,9 +5,6 @@ This schema belongs to Bunny. Downstream projects may generate their own
 language bindings from it, but Echo and Geordi must not become the owners of
 these primitive graphics contracts.
 """
-schema {
-  query: BunnySchemaQuery
-}
 
 directive @bunnyInvariant(description: String!) on OBJECT | FIELD_DEFINITION | INPUT_OBJECT | SCALAR
 

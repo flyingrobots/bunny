@@ -55,11 +55,30 @@ crates/
 
   bunny-contract
     schema and canonical contract helpers
+
+  bunny-wesley
+    Bunny-owned schema parser and DTO generator
 ```
 
 Planned crates include `bunny-query`, `bunny-broadphase`, `bunny-mesh`,
-`bunny-optics`, `bunny-codec`, `bunny-fixtures`, `bunny-wesley`,
-`bunny-echo`, and `bunny-geordi`.
+`bunny-optics`, `bunny-codec`, `bunny-fixtures`, `bunny-echo`, and
+`bunny-geordi`.
+
+## Contract Generation
+
+Bunny owns its shared graphics schemas under `schemas/bunny`.
+
+Regenerate checked-in DTO witnesses with:
+
+```bash
+bash scripts/generate-contracts.sh
+```
+
+The current generator emits:
+
+- Rust DTOs for `bunny-contract`
+- TypeScript DTOs for downstream consumers
+- a manifest with the schema SHA-256 hash and output paths
 
 ## Invariants
 

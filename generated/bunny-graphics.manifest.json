@@ -1,0 +1,9 @@
+{
+  "generator": "bunny-wesley/0",
+  "schema": "schemas/bunny/v0/graphics.graphql",
+  "schemaSha256": "1a0646fd279f0d50668b63109f3285a3a281f5615b6da6dfe3541470f88c9c92",
+  "outputs": [
+    "crates/bunny-contract/src/generated/graphics.rs",
+    "generated/typescript/bunny-graphics.ts"
+  ]
+}
