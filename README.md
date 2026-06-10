@@ -45,7 +45,7 @@ Bunny directly only for justified hot paths.
 ```text
 crates/
   bunny-num
-    deterministic scalar profiles and finite-number policy
+    deterministic scalar profiles, finite-number policy, Q32.32 helpers
 
   bunny-linalg
     vectors, matrices, quaternions, transforms
@@ -79,6 +79,19 @@ The current generator emits:
 - Rust DTOs for `bunny-contract`
 - TypeScript DTOs for downstream consumers
 - a manifest with the schema SHA-256 hash and output paths
+
+The current generator is a Bunny-owned bootstrap. A future slice should replace
+its local parser/emitter internals with the published Wesley crates where those
+crates provide the needed IR and emitter hooks.
+
+## Numeric Profiles
+
+Bunny currently defines:
+
+- `BunnyScalar`: finite `f32` graphics scalar profile.
+- `BunnyFixedQ32_32Raw`: signed Q32.32 fixed-point raw `i64` profile.
+
+Q32.32 conversion helpers live in `bunny-num::fixed_q32_32`.
 
 ## Invariants
 

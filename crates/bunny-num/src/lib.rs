@@ -1,5 +1,7 @@
 //! Deterministic numeric profiles for Bunny graphics primitives.
 
+pub mod fixed_q32_32;
+
 /// Bunny's first scalar representation.
 ///
 /// This is intentionally tiny while the deterministic profile is still being

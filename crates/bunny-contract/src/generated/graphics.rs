@@ -2,9 +2,11 @@
 // source: schemas/bunny/v0/graphics.graphql
 
 pub const BUNNY_GRAPHICS_SCHEMA_SHA256: &str =
-    "1a0646fd279f0d50668b63109f3285a3a281f5615b6da6dfe3541470f88c9c92";
+    "d52688b77a01d1d4823d3f90444d7228b6e357918768ef6fc9ee1957a594e8c2";
 
 pub type BunnyScalar = f32;
+#[allow(non_camel_case_types)]
+pub type BunnyFixedQ32_32Raw = i64;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BunnySchemaQuery {
