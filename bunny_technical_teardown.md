@@ -296,30 +296,31 @@ Because fixed-point numbers have uniform spacing between representable values (e
 
 ```mermaid
 flowchart TD
-    A[Input: f32] --> B{Is NaN?}
+    A["Input: f32"] --> B{Is NaN?}
     B -- Yes --> C[Return 0]
     B -- No --> D{Is Infinite?}
     D -- Yes --> E{Is Positive?}
-    E -- Yes --> F[Return i64::MAX]
-    E -- No --> G[Return i64::MIN]
+    E -- Yes --> F["Return i64::MAX"]
+    E -- No --> G["Return i64::MIN"]
     D -- No --> H[Unpack IEEE 754 Bits]
-    H --> I[Extract Sign, Exponent, Mantissa]
-    I --> J{Exponent == 0?}
-    J -- Yes --> K[Subnormal: Mantissa = mant, exp = -126]
-    J -- No --> L[Normal: Mantissa = 1 << 23 | mant, exp = exp_u8 - 127]
-    K --> M[Calculate Shift = exp + 9]
+    H --> I["Extract Sign, Exponent, Mantissa"]
+    I --> J{"Exponent == 0?"}
+    J -- Yes --> K["Subnormal: Mantissa = mant, exp = -126
+    ]
+    J -- No --> L["Normal: Mantissa = 1 << 23 BITOR mant, exp = exp_u8 - 127"]
+    K --> M["Calculate Shift = exp + 9"]
     L --> M
-    M --> N{Shift >= 0?}
-    N -- Yes --> O{Shift > 103?}
-    O -- Yes --> P[Saturate to i128::MAX]
-    O -- No --> Q[abs_raw = mantissa << shift]
-    N -- No --> R[abs_raw = round_shift_right_u64]
-    R --> S[Apply Ties-to-Even rounding]
+    M --> N{"Shift >= 0?"}
+    N -- Yes --> O{"Shift > 103?"}
+    O -- Yes --> P["Saturate to i128::MAX"]
+    O -- No --> Q["abs_raw = mantissa << shift"]
+    N -- No --> R["abs_raw = round_shift_right_u64"]
+    R --> S["Apply Ties-to-Even rounding"]
     Q --> T[Apply Sign]
     P --> T
     S --> T
-    T --> U[Saturate i128 to i64]
-    U --> V[Return i64]
+    T --> U["Saturate i128 to i64"]
+    U --> V["Return i64"]
 ```
 
 #### Shift and Ties-to-Even Rounding (`round_shift_right_u64`)
