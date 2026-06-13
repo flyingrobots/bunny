@@ -136,6 +136,25 @@ fn test_float_shape_conversions_reject_invalid_bounds() {
     let converted_aabb: Result<FixedAabb3, GeomError> = FixedAabb3::try_from(invalid_aabb);
     assert_eq!(converted_aabb, Err(GeomError::InvalidAabbBounds));
 
+    let sub_lsb_invalid_aabb = Aabb3 {
+        min: Vec3::new(1e-12, 0.0, 0.0),
+        max: Vec3::new(0.0, 0.0, 0.0),
+    };
+    let converted_sub_lsb_aabb: Result<FixedAabb3, GeomError> =
+        FixedAabb3::try_from(sub_lsb_invalid_aabb);
+    assert_eq!(converted_sub_lsb_aabb, Err(GeomError::InvalidAabbBounds));
+
+    let non_finite_aabb = Aabb3 {
+        min: Vec3::new(f32::NAN, 0.0, 0.0),
+        max: Vec3::new(0.0, 0.0, 0.0),
+    };
+    let converted_non_finite_aabb: Result<FixedAabb3, GeomError> =
+        FixedAabb3::try_from(non_finite_aabb);
+    assert_eq!(
+        converted_non_finite_aabb,
+        Err(GeomError::NonFiniteCoordinate)
+    );
+
     let invalid_sphere = Sphere3 {
         center: Vec3::new(0.0, 0.0, 0.0),
         radius: -1.0,

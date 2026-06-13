@@ -7,17 +7,23 @@
 //! Geometry primitives for Bunny graphics contracts.
 
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
-use bunny_num::{FixedQ32_32, Scalar};
+use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeomError {
     /// AABB min boundary exceeds max boundary.
     InvalidAabbBounds,
+    /// A coordinate is not finite.
+    NonFiniteCoordinate,
     /// Sphere radius is negative.
     NegativeSphereRadius,
     /// Ray direction normalization failed (zero length or overflow).
     InvalidRayDirection,
+}
+
+const fn vec3_is_finite(v: Vec3) -> bool {
+    is_finite(v.x) && is_finite(v.y) && is_finite(v.z)
 }
 
 /// A 3D ray with finite origin and direction components.
@@ -153,6 +159,12 @@ impl TryFrom<Aabb3> for FixedAabb3 {
     type Error = GeomError;
 
     fn try_from(a: Aabb3) -> Result<Self, Self::Error> {
+        if !vec3_is_finite(a.min) || !vec3_is_finite(a.max) {
+            return Err(GeomError::NonFiniteCoordinate);
+        }
+        if a.min.x > a.max.x || a.min.y > a.max.y || a.min.z > a.max.z {
+            return Err(GeomError::InvalidAabbBounds);
+        }
         Self::try_new(FixedVec3::from(a.min), FixedVec3::from(a.max))
     }
 }
