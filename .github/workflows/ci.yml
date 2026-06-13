@@ -47,7 +47,7 @@ jobs:
 
       - name: Verify WebAssembly Portability
         run: |
-          cargo check -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract -p bunny-query -p bunny-broadphase --target wasm32-unknown-unknown
+          cargo check -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh --target wasm32-unknown-unknown
 
   wasm-test:
     name: WebAssembly Headless Tests
@@ -77,3 +77,4 @@ jobs:
           wasm-pack test --node crates/bunny-geom
           wasm-pack test --node crates/bunny-query
           wasm-pack test --node crates/bunny-broadphase
+          wasm-pack test --node crates/bunny-mesh

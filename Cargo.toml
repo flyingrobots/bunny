@@ -1,12 +1,13 @@
 [workspace]
 members = [
+  "crates/bunny-broadphase",
   "crates/bunny-contract",
   "crates/bunny-geom",
   "crates/bunny-linalg",
+  "crates/bunny-mesh",
   "crates/bunny-num",
   "crates/bunny-query",
   "crates/bunny-wesley",
-  "crates/bunny-broadphase",
   "xtask",
 ]
 resolver = "2"

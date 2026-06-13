@@ -1,0 +1,20 @@
+[package]
+name = "bunny-mesh"
+description = "Quantized mesh layouts and verification hashes for Stanford Bunny."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+bunny-geom = { path = "../bunny-geom" }
+bunny-linalg = { path = "../bunny-linalg" }
+bunny-num = { path = "../bunny-num" }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[lib]
+path = "src/lib.rs"
