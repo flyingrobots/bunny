@@ -140,3 +140,93 @@ fn test_tiny_vector_length() {
     assert_eq!(norm_v3.y, FixedQ32_32::ONE);
     assert_eq!(norm_v3.z, FixedQ32_32::ZERO);
 }
+
+#[test]
+fn test_vector_saturation_and_boundaries() {
+    let max_val = FixedQ32_32::from_raw(i64::MAX);
+    let min_val = FixedQ32_32::from_raw(i64::MIN);
+    let one = FixedQ32_32::ONE;
+    let two = FixedQ32_32::from_f32(2.0);
+    let neg_two = FixedQ32_32::from_f32(-2.0);
+
+    let v2_max = FixedVec2::new(max_val, max_val);
+    let v2_min = FixedVec2::new(min_val, min_val);
+
+    // Addition saturation
+    let v2_add_overflow = v2_max + FixedVec2::new(one, one);
+    assert_eq!(v2_add_overflow.x, max_val);
+    assert_eq!(v2_add_overflow.y, max_val);
+
+    let v2_add_underflow = v2_min + FixedVec2::new(-one, -one);
+    assert_eq!(v2_add_underflow.x, min_val);
+    assert_eq!(v2_add_underflow.y, min_val);
+
+    // Subtraction saturation
+    let v2_sub_overflow = v2_max - FixedVec2::new(-one, -one);
+    assert_eq!(v2_sub_overflow.x, max_val);
+    assert_eq!(v2_sub_overflow.y, max_val);
+
+    let v2_sub_underflow = v2_min - FixedVec2::new(one, one);
+    assert_eq!(v2_sub_underflow.x, min_val);
+    assert_eq!(v2_sub_underflow.y, min_val);
+
+    // Multiplication saturation
+    let v2_mul_overflow = v2_max * two;
+    assert_eq!(v2_mul_overflow.x, max_val);
+    assert_eq!(v2_mul_overflow.y, max_val);
+
+    let v2_mul_underflow = v2_max * neg_two;
+    assert_eq!(v2_mul_underflow.x, min_val);
+    assert_eq!(v2_mul_underflow.y, min_val);
+
+    // Division saturation (div by zero & overflow)
+    let v2_div_zero = v2_max / FixedQ32_32::ZERO;
+    assert_eq!(v2_div_zero.x, max_val);
+    assert_eq!(v2_div_zero.y, max_val);
+
+    let v2_div_overflow = v2_max / FixedQ32_32::from_raw(1);
+    assert_eq!(v2_div_overflow.x, max_val);
+    assert_eq!(v2_div_overflow.y, max_val);
+
+    // Dot product saturation
+    let dot_overflow = v2_max.dot(v2_max);
+    assert_eq!(dot_overflow, max_val);
+
+    // Length saturation
+    let len_sq_overflow = v2_max.length_squared();
+    assert_eq!(len_sq_overflow, max_val);
+
+    let len_overflow = v2_max.length().expect("length should compute");
+    assert_eq!(len_overflow, max_val);
+
+    // FixedVec3 saturation tests
+    let v3_max = FixedVec3::new(max_val, max_val, max_val);
+    let v3_min = FixedVec3::new(min_val, min_val, min_val);
+
+    let v3_add_overflow = v3_max + FixedVec3::new(one, one, one);
+    assert_eq!(v3_add_overflow.x, max_val);
+    assert_eq!(v3_add_overflow.y, max_val);
+    assert_eq!(v3_add_overflow.z, max_val);
+
+    let v3_add_underflow = v3_min + FixedVec3::new(-one, -one, -one);
+    assert_eq!(v3_add_underflow.x, min_val);
+    assert_eq!(v3_add_underflow.y, min_val);
+    assert_eq!(v3_add_underflow.z, min_val);
+
+    let v3_mul_overflow = v3_max * two;
+    assert_eq!(v3_mul_overflow.x, max_val);
+
+    let v3_div_zero = v3_max / FixedQ32_32::ZERO;
+    assert_eq!(v3_div_zero.x, max_val);
+
+    let v3_dot_overflow = v3_max.dot(v3_max);
+    assert_eq!(v3_dot_overflow, max_val);
+
+    // Cross product saturation
+    let v3_cross_overflow = v3_max.cross(FixedVec3::new(
+        max_val * two,
+        max_val * neg_two,
+        max_val * two,
+    ));
+    assert_eq!(v3_cross_overflow.x, max_val);
+}
