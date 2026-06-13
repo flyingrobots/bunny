@@ -18,6 +18,8 @@ pub enum GeomError {
     NonFiniteCoordinate,
     /// Sphere radius is negative.
     NegativeSphereRadius,
+    /// Sphere radius is not finite.
+    NonFiniteRadius,
     /// Ray direction normalization failed (zero length or overflow).
     InvalidRayDirection,
 }
@@ -182,6 +184,15 @@ impl TryFrom<Sphere3> for FixedSphere3 {
     type Error = GeomError;
 
     fn try_from(s: Sphere3) -> Result<Self, Self::Error> {
+        if !vec3_is_finite(s.center) {
+            return Err(GeomError::NonFiniteCoordinate);
+        }
+        if !is_finite(s.radius) {
+            return Err(GeomError::NonFiniteRadius);
+        }
+        if s.radius < 0.0 {
+            return Err(GeomError::NegativeSphereRadius);
+        }
         Self::try_new(FixedVec3::from(s.center), FixedQ32_32::from_f32(s.radius))
     }
 }

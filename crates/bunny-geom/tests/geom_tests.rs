@@ -161,4 +161,34 @@ fn test_float_shape_conversions_reject_invalid_bounds() {
     };
     let converted_sphere: Result<FixedSphere3, GeomError> = FixedSphere3::try_from(invalid_sphere);
     assert_eq!(converted_sphere, Err(GeomError::NegativeSphereRadius));
+
+    let sub_lsb_invalid_sphere = Sphere3 {
+        center: Vec3::new(0.0, 0.0, 0.0),
+        radius: -1e-12,
+    };
+    let converted_sub_lsb_sphere: Result<FixedSphere3, GeomError> =
+        FixedSphere3::try_from(sub_lsb_invalid_sphere);
+    assert_eq!(
+        converted_sub_lsb_sphere,
+        Err(GeomError::NegativeSphereRadius)
+    );
+
+    let non_finite_sphere = Sphere3 {
+        center: Vec3::new(0.0, 0.0, 0.0),
+        radius: f32::INFINITY,
+    };
+    let converted_non_finite_sphere: Result<FixedSphere3, GeomError> =
+        FixedSphere3::try_from(non_finite_sphere);
+    assert_eq!(converted_non_finite_sphere, Err(GeomError::NonFiniteRadius));
+
+    let non_finite_center_sphere = Sphere3 {
+        center: Vec3::new(f32::INFINITY, 0.0, 0.0),
+        radius: 1.0,
+    };
+    let converted_non_finite_center_sphere: Result<FixedSphere3, GeomError> =
+        FixedSphere3::try_from(non_finite_center_sphere);
+    assert_eq!(
+        converted_non_finite_center_sphere,
+        Err(GeomError::NonFiniteCoordinate)
+    );
 }
