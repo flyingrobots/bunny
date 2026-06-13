@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "54c0678e78065d8e",
+    "type": "split",
+    "children": [
+      {
+        "id": "d8cc9e4d9d5e80c7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ec23bcb850ba7c88",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "README.md",
+                "mode": "preview",
+                "source": true
+              },
+              "icon": "lucide-file",
+              "title": "README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fcecebaf09c86230",
+    "type": "split",
+    "children": [
+      {
+        "id": "fd9b3060cac2ece8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5cc520179813a52f",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "993890c6b96d589e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "8e1902ebe05212ed",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "f654d9b45d25bd84",
+    "type": "split",
+    "children": [
+      {
+        "id": "4113b4a911434eb8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "66320ba2d5f50b1b",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "bunny_technical_teardown.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for bunny_technical_teardown"
+            }
+          },
+          {
+            "id": "a342be53dc6331ef",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "bunny_technical_teardown.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from bunny_technical_teardown"
+            }
+          },
+          {
+            "id": "7d6b7cd7328e5e97",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "c5843a4cde339d18",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "98c05e57e7239066",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "bunny_technical_teardown.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of bunny_technical_teardown"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "ec23bcb850ba7c88",
+  "lastOpenFiles": [
+    "scripts/create_issues.sh",
+    "docs/goalposts/v0.4.0-gp2.md",
+    "docs/goalposts/v0.4.0-gp1.md",
+    "docs/goalposts/v0.3.0-gp2.md",
+    "docs/goalposts/v0.3.0-gp1.md",
+    "docs/goalposts/v0.2.0-gp3.md",
+    "docs/goalposts/v0.2.0-gp2.md",
+    "docs/goalposts/v0.2.0-gp1.md",
+    "docs/goalposts/v0.1.1-gp1.md",
+    "docs/goalposts/v0.1.0-gp3.md",
+    "docs/goalposts/v0.1.0-gp2.md",
+    "docs/goalposts/v0.1.0-gp1.md",
+    "docs/goalposts",
+    "docs/VISION.md",
+    "docs/TESTING.md",
+    "docs/PROCESS.md",
+    "docs/BEARING.md",
+    "crates/bunny-wesley/README.md",
+    "crates/bunny-num/README.md",
+    "crates/bunny-linalg/README.md",
+    "crates/bunny-geom/README.md",
+    "crates/bunny-contract/README.md",
+    "ROADMAP.md",
+    "CHANGELOG.md",
+    "target/debug/incremental/bunny_contract-03sc53lc9gys3/s-hjfc8tipo7-1lneyq2-28200co7c4b3fl31sug6jz3dq/work-products.bin",
+    "target/debug/incremental/bunny_contract-03sc53lc9gys3/s-hjfc8tipo7-1lneyq2-28200co7c4b3fl31sug6jz3dq/query-cache.bin",
+    "target/debug/incremental/bunny_contract-03sc53lc9gys3/s-hjfc8tipo7-1lneyq2-28200co7c4b3fl31sug6jz3dq/metadata.rmeta",
+    "target/debug/incremental/bunny_contract-03sc53lc9gys3/s-hjfc8tipo7-1lneyq2-28200co7c4b3fl31sug6jz3dq/dep-graph.bin",
+    "target/debug/incremental/bunny_contract-03sc53lc9gys3/s-hjfc8tipo7-1lneyq2-28200co7c4b3fl31sug6jz3dq/akgm34vj67hvgbuh5i1t7e8cn.o",
+    "target/debug/incremental/bunny_contract-03sc53lc9gys3/s-hjfc8tipo7-1lneyq2-28200co7c4b3fl31sug6jz3dq",
+    "target/debug/incremental/bunny_contract-3axrpuutbrx8w/s-hjfc8tipo7-1mm342w-cvkkuco3kw4m7ihv5zjl00g8x/work-products.bin",
+    "target/debug/incremental/bunny_contract-3axrpuutbrx8w/s-hjfc8tipo7-1mm342w-cvkkuco3kw4m7ihv5zjl00g8x/query-cache.bin",
+    "target/debug/incremental/bunny_contract-3axrpuutbrx8w/s-hjfc8tipo7-1mm342w-cvkkuco3kw4m7ihv5zjl00g8x/dep-graph.bin",
+    "docs/design/0003-bunny-q32-32-numeric-profile.md",
+    "docs/design/0002-bunny-wesley-generation.md",
+    "bunny_technical_teardown.md"
+  ]
+}
