@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -26,7 +27,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     let config = parse_args(env::args().skip(1))?;
     let schema_source = fs::read_to_string(&config.schema)?;
     let schema_ir = wesley_core::lower_schema_sdl(&schema_source)?;
-    let schema_hash = wesley_core::compute_registry_hash(&schema_ir)?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(schema_source.as_bytes());
+    let schema_hash = format!("{:x}", hasher.finalize());
 
     write_file(
         &config.rust,
