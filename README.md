@@ -45,7 +45,7 @@ Bunny directly only for justified hot paths.
 ```text
 crates/
   bunny-num
-    deterministic scalar profiles and finite-number policy
+    deterministic scalar profiles, finite-number policy, Q32.32 helpers
 
   bunny-linalg
     vectors, matrices, quaternions, transforms
@@ -55,11 +55,45 @@ crates/
 
   bunny-contract
     schema and canonical contract helpers
+
+  bunny-wesley
+    Bunny-owned schema parser and DTO generator
 ```
 
 Planned crates include `bunny-query`, `bunny-broadphase`, `bunny-mesh`,
-`bunny-optics`, `bunny-codec`, `bunny-fixtures`, `bunny-wesley`,
-`bunny-echo`, and `bunny-geordi`.
+`bunny-optics`, `bunny-codec`, `bunny-fixtures`, `bunny-echo`, and
+`bunny-geordi`.
+
+## Contract Generation
+
+Bunny owns its shared graphics schemas under `schemas/bunny`.
+
+Regenerate checked-in DTO witnesses with:
+
+```bash
+bash scripts/generate-contracts.sh
+```
+
+The current generator emits:
+
+- Rust DTOs for `bunny-contract`
+- TypeScript DTOs for downstream consumers
+- a manifest with the schema SHA-256 hash and output paths
+
+The generator extends published Wesley lowering:
+
+- `wesley-core` lowers Bunny SDL into Wesley IR.
+- Bunny maps Wesley IR into graphics-specific Rust and TypeScript DTOs.
+- Bunny records the Wesley core version in generated witnesses.
+
+## Numeric Profiles
+
+Bunny currently defines:
+
+- `BunnyScalar`: finite `f32` graphics scalar profile.
+- `BunnyFixedQ32_32Raw`: signed Q32.32 fixed-point raw `i64` profile.
+
+Q32.32 conversion helpers live in `bunny-num::fixed_q32_32`.
 
 ## Invariants
 

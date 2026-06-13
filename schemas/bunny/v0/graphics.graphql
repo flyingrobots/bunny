@@ -5,11 +5,9 @@ This schema belongs to Bunny. Downstream projects may generate their own
 language bindings from it, but Echo and Geordi must not become the owners of
 these primitive graphics contracts.
 """
-schema {
-  query: BunnySchemaQuery
-}
 
 directive @bunnyInvariant(description: String!) on OBJECT | FIELD_DEFINITION | INPUT_OBJECT | SCALAR
+directive @bunnyScalarProfile(name: String!) on SCALAR | FIELD_DEFINITION
 
 type BunnySchemaQuery {
   version: String!
@@ -18,7 +16,15 @@ type BunnySchemaQuery {
 """
 Finite deterministic scalar selected by the active Bunny numeric profile.
 """
-scalar BunnyScalar @bunnyInvariant(description: "Bunny scalar values must be finite under the active numeric profile.")
+scalar BunnyScalar
+  @bunnyInvariant(description: "Bunny scalar values must be finite under the active numeric profile.")
+
+"""
+Signed Q32.32 fixed-point raw integer profile.
+"""
+scalar BunnyFixedQ32_32Raw
+  @bunnyScalarProfile(name: "q32.32")
+  @bunnyInvariant(description: "Signed Q32.32 fixed-point raw i64.")
 
 type BunnyVec2 {
   x: BunnyScalar!

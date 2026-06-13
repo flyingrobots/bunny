@@ -1,0 +1,10 @@
+{
+  "generator": "bunny-wesley/0.1.0",
+  "wesleyCore": "0.0.5",
+  "schema": "schemas/bunny/v0/graphics.graphql",
+  "schemaSha256": "51ba0f00ac6a46e848cd9b91a5730ebfa95313be0f81f75ad7cf5f4214d619bf",
+  "outputs": [
+    "crates/bunny-contract/src/generated/graphics.rs",
+    "generated/typescript/bunny-graphics.ts"
+  ]
+}

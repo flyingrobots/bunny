@@ -1,4 +1,14 @@
+#![deny(unsafe_code)]
+#![deny(clippy::all)]
+#![deny(clippy::pedantic)]
+#![deny(clippy::nursery)]
+#![deny(missing_docs)]
+
 //! Deterministic numeric profiles for Bunny graphics primitives.
+
+pub mod fixed_q32_32;
+
+pub use fixed_q32_32::FixedQ32_32;
 
 /// Bunny's first scalar representation.
 ///

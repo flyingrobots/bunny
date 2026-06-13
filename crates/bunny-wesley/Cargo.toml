@@ -1,0 +1,16 @@
+[package]
+name = "bunny-wesley"
+description = "Bunny-owned schema parser and DTO generator."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+wesley-core = "0.0.5"
+
+[[bin]]
+name = "bunny-wesley"
+path = "src/main.rs"
