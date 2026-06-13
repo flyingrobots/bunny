@@ -114,6 +114,30 @@ fn test_quantization_uses_wide_single_rounding() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn test_dequantization_uses_wide_single_rounding() {
+    let wide_bounds = FixedAabb3::new(
+        FixedVec3::new(
+            FixedQ32_32::from_raw(i64::MIN),
+            FixedQ32_32::from_raw(i64::MIN),
+            FixedQ32_32::from_raw(i64::MIN),
+        ),
+        FixedVec3::new(
+            FixedQ32_32::from_raw(i64::MAX),
+            FixedQ32_32::from_raw(i64::MAX),
+            FixedQ32_32::from_raw(i64::MAX),
+        ),
+    );
+    let decoded = dequantize_vertex(QuantizedVertex::new(32768, 32768, 32768), &wide_bounds);
+    let expected = FixedVec3::new(
+        FixedQ32_32::from_raw(140_739_635_871_744),
+        FixedQ32_32::from_raw(140_739_635_871_744),
+        FixedQ32_32::from_raw(140_739_635_871_744),
+    );
+
+    assert_eq!(decoded, expected);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn test_quantization_clamping() {
     let bounds = FixedAabb3::new(
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO),

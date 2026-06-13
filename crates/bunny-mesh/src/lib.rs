@@ -12,6 +12,7 @@ use bunny_num::FixedQ32_32;
 use sha2::{Digest, Sha256};
 
 const MESH_HASH_DOMAIN: &[u8; 13] = b"bunny-mesh:v1";
+const QUANTIZATION_STEPS: u128 = u16::MAX as u128;
 
 /// A 3D vertex quantized to 16-bit unsigned integers relative to a bounding box.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,20 +33,34 @@ impl QuantizedVertex {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)]
-fn round_scaled_ratio_to_u16(numerator: u128, denominator: u128) -> u16 {
-    let scaled = numerator * u128::from(u16::MAX);
-    let quotient = scaled / denominator;
-    let remainder = scaled % denominator;
+const fn round_div_ties_to_even(numerator: u128, denominator: u128) -> u128 {
+    let quotient = numerator / denominator;
+    let remainder = numerator % denominator;
     let doubled_remainder = remainder * 2;
-    let rounded = if doubled_remainder > denominator {
+    if doubled_remainder > denominator {
         quotient + 1
     } else if doubled_remainder < denominator || (quotient & 1) == 0 {
         quotient
     } else {
         quotient + 1
-    };
-    rounded as u16
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)]
+const fn round_scaled_ratio_to_u16(numerator: u128, denominator: u128) -> u16 {
+    let scaled = numerator * QUANTIZATION_STEPS;
+    round_div_ties_to_even(scaled, denominator) as u16
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn clamp_i128_to_i64(value: i128) -> i64 {
+    if value < i128::from(i64::MIN) {
+        i64::MIN
+    } else if value > i128::from(i64::MAX) {
+        i64::MAX
+    } else {
+        value as i64
+    }
 }
 
 /// Quantizes a single scalar value relative to min and max boundaries.
@@ -69,13 +84,22 @@ pub fn quantize_scalar(val: FixedQ32_32, min: FixedQ32_32, max: FixedQ32_32) -> 
 
 /// Dequantizes a single 16-bit scalar value back to fixed-point relative to min and max boundaries.
 #[must_use]
+#[allow(clippy::cast_possible_wrap)]
 pub fn dequantize_scalar(q: u16, min: FixedQ32_32, max: FixedQ32_32) -> FixedQ32_32 {
-    let span = max - min;
-    let q_fixed = FixedQ32_32::from_raw(i64::from(q) << 32);
-    let scale = FixedQ32_32::from_raw(65535 * FixedQ32_32::ONE.to_raw());
-    let t = q_fixed / scale;
+    let min_raw = i128::from(min.to_raw());
+    let max_raw = i128::from(max.to_raw());
 
-    min + t * span
+    if max_raw <= min_raw || q == 0 {
+        return min;
+    }
+    if q == u16::MAX {
+        return max;
+    }
+
+    let span = (max_raw - min_raw).unsigned_abs();
+    let scaled = span * u128::from(q);
+    let offset = round_div_ties_to_even(scaled, QUANTIZATION_STEPS) as i128;
+    FixedQ32_32::from_raw(clamp_i128_to_i64(min_raw + offset))
 }
 
 /// Quantizes a 3D vertex position relative to a bounding box.
