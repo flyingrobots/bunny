@@ -77,10 +77,12 @@ impl FixedUnitVec2 {
     #[must_use]
     pub fn new(v: FixedVec2) -> Option<Self> {
         let normalized = v.normalize()?;
-        normalized
-            .length()
-            .filter(|&length| is_unit_length(length))?;
-        Some(Self(normalized))
+        let length = normalized.length()?;
+        if is_unit_length(length) {
+            Some(Self(normalized))
+        } else {
+            None
+        }
     }
 
     /// Gets the underlying `FixedVec2`.
@@ -101,10 +103,12 @@ impl FixedUnitVec3 {
     #[must_use]
     pub fn new(v: FixedVec3) -> Option<Self> {
         let normalized = v.normalize()?;
-        normalized
-            .length()
-            .filter(|&length| is_unit_length(length))?;
-        Some(Self(normalized))
+        let length = normalized.length()?;
+        if is_unit_length(length) {
+            Some(Self(normalized))
+        } else {
+            None
+        }
     }
 
     /// Gets the underlying `FixedVec3`.
