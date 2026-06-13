@@ -5,6 +5,8 @@ use bunny_geom::{FixedAabb3, FixedRay3};
 use crate::bvh::BvhNode;
 use crate::utils::aabbs_overlap;
 
+const STACK_CAPACITY: usize = 64;
+
 /// Traversal error type for BVH query operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TraversalError {
@@ -29,7 +31,7 @@ where
         return Ok(());
     }
 
-    let mut stack = [0_u32; 64];
+    let mut stack = [0_u32; STACK_CAPACITY];
     let mut stack_ptr = 0;
 
     stack[stack_ptr] = 0;
@@ -54,7 +56,7 @@ where
             let left_child = node.first_child_or_prim_idx;
             let right_child = left_child + 1;
 
-            if stack_ptr + 2 > 64 {
+            if stack_ptr + 2 > STACK_CAPACITY {
                 return Err(TraversalError::StackOverflow);
             }
 
@@ -84,7 +86,7 @@ where
         return Ok(());
     }
 
-    let mut stack = [0_u32; 64];
+    let mut stack = [0_u32; STACK_CAPACITY];
     let mut stack_ptr = 0;
 
     stack[stack_ptr] = 0;
@@ -109,7 +111,7 @@ where
             let left_child = node.first_child_or_prim_idx;
             let right_child = left_child + 1;
 
-            if stack_ptr + 2 > 64 {
+            if stack_ptr + 2 > STACK_CAPACITY {
                 return Err(TraversalError::StackOverflow);
             }
 
