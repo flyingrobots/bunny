@@ -231,3 +231,43 @@ fn test_vector_saturation_and_boundaries() {
     ));
     assert_eq!(v3_cross_overflow.x, max_val);
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_fixed_unit_vectors() {
+    use bunny_linalg::{FixedUnitVec2, FixedUnitVec3};
+
+    // 1. FixedUnitVec2
+    let v2_valid = FixedVec2::new(FixedQ32_32::from_f32(3.0), FixedQ32_32::from_f32(4.0));
+    let uv2 = FixedUnitVec2::new(v2_valid).expect("should normalize");
+    let inner2 = uv2.into_inner();
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(inner2.x.to_f32(), 3.0 / 5.0);
+        assert_eq!(inner2.y.to_f32(), 4.0 / 5.0);
+    }
+
+    let uv2_zero = FixedUnitVec2::new(FixedVec2::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO));
+    assert!(uv2_zero.is_none());
+
+    // 2. FixedUnitVec3
+    let v3_valid = FixedVec3::new(
+        FixedQ32_32::from_f32(0.0),
+        FixedQ32_32::from_f32(10.0),
+        FixedQ32_32::from_f32(0.0),
+    );
+    let uv3 = FixedUnitVec3::new(v3_valid).expect("should normalize");
+    let inner3 = uv3.into_inner();
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(inner3.x.to_f32(), 0.0);
+        assert_eq!(inner3.y.to_f32(), 1.0);
+        assert_eq!(inner3.z.to_f32(), 0.0);
+    }
+
+    let uv3_zero = FixedUnitVec3::new(FixedVec3::new(
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+    ));
+    assert!(uv3_zero.is_none());
+}

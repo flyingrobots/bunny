@@ -82,25 +82,28 @@ fn test_bvh_build_and_traverse() {
     let mut overlapped = Vec::new();
     intersect_aabb(&nodes[..node_count], &prim_indices, &query_box, |idx| {
         overlapped.push(idx);
-    });
+    })
+    .expect("AABB intersection traversal should not overflow stack");
 
     assert_eq!(overlapped.len(), 1);
     assert_eq!(overlapped[0], 1); // Should find Box 1 at center (5,0,0)
 
     // 3. Query Ray intersection: ray along X axis from (-2, 0, 0)
-    let ray = FixedRay3::new(
+    let ray = FixedRay3::try_new(
         FixedVec3::new(
             FixedQ32_32::from_f32(-2.0),
             FixedQ32_32::ZERO,
             FixedQ32_32::ZERO,
         ),
-        FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO), // Direction (1,0,0)
-    );
+        FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
+    )
+    .unwrap();
 
     let mut hit_indices = Vec::new();
     intersect_ray(&nodes[..node_count], &prim_indices, &ray, |idx| {
         hit_indices.push(idx);
-    });
+    })
+    .expect("Ray intersection traversal should not overflow stack");
 
     // Should intersect all 3 boxes along the X axis
     assert_eq!(hit_indices.len(), 3);
@@ -180,4 +183,40 @@ fn test_sweep_and_prune_solver() {
     assert_eq!(pairs[1], (0, 4));
     assert_eq!(pairs[2], (1, 4));
     assert_eq!(pairs[3], (2, 3));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_traversal_stack_overflow() {
+    use bunny_broadphase::traversal::{intersect_aabb, TraversalError};
+    use bunny_broadphase::BvhNode;
+    use bunny_geom::FixedAabb3;
+    use bunny_linalg::FixedVec3;
+
+    let zero = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
+
+    // Create a pathological chain of nodes to trigger stack overflow
+    // For even indices i < 160, it's a non-leaf pointing to i+1 and i+2.
+    // For odd indices or i >= 160, it's a leaf.
+    let mut nodes = Vec::new();
+    for i in 0..200 {
+        if i % 2 == 0 && i < 160 {
+            nodes.push(BvhNode {
+                bounds: FixedAabb3::new(zero, zero),
+                first_child_or_prim_idx: (i + 1) as u32,
+                prim_count: 0,
+            });
+        } else {
+            nodes.push(BvhNode {
+                bounds: FixedAabb3::new(zero, zero),
+                first_child_or_prim_idx: 0,
+                prim_count: 1, // leaf
+            });
+        }
+    }
+
+    let prim_indices = vec![0; 250];
+    let query_box = FixedAabb3::new(zero, zero);
+
+    let res = intersect_aabb(&nodes, &prim_indices, &query_box, |_idx| {});
+    assert_eq!(res, Err(TraversalError::StackOverflow));
 }

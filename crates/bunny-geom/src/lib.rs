@@ -6,8 +6,19 @@
 
 //! Geometry primitives for Bunny graphics contracts.
 
-use bunny_linalg::{FixedVec3, Vec3};
+use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
 use bunny_num::{FixedQ32_32, Scalar};
+
+/// Error type for bounding shape constructors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GeomError {
+    /// AABB min boundary exceeds max boundary.
+    InvalidAabbBounds,
+    /// Sphere radius is negative.
+    NegativeSphereRadius,
+    /// Ray direction normalization failed (zero length or overflow).
+    InvalidRayDirection,
+}
 
 /// A 3D ray with finite origin and direction components.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -42,14 +53,24 @@ pub struct FixedRay3 {
     /// The ray origin.
     pub origin: FixedVec3,
     /// The ray direction vector.
-    pub direction: FixedVec3,
+    pub direction: FixedUnitVec3,
 }
 
 impl FixedRay3 {
-    /// Creates a new deterministic fixed-point ray.
+    /// Creates a new deterministic fixed-point ray with a pre-normalized direction.
     #[must_use]
-    pub const fn new(origin: FixedVec3, direction: FixedVec3) -> Self {
+    pub const fn new(origin: FixedVec3, direction: FixedUnitVec3) -> Self {
         Self { origin, direction }
+    }
+
+    /// Tries to create a new `FixedRay3` by normalizing the direction.
+    ///
+    /// # Errors
+    /// Returns `GeomError::InvalidRayDirection` if the direction cannot be normalized.
+    pub fn try_new(origin: FixedVec3, direction: FixedVec3) -> Result<Self, GeomError> {
+        FixedUnitVec3::new(direction)
+            .map(|dir| Self::new(origin, dir))
+            .ok_or(GeomError::InvalidRayDirection)
     }
 }
 
@@ -68,6 +89,18 @@ impl FixedAabb3 {
     pub const fn new(min: FixedVec3, max: FixedVec3) -> Self {
         Self { min, max }
     }
+
+    /// Tries to create a new `FixedAabb3` with min <= max.
+    ///
+    /// # Errors
+    /// Returns `GeomError::InvalidAabbBounds` if min.x > max.x, min.y > max.y, or min.z > max.z.
+    pub fn try_new(min: FixedVec3, max: FixedVec3) -> Result<Self, GeomError> {
+        if min.x <= max.x && min.y <= max.y && min.z <= max.z {
+            Ok(Self::new(min, max))
+        } else {
+            Err(GeomError::InvalidAabbBounds)
+        }
+    }
 }
 
 /// A 3D sphere with deterministic fixed-point coordinates.
@@ -85,11 +118,31 @@ impl FixedSphere3 {
     pub const fn new(center: FixedVec3, radius: FixedQ32_32) -> Self {
         Self { center, radius }
     }
+
+    /// Tries to create a new `FixedSphere3` with a non-negative radius.
+    ///
+    /// # Errors
+    /// Returns `GeomError::NegativeSphereRadius` if the radius is negative.
+    pub fn try_new(center: FixedVec3, radius: FixedQ32_32) -> Result<Self, GeomError> {
+        if radius >= FixedQ32_32::ZERO {
+            Ok(Self::new(center, radius))
+        } else {
+            Err(GeomError::NegativeSphereRadius)
+        }
+    }
 }
 
 impl From<Ray3> for FixedRay3 {
     fn from(r: Ray3) -> Self {
-        Self::new(FixedVec3::from(r.origin), FixedVec3::from(r.direction))
+        let dir = FixedVec3::from(r.direction);
+        let udir = FixedUnitVec3::new(dir).unwrap_or_else(|| {
+            FixedUnitVec3::new_unchecked(FixedVec3::new(
+                FixedQ32_32::ONE,
+                FixedQ32_32::ZERO,
+                FixedQ32_32::ZERO,
+            ))
+        });
+        Self::new(FixedVec3::from(r.origin), udir)
     }
 }
 
@@ -97,7 +150,7 @@ impl From<FixedRay3> for Ray3 {
     fn from(r: FixedRay3) -> Self {
         Self {
             origin: Vec3::from(r.origin),
-            direction: Vec3::from(r.direction),
+            direction: Vec3::from(r.direction.into_inner()),
         }
     }
 }

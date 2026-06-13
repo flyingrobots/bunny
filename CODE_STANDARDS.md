@@ -55,15 +55,30 @@ If any of these are needed, they must be injected as pure, stateless parameters 
 
 ---
 
-## Strict Limits (Enforced)
+## Scoped Code Limits (Enforced)
 
-* **File size**: ≤ **300 lines** of source code.
-* **Source line length**: ≤ **100 characters** (excluding URLs or file paths).
-* **Function / Method size**: ≤ **25 lines** (excluding comments and whitespace).
+To avoid "strict standard theater," limits are scoped strictly by crate category:
+
+### 1. Core Runtime Crates (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`, `bunny-mesh`)
+* **File size**: ≤ **300 lines** of source code (strict).
+* **Source line length**: ≤ **100 characters** (excluding URLs/paths).
+* **Function size**: ≤ **25 lines** (excluding comments/whitespace).
 * **Statements per function**: ≤ **15**.
-* **Nesting depth**: ≤ **3** levels (e.g., maximum of three nested loops/conditionals).
-* **Parameters**: ≤ **4** parameters per function. Wrap more in a configuration struct.
+* **Nesting depth**: ≤ **3** levels.
+* **Parameters**: ≤ **4** parameters per function.
 * **Cyclomatic complexity**: ≤ **6**.
+* **Panics**: **Zero** runtime panic potential (no `unwrap`, `expect`, or indexing).
+
+### 2. Code-Generator Crates (`bunny-wesley`)
+* **File size**: ≤ **500 lines** of source code (relaxed for AST generation code).
+* **Function size**: ≤ **50 lines**.
+* **Nesting depth**: ≤ **4** levels (due to recursive AST traversals).
+* **Panics**: Discouraged, but allowed for unrecoverable schema validation errors during build.
+
+### 3. Build Tooling Crates (`xtask`)
+* **File size**: Exempt.
+* **Panics**: Allowed (`unwrap()` / `expect()`) for scripting convenience.
+* **Lints**: Must compile clean under workspace Clippy rules.
 
 ---
 
@@ -79,6 +94,11 @@ Every arithmetic operation must:
 1. Promote operands to `i128` to guarantee no intermediate overflow.
 2. Apply unbiased **Banker's Rounding (Ties-to-Even)** at the bit boundary.
 3. Apply **Saturating Arithmetic** during downcasting back to `i64`.
+
+## Floating-Point Boundary & DTO Doctrine
+
+* **Convenience views only**: Floating-point representations (like `f32` in generated DTO contracts or `Ray3` / `Aabb3` / `Sphere3` in `bunny-geom`) are boundary convenience formats used solely for ingress/egress interfaces (e.g., reading from standard files or passing to/from non-deterministic platforms).
+* **Deterministic canonical reality**: Inside the core runtime, all canonical geometry computations are done exclusively in deterministic Q32.32 fixed-point math. Float convenience formats must never be used as the internal source of truth.
 
 ---
 

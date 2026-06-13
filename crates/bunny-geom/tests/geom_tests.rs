@@ -16,9 +16,10 @@ fn test_fixed_ray3_creation_and_conversion() {
         FixedQ32_32::from_f32(0.0),
     );
 
-    let fixed_ray = FixedRay3::new(origin, direction);
+    let udir = bunny_linalg::FixedUnitVec3::new(direction).unwrap();
+    let fixed_ray = FixedRay3::new(origin, udir);
     assert_eq!(fixed_ray.origin, origin);
-    assert_eq!(fixed_ray.direction, direction);
+    assert_eq!(fixed_ray.direction, udir);
 
     // Roundtrip
     let float_ray = Ray3::from(fixed_ray);
@@ -79,4 +80,34 @@ fn test_fixed_sphere3_creation_and_conversion() {
 
     let fixed_sphere_back = FixedSphere3::from(float_sphere);
     assert_eq!(fixed_sphere_back, fixed_sphere);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_geom_validation_constructors() {
+    use bunny_geom::GeomError;
+
+    let p0 = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
+    let p1 = FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ONE, FixedQ32_32::ONE);
+
+    // 1. AABB validation
+    assert!(FixedAabb3::try_new(p0, p1).is_ok());
+    assert_eq!(
+        FixedAabb3::try_new(p1, p0),
+        Err(GeomError::InvalidAabbBounds)
+    );
+
+    // 2. Sphere validation
+    assert!(FixedSphere3::try_new(p0, FixedQ32_32::ZERO).is_ok());
+    assert!(FixedSphere3::try_new(p0, FixedQ32_32::ONE).is_ok());
+    assert_eq!(
+        FixedSphere3::try_new(p0, FixedQ32_32::from_f32(-1.0)),
+        Err(GeomError::NegativeSphereRadius)
+    );
+
+    // 3. Ray validation
+    assert!(FixedRay3::try_new(p0, p1).is_ok());
+    assert_eq!(
+        FixedRay3::try_new(p0, p0),
+        Err(GeomError::InvalidRayDirection)
+    );
 }

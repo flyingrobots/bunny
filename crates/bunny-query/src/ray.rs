@@ -15,7 +15,7 @@ pub fn ray_intersects_sphere(
     ray: &FixedRay3,
     sphere: &FixedSphere3,
 ) -> Option<(FixedVec3, FixedVec3)> {
-    let dir = ray.direction.normalize()?;
+    let dir = ray.direction.into_inner();
     let v = sphere.center - ray.origin;
     let tca = v.dot(dir);
     let v_dot_v = v.dot(v);
@@ -55,41 +55,42 @@ pub fn ray_intersects_aabb(
     ray: &FixedRay3,
     aabb: &FixedAabb3,
 ) -> Option<(FixedQ32_32, FixedQ32_32)> {
+    let dir = ray.direction.into_inner();
     let mut t_enter = FixedQ32_32::from_raw(i64::MIN);
     let mut t_exit = FixedQ32_32::from_raw(i64::MAX);
 
     // X axis
-    if ray.direction.x == FixedQ32_32::ZERO {
+    if dir.x == FixedQ32_32::ZERO {
         if ray.origin.x < aabb.min.x || ray.origin.x > aabb.max.x {
             return None;
         }
     } else {
-        let t0 = (aabb.min.x - ray.origin.x).checked_div(ray.direction.x)?;
-        let t1 = (aabb.max.x - ray.origin.x).checked_div(ray.direction.x)?;
+        let t0 = (aabb.min.x - ray.origin.x).checked_div(dir.x)?;
+        let t1 = (aabb.max.x - ray.origin.x).checked_div(dir.x)?;
         t_enter = max(t_enter, min(t0, t1));
         t_exit = min(t_exit, max(t0, t1));
     }
 
     // Y axis
-    if ray.direction.y == FixedQ32_32::ZERO {
+    if dir.y == FixedQ32_32::ZERO {
         if ray.origin.y < aabb.min.y || ray.origin.y > aabb.max.y {
             return None;
         }
     } else {
-        let t0 = (aabb.min.y - ray.origin.y).checked_div(ray.direction.y)?;
-        let t1 = (aabb.max.y - ray.origin.y).checked_div(ray.direction.y)?;
+        let t0 = (aabb.min.y - ray.origin.y).checked_div(dir.y)?;
+        let t1 = (aabb.max.y - ray.origin.y).checked_div(dir.y)?;
         t_enter = max(t_enter, min(t0, t1));
         t_exit = min(t_exit, max(t0, t1));
     }
 
     // Z axis
-    if ray.direction.z == FixedQ32_32::ZERO {
+    if dir.z == FixedQ32_32::ZERO {
         if ray.origin.z < aabb.min.z || ray.origin.z > aabb.max.z {
             return None;
         }
     } else {
-        let t0 = (aabb.min.z - ray.origin.z).checked_div(ray.direction.z)?;
-        let t1 = (aabb.max.z - ray.origin.z).checked_div(ray.direction.z)?;
+        let t0 = (aabb.min.z - ray.origin.z).checked_div(dir.z)?;
+        let t1 = (aabb.max.z - ray.origin.z).checked_div(dir.z)?;
         t_enter = max(t_enter, min(t0, t1));
         t_exit = min(t_exit, max(t0, t1));
     }
@@ -112,9 +113,10 @@ pub fn ray_intersects_triangle(
     v1: FixedVec3,
     v2: FixedVec3,
 ) -> Option<FixedVec3> {
+    let dir = ray.direction.into_inner();
     let edge1 = v1 - v0;
     let edge2 = v2 - v0;
-    let pvec = ray.direction.cross(edge2);
+    let pvec = dir.cross(edge2);
     let det = edge1.dot(pvec);
 
     if det == FixedQ32_32::ZERO {
@@ -130,7 +132,7 @@ pub fn ray_intersects_triangle(
     }
 
     let qvec = tvec.cross(edge1);
-    let v = ray.direction.dot(qvec) * inv_det;
+    let v = dir.dot(qvec) * inv_det;
     if v < FixedQ32_32::ZERO || u + v > FixedQ32_32::ONE {
         return None;
     }
@@ -140,5 +142,5 @@ pub fn ray_intersects_triangle(
         return None;
     }
 
-    Some(ray.origin + ray.direction * t)
+    Some(ray.origin + dir * t)
 }

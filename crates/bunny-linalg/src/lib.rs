@@ -58,3 +58,57 @@ pub(crate) const fn saturate_u128_to_i64(value: u128) -> i64 {
         value as i64
     }
 }
+
+/// A normalized two-dimensional vector using deterministic Q32.32 fixed-point representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedUnitVec2(FixedVec2);
+
+impl FixedUnitVec2 {
+    /// Creates a new `FixedUnitVec2` by normalizing the given vector.
+    ///
+    /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
+    #[must_use]
+    pub fn new(v: FixedVec2) -> Option<Self> {
+        let normalized = v.normalize()?;
+        Some(Self(normalized))
+    }
+
+    /// Creates a new `FixedUnitVec2` without checking if it is normalized.
+    #[must_use]
+    pub const fn new_unchecked(v: FixedVec2) -> Self {
+        Self(v)
+    }
+
+    /// Gets the underlying `FixedVec2`.
+    #[must_use]
+    pub const fn into_inner(self) -> FixedVec2 {
+        self.0
+    }
+}
+
+/// A normalized three-dimensional vector using deterministic Q32.32 fixed-point representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedUnitVec3(FixedVec3);
+
+impl FixedUnitVec3 {
+    /// Creates a new `FixedUnitVec3` by normalizing the given vector.
+    ///
+    /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
+    #[must_use]
+    pub fn new(v: FixedVec3) -> Option<Self> {
+        let normalized = v.normalize()?;
+        Some(Self(normalized))
+    }
+
+    /// Creates a new `FixedUnitVec3` without checking if it is normalized.
+    #[must_use]
+    pub const fn new_unchecked(v: FixedVec3) -> Self {
+        Self(v)
+    }
+
+    /// Gets the underlying `FixedVec3`.
+    #[must_use]
+    pub const fn into_inner(self) -> FixedVec3 {
+        self.0
+    }
+}
