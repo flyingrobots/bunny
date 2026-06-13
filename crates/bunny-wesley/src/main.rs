@@ -6,9 +6,6 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const GENERATOR_ID: &str = "bunny-wesley/0.1.0";
-const WESLEY_CORE_VERSION: &str = "0.0.5";
-
 #[derive(Debug)]
 struct Config {
     schema: PathBuf,
@@ -109,8 +106,8 @@ fn render_manifest(config: &Config, schema_sha256: &str) -> String {
             "  ]\n",
             "}}\n"
         ),
-        GENERATOR_ID,
-        WESLEY_CORE_VERSION,
+        render::GENERATOR_ID,
+        render::WESLEY_CORE_VERSION,
         json_escape(&config.schema.display().to_string()),
         schema_sha256,
         json_escape(&config.rust.display().to_string()),

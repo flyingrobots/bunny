@@ -1,8 +1,8 @@
 use std::path::Path;
 use wesley_core::{TypeDefinition, TypeKind, TypeReference, WesleyIR};
 
-const GENERATOR_ID: &str = "bunny-wesley/0.1.0";
-const WESLEY_CORE_VERSION: &str = "0.0.5";
+pub const GENERATOR_ID: &str = concat!("bunny-wesley/", env!("CARGO_PKG_VERSION"));
+pub const WESLEY_CORE_VERSION: &str = env!("WESLEY_CORE_VERSION");
 
 fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
