@@ -35,82 +35,82 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 ---
 
 ## Release v0.1.1: Compiler Directive Tuning & Workspace Safeguards (The Tuning Commons)
-* **Status**: Planned
+* **Status**: Complete (GP3 Deferred)
 * **Description**: Enhances the code generator, improves mathematical safeguards, and configures headless WASM execution gates.
 
 ### Goalpost 1: Directive-Driven Scalar Mapping (`bunny-wesley`)
 * **Description**: Parse `@bunnyScalarProfile` arguments from schema AST instead of using hardcoded string matching.
 * **Slice Budget**: 2 Slices
 * **Slices**:
-  * **Slice 1.1**: Parse and extract `@bunnyScalarProfile` directive arguments from Wesley IR [Issue #1]
-  * **Slice 1.2**: Implement dynamic mapping config based on extracted profiles and deprecate hardcoded name checks
+  * **Slice 1.1**: Parse and extract `@bunnyScalarProfile` directive arguments from Wesley IR [Done]
+  * **Slice 1.2**: Implement dynamic mapping config based on extracted profiles and deprecate hardcoded name checks [Done]
 
 ### Goalpost 2: Numeric Safeguards & Saturation Verification (`bunny-num` / `bunny-linalg`)
 * **Description**: Introduce checked mathematical division and verify vector boundary conditions under saturation.
 * **Slice Budget**: 2 Slices
 * **Slices**:
-  * **Slice 2.1**: Implement safe checked division (`checked_div`) returning `Option<FixedQ32_32>` for math guards.
-  * **Slice 2.2**: Implement comprehensive boundary-condition unit tests for vector operations under Q32.32 coordinate saturation.
+  * **Slice 2.1**: Implement safe checked division (`checked_div`) returning `Option<FixedQ32_32>` for math guards [Done]
+  * **Slice 2.2**: Implement comprehensive boundary-condition unit tests for vector operations under Q32.32 coordinate saturation [Done]
 
 ### Goalpost 3: Headless WebAssembly Verification (`bunny-infra`)
 * **Description**: Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.
 * **Slice Budget**: 1 Slice
 * **Slices**:
-  * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test`.
+  * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test` [Deferred]
 
 
 ---
 
 ## Release v0.2.0: Spatial Geometry & Intersection Solvers (The Query Commons)
-* **Status**: Planned
+* **Status**: Complete
 * **Description**: Introduces bounding shapes and ray-casting query solvers.
 
 ### Goalpost 1: Core Bounding Shapes (`bunny-geom` / `bunny-linalg`)
 * **Description**: Implement core shapes and type-safe normalized coordinate wrappers.
 * **Slice Budget**: 3 Slices
 * **Slices**:
-  * **Slice 1.1**: Implement `FixedRay3`, `FixedAabb3`, and `FixedSphere3` using `FixedVec3` coordinates.
-  * **Slice 1.2**: Implement shape boundary conversion traits (`From`/`Into`) for float boundaries.
-  * **Slice 1.3**: Implement compile-time normalized wrappers `FixedUnitVec2` and `FixedUnitVec3` to enforce normalization invariants.
+  * **Slice 1.1**: Implement `FixedRay3`, `FixedAabb3`, and `FixedSphere3` using `FixedVec3` coordinates [Done]
+  * **Slice 1.2**: Implement shape boundary conversion traits (`From`/`Into`) for float boundaries [Done]
+  * **Slice 1.3**: Implement compile-time normalized wrappers `FixedUnitVec2` and `FixedUnitVec3` to enforce normalization invariants [Done]
 
 
 ### Goalpost 2: Ray-Casting Queries (`bunny-query`)
 * **Description**: Implement ray-intersection math solvers.
 * **Slice Budget**: 3 Slices
 * **Slices**:
-  * **Slice 2.1**: Implement ray-sphere intersection solver.
-  * **Slice 2.2**: Implement ray-AABB intersection solver.
-  * **Slice 2.3**: Implement ray-triangle intersection solver.
+  * **Slice 2.1**: Implement ray-sphere intersection solver [Done]
+  * **Slice 2.2**: Implement ray-AABB intersection solver [Done]
+  * **Slice 2.3**: Implement ray-triangle intersection solver [Done]
 
 ### Goalpost 3: Closest Point Queries (`bunny-query`)
 * **Description**: Implement minimum-distance calculations between shapes.
 * **Slice Budget**: 3 Slices
 * **Slices**:
-  * **Slice 3.1**: Implement Point-to-Triangle closest point solver.
-  * **Slice 3.2**: Implement Segment-to-Segment closest point solver.
-  * **Slice 3.3**: Implement AABB-to-Sphere closest point solver.
+  * **Slice 3.1**: Implement Point-to-Triangle closest point solver [Done]
+  * **Slice 3.2**: Implement Segment-to-Segment closest point solver [Done]
+  * **Slice 3.3**: Implement AABB-to-Sphere closest point solver [Done]
 
 ---
 
 ## Release v0.3.0: Spatial Partitioning & Broadphase (The Acceleration Commons)
-* **Status**: Planned
+* **Status**: Complete
 * **Description**: Introduces spatial partitioning systems to handle large-scale intersection checks.
 
 ### Goalpost 1: Stable BVH Tree (`bunny-broadphase`)
 * **Description**: Build a memory-stable, zero-allocation bounding volume hierarchy (BVH).
 * **Slice Budget**: 4 Slices
 * **Slices**:
-  * **Slice 1.1**: Define BVH node layout and array-backed tree layout.
-  * **Slice 1.2**: Implement SAH (Surface Area Heuristic) tree building algorithm.
-  * **Slice 1.3**: Implement deterministic BVH ray-traversal solver.
-  * **Slice 1.4**: Implement BVH box overlap query.
+  * **Slice 1.1**: Define BVH node layout and array-backed tree layout [Done]
+  * **Slice 1.2**: Implement SAH (Surface Area Heuristic) tree building algorithm [Done]
+  * **Slice 1.3**: Implement deterministic BVH ray-traversal solver [Done]
+  * **Slice 1.4**: Implement BVH box overlap query [Done]
 
 ### Goalpost 2: Sweep-and-Prune Solver (`bunny-broadphase`)
 * **Description**: Implement multi-axis collision sweeps.
 * **Slice Budget**: 2 Slices
 * **Slices**:
-  * **Slice 2.1**: Implement 1D/3D sorting and sweep overlap queries.
-  * **Slice 2.2**: Implement active-pair generator with stable sorting.
+  * **Slice 2.1**: Implement 1D/3D sorting and sweep overlap queries [Done]
+  * **Slice 2.2**: Implement active-pair generator with stable sorting [Done]
 
 ---
 

@@ -4,28 +4,24 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## Where are we going?
 
-**Current Priority**: v0.2.0 / Goalpost 1 — Core Bounding Shapes (`FixedRay3`, `FixedAabb3`, `FixedSphere3`).
-* **Active Slice**: Slice 1.1 — Implement `FixedRay3`, `FixedAabb3`, and `FixedSphere3` using `FixedVec3` coordinates.
-* **Next Branch**: `feature/geom-fixed-shapes`.
+**Current Priority**: v0.4.0 / Goalpost 1 — Compressed Mesh Layouts (`bunny-mesh`).
+* **Active Slice**: Slice 1.1 — Implement 16-bit integer quantization mapping for vertices.
+* **Next Branch**: `goalpost/v0.4.0-gp1`.
 
 ## What just shipped?
 
-* **Crate Documentation Sync** (Merged via docs branch, 2026-06-12):
-  Added independent, self-contained `README.md` files for all 5 workspace crates (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-contract`, `bunny-wesley`) to prepare them forcrates.io publishing.
-* **Fixed-Point Linear Algebra** (Branch `feature/linalg-fixed-vectors` pushed, 2026-06-12):
-  Implemented `FixedVec2` and `FixedVec3` vector operations (dot, cross, normalize, arithmetic traits, conversions) and deterministic binary `FixedQ32_32::sqrt()`.
-* **Type-Safe Fixed-Point Math** (Branch `feature/q32-32-operators` pushed, 2026-06-12):
-  Created type-safe `FixedQ32_32` numeric wrapper and saturating Bankers' rounding math.
-* **Workspace CI Gates** (Branch `feature/q32-32-operators` pushed, 2026-06-12):
-  Set up GitHub Actions validation suite running on Linux, macOS (ARM64), and Windows, plus WebAssembly checks.
-* **Code Quality Rules**:
-  Established `CODE_STANDARDS.md` enforcing strict clippy denies and 300-line limits.
+* **Broadphase Sweep-and-Prune Solver** (Completed Goalpost v0.3.0-GP2, 2026-06-13):
+  Implemented a zero-allocation, multi-axis Sweep-and-Prune broadphase overlap query solver with stable lexicographical index sorting. Decomposed broadphase crate into modularized submodules (`bvh`, `sweep_and_prune`, `traversal`, `utils`) to strictly comply with the 300-line file limit.
+* **Stable BVH Tree** (Completed Goalpost v0.3.0-GP1, 2026-06-13):
+  Implemented a flat array-backed bounding volume hierarchy (BVH) with Surface Area Heuristic (SAH) construction and stack-based traversal solvers.
+* **Geometry Intersection and Closest Point Queries** (Completed Release v0.2.0, 2026-06-12):
+  Shipped `FixedRay3`, `FixedAabb3`, `FixedSphere3` shapes, ray-sphere/ray-AABB/ray-triangle intersection solvers, and point-to-triangle/segment-to-segment/AABB-to-sphere closest point solvers.
+* **Compiler Directives and Numeric Safeguards** (Completed Release v0.1.1, 2026-06-12):
+  Shipped directive-driven scalar mapping, Checked Division math guards, and vector saturation boundary verification suites.
 
 ## What feels wrong?
 
-* **Ignored Schema Directives**:
-  `bunny-wesley` ignores the `@bunnyScalarProfile` directive arguments on schemas, relying on hardcoded name string comparisons instead.
-* **Missing Matrix Math**:
-  `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which are required for transformation queries.
-* **Empty Geometry Implementation**:
-  `bunny-geom` contains only float definitions; query algorithms are entirely unimplemented.
+* **Missing Headless WebAssembly Verification**:
+  CI check parses compile target portability but does not run headless tests via `wasm-pack test`.
+* **Missing Matrix and Quaternion Math**:
+  `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which will be needed for transformation queries.
