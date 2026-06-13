@@ -11,10 +11,11 @@ use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 use sha2::{Digest, Sha256};
 
-const MESH_HASH_DOMAIN: &[u8; 13] = b"bunny-mesh:v1";
+const MESH_HASH_DOMAIN: &[u8; 13] = b"bunny-mesh:v2";
 const QUANTIZATION_STEPS: u128 = u16::MAX as u128;
 
 /// A 3D vertex quantized to 16-bit unsigned integers relative to a bounding box.
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct QuantizedVertex {
     /// Quantized X coordinate.
@@ -123,6 +124,7 @@ pub fn dequantize_vertex(q: QuantizedVertex, bounds: &FixedAabb3) -> FixedVec3 {
 }
 
 /// A triangulated face using 16-bit unsigned integer vertex indices.
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Triangle16 {
     /// Index of the first vertex.
@@ -142,6 +144,7 @@ impl Triangle16 {
 }
 
 /// A triangulated face using 32-bit unsigned integer vertex indices.
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Triangle32 {
     /// Index of the first vertex.
@@ -248,18 +251,33 @@ fn update_faces32(hasher: &mut Sha256, faces: &[Triangle32]) {
     }
 }
 
+fn update_bounds(hasher: &mut Sha256, bounds: &FixedAabb3) {
+    hasher.update(bounds.min.x.to_raw().to_le_bytes());
+    hasher.update(bounds.min.y.to_raw().to_le_bytes());
+    hasher.update(bounds.min.z.to_raw().to_le_bytes());
+    hasher.update(bounds.max.x.to_raw().to_le_bytes());
+    hasher.update(bounds.max.y.to_raw().to_le_bytes());
+    hasher.update(bounds.max.z.to_raw().to_le_bytes());
+}
+
 /// Computes the cryptographic SHA-256 hash of the quantized mesh vertex and index data.
 ///
 /// This function is zero-allocation and operates on slices of vertices and the index buffer layout.
 /// The byte representation is processed sequentially:
-/// 1. A domain marker and little-endian `u64` vertex count.
-/// 2. The vertices as little-endian `u16` values `[x, y, z]`.
-/// 3. The index layout tag (`0x00` for `Width16`, `0x01` for `Width32`).
-/// 4. A little-endian `u64` face count, then each face's little-endian indices.
+/// 1. A domain marker and six little-endian Q32.32 bound coordinates.
+/// 2. A little-endian `u64` vertex count.
+/// 3. The vertices as little-endian `u16` values `[x, y, z]`.
+/// 4. The index layout tag (`0x00` for `Width16`, `0x01` for `Width32`).
+/// 5. A little-endian `u64` face count, then each face's little-endian indices.
 #[must_use]
-pub fn compute_mesh_hash(vertices: &[QuantizedVertex], indices: IndexBufferLayout) -> [u8; 32] {
+pub fn compute_mesh_hash(
+    vertices: &[QuantizedVertex],
+    indices: IndexBufferLayout,
+    bounds: &FixedAabb3,
+) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(MESH_HASH_DOMAIN);
+    update_bounds(&mut hasher, bounds);
     update_vertices(&mut hasher, vertices);
     match indices {
         IndexBufferLayout::Width16(faces) => update_faces16(&mut hasher, faces),

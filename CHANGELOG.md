@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Raised the workspace Rust toolchain contract to Rust 1.96 and pinned CI to Rust 1.96.0.
+* Mesh hashes now include quantization bounds so identical quantized buffers under different AABBs produce distinct verification IDs.
 
 ## [0.3.0] - 2026-06-13
 
