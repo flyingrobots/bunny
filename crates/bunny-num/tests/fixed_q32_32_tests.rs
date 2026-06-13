@@ -79,3 +79,27 @@ fn fixed_q32_32_saturating_limits() {
     assert_eq!((min_val - one).to_raw(), i64::MIN);
     assert_eq!((-min_val).to_raw(), i64::MAX);
 }
+
+#[test]
+fn fixed_q32_32_sqrt() {
+    let a = FixedQ32_32::from_f32(4.0);
+    let sqrt_a = a.sqrt().expect("4.0 has a real square root");
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(sqrt_a.to_f32(), 2.0);
+    }
+
+    let b = FixedQ32_32::from_f32(9.0);
+    let sqrt_b = b.sqrt().expect("9.0 has a real square root");
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(sqrt_b.to_f32(), 3.0);
+    }
+
+    let c = FixedQ32_32::from_f32(2.0);
+    let sqrt_c = c.sqrt().expect("2.0 has a real square root");
+    assert!((sqrt_c.to_f32() - std::f32::consts::SQRT_2).abs() < 1e-7);
+
+    let d = FixedQ32_32::from_f32(-1.0);
+    assert!(d.sqrt().is_none());
+}
