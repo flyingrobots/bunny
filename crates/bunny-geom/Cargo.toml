@@ -14,3 +14,6 @@ bunny-num = { path = "../bunny-num" }
 
 [lib]
 path = "src/lib.rs"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

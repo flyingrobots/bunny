@@ -2,8 +2,9 @@ use bunny_broadphase::{build_bvh, intersect_aabb, intersect_ray, sweep_and_prune
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
+use wasm_bindgen_test::wasm_bindgen_test;
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_bvh_build_and_traverse() {
     // 1. Create some primitives (AABBs) scattered in space
     let prims = [
@@ -108,7 +109,7 @@ fn test_bvh_build_and_traverse() {
     assert!(hit_indices.contains(&2));
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_sweep_and_prune_solver() {
     let prims = [
         // Box 0

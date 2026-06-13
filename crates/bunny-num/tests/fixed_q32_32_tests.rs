@@ -1,13 +1,14 @@
 use bunny_num::fixed_q32_32::{from_f32, to_f32, FRAC_BITS, ONE_RAW};
 use bunny_num::FixedQ32_32;
+use wasm_bindgen_test::wasm_bindgen_test;
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn constants_and_raw_encoding_are_q32_32() {
     assert_eq!(FRAC_BITS, 32);
     assert_eq!(ONE_RAW, 1_i64 << 32);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn from_f32_encodes_exact_values() {
     assert_eq!(from_f32(0.0), 0);
     assert_eq!(from_f32(-0.0), 0);
@@ -17,7 +18,7 @@ fn from_f32_encodes_exact_values() {
     assert_eq!(from_f32(1.5), ONE_RAW + (1_i64 << 31));
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn to_f32_roundtrips_basic_values() {
     for value in [0.0, -0.0, 1.0, -1.0, 0.5, 1.5] {
         #[allow(clippy::float_cmp)]
@@ -27,14 +28,14 @@ fn to_f32_roundtrips_basic_values() {
     }
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn non_finite_inputs_use_canonical_policy() {
     assert_eq!(from_f32(f32::NAN), 0);
     assert_eq!(from_f32(f32::INFINITY), i64::MAX);
     assert_eq!(from_f32(f32::NEG_INFINITY), i64::MIN);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn fixed_q32_32_operator_math() {
     let a = FixedQ32_32::from_f32(1.5);
     let b = FixedQ32_32::from_f32(2.5);
@@ -69,7 +70,7 @@ fn fixed_q32_32_operator_math() {
     }
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn fixed_q32_32_saturating_limits() {
     let max_val = FixedQ32_32::from_raw(i64::MAX);
     let min_val = FixedQ32_32::from_raw(i64::MIN);
@@ -80,7 +81,7 @@ fn fixed_q32_32_saturating_limits() {
     assert_eq!((-min_val).to_raw(), i64::MAX);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn fixed_q32_32_sqrt() {
     let a = FixedQ32_32::from_f32(4.0);
     let sqrt_a = a.sqrt().expect("4.0 has a real square root");
@@ -104,7 +105,7 @@ fn fixed_q32_32_sqrt() {
     assert!(d.sqrt().is_none());
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_fixed_q32_32_checked_div() {
     let a = FixedQ32_32::from_f32(10.0);
     let b = FixedQ32_32::from_f32(2.0);
