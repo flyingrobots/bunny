@@ -1,0 +1,10 @@
+{
+  "cssTheme": "Kakano",
+  "interfaceFontFamily": "RL Horizon TRIAL",
+  "textFontFamily": "Test The Future",
+  "monospaceFontFamily": "Recursive",
+  "baseFontSize": 25,
+  "accentColor": "#5cf582",
+  "theme": "obsidian",
+  "showRibbon": false
+}

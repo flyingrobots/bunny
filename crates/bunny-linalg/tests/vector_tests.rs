@@ -106,3 +106,37 @@ fn test_conversions() {
         assert_eq!(vf2_back.y, 6.5);
     }
 }
+
+#[test]
+fn test_tiny_vector_length() {
+    // A vector with components so small that squaring them in Q32.32
+    // would round to zero if we round back to Q32.32 before taking the square root.
+    let tiny_v2 = FixedVec2::new(FixedQ32_32::from_raw(1), FixedQ32_32::from_raw(0));
+    let len_v2 = tiny_v2
+        .length()
+        .expect("Tiny FixedVec2 length should be computed");
+    assert_eq!(len_v2.to_raw(), 1);
+
+    let norm_v2 = tiny_v2
+        .normalize()
+        .expect("Tiny FixedVec2 normalize should succeed");
+    assert_eq!(norm_v2.x.to_raw(), 1);
+    assert_eq!(norm_v2.y.to_raw(), 0);
+
+    let tiny_v3 = FixedVec3::new(
+        FixedQ32_32::from_raw(0),
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::from_raw(0),
+    );
+    let len_v3 = tiny_v3
+        .length()
+        .expect("Tiny FixedVec3 length should be computed");
+    assert_eq!(len_v3.to_raw(), 1);
+
+    let norm_v3 = tiny_v3
+        .normalize()
+        .expect("Tiny FixedVec3 normalize should succeed");
+    assert_eq!(norm_v3.x.to_raw(), 0);
+    assert_eq!(norm_v3.y.to_raw(), 1);
+    assert_eq!(norm_v3.z.to_raw(), 0);
+}

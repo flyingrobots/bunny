@@ -60,16 +60,22 @@ impl FixedQ32_32 {
         if self.0 < 0 {
             return None;
         }
-        if self.0 == 0 {
-            return Some(Self::ZERO);
+        let val_u128 = (self.0.unsigned_abs() as u128) << FRAC_BITS;
+        Some(Self(Self::sqrt_u128(val_u128) as i64))
+    }
+
+    /// Computes the integer square root of a `u128` value.
+    #[must_use]
+    pub const fn sqrt_u128(val: u128) -> u128 {
+        if val == 0 {
+            return 0;
         }
 
-        let val_u128 = (self.0.unsigned_abs() as u128) << FRAC_BITS;
-        let mut op = val_u128;
+        let mut op = val;
         let mut res = 0_u128;
         let mut one = 1_u128 << 126;
 
-        let leading = val_u128.leading_zeros();
+        let leading = val.leading_zeros();
         let shift = leading & !1;
         if shift < 128 {
             one >>= shift;
@@ -85,7 +91,7 @@ impl FixedQ32_32 {
             one >>= 2;
         }
 
-        Some(Self(res as i64))
+        res
     }
 }
 
