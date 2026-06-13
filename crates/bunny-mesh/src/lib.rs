@@ -104,3 +104,95 @@ pub fn dequantize_vertex(q: QuantizedVertex, bounds: &FixedAabb3) -> FixedVec3 {
         dequantize_scalar(q.z, bounds.min.z, bounds.max.z),
     )
 }
+
+/// A triangulated face using 16-bit unsigned integer vertex indices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Triangle16 {
+    /// Index of the first vertex.
+    pub v0: u16,
+    /// Index of the second vertex.
+    pub v1: u16,
+    /// Index of the third vertex.
+    pub v2: u16,
+}
+
+impl Triangle16 {
+    /// Creates a new `Triangle16`.
+    #[must_use]
+    pub const fn new(v0: u16, v1: u16, v2: u16) -> Self {
+        Self { v0, v1, v2 }
+    }
+}
+
+/// A triangulated face using 32-bit unsigned integer vertex indices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Triangle32 {
+    /// Index of the first vertex.
+    pub v0: u32,
+    /// Index of the second vertex.
+    pub v1: u32,
+    /// Index of the third vertex.
+    pub v2: u32,
+}
+
+impl Triangle32 {
+    /// Creates a new `Triangle32`.
+    #[must_use]
+    pub const fn new(v0: u32, v1: u32, v2: u32) -> Self {
+        Self { v0, v1, v2 }
+    }
+}
+
+/// Memory-stable, zero-allocation layout options for index buffering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IndexBufferLayout<'a> {
+    /// 16-bit index buffer layout.
+    Width16(&'a [Triangle16]),
+    /// 32-bit index buffer layout.
+    Width32(&'a [Triangle32]),
+}
+
+impl IndexBufferLayout<'_> {
+    /// Checks if all indices in the layout are valid for a given vertex buffer length.
+    #[must_use]
+    pub fn is_valid(self, vertex_count: usize) -> bool {
+        match self {
+            Self::Width16(faces) => {
+                for face in faces {
+                    if usize::from(face.v0) >= vertex_count
+                        || usize::from(face.v1) >= vertex_count
+                        || usize::from(face.v2) >= vertex_count
+                    {
+                        return false;
+                    }
+                }
+            }
+            Self::Width32(faces) => {
+                for face in faces {
+                    if face.v0 as usize >= vertex_count
+                        || face.v1 as usize >= vertex_count
+                        || face.v2 as usize >= vertex_count
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Gets the number of triangles in the index buffer.
+    #[must_use]
+    pub const fn len(self) -> usize {
+        match self {
+            Self::Width16(faces) => faces.len(),
+            Self::Width32(faces) => faces.len(),
+        }
+    }
+
+    /// Returns `true` if the index buffer has no triangles.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+}

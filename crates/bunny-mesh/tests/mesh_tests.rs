@@ -101,3 +101,36 @@ fn test_quantization_clamping() {
     let q_large = quantize_vertex(p_large, &bounds);
     assert_eq!(q_large, QuantizedVertex::new(65535, 65535, 65535));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_index_buffer_layouts() {
+    use bunny_mesh::{IndexBufferLayout, Triangle16, Triangle32};
+
+    let vertex_count = 4;
+
+    // 1. Width16 tests
+    let faces16 = [Triangle16::new(0, 1, 2), Triangle16::new(2, 3, 0)];
+    let layout16 = IndexBufferLayout::Width16(&faces16);
+    assert!(layout16.is_valid(vertex_count));
+    assert_eq!(layout16.len(), 2);
+    assert!(!layout16.is_empty());
+
+    let invalid_faces16 = [
+        Triangle16::new(0, 1, 4), // Index 4 is out of bounds
+    ];
+    let invalid_layout16 = IndexBufferLayout::Width16(&invalid_faces16);
+    assert!(!invalid_layout16.is_valid(vertex_count));
+
+    // 2. Width32 tests
+    let faces32 = [Triangle32::new(0, 1, 2), Triangle32::new(2, 3, 0)];
+    let layout32 = IndexBufferLayout::Width32(&faces32);
+    assert!(layout32.is_valid(vertex_count));
+    assert_eq!(layout32.len(), 2);
+    assert!(!layout32.is_empty());
+
+    let invalid_faces32 = [
+        Triangle32::new(0, 1, 10), // Index 10 is out of bounds
+    ];
+    let invalid_layout32 = IndexBufferLayout::Width32(&invalid_faces32);
+    assert!(!invalid_layout32.is_valid(vertex_count));
+}
