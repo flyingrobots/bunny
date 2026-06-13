@@ -71,15 +71,26 @@ for num in "$gp3_num" "$s3_1" "$s3_2"; do
   gh issue close "$num"
 done
 
-# Close Issue #2 and #3 which were the original open ones corresponding to GP1/GP2 math
-gh issue close 2 || true
-gh issue close 3 || true
+# Close original open issues by dynamically querying their IDs
+num_issue_num=$(gh issue list --state all --limit 100 --json number,title --jq '.[] | select(.title | contains("num: Introduce type-safe FixedQ32_32")) | .number' | head -n 1)
+linalg_issue_num=$(gh issue list --state all --limit 100 --json number,title --jq '.[] | select(.title | contains("linalg/geom: Implement deterministic vector")) | .number' | head -n 1)
+
+if [ -n "$num_issue_num" ]; then
+  gh issue close "$num_issue_num" || true
+fi
+if [ -n "$linalg_issue_num" ]; then
+  gh issue close "$linalg_issue_num" || true
+fi
 
 # ----------------------------------------------------
 # v0.1.1 - Planned
 # ----------------------------------------------------
-# GP1: Parent is Issue #1
-gp1_v011_num=1
+# GP1: Parent is resolved dynamically
+gp1_v011_num=$(gh issue list --state all --limit 100 --json number,title --jq '.[] | select(.title | contains("compiler: Parse @bunnyScalarProfile")) | .number' | head -n 1)
+if [ -z "$gp1_v011_num" ]; then
+  echo "Warning: Could not dynamically resolve parent issue for compiler: Parse @bunnyScalarProfile"
+  gp1_v011_num=1
+fi
 s1_1_v011=$(create_issue "Slice 1.1: Parse and extract @bunnyScalarProfile directive arguments from Wesley IR" "Parent Goalpost: #$gp1_v011_num")
 s1_2_v011=$(create_issue "Slice 1.2: Implement dynamic mapping config based on extracted profiles" "Parent Goalpost: #$gp1_v011_num")
 update_issue_body "$gp1_v011_num" "compiler: Parse @bunnyScalarProfile directive arguments dynamically instead of hardcoding names.
