@@ -4,9 +4,9 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## Where are we going?
 
-**Current Priority**: v0.4.0 / Goalpost 1 — Compressed Mesh Layouts (`bunny-mesh`).
-* **Active Slice**: Slice 1.1 — Implement 16-bit integer quantization mapping for vertices.
-* **Next Branch**: `goalpost/v0.4.0-gp1`.
+**Current Priority**: v0.1.1 / Goalpost 3 — Headless WebAssembly Verification (`bunny-infra`).
+* **Active Slice**: Slice 3.1 — Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test`.
+* **Next Branch**: `goalpost/v0.1.1-gp3`.
 
 ## What just shipped?
 
