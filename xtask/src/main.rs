@@ -257,12 +257,50 @@ fn handle_create_issues() -> Result<(), Box<dyn Error>> {
         )
     )?;
 
+    // GP2
+    let gp2_v011_num = create_issue(
+        "Goalpost v0.1.1-GP2: Numeric Safeguards & Saturation Verification (bunny-num / bunny-linalg)",
+        "Introduce checked mathematical division and verify vector boundary conditions under saturation.",
+    )?;
+    let s2_1_v011 = create_issue(
+        "Slice 2.1: Implement safe checked division (checked_div) returning Option<FixedQ32_32> for math guards",
+        &format!("Parent Goalpost: #{}", gp2_v011_num),
+    )?;
+    let s2_2_v011 = create_issue(
+        "Slice 2.2: Implement comprehensive boundary-condition unit tests for vector operations under Q32.32 coordinate saturation",
+        &format!("Parent Goalpost: #{}", gp2_v011_num),
+    )?;
+    update_issue_body(
+        &gp2_v011_num,
+        &format!(
+            "Introduce checked mathematical division and verify vector boundary conditions under saturation.\n\n### Slices:\n- [ ] #{}\n- [ ] #{}",
+            s2_1_v011, s2_2_v011
+        )
+    )?;
+
+    // GP3
+    let gp3_v011_num = create_issue(
+        "Goalpost v0.1.1-GP3: Headless WebAssembly Verification (bunny-infra)",
+        "Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.",
+    )?;
+    let s3_1_v011 = create_issue(
+        "Slice 3.1: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via wasm-pack test",
+        &format!("Parent Goalpost: #{}", gp3_v011_num),
+    )?;
+    update_issue_body(
+        &gp3_v011_num,
+        &format!(
+            "Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.\n\n### Slices:\n- [ ] #{}",
+            s3_1_v011
+        )
+    )?;
+
     // ----------------------------------------------------
     // v0.2.0 - Planned
     // ----------------------------------------------------
     println!("Syncing v0.2.0 issues...");
     let gp1_v020_num = create_issue(
-        "Goalpost v0.2.0-GP1: Core Bounding Shapes (bunny-geom)",
+        "Goalpost v0.2.0-GP1: Core Bounding Shapes (bunny-geom / bunny-linalg)",
         "Track core bounding envelopes using fixed-point vectors.",
     )?;
     let s1_1_v020 = create_issue(
@@ -273,11 +311,15 @@ fn handle_create_issues() -> Result<(), Box<dyn Error>> {
         "Slice 1.2: Implement shape boundary conversion traits for float boundaries",
         &format!("Parent Goalpost: #{}", gp1_v020_num),
     )?;
+    let s1_3_v020 = create_issue(
+        "Slice 1.3: Implement compile-time normalized wrappers FixedUnitVec2 and FixedUnitVec3 to enforce normalization invariants",
+        &format!("Parent Goalpost: #{}", gp1_v020_num),
+    )?;
     update_issue_body(
         &gp1_v020_num,
         &format!(
-            "Track core bounding envelopes using fixed-point vectors.\n\n### Slices:\n- [ ] #{}\n- [ ] #{}",
-            s1_1_v020, s1_2_v020
+            "Track core bounding envelopes using fixed-point vectors.\n\n### Slices:\n- [ ] #{}\n- [ ] #{}\n- [ ] #{}",
+            s1_1_v020, s1_2_v020, s1_3_v020
         )
     )?;
 

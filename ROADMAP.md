@@ -34,9 +34,9 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ---
 
-## Release v0.1.1: Compiler Directive Tuning (The Compiler Commons)
+## Release v0.1.1: Compiler Directive Tuning & Workspace Safeguards (The Tuning Commons)
 * **Status**: Planned
-* **Description**: Enhances the code generator to dynamically resolve scalar profiles.
+* **Description**: Enhances the code generator, improves mathematical safeguards, and configures headless WASM execution gates.
 
 ### Goalpost 1: Directive-Driven Scalar Mapping (`bunny-wesley`)
 * **Description**: Parse `@bunnyScalarProfile` arguments from schema AST instead of using hardcoded string matching.
@@ -45,18 +45,34 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.1**: Parse and extract `@bunnyScalarProfile` directive arguments from Wesley IR [Issue #1]
   * **Slice 1.2**: Implement dynamic mapping config based on extracted profiles and deprecate hardcoded name checks
 
+### Goalpost 2: Numeric Safeguards & Saturation Verification (`bunny-num` / `bunny-linalg`)
+* **Description**: Introduce checked mathematical division and verify vector boundary conditions under saturation.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 2.1**: Implement safe checked division (`checked_div`) returning `Option<FixedQ32_32>` for math guards.
+  * **Slice 2.2**: Implement comprehensive boundary-condition unit tests for vector operations under Q32.32 coordinate saturation.
+
+### Goalpost 3: Headless WebAssembly Verification (`bunny-infra`)
+* **Description**: Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.
+* **Slice Budget**: 1 Slice
+* **Slices**:
+  * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test`.
+
+
 ---
 
 ## Release v0.2.0: Spatial Geometry & Intersection Solvers (The Query Commons)
 * **Status**: Planned
 * **Description**: Introduces bounding shapes and ray-casting query solvers.
 
-### Goalpost 1: Core Bounding Shapes (`bunny-geom`)
-* **Description**: Implement core shapes using fixed-point vectors.
-* **Slice Budget**: 2 Slices
+### Goalpost 1: Core Bounding Shapes (`bunny-geom` / `bunny-linalg`)
+* **Description**: Implement core shapes and type-safe normalized coordinate wrappers.
+* **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 1.1**: Implement `FixedRay3`, `FixedAabb3`, and `FixedSphere3` using `FixedVec3` coordinates.
   * **Slice 1.2**: Implement shape boundary conversion traits (`From`/`Into`) for float boundaries.
+  * **Slice 1.3**: Implement compile-time normalized wrappers `FixedUnitVec2` and `FixedUnitVec3` to enforce normalization invariants.
+
 
 ### Goalpost 2: Ray-Casting Queries (`bunny-query`)
 * **Description**: Implement ray-intersection math solvers.
