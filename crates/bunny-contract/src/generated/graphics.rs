@@ -2,7 +2,7 @@
 // source: schemas/bunny/v0/graphics.graphql
 
 pub const BUNNY_GRAPHICS_SCHEMA_SHA256: &str =
-    "fc01d8c9d7845568df00d064dc109e7825b2538fed0d5d165510faa8fa0515b8";
+    "71757e5b3bbd32a99936db03080f4a896265fdd03af201b3488ba80743941c92";
 
 pub const BUNNY_WESLEY_GENERATOR: &str = "bunny-wesley/0.1.0";
 pub const BUNNY_WESLEY_CORE_VERSION: &str = "0.0.5";
