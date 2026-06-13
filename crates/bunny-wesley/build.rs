@@ -1,17 +1,21 @@
 use std::fs;
+use toml::Value;
 
 fn main() {
-    // Re-run if Cargo.toml changes
     println!("cargo:rerun-if-changed=Cargo.toml");
 
-    let cargo_toml = fs::read_to_string("Cargo.toml").unwrap();
-    let version = cargo_toml
-        .lines()
-        .find(|line| line.trim().starts_with("wesley-core"))
-        .and_then(|line| line.split('=').nth(1))
-        .map(|v| v.trim().trim_matches('"').trim_matches('\'').trim())
-        .map(|s| s.to_string())
-        .expect("Failed to find wesley-core dependency in Cargo.toml");
+    let cargo_toml = fs::read_to_string("Cargo.toml").expect("Failed to read Cargo.toml");
+    let parsed: Value = toml::from_str(&cargo_toml).expect("Failed to parse Cargo.toml");
+
+    let version = parsed
+        .get("dependencies")
+        .and_then(|d| d.get("wesley-core"))
+        .and_then(|dep| match dep {
+            Value::String(v) => Some(v.clone()),
+            Value::Table(t) => t.get("version").and_then(Value::as_str).map(String::from),
+            _ => None,
+        })
+        .expect("Failed to find wesley-core version in [dependencies]");
 
     println!("cargo:rustc-env=WESLEY_CORE_VERSION={}", version);
 }

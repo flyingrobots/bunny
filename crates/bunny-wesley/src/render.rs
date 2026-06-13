@@ -186,13 +186,24 @@ fn resolve_profile_types(
     scalar_def: &TypeDefinition,
 ) -> Result<Option<(&'static str, &'static str)>, String> {
     if let Some(profile_val) = scalar_def.directives.get("bunnyScalarProfile") {
-        let name_val = profile_val
-            .as_object()
-            .and_then(|o| o.get("name"))
-            .and_then(|n| n.as_str())
+        let obj = profile_val.as_object().ok_or_else(|| {
+            format!(
+                "`@bunnyScalarProfile` directive on scalar '{}' must be an object with arguments",
+                scalar_def.name
+            )
+        })?;
+        let name_val = obj
+            .get("name")
             .ok_or_else(|| {
                 format!(
-                    "Missing or invalid 'name' argument in @bunnyScalarProfile on scalar '{}'",
+                    "Missing 'name' argument in `@bunnyScalarProfile` on scalar '{}'",
+                    scalar_def.name
+                )
+            })?
+            .as_str()
+            .ok_or_else(|| {
+                format!(
+                    "'name' argument in `@bunnyScalarProfile` on scalar '{}' must be a string",
                     scalar_def.name
                 )
             })?;
@@ -275,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_schema_object_order() {
+    fn test_lower_schema_sdl_preserves_type_order() {
         let schema = r#"
 type First {
   value: String!
