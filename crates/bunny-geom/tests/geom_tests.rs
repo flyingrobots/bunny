@@ -1,6 +1,7 @@
 use bunny_geom::{Aabb3, FixedAabb3, FixedRay3, FixedSphere3, Ray3, Sphere3};
-use bunny_linalg::FixedVec3;
+use bunny_linalg::{FixedVec3, Vec3};
 use bunny_num::FixedQ32_32;
+use std::convert::TryFrom;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -30,8 +31,7 @@ fn test_fixed_ray3_creation_and_conversion() {
     assert_eq!(float_ray.direction.y, 1.0);
     assert_eq!(float_ray.direction.z, 0.0);
 
-    let fixed_ray_back = FixedRay3::from(float_ray);
-    assert_eq!(fixed_ray_back, fixed_ray);
+    assert_eq!(FixedRay3::try_from(float_ray), Ok(fixed_ray));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -110,4 +110,17 @@ fn test_geom_validation_constructors() {
         FixedRay3::try_new(p0, p0),
         Err(GeomError::InvalidRayDirection)
     );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_ray3_conversion_rejects_invalid_direction() {
+    use bunny_geom::GeomError;
+
+    let ray = Ray3 {
+        origin: Vec3::new(0.0, 0.0, 0.0),
+        direction: Vec3::new(0.0, 0.0, 0.0),
+    };
+    let converted: Result<FixedRay3, GeomError> = FixedRay3::try_from(ray);
+
+    assert_eq!(converted, Err(GeomError::InvalidRayDirection));
 }

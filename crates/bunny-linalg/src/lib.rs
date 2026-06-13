@@ -73,12 +73,6 @@ impl FixedUnitVec2 {
         Some(Self(normalized))
     }
 
-    /// Creates a new `FixedUnitVec2` without checking if it is normalized.
-    #[must_use]
-    pub const fn new_unchecked(v: FixedVec2) -> Self {
-        Self(v)
-    }
-
     /// Gets the underlying `FixedVec2`.
     #[must_use]
     pub const fn into_inner(self) -> FixedVec2 {
@@ -98,12 +92,6 @@ impl FixedUnitVec3 {
     pub fn new(v: FixedVec3) -> Option<Self> {
         let normalized = v.normalize()?;
         Some(Self(normalized))
-    }
-
-    /// Creates a new `FixedUnitVec3` without checking if it is normalized.
-    #[must_use]
-    pub const fn new_unchecked(v: FixedVec3) -> Self {
-        Self(v)
     }
 
     /// Gets the underlying `FixedVec3`.

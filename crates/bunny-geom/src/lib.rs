@@ -132,17 +132,11 @@ impl FixedSphere3 {
     }
 }
 
-impl From<Ray3> for FixedRay3 {
-    fn from(r: Ray3) -> Self {
-        let dir = FixedVec3::from(r.direction);
-        let udir = FixedUnitVec3::new(dir).unwrap_or_else(|| {
-            FixedUnitVec3::new_unchecked(FixedVec3::new(
-                FixedQ32_32::ONE,
-                FixedQ32_32::ZERO,
-                FixedQ32_32::ZERO,
-            ))
-        });
-        Self::new(FixedVec3::from(r.origin), udir)
+impl TryFrom<Ray3> for FixedRay3 {
+    type Error = GeomError;
+
+    fn try_from(r: Ray3) -> Result<Self, Self::Error> {
+        Self::try_new(FixedVec3::from(r.origin), FixedVec3::from(r.direction))
     }
 }
 
