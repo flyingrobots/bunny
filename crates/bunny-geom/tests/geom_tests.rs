@@ -123,6 +123,21 @@ fn test_ray3_conversion_rejects_invalid_direction() {
     let converted: Result<FixedRay3, GeomError> = FixedRay3::try_from(ray);
 
     assert_eq!(converted, Err(GeomError::InvalidRayDirection));
+
+    let non_finite_origin = Ray3 {
+        origin: Vec3::new(f32::INFINITY, 0.0, 0.0),
+        direction: Vec3::new(1.0, 0.0, 0.0),
+    };
+    let converted_origin: Result<FixedRay3, GeomError> = FixedRay3::try_from(non_finite_origin);
+    assert_eq!(converted_origin, Err(GeomError::NonFiniteCoordinate));
+
+    let non_finite_direction = Ray3 {
+        origin: Vec3::new(0.0, 0.0, 0.0),
+        direction: Vec3::new(f32::INFINITY, 0.0, 0.0),
+    };
+    let converted_direction: Result<FixedRay3, GeomError> =
+        FixedRay3::try_from(non_finite_direction);
+    assert_eq!(converted_direction, Err(GeomError::NonFiniteCoordinate));
 }
 
 #[wasm_bindgen_test(unsupported = test)]

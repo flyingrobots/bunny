@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `Aabb3` to `FixedAabb3` conversion now rejects non-finite coordinates and
   inverted float bounds before fixed-point quantization.
 * Mesh hashes now include quantization bounds so identical quantized buffers under different AABBs produce distinct verification IDs.
+* `Ray3` to `FixedRay3` conversion now rejects non-finite origin and direction
+  coordinates before fixed-point canonicalization.
 * `Sphere3` to `FixedSphere3` conversion now rejects non-finite centers plus
   non-finite and negative radii before fixed-point quantization.
 

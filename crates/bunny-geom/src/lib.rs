@@ -144,6 +144,9 @@ impl TryFrom<Ray3> for FixedRay3 {
     type Error = GeomError;
 
     fn try_from(r: Ray3) -> Result<Self, Self::Error> {
+        if !vec3_is_finite(r.origin) || !vec3_is_finite(r.direction) {
+            return Err(GeomError::NonFiniteCoordinate);
+        }
         Self::try_new(FixedVec3::from(r.origin), FixedVec3::from(r.direction))
     }
 }
