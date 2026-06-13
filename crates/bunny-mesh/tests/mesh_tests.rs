@@ -181,3 +181,16 @@ fn test_mesh_hash() {
     let hash_empty_32 = compute_mesh_hash(&[], IndexBufferLayout::Width32(&[]));
     assert_ne!(hash_empty_16, hash_empty_32);
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_mesh_hash_frames_vertex_and_face_sections() {
+    use bunny_mesh::{compute_mesh_hash, IndexBufferLayout, Triangle16};
+
+    let faces_only = [Triangle16::new(1, 2, 3)];
+    let vertices_only = [QuantizedVertex::new(256, 512, 768)];
+
+    let hash_faces_only = compute_mesh_hash(&[], IndexBufferLayout::Width16(&faces_only));
+    let hash_vertices_only = compute_mesh_hash(&vertices_only, IndexBufferLayout::Width16(&[]));
+
+    assert_ne!(hash_faces_only, hash_vertices_only);
+}
