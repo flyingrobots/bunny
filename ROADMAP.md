@@ -128,7 +128,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
-* **Status**: Planned
+* **Status**: Active, blocked before Goalpost 2 by the Pre-GP2 Completion
+  Integrity Gate.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
@@ -140,9 +141,41 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.2**: Implement index buffer triangulation layouts [Done]
   * **Slice 1.3**: Implement content-addressable hashing (SHA-256) for mesh assets [Done]
 
+### Pre-GP2 Completion Integrity Gate
+
+* **Description**: Re-audit every completed roadmap claim against code, tests,
+  and CI before starting new codec work.
+* **Slice Budget**: 1 discovery slice plus one or more finish-off slices.
+* **Rule**: Goalpost 2 must not start until every outstanding completed-claim
+  acceptance criterion below is either implemented and tested or the
+  acceptance wording is corrected to match verified reality.
+* **Slices**:
+  * **Slice A**: Fact-check completed roadmap claims and publish honest
+    documents listing verified claims, partial claims, and remaining finish-off
+    work. [Planned]
+  * **Slice B+**: Finish the outstanding acceptance criteria discovered by
+    Slice A. The number of slices is intentionally open-ended until the audit
+    is complete. [Blocked on Slice A]
+
+#### Outstanding Completed-Claim Acceptance Criteria
+
+These items were previously marked complete, but the current evidence does not
+fully satisfy the written acceptance criteria.
+
+| Claim Area | Outstanding Acceptance Criterion | Required Resolution |
+| --- | --- | --- |
+| v0.1.1-GP1 Directive-Driven Scalar Mapping | Acceptance text says hardcoded scalar-name strings are removed from `main.rs`, but profile resolution is now in `render.rs` and still uses literal profile names. | Replace path-specific/string-search wording with a real invariant, or centralize supported profile names behind constants/config and test the source-level rule. |
+| v0.1.1-GP3 Headless WebAssembly Verification | Goalpost claims the full workspace unit suite runs under headless WASM, but CI only runs WASM tests for the runtime crates. | Either add missing WASM coverage where feasible or narrow the acceptance criterion to the WASM-compatible runtime crate set. |
+| v0.2.0-GP1 Core Bounding Shapes | Acceptance text says `From`/`Into` maps float geometries into fixed-point spaces, while safe ingress is now fallible `TryFrom`. | Correct the acceptance criterion to require fallible validation for float-to-fixed ingress and infallible fixed-to-float egress. |
+| v0.2.0-GP1 Normalized Wrappers | Roadmap calls `FixedUnitVec2` / `FixedUnitVec3` compile-time normalized wrappers, but the invariant is runtime-validated. | Correct roadmap wording or introduce an actual type-level construction proof if compile-time enforcement is required. |
+| v0.2.0-GP2 Ray-Casting Queries | Goalpost claims a fixed RNG-seed corpus and cross-platform bitwise/epsilon determinism gate. Current tests are deterministic examples, not a corpus/divergence gate. | Add canonical raw-output regression fixtures executed in CI across OS/WASM, or narrow the criterion to implemented deterministic examples. |
+| v0.2.0-GP3 Closest Point Queries | Goalpost claims byte-for-byte correctness, but tests mostly assert `to_f32()` values. | Add raw Q32.32 output assertions for closest-point results or soften the claim. |
+| v0.3.0-GP1 Stable BVH Tree | Goalpost claims zero runtime heap allocation, and standards ban panics in library code, but `bunny-broadphase` still has guarded `unwrap()` and unchecked indexing in builder internals. | Remove panic-capable library operations and add an allocation/panic audit appropriate to the zero-allocation claim, or narrow the claim to caller-provided-buffer APIs. |
+
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 
 * **Description**: Zero-copy mesh deserialization.
+* **Status**: Blocked on the Pre-GP2 Completion Integrity Gate.
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 2.1**: Implement zero-copy PLY binary parser.

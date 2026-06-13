@@ -4,10 +4,14 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## Where are we going?
 
-**Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters (`bunny-codec`).
+**Current Priority**: v0.4.0 / Pre-GP2 — Completion Integrity Gate.
 
-* **Active Slice**: Slice 2.1 — Implement zero-copy PLY binary parser.
-* **Next Branch**: `goalpost/v0.4.0-gp2`.
+* **Active Slice**: Slice A — Fact-check completed roadmap claims and publish
+  honest documents.
+* **Next Branch**: `roadmap/pre-gp2-truth-gate`.
+* **Blocked Work**: v0.4.0 / Goalpost 2 — File Format Adapters
+  (`bunny-codec`) must wait until every outstanding completed-claim acceptance
+  criterion is implemented or corrected.
 
 ## What just shipped?
 
@@ -26,5 +30,9 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## What feels wrong?
 
+* **Overstated Completion Claims**:
+  Several completed roadmap entries have acceptance criteria that are stronger
+  than the current source/test evidence. GP2 is blocked until these are
+  fact-checked, corrected, and finished off.
 * **Missing Matrix and Quaternion Math**:
   `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which will be needed for transformation queries.
