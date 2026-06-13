@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Raised the workspace Rust toolchain contract to Rust 1.96 and pinned CI to Rust 1.96.0.
+* Raised the workspace Rust toolchain contract and CI pin to Rust 1.96.0.
 * `Aabb3` to `FixedAabb3` conversion now rejects non-finite coordinates and
   inverted float bounds before fixed-point quantization.
 * Mesh hashes now include quantization bounds so identical quantized buffers under different AABBs produce distinct verification IDs.
