@@ -34,12 +34,15 @@ Those jobs belong to downstream projects.
 
 ## Ecosystem Context & Relationships
 
-To understand Bunny, it helps to understand the other downstream projects in the workspace and ecosystem:
+To understand Bunny, it helps to understand the downstream projects in the ecosystem:
 
-*   **Echo (Causal Database & Runtime)**: Echo is a causal database and transaction engine. It tracks causal histories (strands, braids, transactions, and provenance) to coordinate and replicate state across users. Echo depends on Bunny to compute deterministic geometric results, wrapping them as immutable causal facts.
-*   **Geordi (Deterministic Rendering Backend)**: Geordi is a rendering engine and backend IR. It translates scene descriptions into rendered pixels, negotiates GPU features, and issues cryptographic proofs/receipts of rendering completion. Geordi consumes Bunny's math, mesh, and optics specifications to guarantee that the scene geometry it draws matches the geometry computed by the database.
-*   **jedit / Jim (Interactive Editor & Workspace)**: `jedit` is the user-facing editor application and workspace interface. It defines product behavior, panels, and user workflows. It consumes Bunny and Echo to present visual editor states to the user.
-*   **Wesley (Schema Compiler)**: Wesley is a compiler that translates schema files (`.graphql` SDL) into language-specific DTOs (Data Transfer Objects). Bunny uses a custom code generator (`bunny-wesley`) extending `wesley-core` to compile the graphics schemas under `schemas/bunny/` into Rust and TypeScript types.
+| Project | Role | Integration |
+| :--- | :--- | :--- |
+| **[Echo](https://github.com/flyingrobots/echo)** | Causal database & transaction engine tracking Strands, Braids, and Provenance. | Depends on Bunny to compute deterministic geometric results, wrapping them as causal facts. |
+| **[Geordi](https://github.com/flyingrobots/geordi)** | Deterministic rendering backend. | Consumes Bunny's math, mesh, and optics specifications to guarantee rendered geometry matches calculated inputs. |
+| **[jedit](https://github.com/flyingrobots/jedit)** | Interactive editor application & workspace interface. | Consumes Bunny and Echo to present visual editor states and behaviors to the user. |
+| **[Wesley](https://github.com/flyingrobots/wesley)** | Schema compiler translating GraphQL SDL to DTOs. | Extended by `bunny-wesley` to generate shared Rust and TypeScript types from graphics schemas. |
+
 
 
 ## Initial Crate Map
@@ -78,9 +81,10 @@ bash scripts/generate-contracts.sh
 
 The current generator emits:
 
-- Rust DTOs for `bunny-contract`
-- TypeScript DTOs for downstream consumers
-- a manifest with the schema SHA-256 hash and output paths
+*   **Rust DTOs**: Emitted directly into the shared contracts package at `crates/bunny-contract/src/generated/graphics.rs`.
+*   **TypeScript DTOs**: Emitted for downstream browser/Node.js clients at `generated/typescript/bunny-graphics.ts`.
+*   **Manifest**: Emitted at `generated/bunny-graphics.manifest.json`, detailing the schema SHA-256 hash and generated output file paths.
+
 
 The generator extends published Wesley lowering:
 
