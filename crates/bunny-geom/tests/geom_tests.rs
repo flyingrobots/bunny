@@ -141,6 +141,35 @@ fn test_ray3_conversion_rejects_invalid_direction() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn test_geom_error_implements_std_error() {
+    use bunny_geom::GeomError;
+
+    fn assert_error<E: std::error::Error>() {}
+    assert_error::<GeomError>();
+
+    assert_eq!(
+        GeomError::InvalidAabbBounds.to_string(),
+        "AABB min boundary exceeds max boundary"
+    );
+    assert_eq!(
+        GeomError::NonFiniteCoordinate.to_string(),
+        "coordinate is not finite"
+    );
+    assert_eq!(
+        GeomError::NegativeSphereRadius.to_string(),
+        "sphere radius is negative"
+    );
+    assert_eq!(
+        GeomError::NonFiniteRadius.to_string(),
+        "sphere radius is not finite"
+    );
+    assert_eq!(
+        GeomError::InvalidRayDirection.to_string(),
+        "ray direction normalization failed"
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn test_float_shape_conversions_reject_invalid_bounds() {
     use bunny_geom::GeomError;
 

@@ -6,6 +6,8 @@
 
 //! Geometry primitives for Bunny graphics contracts.
 
+use core::fmt;
+
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
@@ -23,6 +25,21 @@ pub enum GeomError {
     /// Ray direction normalization failed (zero length or overflow).
     InvalidRayDirection,
 }
+
+impl fmt::Display for GeomError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::InvalidAabbBounds => "AABB min boundary exceeds max boundary",
+            Self::NonFiniteCoordinate => "coordinate is not finite",
+            Self::NegativeSphereRadius => "sphere radius is negative",
+            Self::NonFiniteRadius => "sphere radius is not finite",
+            Self::InvalidRayDirection => "ray direction normalization failed",
+        };
+        f.write_str(message)
+    }
+}
+
+impl std::error::Error for GeomError {}
 
 const fn vec3_is_finite(v: Vec3) -> bool {
     is_finite(v.x) && is_finite(v.y) && is_finite(v.z)
