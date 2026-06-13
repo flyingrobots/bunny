@@ -15,6 +15,9 @@ pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
 
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
+const UNIT_LENGTH_SQUARED_RAW: i128 =
+    (bunny_num::fixed_q32_32::ONE_RAW as i128) * (bunny_num::fixed_q32_32::ONE_RAW as i128);
+const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
 
 /// Two-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -66,11 +69,66 @@ fn is_unit_length(length: FixedQ32_32) -> bool {
     delta.abs() <= UNIT_LENGTH_TOLERANCE_RAW
 }
 
+const fn abs_i64_as_i128(value: i64) -> i128 {
+    if value < 0 {
+        -(value as i128)
+    } else {
+        value as i128
+    }
+}
+
+const fn raw_square(value: FixedQ32_32) -> i128 {
+    let abs = abs_i64_as_i128(value.to_raw());
+    abs * abs
+}
+
+const fn add_nonnegative_i128(lhs: i128, rhs: i128) -> Option<i128> {
+    if lhs > i128::MAX - rhs {
+        None
+    } else {
+        Some(lhs + rhs)
+    }
+}
+
+const fn is_exact_unit_vec2(v: FixedVec2) -> bool {
+    let x_squared = raw_square(v.x);
+    let y_squared = raw_square(v.y);
+    match add_nonnegative_i128(x_squared, y_squared) {
+        Some(sum) => sum == UNIT_LENGTH_SQUARED_RAW,
+        None => false,
+    }
+}
+
+const fn is_exact_unit_vec3(v: FixedVec3) -> bool {
+    let x_squared = raw_square(v.x);
+    let y_squared = raw_square(v.y);
+    let z_squared = raw_square(v.z);
+    match add_nonnegative_i128(x_squared, y_squared) {
+        Some(xy_sum) => match add_nonnegative_i128(xy_sum, z_squared) {
+            Some(sum) => sum == UNIT_LENGTH_SQUARED_RAW,
+            None => false,
+        },
+        None => false,
+    }
+}
+
 /// A normalized two-dimensional vector using deterministic Q32.32 fixed-point representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FixedUnitVec2(FixedVec2);
 
 impl FixedUnitVec2 {
+    /// The positive X axis unit vector.
+    pub const UNIT_X: Self = Self(FixedVec2::new(FixedQ32_32::ONE, FixedQ32_32::ZERO));
+
+    /// The negative X axis unit vector.
+    pub const NEG_UNIT_X: Self = Self(FixedVec2::new(NEG_ONE, FixedQ32_32::ZERO));
+
+    /// The positive Y axis unit vector.
+    pub const UNIT_Y: Self = Self(FixedVec2::new(FixedQ32_32::ZERO, FixedQ32_32::ONE));
+
+    /// The negative Y axis unit vector.
+    pub const NEG_UNIT_Y: Self = Self(FixedVec2::new(FixedQ32_32::ZERO, NEG_ONE));
+
     /// Creates a new `FixedUnitVec2` by normalizing the given vector.
     ///
     /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
@@ -80,6 +138,20 @@ impl FixedUnitVec2 {
         let length = normalized.length()?;
         if is_unit_length(length) {
             Some(Self(normalized))
+        } else {
+            None
+        }
+    }
+
+    /// Const-validates an already-normalized fixed vector as an exact unit vector.
+    ///
+    /// Unlike `new`, this function does not normalize its input. It exists for
+    /// compile-time known vectors where the caller needs a unit-vector proof
+    /// without runtime normalization.
+    #[must_use]
+    pub const fn try_from_unit(v: FixedVec2) -> Option<Self> {
+        if is_exact_unit_vec2(v) {
+            Some(Self(v))
         } else {
             None
         }
@@ -97,6 +169,48 @@ impl FixedUnitVec2 {
 pub struct FixedUnitVec3(FixedVec3);
 
 impl FixedUnitVec3 {
+    /// The positive X axis unit vector.
+    pub const UNIT_X: Self = Self(FixedVec3::new(
+        FixedQ32_32::ONE,
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+    ));
+
+    /// The negative X axis unit vector.
+    pub const NEG_UNIT_X: Self = Self(FixedVec3::new(
+        NEG_ONE,
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+    ));
+
+    /// The positive Y axis unit vector.
+    pub const UNIT_Y: Self = Self(FixedVec3::new(
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ONE,
+        FixedQ32_32::ZERO,
+    ));
+
+    /// The negative Y axis unit vector.
+    pub const NEG_UNIT_Y: Self = Self(FixedVec3::new(
+        FixedQ32_32::ZERO,
+        NEG_ONE,
+        FixedQ32_32::ZERO,
+    ));
+
+    /// The positive Z axis unit vector.
+    pub const UNIT_Z: Self = Self(FixedVec3::new(
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ONE,
+    ));
+
+    /// The negative Z axis unit vector.
+    pub const NEG_UNIT_Z: Self = Self(FixedVec3::new(
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+        NEG_ONE,
+    ));
+
     /// Creates a new `FixedUnitVec3` by normalizing the given vector.
     ///
     /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
@@ -106,6 +220,20 @@ impl FixedUnitVec3 {
         let length = normalized.length()?;
         if is_unit_length(length) {
             Some(Self(normalized))
+        } else {
+            None
+        }
+    }
+
+    /// Const-validates an already-normalized fixed vector as an exact unit vector.
+    ///
+    /// Unlike `new`, this function does not normalize its input. It exists for
+    /// compile-time known vectors where the caller needs a unit-vector proof
+    /// without runtime normalization.
+    #[must_use]
+    pub const fn try_from_unit(v: FixedVec3) -> Option<Self> {
+        if is_exact_unit_vec3(v) {
+            Some(Self(v))
         } else {
             None
         }
