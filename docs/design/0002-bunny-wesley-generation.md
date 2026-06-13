@@ -66,7 +66,7 @@ The manifest records:
 Run:
 
 ```bash
-bash scripts/generate-contracts.sh
+cargo run --bin xtask generate
 cargo fmt --check --all
 cargo test --workspace
 npx --yes markdownlint-cli README.md docs/design/*.md

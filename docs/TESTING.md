@@ -49,4 +49,5 @@ To ensure that Rust DTOs and TypeScript DTOs do not drift, the `bunny-wesley` co
 * Generator metadata and core versions.
 * Output file targets.
 
-Any change to the schema must be rebuilt via `generate-contracts.sh` and verified by checking the manifest checksum matches.
+Any change to the schema must be rebuilt via `cargo run --bin xtask generate` and verified by checking the manifest checksum matches.
+

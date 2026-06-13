@@ -73,11 +73,14 @@ Planned crates include `bunny-query`, `bunny-broadphase`, `bunny-mesh`,
 
 Bunny owns its shared graphics schemas under `schemas/bunny`.
 
+
 Regenerate checked-in DTO witnesses with:
 
 ```bash
-bash scripts/generate-contracts.sh
+cargo run --bin xtask generate
 ```
+
+
 
 The current generator emits:
 

@@ -5,6 +5,7 @@ members = [
   "crates/bunny-linalg",
   "crates/bunny-num",
   "crates/bunny-wesley",
+  "xtask",
 ]
 resolver = "2"
 
