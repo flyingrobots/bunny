@@ -134,3 +134,50 @@ fn test_index_buffer_layouts() {
     let invalid_layout32 = IndexBufferLayout::Width32(&invalid_faces32);
     assert!(!invalid_layout32.is_valid(vertex_count));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_mesh_hash() {
+    use bunny_mesh::{compute_mesh_hash, IndexBufferLayout, Triangle16, Triangle32};
+
+    let vertices = [
+        QuantizedVertex::new(1, 2, 3),
+        QuantizedVertex::new(10, 20, 30),
+        QuantizedVertex::new(100, 200, 300),
+    ];
+
+    let faces16 = [Triangle16::new(0, 1, 2)];
+    let layout16 = IndexBufferLayout::Width16(&faces16);
+
+    // Get baseline hash
+    let hash_base = compute_mesh_hash(&vertices, layout16);
+
+    // Identical mesh must match
+    let hash_same = compute_mesh_hash(&vertices, layout16);
+    assert_eq!(hash_base, hash_same);
+
+    // Altering vertex must change the hash
+    let vertices_alt = [
+        QuantizedVertex::new(1, 2, 3),
+        QuantizedVertex::new(10, 99, 30), // altered y
+        QuantizedVertex::new(100, 200, 300),
+    ];
+    let hash_alt_v = compute_mesh_hash(&vertices_alt, layout16);
+    assert_ne!(hash_base, hash_alt_v);
+
+    // Altering index value must change the hash
+    let faces16_alt = [Triangle16::new(0, 2, 1)];
+    let layout16_alt = IndexBufferLayout::Width16(&faces16_alt);
+    let hash_alt_i = compute_mesh_hash(&vertices, layout16_alt);
+    assert_ne!(hash_base, hash_alt_i);
+
+    // Changing layout width (Width16 vs Width32) must change the hash
+    let faces32 = [Triangle32::new(0, 1, 2)];
+    let layout32 = IndexBufferLayout::Width32(&faces32);
+    let hash_32 = compute_mesh_hash(&vertices, layout32);
+    assert_ne!(hash_base, hash_32);
+
+    // Empty mesh hashing is stable and valid
+    let hash_empty_16 = compute_mesh_hash(&[], IndexBufferLayout::Width16(&[]));
+    let hash_empty_32 = compute_mesh_hash(&[], IndexBufferLayout::Width32(&[]));
+    assert_ne!(hash_empty_16, hash_empty_32);
+}

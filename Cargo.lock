@@ -99,6 +99,7 @@ dependencies = [
  "bunny-geom",
  "bunny-linalg",
  "bunny-num",
+ "sha2",
  "wasm-bindgen-test",
 ]
 

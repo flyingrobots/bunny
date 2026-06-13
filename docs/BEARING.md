@@ -4,12 +4,14 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## Where are we going?
 
-**Current Priority**: v0.4.0 / Goalpost 1 — Compressed Mesh Layouts (`bunny-mesh`).
-* **Active Slice**: Slice 1.1 — Implement 16-bit integer quantization mapping for vertices.
-* **Next Branch**: `goalpost/v0.4.0-gp1`.
+**Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters (`bunny-codec`).
+* **Active Slice**: Slice 2.1 — Implement zero-copy PLY binary parser.
+* **Next Branch**: `goalpost/v0.4.0-gp2`.
 
 ## What just shipped?
 
+* **Compressed Mesh Layouts** (Completed Goalpost v0.4.0-GP1, 2026-06-13):
+  Implemented 16-bit integer coordinate quantization mapping for 3D vertices, memory-stable index buffer layouts (Width16/Width32) with vertex index validation, and zero-allocation cryptographic SHA-256 content-addressable asset hashing for mesh verification inside `bunny-mesh`.
 * **WASM Headless Test Runner** (Completed Goalpost v0.1.1-GP3, 2026-06-13):
   Configured Node.js headless WebAssembly unit testing via `wasm-pack test` for all core libraries (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`) using `wasm-bindgen-test(unsupported = test)` fallback for native host compilation. Added automated WASM check and WASM test jobs in GitHub Actions CI suite.
 * **Broadphase Sweep-and-Prune Solver** (Completed Goalpost v0.3.0-GP2, 2026-06-13):

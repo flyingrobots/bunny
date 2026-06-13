@@ -122,9 +122,9 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 * **Description**: Quantize vertex layouts to reduce memory footprints.
 * **Slice Budget**: 3 Slices
 * **Slices**:
-  * **Slice 1.1**: Implement 16-bit integer quantization mapping for vertices.
-  * **Slice 1.2**: Implement index buffer triangulation layouts.
-  * **Slice 1.3**: Implement content-addressable hashing (SHA-256) for mesh assets.
+  * **Slice 1.1**: Implement 16-bit integer quantization mapping for vertices [Done]
+  * **Slice 1.2**: Implement index buffer triangulation layouts [Done]
+  * **Slice 1.3**: Implement content-addressable hashing (SHA-256) for mesh assets [Done]
 
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 * **Description**: Zero-copy mesh deserialization.
