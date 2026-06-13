@@ -19,6 +19,6 @@ pub type Scalar = f32;
 
 /// Returns true when the scalar can participate in canonical Bunny contracts.
 #[must_use]
-pub fn is_finite(value: Scalar) -> bool {
+pub const fn is_finite(value: Scalar) -> bool {
     value.is_finite()
 }

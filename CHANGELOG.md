@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Memory-stable, zero-allocation index buffer layouts with validation rules for 16-bit and 32-bit triangle indices (`bunny-mesh`).
 * Cryptographic SHA-256 content-addressable hashing for mesh vertex and index buffers (`bunny-mesh`).
 
+### Changed
+
+* Raised the workspace Rust toolchain contract to Rust 1.96 and pinned CI to Rust 1.96.0.
+
 ## [0.3.0] - 2026-06-13
 
 ### Added
