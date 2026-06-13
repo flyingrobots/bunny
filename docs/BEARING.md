@@ -11,7 +11,7 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 * **Next Branch**: `roadmap/pre-gp2-truth-gate`.
 * **Blocked Work**: v0.4.0 / Goalpost 2 — File Format Adapters
   (`bunny-codec`) must wait until every outstanding completed-claim acceptance
-  criterion is implemented or corrected.
+  criterion is implemented, tested, and documented.
 
 ## What just shipped?
 
@@ -33,6 +33,6 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 * **Overstated Completion Claims**:
   Several completed roadmap entries have acceptance criteria that are stronger
   than the current source/test evidence. GP2 is blocked until these are
-  fact-checked, corrected, and finished off.
+  fact-checked and finished off in implementation.
 * **Missing Matrix and Quaternion Math**:
   `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which will be needed for transformation queries.
