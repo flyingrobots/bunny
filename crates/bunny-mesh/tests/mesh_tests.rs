@@ -73,6 +73,47 @@ fn test_quantization_midpoint() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn test_quantization_uses_wide_single_rounding() {
+    let narrow_bounds = FixedAabb3::new(
+        FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
+        FixedVec3::new(
+            FixedQ32_32::from_f32(10.0),
+            FixedQ32_32::from_f32(10.0),
+            FixedQ32_32::from_f32(10.0),
+        ),
+    );
+    let three = FixedVec3::new(
+        FixedQ32_32::from_f32(3.0),
+        FixedQ32_32::from_f32(3.0),
+        FixedQ32_32::from_f32(3.0),
+    );
+
+    assert_eq!(
+        quantize_vertex(three, &narrow_bounds),
+        QuantizedVertex::new(19660, 19660, 19660)
+    );
+
+    let wide_bounds = FixedAabb3::new(
+        FixedVec3::new(
+            FixedQ32_32::from_raw(i64::MIN),
+            FixedQ32_32::from_raw(i64::MIN),
+            FixedQ32_32::from_raw(i64::MIN),
+        ),
+        FixedVec3::new(
+            FixedQ32_32::from_raw(i64::MAX),
+            FixedQ32_32::from_raw(i64::MAX),
+            FixedQ32_32::from_raw(i64::MAX),
+        ),
+    );
+    let zero = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
+
+    assert_eq!(
+        quantize_vertex(zero, &wide_bounds),
+        QuantizedVertex::new(32768, 32768, 32768)
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn test_quantization_clamping() {
     let bounds = FixedAabb3::new(
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO),

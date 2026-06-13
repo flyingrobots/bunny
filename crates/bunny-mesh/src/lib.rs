@@ -32,49 +32,39 @@ impl QuantizedVertex {
     }
 }
 
-const fn round_shift_right_u128(value: u128, shift: u32) -> u128 {
-    if shift == 0 {
-        return value;
-    }
-    let q = value >> shift;
-    let mask = (1_u128 << shift) - 1;
-    let r = value & mask;
-    let half = 1_u128 << (shift - 1);
-
-    if r > half {
-        q + 1
-    } else if r < half {
-        q
-    } else if (q & 1) == 1 {
-        q + 1
+#[allow(clippy::cast_possible_truncation)]
+fn round_scaled_ratio_to_u16(numerator: u128, denominator: u128) -> u16 {
+    let scaled = numerator * u128::from(u16::MAX);
+    let quotient = scaled / denominator;
+    let remainder = scaled % denominator;
+    let doubled_remainder = remainder * 2;
+    let rounded = if doubled_remainder > denominator {
+        quotient + 1
+    } else if doubled_remainder < denominator || (quotient & 1) == 0 {
+        quotient
     } else {
-        q
-    }
+        quotient + 1
+    };
+    rounded as u16
 }
 
 /// Quantizes a single scalar value relative to min and max boundaries.
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
 pub fn quantize_scalar(val: FixedQ32_32, min: FixedQ32_32, max: FixedQ32_32) -> u16 {
-    let span = max - min;
-    if span == FixedQ32_32::ZERO {
+    let min_raw = i128::from(min.to_raw());
+    let max_raw = i128::from(max.to_raw());
+    let val_raw = i128::from(val.to_raw());
+
+    if max_raw <= min_raw || val_raw <= min_raw {
         return 0;
     }
-    let diff = val - min;
-    let t = diff / span;
-    let t_clamped = if t < FixedQ32_32::ZERO {
-        FixedQ32_32::ZERO
-    } else if t > FixedQ32_32::ONE {
-        FixedQ32_32::ONE
-    } else {
-        t
-    };
+    if val_raw >= max_raw {
+        return u16::MAX;
+    }
 
-    let scale = FixedQ32_32::from_raw(65535 * FixedQ32_32::ONE.to_raw());
-    let scaled = t_clamped * scale;
-
-    let rounded = round_shift_right_u128(u128::from(scaled.to_raw().unsigned_abs()), 32);
-    rounded as u16
+    let numerator = (val_raw - min_raw).unsigned_abs();
+    let denominator = (max_raw - min_raw).unsigned_abs();
+    round_scaled_ratio_to_u16(numerator, denominator)
 }
 
 /// Dequantizes a single 16-bit scalar value back to fixed-point relative to min and max boundaries.
