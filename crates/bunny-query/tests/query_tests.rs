@@ -5,8 +5,9 @@ use bunny_query::{
     aabb_intersects_sphere, closest_point_aabb, closest_point_triangle, closest_points_segments,
     ray_intersects_aabb, ray_intersects_sphere, ray_intersects_triangle,
 };
+use wasm_bindgen_test::wasm_bindgen_test;
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_ray_sphere_intersection() {
     let zero_vec = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
     let sphere = FixedSphere3::new(
@@ -48,7 +49,7 @@ fn test_ray_sphere_intersection() {
     assert_eq!(normal3.z.to_f32(), 1.0);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_ray_aabb_intersection() {
     let zero_vec = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
     let aabb = FixedAabb3::new(
@@ -85,7 +86,7 @@ fn test_ray_aabb_intersection() {
     assert!(ray_intersects_aabb(&ray2, &aabb).is_none());
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_ray_triangle_intersection() {
     let zero_vec = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
     let v0 = FixedVec3::new(
@@ -126,7 +127,7 @@ fn test_ray_triangle_intersection() {
     assert!(ray_intersects_triangle(&ray2, v0, v1, v2).is_none());
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_aabb_sphere_closest_point_and_overlap() {
     let aabb = FixedAabb3::new(
         FixedVec3::new(
@@ -169,7 +170,7 @@ fn test_aabb_sphere_closest_point_and_overlap() {
     assert_eq!(closest_far.x.to_f32(), 1.0);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_closest_point_triangle() {
     let v0 = FixedVec3::new(
         FixedQ32_32::from_f32(-1.0),
@@ -209,7 +210,7 @@ fn test_closest_point_triangle() {
     assert_eq!(cp_vertex.y.to_f32(), 1.0);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_closest_points_segments() {
     // Two parallel segments:
     // Seg 1: (0,0,0) to (2,0,0)

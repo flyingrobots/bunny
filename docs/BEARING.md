@@ -10,6 +10,8 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## What just shipped?
 
+* **WASM Headless Test Runner** (Completed Goalpost v0.1.1-GP3, 2026-06-13):
+  Configured Node.js headless WebAssembly unit testing via `wasm-pack test` for all core libraries (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`) using `wasm-bindgen-test(unsupported = test)` fallback for native host compilation. Added automated WASM check and WASM test jobs in GitHub Actions CI suite.
 * **Broadphase Sweep-and-Prune Solver** (Completed Goalpost v0.3.0-GP2, 2026-06-13):
   Implemented a zero-allocation, multi-axis Sweep-and-Prune broadphase overlap query solver with stable lexicographical index sorting. Decomposed broadphase crate into modularized submodules (`bvh`, `sweep_and_prune`, `traversal`, `utils`) to strictly comply with the 300-line file limit.
 * **Stable BVH Tree** (Completed Goalpost v0.3.0-GP1, 2026-06-13):
@@ -21,7 +23,5 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## What feels wrong?
 
-* **Missing Headless WebAssembly Verification**:
-  CI check parses compile target portability but does not run headless tests via `wasm-pack test`.
 * **Missing Matrix and Quaternion Math**:
   `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which will be needed for transformation queries.

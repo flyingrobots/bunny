@@ -1,8 +1,9 @@
 use bunny_geom::{Aabb3, FixedAabb3, FixedRay3, FixedSphere3, Ray3, Sphere3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
+use wasm_bindgen_test::wasm_bindgen_test;
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_fixed_ray3_creation_and_conversion() {
     let origin = FixedVec3::new(
         FixedQ32_32::from_f32(1.0),
@@ -32,7 +33,7 @@ fn test_fixed_ray3_creation_and_conversion() {
     assert_eq!(fixed_ray_back, fixed_ray);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_fixed_aabb3_creation_and_conversion() {
     let min = FixedVec3::new(
         FixedQ32_32::from_f32(-1.0),
@@ -58,7 +59,7 @@ fn test_fixed_aabb3_creation_and_conversion() {
     assert_eq!(fixed_aabb_back, fixed_aabb);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_fixed_sphere3_creation_and_conversion() {
     let center = FixedVec3::new(
         FixedQ32_32::from_f32(5.0),

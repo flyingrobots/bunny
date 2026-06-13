@@ -1,7 +1,8 @@
 use bunny_linalg::{FixedVec2, FixedVec3, Vec2, Vec3};
 use bunny_num::FixedQ32_32;
+use wasm_bindgen_test::wasm_bindgen_test;
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_fixed_vec2_operations() {
     let a = FixedVec2::new(FixedQ32_32::from_f32(3.0), FixedQ32_32::from_f32(4.0));
     let b = FixedVec2::new(FixedQ32_32::from_f32(1.0), FixedQ32_32::from_f32(2.0));
@@ -46,7 +47,7 @@ fn test_fixed_vec2_operations() {
     }
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_fixed_vec3_operations() {
     let a = FixedVec3::new(
         FixedQ32_32::from_f32(1.0),
@@ -85,7 +86,7 @@ fn test_fixed_vec3_operations() {
     }
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_conversions() {
     let vf = Vec3::new(1.0, 2.0, 3.0);
     let vfx = FixedVec3::from(vf);
@@ -107,7 +108,7 @@ fn test_conversions() {
     }
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_tiny_vector_length() {
     // A vector with components so small that squaring them in Q32.32
     // would round to zero if we round back to Q32.32 before taking the square root.
@@ -141,7 +142,7 @@ fn test_tiny_vector_length() {
     assert_eq!(norm_v3.z, FixedQ32_32::ZERO);
 }
 
-#[test]
+#[wasm_bindgen_test(unsupported = test)]
 fn test_vector_saturation_and_boundaries() {
     let max_val = FixedQ32_32::from_raw(i64::MAX);
     let min_val = FixedQ32_32::from_raw(i64::MIN);

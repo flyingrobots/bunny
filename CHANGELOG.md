@@ -30,9 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * AST parser mappings to dynamically resolve custom `@bunnyScalarProfile` schema directives in `bunny-wesley` instead of hardcoded strings.
 * Saturation-checked mathematical division `FixedQ32_32::checked_div` returning `Option<FixedQ32_32>` for mathematical division guards.
 * Q32.32 vector boundary-condition and coordinate saturation verification suites.
-
-### Changed
-* Deferred `v0.1.1-GP3` Headless WebAssembly Verification to allow downstream broadphase acceleration progress.
+* Headless WebAssembly unit testing suite executing inside Node.js using `wasm-pack test`.
 
 ## [0.1.0] - 2026-06-12
 

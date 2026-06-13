@@ -16,3 +16,6 @@ bunny-query = { path = "../bunny-query" }
 
 [lib]
 path = "src/lib.rs"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

@@ -35,7 +35,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 ---
 
 ## Release v0.1.1: Compiler Directive Tuning & Workspace Safeguards (The Tuning Commons)
-* **Status**: Complete (GP3 Deferred)
+* **Status**: Complete
 * **Description**: Enhances the code generator, improves mathematical safeguards, and configures headless WASM execution gates.
 
 ### Goalpost 1: Directive-Driven Scalar Mapping (`bunny-wesley`)
@@ -56,7 +56,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 * **Description**: Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.
 * **Slice Budget**: 1 Slice
 * **Slices**:
-  * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test` [Deferred]
+  * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test` [Done]
 
 
 ---
