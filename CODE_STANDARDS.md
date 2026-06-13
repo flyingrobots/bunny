@@ -23,7 +23,9 @@ Any variation in rounding, FMA register optimizations, or compiler floating-poin
 ## Mandatory Code Quality Rules
 
 ### 1. Clippy & Compiler Warnings
+
 All crates must compile with the following module-level annotations:
+
 ```rust
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
@@ -31,21 +33,27 @@ All crates must compile with the following module-level annotations:
 #![deny(clippy::nursery)]
 #![deny(missing_docs)]
 ```
+
 Every compiler warning, linter suggestion, or missing documentation line is a build failure.
 
 ### 2. Zero Unsafe Code
+
 The use of `unsafe` blocks, raw pointer manipulations, type transmutations (`std::mem::transmute`), or unsafe union access is completely banned.
 
 ### 3. Floating-Point Boundary Control
+
 Native `f32` or `f64` arithmetic operators (`+`, `-`, `*`, `/`) are **banned** in core geometric queries and transformations. You must convert coordinates to `FixedQ32_32` for operations, or explicitly prove that the operation is non-variant.
 
 ### 4. Zero Panics in Library Code
+
 * Never use `unwrap()`, `expect()`, or indexing that can panic (`slice[index]`).
 * Use `.get()`, `.first()`, `.get_mut()` and handle the option or error.
 * Checked math operations must be handled gracefully.
 
 ### 5. Side-Effect and Ambient State Denial
+
 Core crates must never access:
+
 * System Time (`std::time::SystemTime`)
 * Random Number Generators (`rand::thread_rng()`)
 * File System or Network Sockets
@@ -60,6 +68,7 @@ If any of these are needed, they must be injected as pure, stateless parameters 
 To avoid "strict standard theater," limits are scoped strictly by crate category:
 
 ### 1. Core Runtime Crates (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`, `bunny-mesh`)
+
 * **File size**: ≤ **300 lines** of source code (strict).
 * **Source line length**: ≤ **100 characters** (excluding URLs/paths).
 * **Function size**: ≤ **25 lines** (excluding comments/whitespace).
@@ -70,12 +79,14 @@ To avoid "strict standard theater," limits are scoped strictly by crate category
 * **Panics**: **Zero** runtime panic potential (no `unwrap`, `expect`, or indexing).
 
 ### 2. Code-Generator Crates (`bunny-wesley`)
+
 * **File size**: ≤ **500 lines** of source code (relaxed for AST generation code).
 * **Function size**: ≤ **50 lines**.
 * **Nesting depth**: ≤ **4** levels (due to recursive AST traversals).
 * **Panics**: Discouraged, but allowed for unrecoverable schema validation errors during build.
 
 ### 3. Build Tooling Crates (`xtask`)
+
 * **File size**: Exempt.
 * **Panics**: Allowed (`unwrap()` / `expect()`) for scripting convenience.
 * **Lints**: Must compile clean under workspace Clippy rules.
@@ -85,12 +96,16 @@ To avoid "strict standard theater," limits are scoped strictly by crate category
 ## Language & Numeric Policy
 
 ### Type-Safe Fixed-Point Math
+
 All fixed-point variables must be wrapped in a strongly typed newtype wrapper rather than using raw integer aliases:
+
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FixedQ32_32(pub i64);
 ```
+
 Every arithmetic operation must:
+
 1. Promote operands to `i128` to guarantee no intermediate overflow.
 2. Apply unbiased **Banker's Rounding (Ties-to-Even)** at the bit boundary.
 3. Apply **Saturating Arithmetic** during downcasting back to `i64`.
