@@ -9,6 +9,10 @@ these primitive graphics contracts.
 directive @bunnyInvariant(description: String!) on OBJECT | FIELD_DEFINITION | INPUT_OBJECT | SCALAR
 directive @bunnyScalarProfile(name: String!) on SCALAR | FIELD_DEFINITION
 
+schema {
+  query: BunnySchemaQuery
+}
+
 type BunnySchemaQuery {
   version: String!
 }
