@@ -6,10 +6,13 @@ Bunny uses the METHOD lightweight process framework adapted for deterministic li
 
 ## Cycle Doctrine
 
-The development process flows in a continuous cycle:
+The development process flows in a continuous cycle driven by **Goalposts**:
 ```text
-Issue/Backlog -> Branch -> Design Doc -> RED (Failing tests) -> GREEN (Passing code) -> PR -> Ship Sync
+Goalpost Issue -> Goalpost Branch -> Slice Design Doc -> RED (Failing tests) -> GREEN (Passing code) -> Complete Goalpost -> PR -> Ship Sync
 ```
+
+Development is grouped by Goalposts. Instead of opening individual PRs for each micro-slice, we work directly out of a unified branch for the active Goalpost. Commits are pushed sequentially as slices are developed. Once all slices are complete and the Goalpost's acceptance criteria are fully met, a Pull Request is opened to merge the Goalpost into `main`.
+
 
 ### 1. Backlog Capture
 All work, refactoring, and bug fixes start as GitHub issues. Lane labels categorize priorities:
@@ -47,11 +50,12 @@ After a PR merges to `main`, run this checklist on `main`:
 
 | Branch Type | Pattern | Example |
 | --- | --- | --- |
-| Feature Work | `feature/slug` | `feature/linalg-fixed-vectors` |
+| Goalpost Work | `goalpost/version-gpN` | `goalpost/v0.1.1-gp1` |
 | Documentation | `docs/slug` | `docs/crate-readmes` |
 | Maintenance | `maint-slug` | `maint-update-lockfile` |
 | Triage | `triage-slug` | `triage-backlog-cleanup` |
 
 > [!NOTE]
-> Operational branches (`maint-`, `triage-`) use a hyphen instead of a slash namespace (`feature/`, `docs/`, `cycles/`) to avoid Git reference resolution directory/file collisions. For example, if a branch named `maint` or `triage` is ever created, Git forbids creating any branch starting with `maint/` or `triage/` due to filesystem directory conflicts in `.git/refs/heads/`. Hyphenating short-lived operational branches keeps the namespace flat and safe from these collisions.
+> Operational branches (`maint-`, `triage-`) use a hyphen instead of a slash namespace (`goalpost/`, `docs/`) to avoid Git reference resolution directory/file collisions. For example, if a branch named `maint` or `triage` is ever created, Git forbids creating any branch starting with `maint/` or `triage/` due to filesystem directory conflicts in `.git/refs/heads/`. Hyphenating short-lived operational branches keeps the namespace flat and safe from these collisions.
+
 
