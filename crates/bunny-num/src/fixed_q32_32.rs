@@ -93,6 +93,46 @@ impl FixedQ32_32 {
 
         res
     }
+
+    /// Divides `self` by `rhs`, returning `None` if the divisor is zero or if the division overflows.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn checked_div(self, rhs: Self) -> Option<Self> {
+        if rhs.0 == 0 {
+            return None;
+        }
+
+        let numer = (self.0 as i128) << FRAC_BITS;
+        let denom = rhs.0 as i128;
+        let abs_numer = if numer < 0 { -numer } else { numer };
+        let abs_denom = if denom < 0 { -denom } else { denom };
+
+        let abs_q = abs_numer / abs_denom;
+        let abs_r = abs_numer % abs_denom;
+
+        let double_r = abs_r << 1;
+        let final_abs_q = if double_r > abs_denom {
+            abs_q + 1
+        } else if double_r < abs_denom {
+            abs_q
+        } else if (abs_q & 1) == 1 {
+            abs_q + 1
+        } else {
+            abs_q
+        };
+
+        let signed_q = if (self.0 < 0) ^ (rhs.0 < 0) {
+            -final_abs_q
+        } else {
+            final_abs_q
+        };
+
+        if signed_q < i64::MIN as i128 || signed_q > i64::MAX as i128 {
+            None
+        } else {
+            Some(Self(signed_q as i64))
+        }
+    }
 }
 
 impl Add for FixedQ32_32 {
@@ -174,31 +214,12 @@ impl Div for FixedQ32_32 {
             };
         }
 
-        let numer = i128::from(self.0) << FRAC_BITS;
-        let denom = i128::from(rhs.0);
-        let abs_numer = numer.abs();
-        let abs_denom = denom.abs();
-        let abs_q = abs_numer / abs_denom;
-        let abs_r = abs_numer % abs_denom;
-
-        let double_r = abs_r << 1;
-        let final_abs_q = if double_r > abs_denom {
-            abs_q + 1
-        } else if double_r < abs_denom {
-            abs_q
-        } else if (abs_q & 1) == 1 {
-            abs_q + 1
-        } else {
-            abs_q
-        };
-
-        let signed_q = if (self.0 < 0) ^ (rhs.0 < 0) {
-            -final_abs_q
-        } else {
-            final_abs_q
-        };
-
-        Self(saturate_i128_to_i64(signed_q))
+        self.checked_div(rhs)
+            .unwrap_or(if (self.0 < 0) ^ (rhs.0 < 0) {
+                Self(i64::MIN)
+            } else {
+                Self(i64::MAX)
+            })
     }
 }
 

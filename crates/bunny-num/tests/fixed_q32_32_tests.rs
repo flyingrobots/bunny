@@ -103,3 +103,21 @@ fn fixed_q32_32_sqrt() {
     let d = FixedQ32_32::from_f32(-1.0);
     assert!(d.sqrt().is_none());
 }
+
+#[test]
+fn test_fixed_q32_32_checked_div() {
+    let a = FixedQ32_32::from_f32(10.0);
+    let b = FixedQ32_32::from_f32(2.0);
+
+    let res = a.checked_div(b).expect("10.0 / 2.0 succeeds");
+    assert_eq!(res.to_f32(), 5.0);
+
+    // Div by zero
+    assert!(a.checked_div(FixedQ32_32::ZERO).is_none());
+
+    // Overflow cases
+    let max_val = FixedQ32_32::from_raw(i64::MAX);
+    // Dividing max value by something less than 1.0 (e.g. 0.5) must overflow
+    let half = FixedQ32_32::from_f32(0.5);
+    assert!(max_val.checked_div(half).is_none());
+}
