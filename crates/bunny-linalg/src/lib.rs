@@ -49,3 +49,12 @@ impl Vec3 {
         Self { x, y, z }
     }
 }
+
+#[allow(clippy::cast_possible_truncation)]
+pub(crate) const fn saturate_u128_to_i64(value: u128) -> i64 {
+    if value > i64::MAX as u128 {
+        i64::MAX
+    } else {
+        value as i64
+    }
+}

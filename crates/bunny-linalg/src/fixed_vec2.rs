@@ -36,7 +36,11 @@ impl FixedVec2 {
     /// Computes the length of the vector.
     #[must_use]
     pub fn length(self) -> Option<FixedQ32_32> {
-        self.length_squared().sqrt()
+        let x_raw = u128::from(self.x.to_raw().unsigned_abs());
+        let y_raw = u128::from(self.y.to_raw().unsigned_abs());
+        let sum_sq = x_raw * x_raw + y_raw * y_raw;
+        let root = FixedQ32_32::sqrt_u128(sum_sq);
+        Some(FixedQ32_32::from_raw(crate::saturate_u128_to_i64(root)))
     }
 
     /// Normalizes the vector.

@@ -120,8 +120,8 @@ fn test_tiny_vector_length() {
     let norm_v2 = tiny_v2
         .normalize()
         .expect("Tiny FixedVec2 normalize should succeed");
-    assert_eq!(norm_v2.x.to_raw(), 1);
-    assert_eq!(norm_v2.y.to_raw(), 0);
+    assert_eq!(norm_v2.x, FixedQ32_32::ONE);
+    assert_eq!(norm_v2.y, FixedQ32_32::ZERO);
 
     let tiny_v3 = FixedVec3::new(
         FixedQ32_32::from_raw(0),
@@ -136,7 +136,7 @@ fn test_tiny_vector_length() {
     let norm_v3 = tiny_v3
         .normalize()
         .expect("Tiny FixedVec3 normalize should succeed");
-    assert_eq!(norm_v3.x.to_raw(), 0);
-    assert_eq!(norm_v3.y.to_raw(), 1);
-    assert_eq!(norm_v3.z.to_raw(), 0);
+    assert_eq!(norm_v3.x, FixedQ32_32::ZERO);
+    assert_eq!(norm_v3.y, FixedQ32_32::ONE);
+    assert_eq!(norm_v3.z, FixedQ32_32::ZERO);
 }
