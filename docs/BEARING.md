@@ -5,6 +5,7 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 ## Where are we going?
 
 **Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters (`bunny-codec`).
+
 * **Active Slice**: Slice 2.1 — Implement zero-copy PLY binary parser.
 * **Next Branch**: `goalpost/v0.4.0-gp2`.
 

@@ -56,8 +56,8 @@ fn test_fixed_aabb3_creation_and_conversion() {
     assert_eq!(float_aabb.min.x, -1.0);
     assert_eq!(float_aabb.max.z, 1.0);
 
-    let fixed_aabb_back = FixedAabb3::from(float_aabb);
-    assert_eq!(fixed_aabb_back, fixed_aabb);
+    let fixed_aabb_back = FixedAabb3::try_from(float_aabb);
+    assert_eq!(fixed_aabb_back, Ok(fixed_aabb));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -78,8 +78,8 @@ fn test_fixed_sphere3_creation_and_conversion() {
     assert_eq!(float_sphere.center.x, 5.0);
     assert_eq!(float_sphere.radius, 2.5);
 
-    let fixed_sphere_back = FixedSphere3::from(float_sphere);
-    assert_eq!(fixed_sphere_back, fixed_sphere);
+    let fixed_sphere_back = FixedSphere3::try_from(float_sphere);
+    assert_eq!(fixed_sphere_back, Ok(fixed_sphere));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -123,4 +123,23 @@ fn test_ray3_conversion_rejects_invalid_direction() {
     let converted: Result<FixedRay3, GeomError> = FixedRay3::try_from(ray);
 
     assert_eq!(converted, Err(GeomError::InvalidRayDirection));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_float_shape_conversions_reject_invalid_bounds() {
+    use bunny_geom::GeomError;
+
+    let invalid_aabb = Aabb3 {
+        min: Vec3::new(1.0, 0.0, 0.0),
+        max: Vec3::new(0.0, 0.0, 0.0),
+    };
+    let converted_aabb: Result<FixedAabb3, GeomError> = FixedAabb3::try_from(invalid_aabb);
+    assert_eq!(converted_aabb, Err(GeomError::InvalidAabbBounds));
+
+    let invalid_sphere = Sphere3 {
+        center: Vec3::new(0.0, 0.0, 0.0),
+        radius: -1.0,
+    };
+    let converted_sphere: Result<FixedSphere3, GeomError> = FixedSphere3::try_from(invalid_sphere);
+    assert_eq!(converted_sphere, Err(GeomError::NegativeSphereRadius));
 }

@@ -63,27 +63,30 @@ If any of these are needed, they must be injected as pure, stateless parameters 
 
 ---
 
-## Scoped Code Limits (Enforced)
+## Scoped Code Limits (Review Targets)
 
-To avoid "strict standard theater," limits are scoped strictly by crate category:
+To avoid "strict standard theater," limits are scoped by crate category. These
+limits are mandatory review targets; CI currently enforces formatting, Clippy,
+compiler warnings, tests, and WebAssembly portability.
 
 ### 1. Core Runtime Crates (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`, `bunny-mesh`)
 
-* **File size**: ≤ **300 lines** of source code (strict).
+* **File size**: ≤ **300 lines** of source code.
 * **Source line length**: ≤ **100 characters** (excluding URLs/paths).
 * **Function size**: ≤ **25 lines** (excluding comments/whitespace).
 * **Statements per function**: ≤ **15**.
 * **Nesting depth**: ≤ **3** levels.
 * **Parameters**: ≤ **4** parameters per function.
 * **Cyclomatic complexity**: ≤ **6**.
-* **Panics**: **Zero** runtime panic potential (no `unwrap`, `expect`, or indexing).
+* **Panics**: No new unchecked `unwrap`, `expect`, or indexing in library code.
 
 ### 2. Code-Generator Crates (`bunny-wesley`)
 
 * **File size**: ≤ **500 lines** of source code (relaxed for AST generation code).
 * **Function size**: ≤ **50 lines**.
 * **Nesting depth**: ≤ **4** levels (due to recursive AST traversals).
-* **Panics**: Discouraged, but allowed for unrecoverable schema validation errors during build.
+* **Panics**: Discouraged, but allowed for unrecoverable schema validation
+  errors during build.
 
 ### 3. Build Tooling Crates (`xtask`)
 
@@ -119,10 +122,10 @@ Every arithmetic operation must:
 
 ## PR Review Checklist
 
-- [ ] Bit-level determinism guaranteed? Tested on multiple architectures?
-- [ ] `#![deny(unsafe_code)]` declared and active?
-- [ ] Zero compiler warnings and zero Clippy warnings (`cargo clippy`)?
-- [ ] No `unwrap()`, `expect()`, or array indexing panics?
-- [ ] Functions ≤ 25 lines? File length ≤ 300 lines? Nesting depth ≤ 3?
-- [ ] Side effects (time, random, filesystem) injected or absent?
-- [ ] Standard formatting verified (`cargo fmt --check`)?
+* [ ] Bit-level determinism guaranteed? Tested on multiple architectures?
+* [ ] `#![deny(unsafe_code)]` declared and active?
+* [ ] Zero compiler warnings and zero Clippy warnings (`cargo clippy`)?
+* [ ] No new `unwrap()`, `expect()`, or array indexing panics in library code?
+* [ ] Functions ≤ 25 lines? File length ≤ 300 lines? Nesting depth ≤ 3?
+* [ ] Side effects (time, random, filesystem) injected or absent?
+* [ ] Standard formatting verified (`cargo fmt --check`)?

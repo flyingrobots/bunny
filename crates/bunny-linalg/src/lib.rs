@@ -51,11 +51,11 @@ impl Vec3 {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub(crate) const fn saturate_u128_to_i64(value: u128) -> i64 {
+pub(crate) const fn checked_u128_to_i64(value: u128) -> Option<i64> {
     if value > i64::MAX as u128 {
-        i64::MAX
+        None
     } else {
-        value as i64
+        Some(value as i64)
     }
 }
 
@@ -69,8 +69,7 @@ impl FixedUnitVec2 {
     /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
     #[must_use]
     pub fn new(v: FixedVec2) -> Option<Self> {
-        let normalized = v.normalize()?;
-        Some(Self(normalized))
+        v.normalize().map(Self)
     }
 
     /// Gets the underlying `FixedVec2`.
@@ -90,8 +89,7 @@ impl FixedUnitVec3 {
     /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
     #[must_use]
     pub fn new(v: FixedVec3) -> Option<Self> {
-        let normalized = v.normalize()?;
-        Some(Self(normalized))
+        v.normalize().map(Self)
     }
 
     /// Gets the underlying `FixedVec3`.

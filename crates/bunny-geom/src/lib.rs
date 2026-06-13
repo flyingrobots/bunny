@@ -149,9 +149,11 @@ impl From<FixedRay3> for Ray3 {
     }
 }
 
-impl From<Aabb3> for FixedAabb3 {
-    fn from(a: Aabb3) -> Self {
-        Self::new(FixedVec3::from(a.min), FixedVec3::from(a.max))
+impl TryFrom<Aabb3> for FixedAabb3 {
+    type Error = GeomError;
+
+    fn try_from(a: Aabb3) -> Result<Self, Self::Error> {
+        Self::try_new(FixedVec3::from(a.min), FixedVec3::from(a.max))
     }
 }
 
@@ -164,9 +166,11 @@ impl From<FixedAabb3> for Aabb3 {
     }
 }
 
-impl From<Sphere3> for FixedSphere3 {
-    fn from(s: Sphere3) -> Self {
-        Self::new(FixedVec3::from(s.center), FixedQ32_32::from_f32(s.radius))
+impl TryFrom<Sphere3> for FixedSphere3 {
+    type Error = GeomError;
+
+    fn try_from(s: Sphere3) -> Result<Self, Self::Error> {
+        Self::try_new(FixedVec3::from(s.center), FixedQ32_32::from_f32(s.radius))
     }
 }
 

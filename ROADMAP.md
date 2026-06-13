@@ -5,10 +5,12 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 ---
 
 ## Release v0.1.0: Core Deterministic Math (The Math Commons)
+
 * **Status**: Complete
 * **Description**: Delivers the baseline fixed-point scalar math, linear algebra vector implementations, and workspace test validation gates.
 
 ### Goalpost 1: Deterministic Scalar Profile (`bunny-num`)
+
 * **Description**: Implement software-defined fixed-point math to guarantee bit-level CPU determinism.
 * **Slice Budget**: 4 Slices
 * **Slices**:
@@ -18,6 +20,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.4**: Implement deterministic square root (`sqrt`) on wide integers and integration tests [Done]
 
 ### Goalpost 2: Linear Algebra Primitives (`bunny-linalg`)
+
 * **Description**: Build 2D and 3D vector representations using deterministic math coordinates.
 * **Slice Budget**: 2 Slices
 * **Slices**:
@@ -25,20 +28,22 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 2.2**: Implement dot products, cross products, normalization, and integration tests [Done]
 
 ### Goalpost 3: Workspace Infrastructure and Code Quality Gates
+
 * **Description**: Establish code formatting, Clippy, and cross-platform verification pipelines.
 * **Slice Budget**: 2 Slices
 * **Slices**:
   * **Slice 3.1**: Establish `CODE_STANDARDS.md` and enforce linter policies (`clippy::pedantic`) [Done]
   * **Slice 3.2**: Implement GitHub Actions workflow (`ci.yml`) for multi-platform (Linux/macOS/Windows) determinism and WebAssembly checks [Done]
 
-
 ---
 
 ## Release v0.1.1: Compiler Directive Tuning & Workspace Safeguards (The Tuning Commons)
+
 * **Status**: Complete
 * **Description**: Enhances the code generator, improves mathematical safeguards, and configures headless WASM execution gates.
 
 ### Goalpost 1: Directive-Driven Scalar Mapping (`bunny-wesley`)
+
 * **Description**: Parse `@bunnyScalarProfile` arguments from schema AST instead of using hardcoded string matching.
 * **Slice Budget**: 2 Slices
 * **Slices**:
@@ -46,6 +51,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.2**: Implement dynamic mapping config based on extracted profiles and deprecate hardcoded name checks [Done]
 
 ### Goalpost 2: Numeric Safeguards & Saturation Verification (`bunny-num` / `bunny-linalg`)
+
 * **Description**: Introduce checked mathematical division and verify vector boundary conditions under saturation.
 * **Slice Budget**: 2 Slices
 * **Slices**:
@@ -53,19 +59,21 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 2.2**: Implement comprehensive boundary-condition unit tests for vector operations under Q32.32 coordinate saturation [Done]
 
 ### Goalpost 3: Headless WebAssembly Verification (`bunny-infra`)
+
 * **Description**: Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.
 * **Slice Budget**: 1 Slice
 * **Slices**:
   * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test` [Done]
 
-
 ---
 
 ## Release v0.2.0: Spatial Geometry & Intersection Solvers (The Query Commons)
+
 * **Status**: Complete
 * **Description**: Introduces bounding shapes and ray-casting query solvers.
 
 ### Goalpost 1: Core Bounding Shapes (`bunny-geom` / `bunny-linalg`)
+
 * **Description**: Implement core shapes and type-safe normalized coordinate wrappers.
 * **Slice Budget**: 3 Slices
 * **Slices**:
@@ -73,8 +81,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.2**: Implement shape boundary conversion traits (`From`/`Into`) for float boundaries [Done]
   * **Slice 1.3**: Implement compile-time normalized wrappers `FixedUnitVec2` and `FixedUnitVec3` to enforce normalization invariants [Done]
 
-
 ### Goalpost 2: Ray-Casting Queries (`bunny-query`)
+
 * **Description**: Implement ray-intersection math solvers.
 * **Slice Budget**: 3 Slices
 * **Slices**:
@@ -83,6 +91,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 2.3**: Implement ray-triangle intersection solver [Done]
 
 ### Goalpost 3: Closest Point Queries (`bunny-query`)
+
 * **Description**: Implement minimum-distance calculations between shapes.
 * **Slice Budget**: 3 Slices
 * **Slices**:
@@ -93,10 +102,12 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 ---
 
 ## Release v0.3.0: Spatial Partitioning & Broadphase (The Acceleration Commons)
+
 * **Status**: Complete
 * **Description**: Introduces spatial partitioning systems to handle large-scale intersection checks.
 
 ### Goalpost 1: Stable BVH Tree (`bunny-broadphase`)
+
 * **Description**: Build a memory-stable, zero-allocation bounding volume hierarchy (BVH).
 * **Slice Budget**: 4 Slices
 * **Slices**:
@@ -106,6 +117,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.4**: Implement BVH box overlap query [Done]
 
 ### Goalpost 2: Sweep-and-Prune Solver (`bunny-broadphase`)
+
 * **Description**: Implement multi-axis collision sweeps.
 * **Slice Budget**: 2 Slices
 * **Slices**:
@@ -115,10 +127,12 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 ---
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
+
 * **Status**: Planned
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
+
 * **Description**: Quantize vertex layouts to reduce memory footprints.
 * **Slice Budget**: 3 Slices
 * **Slices**:
@@ -127,6 +141,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.3**: Implement content-addressable hashing (SHA-256) for mesh assets [Done]
 
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
+
 * **Description**: Zero-copy mesh deserialization.
 * **Slice Budget**: 3 Slices
 * **Slices**:
