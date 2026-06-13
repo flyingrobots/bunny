@@ -6,8 +6,8 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 **Current Priority**: v0.4.0 / Pre-GP2 — Completion Integrity Gate.
 
-* **Active Slice**: Slice A — Fact-check completed roadmap claims and publish
-  honest documents.
+* **Active Slice**: Slice B+ — Finish outstanding completed-claim acceptance
+  criteria before starting GP2.
 * **Next Branch**: `roadmap/pre-gp2-truth-gate`.
 * **Blocked Work**: v0.4.0 / Goalpost 2 — File Format Adapters
   (`bunny-codec`) must wait until every outstanding completed-claim acceptance

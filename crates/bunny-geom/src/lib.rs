@@ -11,6 +11,8 @@ use core::fmt;
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
+mod conversions;
+
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeomError {
@@ -41,7 +43,7 @@ impl fmt::Display for GeomError {
 
 impl std::error::Error for GeomError {}
 
-const fn vec3_is_finite(v: Vec3) -> bool {
+pub(crate) const fn vec3_is_finite(v: Vec3) -> bool {
     is_finite(v.x) && is_finite(v.y) && is_finite(v.z)
 }
 
@@ -153,75 +155,6 @@ impl FixedSphere3 {
             Ok(Self::new(center, radius))
         } else {
             Err(GeomError::NegativeSphereRadius)
-        }
-    }
-}
-
-impl TryFrom<Ray3> for FixedRay3 {
-    type Error = GeomError;
-
-    fn try_from(r: Ray3) -> Result<Self, Self::Error> {
-        if !vec3_is_finite(r.origin) || !vec3_is_finite(r.direction) {
-            return Err(GeomError::NonFiniteCoordinate);
-        }
-        Self::try_new(FixedVec3::from(r.origin), FixedVec3::from(r.direction))
-    }
-}
-
-impl From<FixedRay3> for Ray3 {
-    fn from(r: FixedRay3) -> Self {
-        Self {
-            origin: Vec3::from(r.origin),
-            direction: Vec3::from(r.direction.into_inner()),
-        }
-    }
-}
-
-impl TryFrom<Aabb3> for FixedAabb3 {
-    type Error = GeomError;
-
-    fn try_from(a: Aabb3) -> Result<Self, Self::Error> {
-        if !vec3_is_finite(a.min) || !vec3_is_finite(a.max) {
-            return Err(GeomError::NonFiniteCoordinate);
-        }
-        if a.min.x > a.max.x || a.min.y > a.max.y || a.min.z > a.max.z {
-            return Err(GeomError::InvalidAabbBounds);
-        }
-        Self::try_new(FixedVec3::from(a.min), FixedVec3::from(a.max))
-    }
-}
-
-impl From<FixedAabb3> for Aabb3 {
-    fn from(a: FixedAabb3) -> Self {
-        Self {
-            min: Vec3::from(a.min),
-            max: Vec3::from(a.max),
-        }
-    }
-}
-
-impl TryFrom<Sphere3> for FixedSphere3 {
-    type Error = GeomError;
-
-    fn try_from(s: Sphere3) -> Result<Self, Self::Error> {
-        if !vec3_is_finite(s.center) {
-            return Err(GeomError::NonFiniteCoordinate);
-        }
-        if !is_finite(s.radius) {
-            return Err(GeomError::NonFiniteRadius);
-        }
-        if s.radius < 0.0 {
-            return Err(GeomError::NegativeSphereRadius);
-        }
-        Self::try_new(FixedVec3::from(s.center), FixedQ32_32::from_f32(s.radius))
-    }
-}
-
-impl From<FixedSphere3> for Sphere3 {
-    fn from(s: FixedSphere3) -> Self {
-        Self {
-            center: Vec3::from(s.center),
-            radius: s.radius.to_f32(),
         }
     }
 }

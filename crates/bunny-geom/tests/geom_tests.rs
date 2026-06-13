@@ -1,4 +1,4 @@
-use bunny_geom::{Aabb3, FixedAabb3, FixedRay3, FixedSphere3, Ray3, Sphere3};
+use bunny_geom::{Aabb3, FixedAabb3, FixedRay3, FixedSphere3, GeomError, Ray3, Sphere3};
 use bunny_linalg::{FixedVec3, Vec3};
 use bunny_num::FixedQ32_32;
 use std::convert::TryFrom;
@@ -171,8 +171,6 @@ fn test_geom_error_implements_std_error() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn test_float_shape_conversions_reject_invalid_bounds() {
-    use bunny_geom::GeomError;
-
     let invalid_aabb = Aabb3 {
         min: Vec3::new(1.0, 0.0, 0.0),
         max: Vec3::new(0.0, 0.0, 0.0),
@@ -234,5 +232,56 @@ fn test_float_shape_conversions_reject_invalid_bounds() {
     assert_eq!(
         converted_non_finite_center_sphere,
         Err(GeomError::NonFiniteCoordinate)
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_explicit_float_boundary_conversion_apis() {
+    let ray = Ray3::try_new(Vec3::new(1.0, 2.0, 3.0), Vec3::new(0.0, 1.0, 0.0))
+        .expect("valid ray should be accepted");
+    let fixed_ray = ray.try_into_fixed().expect("valid ray should convert");
+    assert_eq!(FixedRay3::try_from_float(ray), Ok(fixed_ray));
+    assert_eq!(fixed_ray.into_float(), Ray3::from(fixed_ray));
+    assert_eq!(
+        Ray3::try_new(Vec3::new(f32::NAN, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0)),
+        Err(GeomError::NonFiniteCoordinate)
+    );
+    assert_eq!(
+        Ray3::try_new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0)),
+        Err(GeomError::InvalidRayDirection)
+    );
+
+    let aabb = Aabb3::try_new(Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0))
+        .expect("valid AABB should be accepted");
+    let fixed_aabb = aabb.try_into_fixed().expect("valid AABB should convert");
+    assert_eq!(FixedAabb3::try_from_float(aabb), Ok(fixed_aabb));
+    assert_eq!(fixed_aabb.into_float(), Aabb3::from(fixed_aabb));
+    assert_eq!(
+        Aabb3::try_new(Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0)),
+        Err(GeomError::InvalidAabbBounds)
+    );
+    assert_eq!(
+        Aabb3::try_new(Vec3::new(f32::INFINITY, 0.0, 0.0), Vec3::new(1.0, 1.0, 1.0)),
+        Err(GeomError::NonFiniteCoordinate)
+    );
+
+    let sphere =
+        Sphere3::try_new(Vec3::new(0.5, 1.5, 2.5), 3.5).expect("valid sphere should be accepted");
+    let fixed_sphere = sphere
+        .try_into_fixed()
+        .expect("valid sphere should convert");
+    assert_eq!(FixedSphere3::try_from_float(sphere), Ok(fixed_sphere));
+    assert_eq!(fixed_sphere.into_float(), Sphere3::from(fixed_sphere));
+    assert_eq!(
+        Sphere3::try_new(Vec3::new(0.0, 0.0, 0.0), -1.0),
+        Err(GeomError::NegativeSphereRadius)
+    );
+    assert_eq!(
+        Sphere3::try_new(Vec3::new(0.0, f32::NAN, 0.0), 1.0),
+        Err(GeomError::NonFiniteCoordinate)
+    );
+    assert_eq!(
+        Sphere3::try_new(Vec3::new(0.0, 0.0, 0.0), f32::INFINITY),
+        Err(GeomError::NonFiniteRadius)
     );
 }
