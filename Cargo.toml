@@ -6,6 +6,7 @@ members = [
   "crates/bunny-num",
   "crates/bunny-query",
   "crates/bunny-wesley",
+  "crates/bunny-broadphase",
   "xtask",
 ]
 resolver = "2"
