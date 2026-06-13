@@ -128,8 +128,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
-* **Status**: Active, blocked before Goalpost 2 by the Pre-GP2 Completion
-  Integrity Gate.
+* **Status**: Active; Pre-GP2 Completion Integrity Gate complete. Goalpost 2 is
+  ready to start.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
@@ -156,7 +156,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
     work. [Done]
   * **Slice B+**: Finish the outstanding acceptance criteria discovered by
     Slice A. The number of slices is intentionally open-ended until the audit
-    is complete. [Active]
+    is complete. [Done]
 
 #### Outstanding Completed-Claim Acceptance Criteria
 
@@ -171,12 +171,13 @@ fully satisfy the written acceptance criteria.
 | Done | v0.2.0-GP1 Normalized Wrappers | Roadmap calls `FixedUnitVec2` / `FixedUnitVec3` compile-time normalized wrappers, but the invariant is runtime-validated. | `FixedUnitVec2` and `FixedUnitVec3` now expose const `try_from_unit` exact-unit proof APIs and axis constants while preserving runtime normalization through `new`; native and WASM tests cover valid and rejected const proofs. |
 | Done | v0.2.0-GP2 Ray-Casting Queries | Goalpost claims a fixed RNG-seed corpus and cross-platform bitwise/epsilon determinism gate. Current tests are deterministic examples, not a corpus/divergence gate. | `ray_determinism_tests.rs` now defines `RAY_DETERMINISM_CORPUS_SEED` and raw Q32.32 expected outputs for ray-sphere, ray-AABB, and ray-triangle cases; the corpus runs in native workspace tests and the WASM `bunny-query` gate. |
 | Done | v0.2.0-GP3 Closest Point Queries | Goalpost claims byte-for-byte correctness, but tests mostly assert `to_f32()` values. | `closest_raw_tests.rs` now asserts raw Q32.32 outputs for AABB, AABB/sphere, triangle, and segment closest-point cases, including a fractional half-unit projection, under native and WASM query tests. |
-| Pending | v0.3.0-GP1 Stable BVH Tree | Goalpost claims zero runtime heap allocation, and standards ban panics in library code, but `bunny-broadphase` still has guarded `unwrap()` and unchecked indexing in builder internals. | Remove panic-capable library operations, add regression coverage for malformed inputs, and add an allocation proof/check for the zero-allocation BVH builder/traversal API surface. |
+| Done | v0.3.0-GP1 Stable BVH Tree | Goalpost claims zero runtime heap allocation, and standards ban panics in library code, but `bunny-broadphase` still has guarded `unwrap()` and unchecked indexing in builder internals. | `build_bvh` and traversal now use checked buffer/stack access with explicit errors or `None`; malformed builder buffers are tested under native and WASM, and a native counting-allocator test proves build/traversal zero heap allocations. |
 
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 
 * **Description**: Zero-copy mesh deserialization.
-* **Status**: Blocked on the Pre-GP2 Completion Integrity Gate.
+* **Status**: Ready to start after the completed Pre-GP2 Completion Integrity
+  Gate.
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 2.1**: Implement zero-copy PLY binary parser.

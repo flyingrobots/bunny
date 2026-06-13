@@ -4,14 +4,13 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## Where are we going?
 
-**Current Priority**: v0.4.0 / Pre-GP2 — Completion Integrity Gate.
+**Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters.
 
-* **Active Slice**: Slice B+ — Finish outstanding completed-claim acceptance
-  criteria before starting GP2.
+* **Pre-GP2 Gate**: Completed. Every outstanding completed-claim acceptance
+  criterion has implementation, test, and documentation evidence.
 * **Next Branch**: `roadmap/pre-gp2-truth-gate`.
-* **Blocked Work**: v0.4.0 / Goalpost 2 — File Format Adapters
-  (`bunny-codec`) must wait until every outstanding completed-claim acceptance
-  criterion is implemented, tested, and documented.
+* **Next Work**: Start v0.4.0 / Goalpost 2 — File Format Adapters
+  (`bunny-codec`) after this gate branch lands.
 
 ## What just shipped?
 
@@ -28,7 +27,11 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 * **Broadphase Sweep-and-Prune Solver** (Completed Goalpost v0.3.0-GP2, 2026-06-13):
   Implemented a zero-allocation, multi-axis Sweep-and-Prune broadphase overlap query solver with stable lexicographical index sorting. Decomposed broadphase crate into modularized submodules (`bvh`, `sweep_and_prune`, `traversal`, `utils`) to strictly comply with the 300-line file limit.
 * **Stable BVH Tree** (Completed Goalpost v0.3.0-GP1, 2026-06-13):
-  Implemented a flat array-backed bounding volume hierarchy (BVH) with Surface Area Heuristic (SAH) construction and stack-based traversal solvers.
+  Implemented a flat array-backed bounding volume hierarchy (BVH) with Surface
+  Area Heuristic (SAH) construction and stack-based traversal solvers. The BVH
+  builder and traversal paths now use checked buffer/stack access, reject
+  malformed inputs without panics, and have a native counting-allocator witness
+  for zero heap allocation on the caller-owned buffer API surface.
 * **Geometry Intersection and Closest Point Queries** (Completed Release v0.2.0, 2026-06-12):
   Shipped `FixedRay3`, `FixedAabb3`, `FixedSphere3` shapes, ray-sphere/ray-AABB/ray-triangle intersection solvers, and point-to-triangle/segment-to-segment/AABB-to-sphere closest point solvers.
 * **Compiler Directives and Numeric Safeguards** (Completed Release v0.1.1, 2026-06-12):
@@ -36,9 +39,9 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## What feels wrong?
 
-* **Overstated Completion Claims**:
-  Several completed roadmap entries have acceptance criteria that are stronger
-  than the current source/test evidence. GP2 is blocked until these are
-  fact-checked and finished off in implementation.
+* **Pre-GP2 Audit Debt**:
+  The dishonest completed-claim labels have been fact-checked and finished off.
+  Keep future completed labels tied to implementation, test, CI, and document
+  evidence.
 * **Missing Matrix and Quaternion Math**:
   `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which will be needed for transformation queries.

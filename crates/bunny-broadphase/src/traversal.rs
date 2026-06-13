@@ -29,6 +29,29 @@ fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32]
         .ok_or(TraversalError::InvalidPrimitiveRange)
 }
 
+fn push_stack(
+    stack: &mut [u32; STACK_CAPACITY],
+    stack_ptr: &mut usize,
+    node_idx: u32,
+) -> Result<(), TraversalError> {
+    if *stack_ptr >= STACK_CAPACITY {
+        return Err(TraversalError::StackOverflow);
+    }
+    *stack
+        .get_mut(*stack_ptr)
+        .ok_or(TraversalError::StackOverflow)? = node_idx;
+    *stack_ptr += 1;
+    Ok(())
+}
+
+fn pop_stack(stack: &[u32; STACK_CAPACITY], stack_ptr: &mut usize) -> Option<u32> {
+    if *stack_ptr == 0 {
+        return None;
+    }
+    *stack_ptr -= 1;
+    stack.get(*stack_ptr).copied()
+}
+
 /// Traverses the BVH to find primitives that overlap with a query AABB.
 ///
 /// # Errors
@@ -51,12 +74,10 @@ where
     let mut stack = [0_u32; STACK_CAPACITY];
     let mut stack_ptr = 0;
 
-    stack[stack_ptr] = 0;
-    stack_ptr += 1;
+    push_stack(&mut stack, &mut stack_ptr, 0)?;
 
-    while stack_ptr > 0 {
-        stack_ptr -= 1;
-        let node_idx = stack[stack_ptr] as usize;
+    while let Some(node_idx) = pop_stack(&stack, &mut stack_ptr) {
+        let node_idx = node_idx as usize;
         let node = nodes
             .get(node_idx)
             .ok_or(TraversalError::InvalidNodeIndex)?;
@@ -71,16 +92,16 @@ where
             }
         } else {
             let left_child = node.first_child_or_prim_idx;
-            let right_child = left_child + 1;
+            let right_child = left_child
+                .checked_add(1)
+                .ok_or(TraversalError::InvalidNodeIndex)?;
 
-            if stack_ptr + 2 > STACK_CAPACITY {
+            if STACK_CAPACITY - stack_ptr < 2 {
                 return Err(TraversalError::StackOverflow);
             }
 
-            stack[stack_ptr] = left_child;
-            stack_ptr += 1;
-            stack[stack_ptr] = right_child;
-            stack_ptr += 1;
+            push_stack(&mut stack, &mut stack_ptr, left_child)?;
+            push_stack(&mut stack, &mut stack_ptr, right_child)?;
         }
     }
     Ok(())
@@ -108,12 +129,10 @@ where
     let mut stack = [0_u32; STACK_CAPACITY];
     let mut stack_ptr = 0;
 
-    stack[stack_ptr] = 0;
-    stack_ptr += 1;
+    push_stack(&mut stack, &mut stack_ptr, 0)?;
 
-    while stack_ptr > 0 {
-        stack_ptr -= 1;
-        let node_idx = stack[stack_ptr] as usize;
+    while let Some(node_idx) = pop_stack(&stack, &mut stack_ptr) {
+        let node_idx = node_idx as usize;
         let node = nodes
             .get(node_idx)
             .ok_or(TraversalError::InvalidNodeIndex)?;
@@ -128,16 +147,16 @@ where
             }
         } else {
             let left_child = node.first_child_or_prim_idx;
-            let right_child = left_child + 1;
+            let right_child = left_child
+                .checked_add(1)
+                .ok_or(TraversalError::InvalidNodeIndex)?;
 
-            if stack_ptr + 2 > STACK_CAPACITY {
+            if STACK_CAPACITY - stack_ptr < 2 {
                 return Err(TraversalError::StackOverflow);
             }
 
-            stack[stack_ptr] = left_child;
-            stack_ptr += 1;
-            stack[stack_ptr] = right_child;
-            stack_ptr += 1;
+            push_stack(&mut stack, &mut stack_ptr, left_child)?;
+            push_stack(&mut stack, &mut stack_ptr, right_child)?;
         }
     }
     Ok(())
