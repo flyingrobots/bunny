@@ -6,8 +6,10 @@
 
 //! Bounding volume hierarchy (BVH) and spatial broadphase query solvers.
 
+#[allow(clippy::module_name_repetitions)]
 pub mod bvh;
 pub mod sweep_and_prune;
+#[allow(clippy::module_name_repetitions)]
 pub mod traversal;
 pub mod utils;
 
