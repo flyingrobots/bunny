@@ -1,44 +1,46 @@
 # Bunny
 
-Bunny is a neutral Rust graphics commons for deterministic math, geometry,
-query, mesh, optics, and render-contract primitives.
+Bunny is a neutral, open-source Rust graphics commons that provides deterministic math, geometry, ray-casting queries, mesh layouts, optics, and render-contract primitives. 
 
-It is named after the Stanford Bunny and exists so projects can share graphics
-infrastructure without depending on Echo, Geordi, jedit, or any other product
-runtime.
+Named after the iconic **Stanford Bunny** (a computer graphics 3D test model), the project exists to establish absolute, bit-level CPU mathematical determinism across all platforms and compilation targets. By decoupling these primitives into a shared, runtime-neutral library, downstream systems can compute consistent graphics and geometric invariants without importing heavy app behaviors, causal database runtimes, or rendering backends.
+
+---
+
+## Rationale: Why Determinism?
+
+In modern multi-platform applications, minor differences in CPU floating-point calculations (e.g., due to compiler optimizations, CPU instructions like FMA, or target architectures) can lead to drift. Over time, these minute deviations cause split-brain behavior in simulated physics, collision detection, and ray-casting. 
+
+Bunny solves this by utilizing a fixed-point numerical profile (`FixedQ32_32`) and ensuring that all geometric operations (like dot products, normalization, and square roots) produce identical bitwise results across Linux, macOS, Windows, and WebAssembly (`wasm32-unknown-unknown`).
+
+---
 
 ## Role
 
 Bunny answers:
-
 ```text
-What is the deterministic graphics, math, geometry, or render-contract
-operation?
+What is the deterministic graphics, math, geometry, or render-contract operation?
 ```
 
 It does not answer:
-
 ```text
-What causally happened?
-What renderer proved a frame?
-What editor or app workflow is active?
+What causal database events occurred?
+What hardware renderer drew or rasterized a frame?
+What interactive editor workflows or product layouts are active?
 ```
 
 Those jobs belong to downstream projects.
 
-## Relationship To Other Projects
+---
 
-Bunny owns math, geometry, shape/query contracts, mesh, and optics substrate.
-It is the source of reusable graphics primitives.
+## Ecosystem Context & Relationships
 
-Echo owns causal runtime, strands, braids, transactions, and provenance. It may
-depend on Bunny and wrap Bunny results as causal facts.
+To understand Bunny, it helps to understand the other downstream projects in the workspace and ecosystem:
 
-Geordi owns render IR, renderer backends, receipts, and feature negotiation. It
-may depend on Bunny for math, geometry, mesh, optics, and schema contracts.
+*   **Echo (Causal Database & Runtime)**: Echo is a causal database and transaction engine. It tracks causal histories (strands, braids, transactions, and provenance) to coordinate and replicate state across users. Echo depends on Bunny to compute deterministic geometric results, wrapping them as immutable causal facts.
+*   **Geordi (Deterministic Rendering Backend)**: Geordi is a rendering engine and backend IR. It translates scene descriptions into rendered pixels, negotiates GPU features, and issues cryptographic proofs/receipts of rendering completion. Geordi consumes Bunny's math, mesh, and optics specifications to guarantee that the scene geometry it draws matches the geometry computed by the database.
+*   **jedit / Jim (Interactive Editor & Workspace)**: `jedit` is the user-facing editor application and workspace interface. It defines product behavior, panels, and user workflows. It consumes Bunny and Echo to present visual editor states to the user.
+*   **Wesley (Schema Compiler)**: Wesley is a compiler that translates schema files (`.graphql` SDL) into language-specific DTOs (Data Transfer Objects). Bunny uses a custom code generator (`bunny-wesley`) extending `wesley-core` to compile the graphics schemas under `schemas/bunny/` into Rust and TypeScript types.
 
-jedit/Jim owns editor product behavior and user workflows. It should consume
-Bunny directly only for justified hot paths.
 
 ## Initial Crate Map
 
