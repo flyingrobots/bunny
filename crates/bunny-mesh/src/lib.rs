@@ -172,6 +172,10 @@ pub enum IndexBufferLayout<'a> {
     Width32(&'a [Triangle32]),
 }
 
+fn u32_index_is_valid(index: u32, vertex_count: usize) -> bool {
+    usize::try_from(index).is_ok_and(|index| index < vertex_count)
+}
+
 impl IndexBufferLayout<'_> {
     /// Checks if all indices in the layout are valid for a given vertex buffer length.
     #[must_use]
@@ -189,9 +193,9 @@ impl IndexBufferLayout<'_> {
             }
             Self::Width32(faces) => {
                 for face in faces {
-                    if face.v0 as usize >= vertex_count
-                        || face.v1 as usize >= vertex_count
-                        || face.v2 as usize >= vertex_count
+                    if !u32_index_is_valid(face.v0, vertex_count)
+                        || !u32_index_is_valid(face.v1, vertex_count)
+                        || !u32_index_is_valid(face.v2, vertex_count)
                     {
                         return false;
                     }
