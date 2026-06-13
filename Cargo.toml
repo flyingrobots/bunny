@@ -4,6 +4,7 @@ members = [
   "crates/bunny-geom",
   "crates/bunny-linalg",
   "crates/bunny-num",
+  "crates/bunny-query",
   "crates/bunny-wesley",
   "xtask",
 ]
