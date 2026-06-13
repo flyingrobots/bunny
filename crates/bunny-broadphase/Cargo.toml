@@ -1,0 +1,18 @@
+[package]
+name = "bunny-broadphase"
+description = "Bounding volume hierarchy (BVH) and spatial broadphase acceleration structures for Bunny."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+bunny-geom = { path = "../bunny-geom" }
+bunny-linalg = { path = "../bunny-linalg" }
+bunny-num = { path = "../bunny-num" }
+bunny-query = { path = "../bunny-query" }
+
+[lib]
+path = "src/lib.rs"
