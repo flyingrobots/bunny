@@ -6,13 +6,15 @@
 
 //! Linear algebra primitives for Bunny graphics contracts.
 
-use bunny_num::Scalar;
+use bunny_num::{FixedQ32_32, Scalar};
 
 mod fixed_vec2;
 mod fixed_vec3;
 
 pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
+
+const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
 
 /// Two-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -59,6 +61,11 @@ pub(crate) const fn checked_u128_to_i64(value: u128) -> Option<i64> {
     }
 }
 
+fn is_unit_length(length: FixedQ32_32) -> bool {
+    let delta = i128::from(length.to_raw()) - i128::from(FixedQ32_32::ONE.to_raw());
+    delta.abs() <= UNIT_LENGTH_TOLERANCE_RAW
+}
+
 /// A normalized two-dimensional vector using deterministic Q32.32 fixed-point representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FixedUnitVec2(FixedVec2);
@@ -69,7 +76,11 @@ impl FixedUnitVec2 {
     /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
     #[must_use]
     pub fn new(v: FixedVec2) -> Option<Self> {
-        v.normalize().map(Self)
+        let normalized = v.normalize()?;
+        normalized
+            .length()
+            .filter(|&length| is_unit_length(length))?;
+        Some(Self(normalized))
     }
 
     /// Gets the underlying `FixedVec2`.
@@ -89,7 +100,11 @@ impl FixedUnitVec3 {
     /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
     #[must_use]
     pub fn new(v: FixedVec3) -> Option<Self> {
-        v.normalize().map(Self)
+        let normalized = v.normalize()?;
+        normalized
+            .length()
+            .filter(|&length| is_unit_length(length))?;
+        Some(Self(normalized))
     }
 
     /// Gets the underlying `FixedVec3`.

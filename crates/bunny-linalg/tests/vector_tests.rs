@@ -281,4 +281,15 @@ fn test_fixed_unit_vectors() {
         FixedQ32_32::from_raw(i64::MAX),
     ))
     .is_none());
+    assert!(FixedUnitVec2::new(FixedVec2::new(
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::from_raw(1),
+    ))
+    .is_none());
+    assert!(FixedUnitVec3::new(FixedVec3::new(
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::ZERO,
+    ))
+    .is_none());
 }
