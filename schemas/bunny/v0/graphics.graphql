@@ -21,6 +21,7 @@ type BunnySchemaQuery {
 Finite deterministic scalar selected by the active Bunny numeric profile.
 """
 scalar BunnyScalar
+  @bunnyScalarProfile(name: "f32")
   @bunnyInvariant(description: "Bunny scalar values must be finite under the active numeric profile.")
 
 """
