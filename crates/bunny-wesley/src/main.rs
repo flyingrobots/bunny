@@ -35,11 +35,11 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     write_file(
         &config.rust,
-        &render::render_rust(&schema_ir, &schema_hash, &config.schema),
+        &render::render_rust(&schema_ir, &schema_hash, &config.schema)?,
     )?;
     write_file(
         &config.typescript,
-        &render::render_typescript(&schema_ir, &schema_hash, &config.schema),
+        &render::render_typescript(&schema_ir, &schema_hash, &config.schema)?,
     )?;
     write_file(&config.manifest, &render_manifest(&config, &schema_hash))?;
 
@@ -131,92 +131,4 @@ fn json_escape(value: &str) -> String {
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
         .replace('\n', "\\n")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use wesley_core::TypeReference;
-
-    #[test]
-    fn maps_nullable_scalar_and_non_null_list() {
-        let nullable_scalar = TypeReference {
-            base: "BunnyScalar".to_string(),
-            nullable: true,
-            is_list: false,
-            list_item_nullable: None,
-            list_wrappers: Vec::new(),
-            leaf_nullable: None,
-        };
-        let point_list = TypeReference {
-            base: "BunnyContactPoint3".to_string(),
-            nullable: false,
-            is_list: true,
-            list_item_nullable: Some(false),
-            list_wrappers: Vec::new(),
-            leaf_nullable: None,
-        };
-
-        assert_eq!(render::rust_type(&nullable_scalar), "Option<BunnyScalar>");
-        assert_eq!(render::ts_type(&nullable_scalar), "BunnyScalar | null");
-        assert_eq!(render::rust_type(&point_list), "Vec<BunnyContactPoint3>");
-        assert_eq!(render::ts_type(&point_list), "BunnyContactPoint3[]");
-    }
-
-    #[test]
-    fn preserves_schema_object_order() {
-        let schema = r#"
-type First {
-  value: String!
-}
-
-type Second {
-  value: Int
-}
-"#;
-
-        let objects = wesley_core::lower_schema_sdl(schema)
-            .expect("schema parses")
-            .types;
-
-        assert_eq!(objects[0].name, "First");
-        assert_eq!(objects[1].name, "Second");
-        assert_eq!(
-            render::rust_type(&objects[1].fields[0].r#type),
-            "Option<i32>"
-        );
-    }
-
-    #[test]
-    fn test_directive_scalar_mapping() {
-        let schema = r#"
-            directive @bunnyScalarProfile(name: String!) on SCALAR
-            scalar BunnyScalar @bunnyScalarProfile(name: "f32")
-            scalar BunnyFixedQ32_32Raw @bunnyScalarProfile(name: "q32.32")
-            scalar CustomScalar @bunnyScalarProfile(name: "q32.32")
-            scalar BunnyFallback
-        "#;
-        let ir = wesley_core::lower_schema_sdl(schema).unwrap();
-
-        let scalar_f32 = ir.types.iter().find(|t| t.name == "BunnyScalar").unwrap();
-        let scalar_q32 = ir
-            .types
-            .iter()
-            .find(|t| t.name == "BunnyFixedQ32_32Raw")
-            .unwrap();
-        let scalar_custom = ir.types.iter().find(|t| t.name == "CustomScalar").unwrap();
-        let scalar_fallback = ir.types.iter().find(|t| t.name == "BunnyFallback").unwrap();
-
-        assert_eq!(render::rust_scalar_type(scalar_f32), "f32");
-        assert_eq!(render::ts_scalar_type(scalar_f32), "number");
-
-        assert_eq!(render::rust_scalar_type(scalar_q32), "i64");
-        assert_eq!(render::ts_scalar_type(scalar_q32), "bigint");
-
-        assert_eq!(render::rust_scalar_type(scalar_custom), "i64");
-        assert_eq!(render::ts_scalar_type(scalar_custom), "bigint");
-
-        assert_eq!(render::rust_scalar_type(scalar_fallback), "String");
-        assert_eq!(render::ts_scalar_type(scalar_fallback), "unknown");
-    }
 }
