@@ -4,6 +4,30 @@ use wesley_core::{TypeDefinition, TypeKind, TypeReference, WesleyIR};
 pub const GENERATOR_ID: &str = concat!("bunny-wesley/", env!("CARGO_PKG_VERSION"));
 pub const WESLEY_CORE_VERSION: &str = env!("WESLEY_CORE_VERSION");
 
+const BUNNY_TYPE_PREFIX: &str = "Bunny";
+const SCALAR_PROFILE_DIRECTIVE: &str = "bunnyScalarProfile";
+const SCALAR_PROFILE_NAME_ARGUMENT: &str = "name";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ScalarProfile {
+    name: &'static str,
+    rust_type: &'static str,
+    typescript_type: &'static str,
+}
+
+const SCALAR_PROFILES: &[ScalarProfile] = &[
+    ScalarProfile {
+        name: "f32",
+        rust_type: "f32",
+        typescript_type: "number",
+    },
+    ScalarProfile {
+        name: "q32.32",
+        rust_type: "i64",
+        typescript_type: "bigint",
+    },
+];
+
 fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
@@ -30,7 +54,7 @@ pub fn render_rust(
             && (is_bunny_type(&type_definition.name)
                 || type_definition
                     .directives
-                    .contains_key("bunnyScalarProfile"))
+                    .contains_key(SCALAR_PROFILE_DIRECTIVE))
     }) {
         if scalar.name.contains('_') {
             output.push_str("#[allow(non_camel_case_types)]\n");
@@ -99,7 +123,7 @@ pub fn render_typescript(
             && (is_bunny_type(&type_definition.name)
                 || type_definition
                     .directives
-                    .contains_key("bunnyScalarProfile"))
+                    .contains_key(SCALAR_PROFILE_DIRECTIVE))
     }) {
         output.push_str(&format!(
             "export type {} = {};\n",
@@ -182,10 +206,12 @@ fn rust_scalar_or_named_type(name: &str) -> String {
     }
 }
 
-fn resolve_profile_types(
-    scalar_def: &TypeDefinition,
-) -> Result<Option<(&'static str, &'static str)>, String> {
-    if let Some(profile_val) = scalar_def.directives.get("bunnyScalarProfile") {
+fn scalar_profile_by_name(name: &str) -> Option<&'static ScalarProfile> {
+    SCALAR_PROFILES.iter().find(|profile| profile.name == name)
+}
+
+fn resolve_profile(scalar_def: &TypeDefinition) -> Result<Option<&'static ScalarProfile>, String> {
+    if let Some(profile_val) = scalar_def.directives.get(SCALAR_PROFILE_DIRECTIVE) {
         let obj = profile_val.as_object().ok_or_else(|| {
             format!(
                 "`@bunnyScalarProfile` directive on scalar '{}' must be an object with arguments",
@@ -193,7 +219,7 @@ fn resolve_profile_types(
             )
         })?;
         let name_val = obj
-            .get("name")
+            .get(SCALAR_PROFILE_NAME_ARGUMENT)
             .ok_or_else(|| {
                 format!(
                     "Missing 'name' argument in `@bunnyScalarProfile` on scalar '{}'",
@@ -208,22 +234,22 @@ fn resolve_profile_types(
                 )
             })?;
 
-        match name_val {
-            "f32" => Ok(Some(("f32", "number"))),
-            "q32.32" => Ok(Some(("i64", "bigint"))),
-            other => Err(format!(
-                "Unsupported scalar profile '{}' on scalar '{}'",
-                other, scalar_def.name
-            )),
-        }
+        scalar_profile_by_name(name_val)
+            .ok_or_else(|| {
+                format!(
+                    "Unsupported scalar profile '{}' on scalar '{}'",
+                    name_val, scalar_def.name
+                )
+            })
+            .map(Some)
     } else {
         Ok(None)
     }
 }
 
 pub fn rust_scalar_type(scalar_def: &TypeDefinition) -> Result<&'static str, String> {
-    match resolve_profile_types(scalar_def)? {
-        Some((r, _)) => Ok(r),
+    match resolve_profile(scalar_def)? {
+        Some(profile) => Ok(profile.rust_type),
         None => Ok("String"),
     }
 }
@@ -238,14 +264,14 @@ fn ts_scalar_or_named_type(name: &str) -> String {
 }
 
 pub fn ts_scalar_type(scalar_def: &TypeDefinition) -> Result<&'static str, String> {
-    match resolve_profile_types(scalar_def)? {
-        Some((_, t)) => Ok(t),
+    match resolve_profile(scalar_def)? {
+        Some(profile) => Ok(profile.typescript_type),
         None => Ok("unknown"),
     }
 }
 
 fn is_bunny_type(name: &str) -> bool {
-    name.starts_with("Bunny")
+    name.starts_with(BUNNY_TYPE_PREFIX)
 }
 
 fn ts_wrap_union(rendered_type: String) -> String {
@@ -333,6 +359,24 @@ type Second {
 
         assert_eq!(rust_scalar_type(scalar_fallback).unwrap(), "String");
         assert_eq!(ts_scalar_type(scalar_fallback).unwrap(), "unknown");
+    }
+
+    #[test]
+    fn scalar_profiles_are_registry_driven() {
+        assert_eq!(scalar_profile_by_name("f32").unwrap().rust_type, "f32");
+        assert_eq!(
+            scalar_profile_by_name("q32.32").unwrap().typescript_type,
+            "bigint"
+        );
+
+        let source = include_str!("render.rs");
+        let legacy_float_name = ["Bunny", "Scalar"].concat();
+        let legacy_fixed_name = ["Bunny", "FixedQ32_32Raw"].concat();
+        let branch_pattern = ["match", " name", "_val"].concat();
+
+        assert!(!source.contains(&legacy_float_name));
+        assert!(!source.contains(&legacy_fixed_name));
+        assert!(!source.contains(&branch_pattern));
     }
 
     #[test]
