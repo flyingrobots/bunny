@@ -51,3 +51,7 @@ After a PR merges to `main`, run this checklist on `main`:
 | Documentation | `docs/slug` | `docs/crate-readmes` |
 | Maintenance | `maint-slug` | `maint-update-lockfile` |
 | Triage | `triage-slug` | `triage-backlog-cleanup` |
+
+> [!NOTE]
+> Operational branches (`maint-`, `triage-`) use a hyphen instead of a slash namespace (`feature/`, `docs/`, `cycles/`) to avoid Git reference resolution directory/file collisions. For example, if a branch named `maint` or `triage` is ever created, Git forbids creating any branch starting with `maint/` or `triage/` due to filesystem directory conflicts in `.git/refs/heads/`. Hyphenating short-lived operational branches keeps the namespace flat and safe from these collisions.
+

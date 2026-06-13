@@ -31,6 +31,20 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 3.1**: Establish `CODE_STANDARDS.md` and enforce linter policies (`clippy::pedantic`) [Done]
   * **Slice 3.2**: Implement GitHub Actions workflow (`ci.yml`) for multi-platform (Linux/macOS/Windows) determinism and WebAssembly checks [Done]
 
+
+---
+
+## Release v0.1.1: Compiler Directive Tuning (The Compiler Commons)
+* **Status**: Planned
+* **Description**: Enhances the code generator to dynamically resolve scalar profiles.
+
+### Goalpost 1: Directive-Driven Scalar Mapping (`bunny-wesley`)
+* **Description**: Parse `@bunnyScalarProfile` arguments from schema AST instead of using hardcoded string matching.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 1.1**: Parse and extract `@bunnyScalarProfile` directive arguments from Wesley IR [Issue #1]
+  * **Slice 1.2**: Implement dynamic mapping config based on extracted profiles and deprecate hardcoded name checks
+
 ---
 
 ## Release v0.2.0: Spatial Geometry & Intersection Solvers (The Query Commons)
