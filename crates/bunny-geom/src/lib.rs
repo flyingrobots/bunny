@@ -1,25 +1,133 @@
+#![deny(unsafe_code)]
+#![deny(clippy::all)]
+#![deny(clippy::pedantic)]
+#![deny(clippy::nursery)]
+#![deny(missing_docs)]
+
 //! Geometry primitives for Bunny graphics contracts.
 
-use bunny_linalg::Vec3;
-use bunny_num::Scalar;
+use bunny_linalg::{FixedVec3, Vec3};
+use bunny_num::{FixedQ32_32, Scalar};
 
 /// A 3D ray with finite origin and direction components.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ray3 {
+    /// The origin of the ray.
     pub origin: Vec3,
+    /// The direction vector of the ray.
     pub direction: Vec3,
 }
 
 /// A 3D axis-aligned bounding box.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Aabb3 {
+    /// The minimum corner of the bounding box.
     pub min: Vec3,
+    /// The maximum corner of the bounding box.
     pub max: Vec3,
 }
 
 /// A 3D sphere.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sphere3 {
+    /// The center of the sphere.
     pub center: Vec3,
+    /// The radius of the sphere.
     pub radius: Scalar,
+}
+
+/// A 3D ray with deterministic fixed-point coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedRay3 {
+    /// The ray origin.
+    pub origin: FixedVec3,
+    /// The ray direction vector.
+    pub direction: FixedVec3,
+}
+
+impl FixedRay3 {
+    /// Creates a new deterministic fixed-point ray.
+    #[must_use]
+    pub const fn new(origin: FixedVec3, direction: FixedVec3) -> Self {
+        Self { origin, direction }
+    }
+}
+
+/// A 3D axis-aligned bounding box with deterministic fixed-point coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedAabb3 {
+    /// The minimum corner.
+    pub min: FixedVec3,
+    /// The maximum corner.
+    pub max: FixedVec3,
+}
+
+impl FixedAabb3 {
+    /// Creates a new deterministic axis-aligned bounding box.
+    #[must_use]
+    pub const fn new(min: FixedVec3, max: FixedVec3) -> Self {
+        Self { min, max }
+    }
+}
+
+/// A 3D sphere with deterministic fixed-point coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedSphere3 {
+    /// The center coordinates.
+    pub center: FixedVec3,
+    /// The sphere radius.
+    pub radius: FixedQ32_32,
+}
+
+impl FixedSphere3 {
+    /// Creates a new deterministic sphere.
+    #[must_use]
+    pub const fn new(center: FixedVec3, radius: FixedQ32_32) -> Self {
+        Self { center, radius }
+    }
+}
+
+impl From<Ray3> for FixedRay3 {
+    fn from(r: Ray3) -> Self {
+        Self::new(FixedVec3::from(r.origin), FixedVec3::from(r.direction))
+    }
+}
+
+impl From<FixedRay3> for Ray3 {
+    fn from(r: FixedRay3) -> Self {
+        Self {
+            origin: Vec3::from(r.origin),
+            direction: Vec3::from(r.direction),
+        }
+    }
+}
+
+impl From<Aabb3> for FixedAabb3 {
+    fn from(a: Aabb3) -> Self {
+        Self::new(FixedVec3::from(a.min), FixedVec3::from(a.max))
+    }
+}
+
+impl From<FixedAabb3> for Aabb3 {
+    fn from(a: FixedAabb3) -> Self {
+        Self {
+            min: Vec3::from(a.min),
+            max: Vec3::from(a.max),
+        }
+    }
+}
+
+impl From<Sphere3> for FixedSphere3 {
+    fn from(s: Sphere3) -> Self {
+        Self::new(FixedVec3::from(s.center), FixedQ32_32::from_f32(s.radius))
+    }
+}
+
+impl From<FixedSphere3> for Sphere3 {
+    fn from(s: FixedSphere3) -> Self {
+        Self {
+            center: Vec3::from(s.center),
+            radius: s.radius.to_f32(),
+        }
+    }
 }
