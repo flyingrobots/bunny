@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-06-13
+
+### Added
+* Memory-stable, zero-allocation flat array-backed bounding volume hierarchy (BVH) tree builder.
+* SAH (Surface Area Heuristic) split selection solver for optimal tree building.
+* Stack-based, deterministic tree traversal solvers for AABB overlap and ray intersection queries.
+* Multi-axis Sweep-and-Prune broadphase collision solver with dynamic optimal axis selection.
+* Zero-allocation Sweep-and-Prune active overlap pair generator with stable lexicographical index sorting.
+
+## [0.2.0] - 2026-06-12
+
+### Added
+* `FixedRay3`, `FixedAabb3`, and `FixedSphere3` bounding volumes defined using fixed-point coordinate structures inside `bunny-geom`.
+* Compile-time normalized vector wrappers `FixedUnitVec2` and `FixedUnitVec3` to enforce normalization invariants.
+* Ray-Sphere, Ray-AABB, and Ray-Triangle (Möller-Trumbore) deterministic query intersection solvers in `bunny-query`.
+* Point-to-Triangle, Segment-to-Segment, and AABB-to-Sphere closest point and minimum distance query solvers in `bunny-query`.
+
+## [0.1.1] - 2026-06-12
+
+### Added
+* AST parser mappings to dynamically resolve custom `@bunnyScalarProfile` schema directives in `bunny-wesley` instead of hardcoded strings.
+* Saturation-checked mathematical division `FixedQ32_32::checked_div` returning `Option<FixedQ32_32>` for mathematical division guards.
+* Q32.32 vector boundary-condition and coordinate saturation verification suites.
+
+### Changed
+* Deferred `v0.1.1-GP3` Headless WebAssembly Verification to allow downstream broadphase acceleration progress.
+
 ## [0.1.0] - 2026-06-12
 
 ### Added

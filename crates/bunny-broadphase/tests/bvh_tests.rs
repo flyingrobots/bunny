@@ -1,4 +1,4 @@
-use bunny_broadphase::{build_bvh, intersect_aabb, intersect_ray, BvhNode};
+use bunny_broadphase::{build_bvh, intersect_aabb, intersect_ray, sweep_and_prune, BvhNode};
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
@@ -106,4 +106,77 @@ fn test_bvh_build_and_traverse() {
     assert!(hit_indices.contains(&0));
     assert!(hit_indices.contains(&1));
     assert!(hit_indices.contains(&2));
+}
+
+#[test]
+fn test_sweep_and_prune_solver() {
+    let prims = [
+        // Box 0
+        FixedAabb3::new(
+            FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
+            FixedVec3::new(
+                FixedQ32_32::from_f32(2.0),
+                FixedQ32_32::from_f32(2.0),
+                FixedQ32_32::from_f32(2.0),
+            ),
+        ),
+        // Box 1
+        FixedAabb3::new(
+            FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ONE, FixedQ32_32::ONE),
+            FixedVec3::new(
+                FixedQ32_32::from_f32(3.0),
+                FixedQ32_32::from_f32(3.0),
+                FixedQ32_32::from_f32(3.0),
+            ),
+        ),
+        // Box 2
+        FixedAabb3::new(
+            FixedVec3::new(
+                FixedQ32_32::from_f32(5.0),
+                FixedQ32_32::from_f32(5.0),
+                FixedQ32_32::from_f32(5.0),
+            ),
+            FixedVec3::new(
+                FixedQ32_32::from_f32(7.0),
+                FixedQ32_32::from_f32(7.0),
+                FixedQ32_32::from_f32(7.0),
+            ),
+        ),
+        // Box 3
+        FixedAabb3::new(
+            FixedVec3::new(
+                FixedQ32_32::from_f32(6.0),
+                FixedQ32_32::from_f32(6.0),
+                FixedQ32_32::from_f32(6.0),
+            ),
+            FixedVec3::new(
+                FixedQ32_32::from_f32(8.0),
+                FixedQ32_32::from_f32(8.0),
+                FixedQ32_32::from_f32(8.0),
+            ),
+        ),
+        // Box 4
+        FixedAabb3::new(
+            FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
+            FixedVec3::new(
+                FixedQ32_32::from_f32(2.0),
+                FixedQ32_32::ONE,
+                FixedQ32_32::ONE,
+            ),
+        ),
+    ];
+
+    let mut pairs = [(0, 0); 10];
+    let mut prim_indices = [0; 5];
+
+    let pair_count = sweep_and_prune(&mut pairs, &mut prim_indices, &prims)
+        .expect("sweep and prune should succeed");
+
+    assert_eq!(pair_count, 4);
+
+    // Pairs must be sorted lexicographically and in a < b order for each pair
+    assert_eq!(pairs[0], (0, 1));
+    assert_eq!(pairs[1], (0, 4));
+    assert_eq!(pairs[2], (1, 4));
+    assert_eq!(pairs[3], (2, 3));
 }
