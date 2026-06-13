@@ -12,12 +12,29 @@ const STACK_CAPACITY: usize = 64;
 pub enum TraversalError {
     /// The traversal stack capacity (64) was exceeded.
     StackOverflow,
+    /// A node references a child index that is outside the node slice.
+    InvalidNodeIndex,
+    /// A leaf node references primitives outside the primitive-index slice.
+    InvalidPrimitiveRange,
+}
+
+fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32], TraversalError> {
+    let start = node.first_child_or_prim_idx as usize;
+    let count = node.prim_count as usize;
+    let end = start
+        .checked_add(count)
+        .ok_or(TraversalError::InvalidPrimitiveRange)?;
+    prim_indices
+        .get(start..end)
+        .ok_or(TraversalError::InvalidPrimitiveRange)
 }
 
 /// Traverses the BVH to find primitives that overlap with a query AABB.
 ///
 /// # Errors
 /// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
+/// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
+/// if the provided BVH buffers are structurally malformed.
 pub fn intersect_aabb<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
@@ -40,17 +57,17 @@ where
     while stack_ptr > 0 {
         stack_ptr -= 1;
         let node_idx = stack[stack_ptr] as usize;
-        let node = &nodes[node_idx];
+        let node = nodes
+            .get(node_idx)
+            .ok_or(TraversalError::InvalidNodeIndex)?;
 
         if !aabbs_overlap(&node.bounds, query_box) {
             continue;
         }
 
         if node.prim_count > 0 {
-            let start = node.first_child_or_prim_idx as usize;
-            let count = node.prim_count as usize;
-            for i in 0..count {
-                overlap_leaf(prim_indices[start + i]);
+            for &prim_idx in leaf_indices(node, prim_indices)? {
+                overlap_leaf(prim_idx);
             }
         } else {
             let left_child = node.first_child_or_prim_idx;
@@ -73,6 +90,8 @@ where
 ///
 /// # Errors
 /// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
+/// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
+/// if the provided BVH buffers are structurally malformed.
 pub fn intersect_ray<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
@@ -95,17 +114,17 @@ where
     while stack_ptr > 0 {
         stack_ptr -= 1;
         let node_idx = stack[stack_ptr] as usize;
-        let node = &nodes[node_idx];
+        let node = nodes
+            .get(node_idx)
+            .ok_or(TraversalError::InvalidNodeIndex)?;
 
         if bunny_query::ray_intersects_aabb(ray, &node.bounds).is_none() {
             continue;
         }
 
         if node.prim_count > 0 {
-            let start = node.first_child_or_prim_idx as usize;
-            let count = node.prim_count as usize;
-            for i in 0..count {
-                intersect_leaf(prim_indices[start + i]);
+            for &prim_idx in leaf_indices(node, prim_indices)? {
+                intersect_leaf(prim_idx);
             }
         } else {
             let left_child = node.first_child_or_prim_idx;

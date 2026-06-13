@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates before fixed-point canonicalization.
 * `Sphere3` to `FixedSphere3` conversion now rejects non-finite centers plus
   non-finite and negative radii before fixed-point quantization.
+* BVH traversal now returns explicit errors for malformed node and primitive
+  index buffers instead of panicking.
 
 ## [0.3.0] - 2026-06-13
 

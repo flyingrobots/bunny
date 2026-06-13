@@ -220,3 +220,59 @@ fn test_traversal_stack_overflow() {
     let res = intersect_aabb(&nodes, &prim_indices, &query_box, |_idx| {});
     assert_eq!(res, Err(TraversalError::StackOverflow));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_traversal_rejects_malformed_bvh_without_panic() {
+    use bunny_broadphase::traversal::{intersect_aabb, TraversalError};
+    use bunny_broadphase::BvhNode;
+    use bunny_geom::{FixedAabb3, FixedRay3};
+    use bunny_linalg::FixedVec3;
+
+    let zero = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
+    let bounds = FixedAabb3::new(zero, zero);
+    let malformed_nodes = [BvhNode {
+        bounds,
+        first_child_or_prim_idx: 10,
+        prim_count: 0,
+    }];
+    let prim_indices = [0_u32];
+    let query_box = FixedAabb3::new(zero, zero);
+
+    let aabb_result = std::panic::catch_unwind(|| {
+        intersect_aabb(&malformed_nodes, &prim_indices, &query_box, |_idx| {})
+    });
+    assert_eq!(
+        aabb_result.expect("malformed child index should not panic"),
+        Err(TraversalError::InvalidNodeIndex)
+    );
+
+    let ray = FixedRay3::try_new(
+        FixedVec3::new(
+            FixedQ32_32::from_f32(-1.0),
+            FixedQ32_32::ZERO,
+            FixedQ32_32::ZERO,
+        ),
+        FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
+    )
+    .unwrap();
+    let ray_result = std::panic::catch_unwind(|| {
+        intersect_ray(&malformed_nodes, &prim_indices, &ray, |_idx| {})
+    });
+    assert_eq!(
+        ray_result.expect("malformed child index should not panic"),
+        Err(TraversalError::InvalidNodeIndex)
+    );
+
+    let malformed_leaf_nodes = [BvhNode {
+        bounds,
+        first_child_or_prim_idx: 1,
+        prim_count: 2,
+    }];
+    let leaf_result = std::panic::catch_unwind(|| {
+        intersect_aabb(&malformed_leaf_nodes, &prim_indices, &query_box, |_idx| {})
+    });
+    assert_eq!(
+        leaf_result.expect("malformed primitive range should not panic"),
+        Err(TraversalError::InvalidPrimitiveRange)
+    );
+}
