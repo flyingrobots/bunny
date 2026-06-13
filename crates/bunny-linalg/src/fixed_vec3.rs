@@ -53,7 +53,7 @@ impl FixedVec3 {
         let z_raw = u128::from(self.z.to_raw().unsigned_abs());
         let sum_sq = x_raw * x_raw + y_raw * y_raw + z_raw * z_raw;
         let root = FixedQ32_32::sqrt_u128(sum_sq);
-        Some(FixedQ32_32::from_raw(crate::saturate_u128_to_i64(root)))
+        crate::checked_u128_to_i64(root).map(FixedQ32_32::from_raw)
     }
 
     /// Normalizes the vector.

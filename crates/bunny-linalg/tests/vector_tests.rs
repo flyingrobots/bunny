@@ -193,12 +193,12 @@ fn test_vector_saturation_and_boundaries() {
     let dot_overflow = v2_max.dot(v2_max);
     assert_eq!(dot_overflow, max_val);
 
-    // Length saturation
+    // Length and normalization reject unrepresentable magnitudes.
     let len_sq_overflow = v2_max.length_squared();
     assert_eq!(len_sq_overflow, max_val);
 
-    let len_overflow = v2_max.length().expect("length should compute");
-    assert_eq!(len_overflow, max_val);
+    assert_eq!(v2_max.length(), None);
+    assert_eq!(v2_max.normalize(), None);
 
     // FixedVec3 saturation tests
     let v3_max = FixedVec3::new(max_val, max_val, max_val);
@@ -223,6 +223,9 @@ fn test_vector_saturation_and_boundaries() {
     let v3_dot_overflow = v3_max.dot(v3_max);
     assert_eq!(v3_dot_overflow, max_val);
 
+    assert_eq!(v3_max.length(), None);
+    assert_eq!(v3_max.normalize(), None);
+
     // Cross product saturation
     let v3_cross_overflow = v3_max.cross(FixedVec3::new(
         max_val * two,
@@ -230,4 +233,63 @@ fn test_vector_saturation_and_boundaries() {
         max_val * two,
     ));
     assert_eq!(v3_cross_overflow.x, max_val);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn test_fixed_unit_vectors() {
+    use bunny_linalg::{FixedUnitVec2, FixedUnitVec3};
+
+    // 1. FixedUnitVec2
+    let v2_valid = FixedVec2::new(FixedQ32_32::from_f32(3.0), FixedQ32_32::from_f32(4.0));
+    let uv2 = FixedUnitVec2::new(v2_valid).expect("should normalize");
+    let inner2 = uv2.into_inner();
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(inner2.x.to_f32(), 3.0 / 5.0);
+        assert_eq!(inner2.y.to_f32(), 4.0 / 5.0);
+    }
+
+    let uv2_zero = FixedUnitVec2::new(FixedVec2::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO));
+    assert!(uv2_zero.is_none());
+    assert!(FixedUnitVec2::new(FixedVec2::new(
+        FixedQ32_32::from_raw(i64::MAX),
+        FixedQ32_32::from_raw(i64::MAX),
+    ))
+    .is_none());
+
+    // 2. FixedUnitVec3
+    let v3_valid = FixedVec3::new(
+        FixedQ32_32::from_f32(2.0),
+        FixedQ32_32::from_f32(3.0),
+        FixedQ32_32::from_f32(6.0),
+    );
+    let uv3 = FixedUnitVec3::new(v3_valid).expect("should normalize");
+    let inner3 = uv3.into_inner();
+    assert!((inner3.x.to_f32() - (2.0 / 7.0)).abs() < 1e-6);
+    assert!((inner3.y.to_f32() - (3.0 / 7.0)).abs() < 1e-6);
+    assert!((inner3.z.to_f32() - (6.0 / 7.0)).abs() < 1e-6);
+
+    let uv3_zero = FixedUnitVec3::new(FixedVec3::new(
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+        FixedQ32_32::ZERO,
+    ));
+    assert!(uv3_zero.is_none());
+    assert!(FixedUnitVec3::new(FixedVec3::new(
+        FixedQ32_32::from_raw(i64::MAX),
+        FixedQ32_32::from_raw(i64::MAX),
+        FixedQ32_32::from_raw(i64::MAX),
+    ))
+    .is_none());
+    assert!(FixedUnitVec2::new(FixedVec2::new(
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::from_raw(1),
+    ))
+    .is_none());
+    assert!(FixedUnitVec3::new(FixedVec3::new(
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::from_raw(1),
+        FixedQ32_32::ZERO,
+    ))
+    .is_none());
 }

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -18,62 +21,65 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          components: clippy, rustfmt
+          persist-credentials: false
+
+      - name: Install Rust 1.96.0
+        run: rustup toolchain install 1.96.0 --profile minimal --component clippy,rustfmt
 
       - name: Verify Code Formatting
-        run: cargo fmt --all -- --check
+        run: cargo +1.96.0 fmt --all -- --check
 
       - name: Run Clippy Quality Gate
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo +1.96.0 clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Run Deterministic Math Tests
-        run: cargo test --workspace --all-targets
+        run: cargo +1.96.0 test --locked --workspace --all-targets
 
   wasm-check:
     name: WebAssembly Compile Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          targets: wasm32-unknown-unknown
+          persist-credentials: false
+
+      - name: Install Rust 1.96.0
+        run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
 
       - name: Verify WebAssembly Portability
         run: |
-          cargo check -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract -p bunny-query -p bunny-broadphase --target wasm32-unknown-unknown
+          cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh --target wasm32-unknown-unknown
 
   wasm-test:
     name: WebAssembly Headless Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          targets: wasm32-unknown-unknown
+          persist-credentials: false
+
+      - name: Install Rust 1.96.0
+        run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
 
       - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
+        uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa
         with:
-          version: 'latest'
+          version: 'v0.14.0'
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
 
       - name: Run Headless WebAssembly Tests
+        env:
+          RUSTUP_TOOLCHAIN: 1.96.0
         run: |
-          wasm-pack test --node crates/bunny-num
-          wasm-pack test --node crates/bunny-linalg
-          wasm-pack test --node crates/bunny-geom
-          wasm-pack test --node crates/bunny-query
-          wasm-pack test --node crates/bunny-broadphase
+          wasm-pack test --node crates/bunny-num --locked
+          wasm-pack test --node crates/bunny-linalg --locked
+          wasm-pack test --node crates/bunny-geom --locked
+          wasm-pack test --node crates/bunny-query --locked
+          wasm-pack test --node crates/bunny-broadphase --locked
+          wasm-pack test --node crates/bunny-mesh --locked

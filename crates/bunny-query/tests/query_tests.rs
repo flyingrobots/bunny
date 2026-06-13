@@ -20,30 +20,33 @@ fn test_ray_sphere_intersection() {
     );
 
     // Hit center
-    let ray1 = FixedRay3::new(
+    let ray1 = FixedRay3::try_new(
         zero_vec,
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ONE),
-    );
+    )
+    .unwrap();
     let (hit, normal) = ray_intersects_sphere(&ray1, &sphere).expect("should hit");
     assert_eq!(hit.z.to_f32(), 4.0);
     assert_eq!(normal.z.to_f32(), -1.0);
 
     // Miss
-    let ray2 = FixedRay3::new(
+    let ray2 = FixedRay3::try_new(
         zero_vec,
         FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
-    );
+    )
+    .unwrap();
     assert!(ray_intersects_sphere(&ray2, &sphere).is_none());
 
     // Inside sphere
-    let ray3 = FixedRay3::new(
+    let ray3 = FixedRay3::try_new(
         FixedVec3::new(
             FixedQ32_32::ZERO,
             FixedQ32_32::ZERO,
             FixedQ32_32::from_f32(4.5),
         ),
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ONE),
-    );
+    )
+    .unwrap();
     let (hit3, normal3) = ray_intersects_sphere(&ray3, &sphere).expect("should hit from inside");
     assert_eq!(hit3.z.to_f32(), 6.0);
     assert_eq!(normal3.z.to_f32(), 1.0);
@@ -66,23 +69,25 @@ fn test_ray_aabb_intersection() {
     );
 
     // Hit front
-    let ray1 = FixedRay3::new(
+    let ray1 = FixedRay3::try_new(
         zero_vec,
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ONE),
-    );
+    )
+    .unwrap();
     let (t_enter, t_exit) = ray_intersects_aabb(&ray1, &aabb).expect("should hit");
     assert_eq!(t_enter.to_f32(), 4.0);
     assert_eq!(t_exit.to_f32(), 6.0);
 
     // Miss
-    let ray2 = FixedRay3::new(
+    let ray2 = FixedRay3::try_new(
         zero_vec,
         FixedVec3::new(
             FixedQ32_32::from_f32(2.0),
             FixedQ32_32::ZERO,
             FixedQ32_32::ONE,
         ),
-    );
+    )
+    .unwrap();
     assert!(ray_intersects_aabb(&ray2, &aabb).is_none());
 }
 
@@ -106,24 +111,26 @@ fn test_ray_triangle_intersection() {
     );
 
     // Hit inside
-    let ray1 = FixedRay3::new(
+    let ray1 = FixedRay3::try_new(
         zero_vec,
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ONE),
-    );
+    )
+    .unwrap();
     let hit1 = ray_intersects_triangle(&ray1, v0, v1, v2).expect("should hit");
     assert_eq!(hit1.z.to_f32(), 5.0);
     assert_eq!(hit1.x.to_f32(), 0.0);
     assert_eq!(hit1.y.to_f32(), 0.0);
 
     // Miss outside edges
-    let ray2 = FixedRay3::new(
+    let ray2 = FixedRay3::try_new(
         zero_vec,
         FixedVec3::new(
             FixedQ32_32::from_f32(2.0),
             FixedQ32_32::ZERO,
             FixedQ32_32::ONE,
         ),
-    );
+    )
+    .unwrap();
     assert!(ray_intersects_triangle(&ray2, v0, v1, v2).is_none());
 }
 

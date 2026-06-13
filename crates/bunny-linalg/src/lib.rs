@@ -6,13 +6,15 @@
 
 //! Linear algebra primitives for Bunny graphics contracts.
 
-use bunny_num::Scalar;
+use bunny_num::{FixedQ32_32, Scalar};
 
 mod fixed_vec2;
 mod fixed_vec3;
 
 pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
+
+const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
 
 /// Two-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -51,10 +53,67 @@ impl Vec3 {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub(crate) const fn saturate_u128_to_i64(value: u128) -> i64 {
+pub(crate) const fn checked_u128_to_i64(value: u128) -> Option<i64> {
     if value > i64::MAX as u128 {
-        i64::MAX
+        None
     } else {
-        value as i64
+        Some(value as i64)
+    }
+}
+
+fn is_unit_length(length: FixedQ32_32) -> bool {
+    let delta = i128::from(length.to_raw()) - i128::from(FixedQ32_32::ONE.to_raw());
+    delta.abs() <= UNIT_LENGTH_TOLERANCE_RAW
+}
+
+/// A normalized two-dimensional vector using deterministic Q32.32 fixed-point representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedUnitVec2(FixedVec2);
+
+impl FixedUnitVec2 {
+    /// Creates a new `FixedUnitVec2` by normalizing the given vector.
+    ///
+    /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
+    #[must_use]
+    pub fn new(v: FixedVec2) -> Option<Self> {
+        let normalized = v.normalize()?;
+        let length = normalized.length()?;
+        if is_unit_length(length) {
+            Some(Self(normalized))
+        } else {
+            None
+        }
+    }
+
+    /// Gets the underlying `FixedVec2`.
+    #[must_use]
+    pub const fn into_inner(self) -> FixedVec2 {
+        self.0
+    }
+}
+
+/// A normalized three-dimensional vector using deterministic Q32.32 fixed-point representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedUnitVec3(FixedVec3);
+
+impl FixedUnitVec3 {
+    /// Creates a new `FixedUnitVec3` by normalizing the given vector.
+    ///
+    /// Returns `None` if normalization fails (vector has zero length or overflows/underflows).
+    #[must_use]
+    pub fn new(v: FixedVec3) -> Option<Self> {
+        let normalized = v.normalize()?;
+        let length = normalized.length()?;
+        if is_unit_length(length) {
+            Some(Self(normalized))
+        } else {
+            None
+        }
+    }
+
+    /// Gets the underlying `FixedVec3`.
+    #[must_use]
+    pub const fn into_inner(self) -> FixedVec3 {
+        self.0
     }
 }

@@ -6,7 +6,9 @@
 
 //! Ray-casting and spatial query math solvers for Bunny.
 
+#[allow(clippy::module_name_repetitions)]
 mod closest;
+#[allow(clippy::module_name_repetitions)]
 mod ray;
 
 pub use closest::{
