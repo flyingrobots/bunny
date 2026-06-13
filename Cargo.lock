@@ -84,6 +84,15 @@ name = "bunny-num"
 version = "0.1.0"
 
 [[package]]
+name = "bunny-query"
+version = "0.1.0"
+dependencies = [
+ "bunny-geom",
+ "bunny-linalg",
+ "bunny-num",
+]
+
+[[package]]
 name = "bunny-wesley"
 version = "0.1.0"
 dependencies = [
