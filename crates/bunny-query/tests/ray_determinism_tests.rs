@@ -7,6 +7,14 @@ use wasm_bindgen_test::wasm_bindgen_test;
 const RAY_DETERMINISM_CORPUS_SEED: u64 = 0xB002_0002_C0DE_0001;
 const ONE_RAW: i64 = bunny_num::fixed_q32_32::ONE_RAW;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SeededAxisCorpus {
+    sphere_center_z: i32,
+    aabb_min_z: i32,
+    aabb_max_z: i32,
+    triangle_z: i32,
+}
+
 fn q32(value: i32) -> FixedQ32_32 {
     FixedQ32_32::from_raw(i64::from(value) * ONE_RAW)
 }
@@ -15,8 +23,39 @@ fn vec3(x: i32, y: i32, z: i32) -> FixedVec3 {
     FixedVec3::new(q32(x), q32(y), q32(z))
 }
 
+fn raw(value: i32) -> i64 {
+    i64::from(value) * ONE_RAW
+}
+
 fn raw3(v: FixedVec3) -> [i64; 3] {
     [v.x.to_raw(), v.y.to_raw(), v.z.to_raw()]
+}
+
+fn next_seed(state: &mut u64) -> u64 {
+    *state = state
+        .wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(1_442_695_040_888_963_407);
+    *state
+}
+
+fn bounded_offset(state: &mut u64, bound: u32) -> i32 {
+    let value = next_seed(state) % u64::from(bound);
+    i32::try_from(value).expect("bounded corpus value should fit i32")
+}
+
+fn seeded_axis_corpus(seed: u64) -> SeededAxisCorpus {
+    let mut state = seed;
+    let sphere_center_z = 4 + bounded_offset(&mut state, 3);
+    let aabb_min_z = 2 + bounded_offset(&mut state, 3);
+    let aabb_max_z = aabb_min_z + 2 + bounded_offset(&mut state, 2);
+    let triangle_z = 3 + bounded_offset(&mut state, 4);
+
+    SeededAxisCorpus {
+        sphere_center_z,
+        aabb_min_z,
+        aabb_max_z,
+        triangle_z,
+    }
 }
 
 fn assert_sphere_raw(
@@ -47,8 +86,6 @@ fn assert_triangle_raw(
 
 #[wasm_bindgen_test(unsupported = test)]
 fn ray_query_raw_output_determinism_corpus() {
-    assert_eq!(RAY_DETERMINISM_CORPUS_SEED, 0xB002_0002_C0DE_0001);
-
     let unit_z_ray = FixedRay3::new(vec3(0, 0, 0), FixedUnitVec3::UNIT_Z);
     let unit_x_ray = FixedRay3::new(vec3(0, 0, 0), FixedUnitVec3::UNIT_X);
     let tangent_z_ray = FixedRay3::new(vec3(1, 0, 0), FixedUnitVec3::UNIT_Z);
@@ -93,4 +130,40 @@ fn ray_query_raw_output_determinism_corpus() {
         Some([ONE_RAW, -ONE_RAW, 5 * ONE_RAW]),
     );
     assert_triangle_raw(&outside_ray, v0, v1, v2, None);
+
+    let seeded = seeded_axis_corpus(RAY_DETERMINISM_CORPUS_SEED);
+    assert_eq!(
+        seeded,
+        SeededAxisCorpus {
+            sphere_center_z: 4,
+            aabb_min_z: 2,
+            aabb_max_z: 4,
+            triangle_z: 4,
+        }
+    );
+
+    let seeded_sphere = FixedSphere3::new(vec3(0, 0, seeded.sphere_center_z), q32(1));
+    assert_sphere_raw(
+        &unit_z_ray,
+        &seeded_sphere,
+        Some(([0, 0, raw(seeded.sphere_center_z - 1)], [0, 0, -ONE_RAW])),
+    );
+
+    let seeded_aabb = FixedAabb3::new(
+        vec3(-1, -1, seeded.aabb_min_z),
+        vec3(1, 1, seeded.aabb_max_z),
+    );
+    assert_aabb_raw(
+        &unit_z_ray,
+        &seeded_aabb,
+        Some((raw(seeded.aabb_min_z), raw(seeded.aabb_max_z))),
+    );
+
+    assert_triangle_raw(
+        &unit_z_ray,
+        vec3(-1, -1, seeded.triangle_z),
+        vec3(1, -1, seeded.triangle_z),
+        vec3(0, 1, seeded.triangle_z),
+        Some([0, 0, raw(seeded.triangle_z)]),
+    );
 }

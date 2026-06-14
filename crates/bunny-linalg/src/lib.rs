@@ -15,8 +15,6 @@ pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
 
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
-const UNIT_LENGTH_SQUARED_RAW: i128 =
-    (bunny_num::fixed_q32_32::ONE_RAW as i128) * (bunny_num::fixed_q32_32::ONE_RAW as i128);
 const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
 
 /// Two-dimensional vector using floating-point coordinates.
@@ -64,48 +62,69 @@ pub(crate) const fn checked_u128_to_i64(value: u128) -> Option<i64> {
     }
 }
 
-fn is_unit_length(length: FixedQ32_32) -> bool {
-    let delta = i128::from(length.to_raw()) - i128::from(FixedQ32_32::ONE.to_raw());
-    delta.abs() <= UNIT_LENGTH_TOLERANCE_RAW
+const fn is_unit_length(length: FixedQ32_32) -> bool {
+    is_unit_length_raw(length.to_raw())
 }
 
-const fn abs_i64_as_i128(value: i64) -> i128 {
+const fn abs_i128(value: i128) -> i128 {
     if value < 0 {
-        -(value as i128)
+        -value
     } else {
-        value as i128
+        value
     }
 }
 
-const fn raw_square(value: FixedQ32_32) -> i128 {
-    let abs = abs_i64_as_i128(value.to_raw());
+#[allow(clippy::cast_lossless)]
+const fn is_unit_length_raw(length_raw: i64) -> bool {
+    let delta = length_raw as i128 - FixedQ32_32::ONE.to_raw() as i128;
+    abs_i128(delta) <= UNIT_LENGTH_TOLERANCE_RAW
+}
+
+#[allow(clippy::cast_sign_loss)]
+const fn abs_i64_as_u128(value: i64) -> u128 {
+    if value < 0 {
+        -(value as i128) as u128
+    } else {
+        value as u128
+    }
+}
+
+const fn raw_square(value: FixedQ32_32) -> u128 {
+    let abs = abs_i64_as_u128(value.to_raw());
     abs * abs
 }
 
-const fn add_nonnegative_i128(lhs: i128, rhs: i128) -> Option<i128> {
-    if lhs > i128::MAX - rhs {
+const fn add_nonnegative_u128(lhs: u128, rhs: u128) -> Option<u128> {
+    if lhs > u128::MAX - rhs {
         None
     } else {
         Some(lhs + rhs)
     }
 }
 
-const fn is_exact_unit_vec2(v: FixedVec2) -> bool {
-    let x_squared = raw_square(v.x);
-    let y_squared = raw_square(v.y);
-    match add_nonnegative_i128(x_squared, y_squared) {
-        Some(sum) => sum == UNIT_LENGTH_SQUARED_RAW,
+const fn raw_squares_have_unit_length(sum: u128) -> bool {
+    match checked_u128_to_i64(FixedQ32_32::sqrt_u128(sum)) {
+        Some(length_raw) => is_unit_length_raw(length_raw),
         None => false,
     }
 }
 
-const fn is_exact_unit_vec3(v: FixedVec3) -> bool {
+const fn is_fixed_unit_vec2(v: FixedVec2) -> bool {
+    let x_squared = raw_square(v.x);
+    let y_squared = raw_square(v.y);
+    match add_nonnegative_u128(x_squared, y_squared) {
+        Some(sum) => raw_squares_have_unit_length(sum),
+        None => false,
+    }
+}
+
+const fn is_fixed_unit_vec3(v: FixedVec3) -> bool {
     let x_squared = raw_square(v.x);
     let y_squared = raw_square(v.y);
     let z_squared = raw_square(v.z);
-    match add_nonnegative_i128(x_squared, y_squared) {
-        Some(xy_sum) => match add_nonnegative_i128(xy_sum, z_squared) {
-            Some(sum) => sum == UNIT_LENGTH_SQUARED_RAW,
+    match add_nonnegative_u128(x_squared, y_squared) {
+        Some(xy_sum) => match add_nonnegative_u128(xy_sum, z_squared) {
+            Some(sum) => raw_squares_have_unit_length(sum),
             None => false,
         },
         None => false,
@@ -143,14 +162,14 @@ impl FixedUnitVec2 {
         }
     }
 
-    /// Const-validates an already-normalized fixed vector as an exact unit vector.
+    /// Const-validates an already-normalized fixed vector as a unit vector.
     ///
     /// Unlike `new`, this function does not normalize its input. It exists for
     /// compile-time known vectors where the caller needs a unit-vector proof
     /// without runtime normalization.
     #[must_use]
     pub const fn try_from_unit(v: FixedVec2) -> Option<Self> {
-        if is_exact_unit_vec2(v) {
+        if is_fixed_unit_vec2(v) {
             Some(Self(v))
         } else {
             None
@@ -225,14 +244,14 @@ impl FixedUnitVec3 {
         }
     }
 
-    /// Const-validates an already-normalized fixed vector as an exact unit vector.
+    /// Const-validates an already-normalized fixed vector as a unit vector.
     ///
     /// Unlike `new`, this function does not normalize its input. It exists for
     /// compile-time known vectors where the caller needs a unit-vector proof
     /// without runtime normalization.
     #[must_use]
     pub const fn try_from_unit(v: FixedVec3) -> Option<Self> {
-        if is_exact_unit_vec3(v) {
+        if is_fixed_unit_vec3(v) {
             Some(Self(v))
         } else {
             None

@@ -12,6 +12,12 @@ const CONST_NEG_Z_3: Option<FixedUnitVec3> = FixedUnitVec3::try_from_unit(FixedV
     FixedQ32_32::ZERO,
     NEG_ONE,
 ));
+const DIAGONAL_UNIT_RAW: i64 = 3_037_000_500;
+const CONST_DIAGONAL_XY_3: Option<FixedUnitVec3> = FixedUnitVec3::try_from_unit(FixedVec3::new(
+    FixedQ32_32::from_raw(DIAGONAL_UNIT_RAW),
+    FixedQ32_32::from_raw(DIAGONAL_UNIT_RAW),
+    FixedQ32_32::ZERO,
+));
 const CONST_NOT_UNIT_3: Option<FixedUnitVec3> = FixedUnitVec3::try_from_unit(FixedVec3::new(
     FixedQ32_32::from_raw(1),
     FixedQ32_32::from_raw(1),
@@ -31,6 +37,29 @@ fn test_unit_vector_compile_time_proofs() {
         FixedUnitVec3::NEG_UNIT_Z
     );
     assert_eq!(CONST_NOT_UNIT_3, None);
+
+    assert_eq!(
+        CONST_DIAGONAL_XY_3
+            .expect("canonical fixed diagonal should validate")
+            .into_inner(),
+        FixedVec3::new(
+            FixedQ32_32::from_raw(DIAGONAL_UNIT_RAW),
+            FixedQ32_32::from_raw(DIAGONAL_UNIT_RAW),
+            FixedQ32_32::ZERO,
+        )
+    );
+    assert_eq!(
+        FixedUnitVec3::new(FixedVec3::new(
+            FixedQ32_32::ONE,
+            FixedQ32_32::ONE,
+            FixedQ32_32::ZERO,
+        ))
+        .expect("runtime diagonal normalizes")
+        .into_inner(),
+        CONST_DIAGONAL_XY_3
+            .expect("const diagonal proof should validate")
+            .into_inner()
+    );
 
     assert_eq!(
         FixedUnitVec2::NEG_UNIT_Y.into_inner(),

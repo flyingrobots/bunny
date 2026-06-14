@@ -49,13 +49,11 @@ pub fn render_rust(
         "pub const BUNNY_WESLEY_CORE_VERSION: &str = \"{WESLEY_CORE_VERSION}\";\n\n"
     ));
 
-    for scalar in schema.types.iter().filter(|type_definition| {
-        matches!(type_definition.kind, TypeKind::Scalar)
-            && (is_bunny_type(&type_definition.name)
-                || type_definition
-                    .directives
-                    .contains_key(SCALAR_PROFILE_DIRECTIVE))
-    }) {
+    for scalar in schema
+        .types
+        .iter()
+        .filter(|type_definition| matches!(type_definition.kind, TypeKind::Scalar))
+    {
         if scalar.name.contains('_') {
             output.push_str("#[allow(non_camel_case_types)]\n");
         }
@@ -118,13 +116,11 @@ pub fn render_typescript(
         "export const BUNNY_WESLEY_CORE_VERSION = \"{WESLEY_CORE_VERSION}\" as const;\n\n"
     ));
 
-    for scalar in schema.types.iter().filter(|type_definition| {
-        matches!(type_definition.kind, TypeKind::Scalar)
-            && (is_bunny_type(&type_definition.name)
-                || type_definition
-                    .directives
-                    .contains_key(SCALAR_PROFILE_DIRECTIVE))
-    }) {
+    for scalar in schema
+        .types
+        .iter()
+        .filter(|type_definition| matches!(type_definition.kind, TypeKind::Scalar))
+    {
         output.push_str(&format!(
             "export type {} = {};\n",
             scalar.name,
@@ -359,6 +355,26 @@ type Second {
 
         assert_eq!(rust_scalar_type(scalar_fallback).unwrap(), "String");
         assert_eq!(ts_scalar_type(scalar_fallback).unwrap(), "unknown");
+    }
+
+    #[test]
+    fn render_emits_fallback_scalar_aliases_for_bunny_objects() {
+        let schema = r#"
+            scalar ExternalId
+
+            type BunnyThing {
+              id: ExternalId!
+            }
+        "#;
+        let ir = wesley_core::lower_schema_sdl(schema).unwrap();
+
+        let rust = render_rust(&ir, "hash", Path::new("schema.graphql")).unwrap();
+        assert!(rust.contains("pub type ExternalId = String;"));
+        assert!(rust.contains("pub id: ExternalId,"));
+
+        let ts = render_typescript(&ir, "hash", Path::new("schema.graphql")).unwrap();
+        assert!(ts.contains("export type ExternalId = unknown;"));
+        assert!(ts.contains("readonly id: ExternalId;"));
     }
 
     #[test]

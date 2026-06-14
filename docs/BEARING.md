@@ -4,11 +4,12 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 
 ## Where are we going?
 
-**Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters.
+**Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters,
+after the Pre-GP2 Completion Integrity Gate.
 
-* **Pre-GP2 Gate**: Completed. Every outstanding completed-claim acceptance
-  criterion has implementation, test, and documentation evidence.
-* **Next Branch**: `roadmap/pre-gp2-truth-gate`.
+* **Pre-GP2 Gate**: Completed with implementation, test, and documentation
+  evidence for every outstanding completed-claim acceptance criterion.
+* **Next Branch**: `goalpost/v0.4.0-gp2`.
 * **Next Work**: Start v0.4.0 / Goalpost 2 — File Format Adapters
   (`bunny-codec`) after this gate branch lands.
 
