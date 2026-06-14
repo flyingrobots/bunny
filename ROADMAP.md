@@ -179,9 +179,9 @@ fully satisfy the written acceptance criteria.
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 
 * **Description**: Zero-copy mesh deserialization.
-* **Status**: Active.
+* **Status**: Completed.
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 2.1**: Implement zero-copy PLY binary parser. [Done]
   * **Slice 2.2**: Implement zero-copy OBJ parser. [Done]
-  * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes. [Active]
+  * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes. [Done]

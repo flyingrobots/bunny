@@ -9,13 +9,17 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 * **Pre-GP2 Gate**: Completed with implementation, test, and documentation
   evidence for every outstanding completed-claim acceptance criterion.
 * **Next Branch**: `goalpost/v0.4.0-gp2`.
-* **Next Work**: Implement Slice 2.3 — Stanford Bunny fixture regression suites
-  for `bunny-codec`.
+* **Next Work**: Review and open the v0.4.0-GP2 pull request.
 
 ## What just shipped?
 
 * **Compressed Mesh Layouts** (Completed Goalpost v0.4.0-GP1, 2026-06-13):
   Implemented 16-bit integer coordinate quantization mapping for 3D vertices, memory-stable `IndexBufferLayout::Width16` / `IndexBufferLayout::Width32` layouts backed by `Triangle16` / `Triangle32` faces with vertex index validation, and zero-allocation cryptographic SHA-256 content-addressable asset hashing for mesh verification inside `bunny-mesh`.
+* **File Format Adapters** (Completed Goalpost v0.4.0-GP2, 2026-06-14):
+  Added `bunny-codec` with zero-copy binary PLY and OBJ text parser contracts,
+  borrowed payload/source views, typed vertex/triangle accessors, native
+  zero-allocation parser witnesses, WASM tests, and Stanford Bunny-derived
+  fixture regressions.
 * **WASM Headless Test Runner** (Completed Goalpost v0.1.1-GP3, 2026-06-13):
   Configured Node.js headless WebAssembly unit testing via `wasm-pack test` for
   every WASM-compatible library crate (`bunny-num`, `bunny-linalg`,
