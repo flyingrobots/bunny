@@ -63,7 +63,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 * **Description**: Upgrade the CI workflow to execute unit tests inside actual headless WebAssembly environments.
 * **Slice Budget**: 1 Slice
 * **Slices**:
-  * **Slice 3.1**: Configure GitHub Actions to execute the full workspace unit test suite inside a headless Node.js/V8 WASM runner via `wasm-pack test` [Done]
+  * **Slice 3.1**: Configure GitHub Actions to execute every WASM-compatible library crate unit suite inside a headless Node.js/V8 WASM runner via `wasm-pack test`, with host-side tooling covered by native tests [Done]
 
 ---
 
@@ -78,7 +78,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 1.1**: Implement `FixedRay3`, `FixedAabb3`, and `FixedSphere3` using `FixedVec3` coordinates [Done]
-  * **Slice 1.2**: Implement shape boundary conversion traits (`From`/`Into`) for float boundaries [Done]
+  * **Slice 1.2**: Implement validating float-to-fixed boundary conversion APIs and infallible fixed-to-float egress [Done]
   * **Slice 1.3**: Implement compile-time normalized wrappers `FixedUnitVec2` and `FixedUnitVec3` to enforce normalization invariants [Done]
 
 ### Goalpost 2: Ray-Casting Queries (`bunny-query`)
@@ -128,7 +128,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
-* **Status**: Planned
+* **Status**: Active; Pre-GP2 Completion Integrity Gate complete. Goalpost 2 is
+  next after the gate lands.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
@@ -140,9 +141,42 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice 1.2**: Implement index buffer triangulation layouts [Done]
   * **Slice 1.3**: Implement content-addressable hashing (SHA-256) for mesh assets [Done]
 
+### Pre-GP2 Completion Integrity Gate
+
+* **Description**: Re-audit every completed roadmap claim against code, tests,
+  and CI before starting new codec work.
+* **Slice Budget**: 1 discovery slice plus one or more finish-off slices.
+* **Rule**: Goalpost 2 must not start until every outstanding completed-claim
+  acceptance criterion below is implemented, tested, and documented. Acceptance
+  wording may be clarified only after the implementation satisfies the original
+  claim's intent.
+* **Slices**:
+  * **Slice A**: Fact-check completed roadmap claims and publish honest
+    documents listing verified claims, partial claims, and remaining finish-off
+    work. [Done]
+  * **Slice B+**: Finish the outstanding acceptance criteria discovered by
+    Slice A. The number of slices is intentionally open-ended until the audit
+    is complete. [Done]
+
+#### Outstanding Completed-Claim Acceptance Criteria
+
+These items were previously marked complete, but the current evidence does not
+fully satisfy the written acceptance criteria.
+
+| Status | Claim Area | Outstanding Acceptance Criterion | Required Resolution |
+| --- | --- | --- | --- |
+| Done | v0.1.1-GP1 Directive-Driven Scalar Mapping | Acceptance text requires directive-driven scalar mapping without hardcoded scalar-name checks. | `bunny-wesley` now uses explicit scalar-profile registry data, directive-driven lookup tests, missing-profile rejection tests, and a source-level guard against legacy hardcoded scalar-name branches. |
+| Done | v0.1.1-GP3 Headless WebAssembly Verification | Goalpost originally overclaimed a full-workspace WASM run, but host-side tooling crates are not WASM library crates. | CI now runs `wasm-pack test --node --locked` for every WASM-compatible library crate, including `bunny-contract`; `bunny-wesley` and `xtask` are documented host-side tooling exclusions covered by native tests. |
+| Done | v0.2.0-GP1 Core Bounding Shapes | Acceptance text previously implied infallible `From`/`Into` float-to-fixed ingress, while safe ingress is fallible by design. | `Ray3`, `Aabb3`, and `Sphere3` now expose validating `try_new` and `try_into_fixed` ingress APIs; fixed types expose `try_from_float`, `into_float`, and standard `TryFrom`/`From` implementations with rejection-path tests. |
+| Done | v0.2.0-GP1 Normalized Wrappers | Roadmap calls `FixedUnitVec2` / `FixedUnitVec3` compile-time normalized wrappers, but dynamic inputs require runtime normalization. | `FixedUnitVec2` and `FixedUnitVec3` now expose const `try_from_unit` fixed-unit proof APIs and axis constants while preserving runtime normalization through `new`; native and WASM tests cover valid and rejected const proofs. |
+| Done | v0.2.0-GP2 Ray-Casting Queries | Goalpost claims a fixed RNG-seed corpus and cross-platform bitwise/epsilon determinism gate. | `ray_determinism_tests.rs` now defines `RAY_DETERMINISM_CORPUS_SEED`, generates seeded corpus cases from it, and asserts raw Q32.32 expected outputs for ray-sphere, ray-AABB, and ray-triangle cases; the corpus runs in native workspace tests and the WASM `bunny-query` gate. |
+| Done | v0.2.0-GP3 Closest Point Queries | Goalpost claims byte-for-byte correctness, but tests mostly assert `to_f32()` values. | `closest_raw_tests.rs` now asserts raw Q32.32 outputs for AABB, AABB/sphere, triangle, and segment closest-point cases, including a fractional half-unit projection, under native and WASM query tests. |
+| Done | v0.3.0-GP1 Stable BVH Tree | Goalpost claims zero runtime heap allocation, and standards ban panics in library code, but `bunny-broadphase` still has guarded `unwrap()` and unchecked indexing in builder internals. | `build_bvh` and traversal now use checked buffer/stack access with explicit errors or `None`; malformed builder buffers are tested under native and WASM, and a native counting-allocator test proves build/traversal zero heap allocations. |
+
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 
 * **Description**: Zero-copy mesh deserialization.
+* **Status**: Next after the completed Pre-GP2 Completion Integrity Gate.
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 2.1**: Implement zero-copy PLY binary parser.

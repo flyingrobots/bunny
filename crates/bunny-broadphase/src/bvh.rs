@@ -31,18 +31,37 @@ pub fn build_bvh(
     }
 
     let n = primitives.len();
-    if nodes.len() < 2 * n - 1 || prim_indices.len() < n {
+    let required_nodes = n.checked_mul(2)?.checked_sub(1)?;
+    if required_nodes > u32::MAX as usize
+        || n > u32::MAX as usize
+        || nodes.len() < required_nodes
+        || prim_indices.len() < n
+    {
         return None;
     }
 
-    for (i, idx) in prim_indices.iter_mut().enumerate() {
-        *idx = i as u32;
+    for (i, idx) in prim_indices.iter_mut().take(n).enumerate() {
+        *idx = u32::try_from(i).ok()?;
     }
 
     let mut node_count = 1;
-    build_recursive(nodes, &mut node_count, prim_indices, primitives, 0, 0, n);
+    build_recursive(nodes, &mut node_count, prim_indices, primitives, 0, 0, n)?;
 
     Some(node_count)
+}
+
+fn write_node(nodes: &mut [BvhNode], node_idx: usize, node: BvhNode) -> Option<()> {
+    *nodes.get_mut(node_idx)? = node;
+    Some(())
+}
+
+fn primitive_at(
+    prim_indices: &[u32],
+    primitives: &[FixedAabb3],
+    slot: usize,
+) -> Option<FixedAabb3> {
+    let primitive_idx = usize::try_from(*prim_indices.get(slot)?).ok()?;
+    primitives.get(primitive_idx).copied()
 }
 
 #[allow(clippy::too_many_lines)]
@@ -57,19 +76,23 @@ fn build_recursive(
     node_idx: usize,
     first_prim: usize,
     num_prims: usize,
-) {
-    let mut bounds = primitives[prim_indices[first_prim] as usize];
+) -> Option<()> {
+    let mut bounds = primitive_at(prim_indices, primitives, first_prim)?;
     for i in 1..num_prims {
-        bounds = union_aabb(bounds, primitives[prim_indices[first_prim + i] as usize]);
+        let slot = first_prim.checked_add(i)?;
+        bounds = union_aabb(bounds, primitive_at(prim_indices, primitives, slot)?);
     }
 
     if num_prims == 1 {
-        nodes[node_idx] = BvhNode {
-            bounds,
-            first_child_or_prim_idx: first_prim as u32,
-            prim_count: num_prims as u32,
-        };
-        return;
+        return write_node(
+            nodes,
+            node_idx,
+            BvhNode {
+                bounds,
+                first_child_or_prim_idx: u32::try_from(first_prim).ok()?,
+                prim_count: u32::try_from(num_prims).ok()?,
+            },
+        );
     }
 
     let mut best_axis = 0;
@@ -77,10 +100,11 @@ fn build_recursive(
     let mut best_cost = FixedQ32_32::from_raw(i64::MAX);
 
     let parent_sa = surface_area(&bounds);
-    let mut centroid_min = get_centroid(&primitives[prim_indices[first_prim] as usize]);
+    let mut centroid_min = get_centroid(&primitive_at(prim_indices, primitives, first_prim)?);
     let mut centroid_max = centroid_min;
     for i in 1..num_prims {
-        let c = get_centroid(&primitives[prim_indices[first_prim + i] as usize]);
+        let slot = first_prim.checked_add(i)?;
+        let c = get_centroid(&primitive_at(prim_indices, primitives, slot)?);
         centroid_min = min_vec(centroid_min, c);
         centroid_max = max_vec(centroid_max, c);
     }
@@ -110,21 +134,21 @@ fn build_recursive(
             let mut right_count = 0;
 
             for i in 0..num_prims {
-                let prim_idx = prim_indices[first_prim + i] as usize;
-                let prim = &primitives[prim_idx];
-                let c = get_axis_val(&get_centroid(prim), axis);
+                let slot = first_prim.checked_add(i)?;
+                let prim = primitive_at(prim_indices, primitives, slot)?;
+                let c = get_axis_val(&get_centroid(&prim), axis);
                 if c < split_coord {
-                    left_bounds = Some(left_bounds.map_or(*prim, |lb| union_aabb(lb, *prim)));
+                    left_bounds = Some(left_bounds.map_or(prim, |lb| union_aabb(lb, prim)));
                     left_count += 1;
                 } else {
-                    right_bounds = Some(right_bounds.map_or(*prim, |rb| union_aabb(rb, *prim)));
+                    right_bounds = Some(right_bounds.map_or(prim, |rb| union_aabb(rb, prim)));
                     right_count += 1;
                 }
             }
 
-            if left_count > 0 && right_count > 0 {
-                let sa_l = surface_area(&left_bounds.unwrap());
-                let sa_r = surface_area(&right_bounds.unwrap());
+            if let (Some(left), Some(right)) = (left_bounds, right_bounds) {
+                let sa_l = surface_area(&left);
+                let sa_r = surface_area(&right);
                 let cost = sa_l
                     * FixedQ32_32::from_raw(left_count as i64 * FixedQ32_32::ONE.to_raw())
                     + sa_r * FixedQ32_32::from_raw(right_count as i64 * FixedQ32_32::ONE.to_raw());
@@ -141,22 +165,28 @@ fn build_recursive(
     let leaf_cost = parent_sa * FixedQ32_32::from_raw(num_prims as i64 * FixedQ32_32::ONE.to_raw());
 
     if best_cost >= leaf_cost && num_prims <= 4 {
-        nodes[node_idx] = BvhNode {
-            bounds,
-            first_child_or_prim_idx: first_prim as u32,
-            prim_count: num_prims as u32,
-        };
-        return;
+        return write_node(
+            nodes,
+            node_idx,
+            BvhNode {
+                bounds,
+                first_child_or_prim_idx: u32::try_from(first_prim).ok()?,
+                prim_count: u32::try_from(num_prims).ok()?,
+            },
+        );
     }
 
     let mut i = first_prim;
-    let mut j = first_prim + num_prims - 1;
+    let mut j = first_prim.checked_add(num_prims)?.checked_sub(1)?;
     while i <= j {
-        let prim_idx = prim_indices[i] as usize;
-        let c = get_axis_val(&get_centroid(&primitives[prim_idx]), best_axis);
+        let prim = primitive_at(prim_indices, primitives, i)?;
+        let c = get_axis_val(&get_centroid(&prim), best_axis);
         if c < best_split {
-            i += 1;
+            i = i.checked_add(1)?;
         } else {
+            if i >= prim_indices.len() || j >= prim_indices.len() {
+                return None;
+            }
             prim_indices.swap(i, j);
             if j == 0 {
                 break;
@@ -167,22 +197,33 @@ fn build_recursive(
 
     let left_count = i - first_prim;
     if left_count == 0 || left_count == num_prims {
-        nodes[node_idx] = BvhNode {
-            bounds,
-            first_child_or_prim_idx: first_prim as u32,
-            prim_count: num_prims as u32,
-        };
-        return;
+        return write_node(
+            nodes,
+            node_idx,
+            BvhNode {
+                bounds,
+                first_child_or_prim_idx: u32::try_from(first_prim).ok()?,
+                prim_count: u32::try_from(num_prims).ok()?,
+            },
+        );
     }
 
     let left_child_idx = *node_count;
-    *node_count += 2;
+    *node_count = node_count.checked_add(2)?;
+    if *node_count > nodes.len() {
+        return None;
+    }
 
-    nodes[node_idx] = BvhNode {
-        bounds,
-        first_child_or_prim_idx: left_child_idx as u32,
-        prim_count: 0,
-    };
+    write_node(
+        nodes,
+        node_idx,
+        BvhNode {
+            bounds,
+            first_child_or_prim_idx: u32::try_from(left_child_idx).ok()?,
+            prim_count: 0,
+        },
+    )?;
+    let right_first_prim = first_prim.checked_add(left_count)?;
 
     build_recursive(
         nodes,
@@ -192,14 +233,14 @@ fn build_recursive(
         left_child_idx,
         first_prim,
         left_count,
-    );
+    )?;
     build_recursive(
         nodes,
         node_count,
         prim_indices,
         primitives,
         left_child_idx + 1,
-        first_prim + left_count,
+        right_first_prim,
         num_prims - left_count,
-    );
+    )
 }

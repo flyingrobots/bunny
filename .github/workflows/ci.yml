@@ -80,6 +80,7 @@ jobs:
           wasm-pack test --node crates/bunny-num --locked
           wasm-pack test --node crates/bunny-linalg --locked
           wasm-pack test --node crates/bunny-geom --locked
+          wasm-pack test --node crates/bunny-contract --locked
           wasm-pack test --node crates/bunny-query --locked
           wasm-pack test --node crates/bunny-broadphase --locked
           wasm-pack test --node crates/bunny-mesh --locked
