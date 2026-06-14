@@ -157,6 +157,9 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice B+**: Finish the outstanding acceptance criteria discovered by
     Slice A. The number of slices is intentionally open-ended until the audit
     is complete. [Done]
+* **Audit Artifact**: `docs/goalposts/v0.4.0-pre-gp2.md` now records verified,
+  partial, and unsubstantiated completed-claim findings with repo-truth
+  evidence anchors.
 
 #### Outstanding Completed-Claim Acceptance Criteria
 
