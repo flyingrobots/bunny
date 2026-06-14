@@ -11,6 +11,8 @@ pub enum ObjError {
     MissingFaces,
     /// A numeric vertex coordinate could not be parsed.
     InvalidVertex,
+    /// A vertex coordinate is NaN or infinity.
+    NonFiniteVertex,
     /// A face is not a triangle.
     NonTriangularFace,
     /// A face index is zero, negative, relative, or not a valid integer.
@@ -27,6 +29,7 @@ impl fmt::Display for ObjError {
             Self::MissingVertices => "OBJ source contains no vertex records",
             Self::MissingFaces => "OBJ source contains no face records",
             Self::InvalidVertex => "OBJ vertex coordinate is invalid",
+            Self::NonFiniteVertex => "OBJ vertex coordinate is not finite",
             Self::NonTriangularFace => "OBJ face is not triangular",
             Self::InvalidIndex => "OBJ face index is invalid",
             Self::IndexOutOfBounds => "OBJ face index is out of bounds",
@@ -213,6 +216,9 @@ fn parse_vertex_line(line: &str) -> Result<ObjVertex, ObjError> {
         y: parse_coord(parts.next())?,
         z: parse_coord(parts.next())?,
     };
+    if !(vertex.x.is_finite() && vertex.y.is_finite() && vertex.z.is_finite()) {
+        return Err(ObjError::NonFiniteVertex);
+    }
     if parts.next().is_some() {
         Err(ObjError::InvalidVertex)
     } else {

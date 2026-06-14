@@ -128,8 +128,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
-* **Status**: Active; Pre-GP2 Completion Integrity Gate complete. Goalpost 2 is
-  now in progress.
+* **Status**: Active; Pre-GP2 Completion Integrity Gate and Goalpost 2 are
+  complete. Goalpost 3 is next.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)

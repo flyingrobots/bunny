@@ -39,6 +39,10 @@ pub enum PlyError {
     NonTriangularFace,
     /// A face index is negative and cannot be represented as `u32`.
     NegativeIndex,
+    /// A face references a vertex outside the parsed vertex range.
+    IndexOutOfBounds,
+    /// A vertex coordinate is NaN or infinity.
+    NonFiniteVertex,
     /// A declared count or offset overflowed `usize`.
     IntegerOverflow,
 }
@@ -59,6 +63,8 @@ impl fmt::Display for PlyError {
             Self::TrailingData => "PLY binary payload has trailing bytes",
             Self::NonTriangularFace => "PLY face list entry is not a triangle",
             Self::NegativeIndex => "PLY face index is negative",
+            Self::IndexOutOfBounds => "PLY face index is out of bounds",
+            Self::NonFiniteVertex => "PLY vertex coordinate is not finite",
             Self::IntegerOverflow => "PLY count or offset overflowed usize",
         };
         f.write_str(message)
@@ -108,11 +114,7 @@ impl<'a> PlyBinaryMesh<'a> {
     pub fn vertex(self, index: usize) -> Result<PlyVertex, PlyError> {
         let start = checked_offset(index, VERTEX_STRIDE)?;
         let bytes = take(self.vertex_bytes, start, VERTEX_STRIDE)?;
-        Ok(PlyVertex {
-            x: f32::from_le_bytes(take_array(bytes, 0)?),
-            y: f32::from_le_bytes(take_array(bytes, 4)?),
-            z: f32::from_le_bytes(take_array(bytes, 8)?),
-        })
+        read_vertex(bytes)
     }
 
     /// Reads a triangle face from the borrowed payload.
@@ -123,7 +125,9 @@ impl<'a> PlyBinaryMesh<'a> {
     pub fn triangle(self, index: usize) -> Result<Triangle32, PlyError> {
         let start = checked_offset(index, TRIANGLE_FACE_STRIDE)?;
         let bytes = take(self.face_bytes, start, TRIANGLE_FACE_STRIDE)?;
-        read_triangle(bytes)
+        let triangle = read_triangle(bytes)?;
+        validate_triangle_bounds(triangle, self.vertex_count)?;
+        Ok(triangle)
     }
 }
 
@@ -136,6 +140,12 @@ pub struct PlyVertex {
     pub y: f32,
     /// Z coordinate.
     pub z: f32,
+}
+
+impl PlyVertex {
+    const fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite()
+    }
 }
 
 /// Parses a canonical binary little-endian PLY mesh as a zero-copy borrowed view.
@@ -166,7 +176,8 @@ pub fn parse_binary_ply(input: &[u8]) -> Result<PlyBinaryMesh<'_>, PlyError> {
 
     let vertex_bytes = take(input, payload_start, vertex_len)?;
     let face_bytes = take(input, face_start, face_len)?;
-    validate_faces(face_bytes, spec.face_count)?;
+    validate_vertices(vertex_bytes, spec.vertex_count)?;
+    validate_faces(face_bytes, spec.face_count, spec.vertex_count)?;
 
     Ok(PlyBinaryMesh {
         vertex_bytes,
@@ -216,12 +227,34 @@ fn take_array<const N: usize>(input: &[u8], start: usize) -> Result<[u8; N], Ply
     Ok(bytes)
 }
 
-fn validate_faces(face_bytes: &[u8], count: usize) -> Result<(), PlyError> {
+fn validate_vertices(vertex_bytes: &[u8], count: usize) -> Result<(), PlyError> {
     for index in 0..count {
-        let start = checked_offset(index, TRIANGLE_FACE_STRIDE)?;
-        read_triangle(take(face_bytes, start, TRIANGLE_FACE_STRIDE)?)?;
+        let start = checked_offset(index, VERTEX_STRIDE)?;
+        read_vertex(take(vertex_bytes, start, VERTEX_STRIDE)?)?;
     }
     Ok(())
+}
+
+fn validate_faces(face_bytes: &[u8], count: usize, vertex_count: usize) -> Result<(), PlyError> {
+    for index in 0..count {
+        let start = checked_offset(index, TRIANGLE_FACE_STRIDE)?;
+        let triangle = read_triangle(take(face_bytes, start, TRIANGLE_FACE_STRIDE)?)?;
+        validate_triangle_bounds(triangle, vertex_count)?;
+    }
+    Ok(())
+}
+
+fn read_vertex(bytes: &[u8]) -> Result<PlyVertex, PlyError> {
+    let vertex = PlyVertex {
+        x: f32::from_le_bytes(take_array(bytes, 0)?),
+        y: f32::from_le_bytes(take_array(bytes, 4)?),
+        z: f32::from_le_bytes(take_array(bytes, 8)?),
+    };
+    if vertex.is_finite() {
+        Ok(vertex)
+    } else {
+        Err(PlyError::NonFiniteVertex)
+    }
 }
 
 fn read_triangle(bytes: &[u8]) -> Result<Triangle32, PlyError> {
@@ -238,4 +271,19 @@ fn read_triangle(bytes: &[u8]) -> Result<Triangle32, PlyError> {
 fn read_index(bytes: &[u8], start: usize) -> Result<u32, PlyError> {
     let value = i32::from_le_bytes(take_array(bytes, start)?);
     u32::try_from(value).map_err(|_| PlyError::NegativeIndex)
+}
+
+fn validate_triangle_bounds(triangle: Triangle32, vertex_count: usize) -> Result<(), PlyError> {
+    if index_is_valid(triangle.v0, vertex_count)
+        && index_is_valid(triangle.v1, vertex_count)
+        && index_is_valid(triangle.v2, vertex_count)
+    {
+        Ok(())
+    } else {
+        Err(PlyError::IndexOutOfBounds)
+    }
+}
+
+fn index_is_valid(index: u32, vertex_count: usize) -> bool {
+    usize::try_from(index).is_ok_and(|index| index < vertex_count)
 }

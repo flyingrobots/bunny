@@ -55,6 +55,25 @@ f 1 2 4
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn rejects_non_finite_obj_vertices() {
+    let nan = "\
+v NaN 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+";
+    assert_eq!(parse_obj_text(nan), Err(ObjError::NonFiniteVertex));
+
+    let infinity = "\
+v 0.0 inf 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+";
+    assert_eq!(parse_obj_text(infinity), Err(ObjError::NonFiniteVertex));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn rejects_relative_or_zero_obj_indices() {
     let negative = "\
 v 0.0 0.0 0.0

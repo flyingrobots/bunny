@@ -74,6 +74,31 @@ fn rejects_negative_face_indices() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn rejects_out_of_bounds_face_indices() {
+    let mut bytes = canonical_triangle_ply();
+    let third_index_start = HEADER.len() + VERTEX_BYTES.len() + 9;
+    bytes[third_index_start..third_index_start + 4].copy_from_slice(&3_i32.to_le_bytes());
+
+    assert_eq!(parse_binary_ply(&bytes), Err(PlyError::IndexOutOfBounds));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn rejects_non_finite_vertices() {
+    let mut nan_bytes = canonical_triangle_ply();
+    let vertex_start = HEADER.len();
+    nan_bytes[vertex_start..vertex_start + 4].copy_from_slice(&f32::NAN.to_le_bytes());
+    assert_eq!(parse_binary_ply(&nan_bytes), Err(PlyError::NonFiniteVertex));
+
+    let mut infinity_bytes = canonical_triangle_ply();
+    infinity_bytes[vertex_start + 4..vertex_start + 8]
+        .copy_from_slice(&f32::INFINITY.to_le_bytes());
+    assert_eq!(
+        parse_binary_ply(&infinity_bytes),
+        Err(PlyError::NonFiniteVertex)
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn rejects_trailing_payload_bytes() {
     let mut bytes = canonical_triangle_ply();
     bytes.push(0);
