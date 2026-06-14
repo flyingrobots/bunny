@@ -1,53 +1,90 @@
-# Bunny — Testing Doctrine
+# Bunny - Testing Doctrine
 
-Determinism is paramount. This document defines the testing strategies used to enforce bit-level computational reproducibility across platforms.
+Bunny tests prove deterministic behavior, safe boundaries, and honest claims.
+Passing tests are not enough if they do not cover the acceptance criteria that
+the roadmap says are complete.
 
----
+## Determinism Rules
 
-## 1. Bit-Level Determinism Assertions
+* Fixed-point outputs use exact assertions on raw values or value objects.
+* Floating-point values are allowed at ingress and egress boundaries only.
+* Non-finite float inputs must be rejected before they enter deterministic
+  geometry or mesh contracts.
+* Randomized corpora must have fixed seeds and committed expected outputs.
+* Allocation claims require direct witnesses, not inference from code shape.
 
-Because float representations differ across host FPUs, compilers, and hardware execution lanes (e.g., Fused Multiply-Add instruction differences), Bunny uses software-defined fixed-point arithmetic (`FixedQ32_32`).
+## Required Local Gates
 
-* **Exact Parity**: Tests operating on `FixedQ32_32` or `FixedVec3` must use strict byte-level assertions (`assert_eq!`) rather than delta-based floating-point comparisons (`assert!((a - b).abs() < epsilon)`).
-* **Float Isolation**: Floating-point operations are tested strictly at the boundary conversions. Core logic is checked within the fixed-point bounds.
+Run these before opening or updating a goalpost PR:
 
----
-
-## 2. Cross-Architecture Verification
-
-To prove platform independence, tests are executed in CI across:
-* **Ubuntu Linux (x86_64)**
-* **macOS (ARM64 Apple Silicon)**
-* **Windows (x86_64)**
-
-If the compiler or optimizer alters the arithmetic execution on any runner, the test suite will fail.
-
----
-
-## 3. WebAssembly Target Verification
-
-To ensure portability to browser runtimes and sandboxed edge workers, the core crates (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-contract`) are checked in CI for target `wasm32-unknown-unknown`:
 ```bash
-cargo check -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract --target wasm32-unknown-unknown
+cargo +1.96.0 fmt --all -- --check
+git diff --check
+cargo +1.96.0 clippy --locked --workspace --all-targets -- -D warnings
+cargo +1.96.0 test --locked --workspace --all-targets
+cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
+  -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
+  -p bunny-codec --target wasm32-unknown-unknown
 ```
 
----
+Documentation changes should also run Markdown lint over every touched Markdown
+file:
 
-## 4. Integration-First Test Structure
+```bash
+markdownlint-cli2 <changed-markdown-files>
+```
 
-To comply with the strict 300-line file size limit enforced in `CODE_STANDARDS.md`, unit tests are organized as **integration tests** placed outside of source files:
-* Core logic is placed in `crates/<crate-name>/src/`.
-* Test code is placed in `crates/<crate-name>/tests/` (e.g., `crates/bunny-num/tests/fixed_q32_32_tests.rs`).
-* This layout ensures that test imports use only the public API boundaries.
+## WebAssembly Gates
 
----
+Every WASM-compatible library crate must run headless under Node.js:
 
-## 5. Cross-Language Parity Witnesses
+```bash
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-num --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-linalg --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-geom --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-contract --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-query --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-broadphase --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-mesh --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
+```
 
-To ensure that Rust DTOs and TypeScript DTOs do not drift, the `bunny-wesley` compiler generates an integrity manifest containing:
-* The schema's SHA-256 hash.
-* Generator metadata and core versions.
-* Output file targets.
+Host-side tooling crates (`bunny-wesley`, `xtask`) are covered by native
+workspace tests and are intentionally not described as WASM library crates.
 
-Any change to the schema must be rebuilt via `cargo run --bin xtask generate` and verified by checking the manifest checksum matches.
+## Test Layout
 
+Source files stay small. Public behavior is tested through integration tests:
+
+| Location | Use |
+| --- | --- |
+| `crates/<crate>/src/` | Library implementation |
+| `crates/<crate>/tests/` | Public API and regression tests |
+| `docs/goalposts/` | Acceptance evidence and completion notes |
+| `.github/workflows/ci.yml` | Cross-platform and WASM enforcement |
+
+## Boundary Fixtures
+
+Fixtures need provenance. A fixture should record:
+
+* Source URL or generation procedure.
+* Download or generation date when applicable.
+* Any source record IDs, vertices, faces, or raw bytes used.
+* Any local remapping performed for reduced fixtures.
+
+For accepted zero-copy parser paths, tests should prove both parsed values and
+borrowed source or payload retention. For rejected paths, tests should assert the
+specific error variant.
+
+## CI Expectations
+
+GitHub Actions must run:
+
+* Formatting.
+* Workspace Clippy with warnings denied.
+* Workspace native tests across Linux, macOS, and Windows.
+* WASM compile checks for all WASM-compatible library crates.
+* Headless Node.js WASM tests for all WASM-compatible library crates.
+
+If local and CI behavior diverge, CI wins until the difference is understood and
+documented.

@@ -1,52 +1,64 @@
-# Bunny — BEARING
+# Bunny - Bearing
 
-This signpost summarizes short-term priorities, recent ships, and technical debt. It does not replace the backlog, design docs, or roadmap milestones.
+This is the living signpost for what the repo is doing now. It should be short,
+current, and honest. Deeper history belongs in `ROADMAP.md`, `CHANGELOG.md`, and
+goalpost documents.
 
-## Where are we going?
+## Current Position
 
-**Current Priority**: v0.4.0 / Goalpost 2 — File Format Adapters.
+| Field | State |
+| --- | --- |
+| Active release | `v0.4.0` - Quantized Meshes & Codecs |
+| Active branch | `goalpost/v0.4.0-gp2` |
+| Open PR | #104 - Complete v0.4.0 GP2 file format adapters |
+| Current gate | CI and review for GP2 |
+| Next goalpost | `v0.4.0-GP3` compression decoders |
 
-* **Pre-GP2 Gate**: Completed with implementation, test, and documentation
-  evidence for every outstanding completed-claim acceptance criterion.
-* **Next Branch**: `goalpost/v0.4.0-gp2`.
-* **Next Work**: Review and open the v0.4.0-GP2 pull request.
+## Recent Truth
 
-## What just shipped?
+* The Pre-GP2 Completion Integrity Gate is complete. Previously overclaimed
+  roadmap items were fact-checked, finished, and documented with evidence.
+* GP1 shipped `bunny-mesh` compressed mesh layouts: 16-bit vertex quantization,
+  stable 16-bit and 32-bit triangle buffers, and SHA-256 mesh hashing.
+* GP2 adds `bunny-codec`, including zero-copy binary PLY and OBJ parser
+  contracts, Stanford Bunny-derived fixtures, native zero-allocation witnesses,
+  and native/WASM regression tests.
+* Codec ingress now rejects non-finite vertex coordinates and out-of-bounds PLY
+  face indices before returning borrowed mesh views.
+* CI is pinned to Rust 1.96.0 and runs native workspace tests plus headless
+  `wasm-pack test --node` for every WASM-compatible library crate.
 
-* **Compressed Mesh Layouts** (Completed Goalpost v0.4.0-GP1, 2026-06-13):
-  Implemented 16-bit integer coordinate quantization mapping for 3D vertices, memory-stable `IndexBufferLayout::Width16` / `IndexBufferLayout::Width32` layouts backed by `Triangle16` / `Triangle32` faces with vertex index validation, and zero-allocation cryptographic SHA-256 content-addressable asset hashing for mesh verification inside `bunny-mesh`.
-* **File Format Adapters** (Completed Goalpost v0.4.0-GP2, 2026-06-14):
-  Added `bunny-codec` with zero-copy binary PLY and OBJ text parser contracts,
-  borrowed payload/source views, typed vertex/triangle accessors, native
-  zero-allocation parser witnesses, WASM tests, and Stanford Bunny-derived
-  fixture regressions.
-* **WASM Headless Test Runner** (Completed Goalpost v0.1.1-GP3, 2026-06-13):
-  Configured Node.js headless WebAssembly unit testing via `wasm-pack test` for
-  every WASM-compatible library crate (`bunny-num`, `bunny-linalg`,
-  `bunny-geom`, `bunny-contract`, `bunny-query`, `bunny-broadphase`, and
-  `bunny-mesh`, plus GP2's `bunny-codec`) using
-  `wasm-bindgen-test(unsupported = test)` fallback for native host compilation.
-  Host-side binary/tooling crates (`bunny-wesley` and `xtask`) are
-  intentionally covered by native workspace tests instead. Added automated WASM
-  check and WASM test jobs in GitHub Actions CI suite.
-* **Broadphase Sweep-and-Prune Solver** (Completed Goalpost v0.3.0-GP2, 2026-06-13):
-  Implemented a zero-allocation, multi-axis Sweep-and-Prune broadphase overlap query solver with stable lexicographical index sorting. Decomposed broadphase crate into modularized submodules (`bvh`, `sweep_and_prune`, `traversal`, `utils`) to strictly comply with the 300-line file limit.
-* **Stable BVH Tree** (Completed Goalpost v0.3.0-GP1, 2026-06-13):
-  Implemented a flat array-backed bounding volume hierarchy (BVH) with Surface
-  Area Heuristic (SAH) construction and stack-based traversal solvers. The BVH
-  builder and traversal paths now use checked buffer/stack access, reject
-  malformed inputs without panics, and have a native counting-allocator witness
-  for zero heap allocation on the caller-owned buffer API surface.
-* **Geometry Intersection and Closest Point Queries** (Completed Release v0.2.0, 2026-06-12):
-  Shipped `FixedRay3`, `FixedAabb3`, `FixedSphere3` shapes, ray-sphere/ray-AABB/ray-triangle intersection solvers, and point-to-triangle/segment-to-segment/AABB-to-sphere closest point solvers.
-* **Compiler Directives and Numeric Safeguards** (Completed Release v0.1.1, 2026-06-12):
-  Shipped directive-driven scalar mapping, Checked Division math guards, and vector saturation boundary verification suites.
+## Immediate Next Work
 
-## What feels wrong?
+1. Let PR #104 finish CI and review.
+2. Resolve any review threads without weakening the GP2 contract.
+3. Merge GP2 only after checks are green and review is clean.
+4. Sync `main`, then open the GP3 branch for compression decoders.
 
-* **Pre-GP2 Audit Debt**:
-  The dishonest completed-claim labels have been fact-checked and finished off.
-  Keep future completed labels tied to implementation, test, CI, and document
-  evidence.
-* **Missing Matrix and Quaternion Math**:
-  `bunny-linalg` lacks matrix and quaternion profiles (`FixedMat3`, `FixedMat4`, `FixedQuat`), which will be needed for transformation queries.
+## Watchpoints
+
+* Do not mark a roadmap slice done unless the implementation, tests, and docs
+  all support the claim.
+* Keep host-side tooling (`bunny-wesley`, `xtask`) distinct from
+  WASM-compatible library crates in docs and CI claims.
+* Keep codec parsers zero-copy on accepted paths while still validating payload
+  structure before returning borrowed views.
+* Matrix and quaternion profiles are still absent from `bunny-linalg`; future
+  transform work must either add them or explicitly stay out of that scope.
+
+## Last Known Local Verification
+
+The GP2 branch was verified with:
+
+```bash
+cargo +1.96.0 fmt --all -- --check
+cargo +1.96.0 clippy --locked --workspace --all-targets -- -D warnings
+cargo +1.96.0 test --locked --workspace --all-targets
+cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
+  -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
+  -p bunny-codec --target wasm32-unknown-unknown
+```
+
+The full local WASM loop also passed for `bunny-num`, `bunny-linalg`,
+`bunny-geom`, `bunny-contract`, `bunny-query`, `bunny-broadphase`,
+`bunny-mesh`, and `bunny-codec` with `wasm-pack test --node --locked`.
