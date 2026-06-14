@@ -3,7 +3,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use bunny_codec::parse_binary_ply;
+use bunny_codec::{parse_binary_ply, parse_obj_text};
 
 const HEADER: &str = concat!(
     "ply\n",
@@ -21,6 +21,12 @@ const VERTEX_BYTES: &[u8] = &[
     128, 63, 0, 0, 0, 0,
 ];
 const FACE_BYTES: &[u8] = &[3, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0];
+const OBJ_TRIANGLE: &str = "\
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+";
 
 static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 static TRACKING: AtomicBool = AtomicBool::new(false);
@@ -73,4 +79,12 @@ fn binary_ply_parse_allocates_zero_times() {
             .face_count(),
         1
     );
+}
+
+#[test]
+fn obj_text_parse_allocates_zero_times() {
+    let (mesh, allocations) = allocations_during(|| parse_obj_text(OBJ_TRIANGLE));
+
+    assert_eq!(allocations, 0);
+    assert_eq!(mesh.expect("canonical OBJ should parse").face_count(), 1);
 }

@@ -9,8 +9,8 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 * **Pre-GP2 Gate**: Completed with implementation, test, and documentation
   evidence for every outstanding completed-claim acceptance criterion.
 * **Next Branch**: `goalpost/v0.4.0-gp2`.
-* **Next Work**: Implement Slice 2.2 — zero-copy OBJ text parser contracts in
-  `bunny-codec`.
+* **Next Work**: Implement Slice 2.3 — Stanford Bunny fixture regression suites
+  for `bunny-codec`.
 
 ## What just shipped?
 

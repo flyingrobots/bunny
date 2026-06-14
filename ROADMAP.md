@@ -183,5 +183,5 @@ fully satisfy the written acceptance criteria.
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 2.1**: Implement zero-copy PLY binary parser. [Done]
-  * **Slice 2.2**: Implement zero-copy OBJ parser. [Active]
-  * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes.
+  * **Slice 2.2**: Implement zero-copy OBJ parser. [Done]
+  * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes. [Active]
