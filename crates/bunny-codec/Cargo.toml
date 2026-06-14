@@ -1,0 +1,18 @@
+[package]
+name = "bunny-codec"
+description = "Zero-copy mesh format adapters for Bunny."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+bunny-mesh = { path = "../bunny-mesh" }
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

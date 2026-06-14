@@ -9,7 +9,7 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
 * **Pre-GP2 Gate**: Completed with implementation, test, and documentation
   evidence for every outstanding completed-claim acceptance criterion.
 * **Next Branch**: `goalpost/v0.4.0-gp2`.
-* **Next Work**: Implement Slice 2.1 — zero-copy PLY binary parser contracts in
+* **Next Work**: Implement Slice 2.2 — zero-copy OBJ text parser contracts in
   `bunny-codec`.
 
 ## What just shipped?
@@ -20,10 +20,11 @@ This signpost summarizes short-term priorities, recent ships, and technical debt
   Configured Node.js headless WebAssembly unit testing via `wasm-pack test` for
   every WASM-compatible library crate (`bunny-num`, `bunny-linalg`,
   `bunny-geom`, `bunny-contract`, `bunny-query`, `bunny-broadphase`, and
-  `bunny-mesh`) using `wasm-bindgen-test(unsupported = test)` fallback for
-  native host compilation. Host-side binary/tooling crates (`bunny-wesley` and
-  `xtask`) are intentionally covered by native workspace tests instead. Added
-  automated WASM check and WASM test jobs in GitHub Actions CI suite.
+  `bunny-mesh`, plus GP2's `bunny-codec`) using
+  `wasm-bindgen-test(unsupported = test)` fallback for native host compilation.
+  Host-side binary/tooling crates (`bunny-wesley` and `xtask`) are
+  intentionally covered by native workspace tests instead. Added automated WASM
+  check and WASM test jobs in GitHub Actions CI suite.
 * **Broadphase Sweep-and-Prune Solver** (Completed Goalpost v0.3.0-GP2, 2026-06-13):
   Implemented a zero-allocation, multi-axis Sweep-and-Prune broadphase overlap query solver with stable lexicographical index sorting. Decomposed broadphase crate into modularized submodules (`bvh`, `sweep_and_prune`, `traversal`, `utils`) to strictly comply with the 300-line file limit.
 * **Stable BVH Tree** (Completed Goalpost v0.3.0-GP1, 2026-06-13):
