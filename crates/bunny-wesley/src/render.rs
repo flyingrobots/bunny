@@ -206,48 +206,48 @@ fn scalar_profile_by_name(name: &str) -> Option<&'static ScalarProfile> {
     SCALAR_PROFILES.iter().find(|profile| profile.name == name)
 }
 
-fn resolve_profile(scalar_def: &TypeDefinition) -> Result<Option<&'static ScalarProfile>, String> {
-    if let Some(profile_val) = scalar_def.directives.get(SCALAR_PROFILE_DIRECTIVE) {
-        let obj = profile_val.as_object().ok_or_else(|| {
+fn resolve_profile(scalar_def: &TypeDefinition) -> Result<&'static ScalarProfile, String> {
+    let profile_val = scalar_def
+        .directives
+        .get(SCALAR_PROFILE_DIRECTIVE)
+        .ok_or_else(|| {
             format!(
-                "`@bunnyScalarProfile` directive on scalar '{}' must be an object with arguments",
+                "Missing `@bunnyScalarProfile` directive on scalar '{}'",
                 scalar_def.name
             )
         })?;
-        let name_val = obj
-            .get(SCALAR_PROFILE_NAME_ARGUMENT)
-            .ok_or_else(|| {
-                format!(
-                    "Missing 'name' argument in `@bunnyScalarProfile` on scalar '{}'",
-                    scalar_def.name
-                )
-            })?
-            .as_str()
-            .ok_or_else(|| {
-                format!(
-                    "'name' argument in `@bunnyScalarProfile` on scalar '{}' must be a string",
-                    scalar_def.name
-                )
-            })?;
+    let obj = profile_val.as_object().ok_or_else(|| {
+        format!(
+            "`@bunnyScalarProfile` directive on scalar '{}' must be an object with arguments",
+            scalar_def.name
+        )
+    })?;
+    let name_val = obj
+        .get(SCALAR_PROFILE_NAME_ARGUMENT)
+        .ok_or_else(|| {
+            format!(
+                "Missing 'name' argument in `@bunnyScalarProfile` on scalar '{}'",
+                scalar_def.name
+            )
+        })?
+        .as_str()
+        .ok_or_else(|| {
+            format!(
+                "'name' argument in `@bunnyScalarProfile` on scalar '{}' must be a string",
+                scalar_def.name
+            )
+        })?;
 
-        scalar_profile_by_name(name_val)
-            .ok_or_else(|| {
-                format!(
-                    "Unsupported scalar profile '{}' on scalar '{}'",
-                    name_val, scalar_def.name
-                )
-            })
-            .map(Some)
-    } else {
-        Ok(None)
-    }
+    scalar_profile_by_name(name_val).ok_or_else(|| {
+        format!(
+            "Unsupported scalar profile '{}' on scalar '{}'",
+            name_val, scalar_def.name
+        )
+    })
 }
 
 pub fn rust_scalar_type(scalar_def: &TypeDefinition) -> Result<&'static str, String> {
-    match resolve_profile(scalar_def)? {
-        Some(profile) => Ok(profile.rust_type),
-        None => Ok("String"),
-    }
+    Ok(resolve_profile(scalar_def)?.rust_type)
 }
 
 fn ts_scalar_or_named_type(name: &str) -> String {
@@ -260,10 +260,7 @@ fn ts_scalar_or_named_type(name: &str) -> String {
 }
 
 pub fn ts_scalar_type(scalar_def: &TypeDefinition) -> Result<&'static str, String> {
-    match resolve_profile(scalar_def)? {
-        Some(profile) => Ok(profile.typescript_type),
-        None => Ok("unknown"),
-    }
+    Ok(resolve_profile(scalar_def)?.typescript_type)
 }
 
 fn is_bunny_type(name: &str) -> bool {
@@ -335,14 +332,12 @@ type Second {
             scalar TestScalar1 @bunnyScalarProfile(name: "f32")
             scalar TestScalar2 @bunnyScalarProfile(name: "q32.32")
             scalar CustomScalar @bunnyScalarProfile(name: "q32.32")
-            scalar TestFallback
         "#;
         let ir = wesley_core::lower_schema_sdl(schema).unwrap();
 
         let scalar_f32 = ir.types.iter().find(|t| t.name == "TestScalar1").unwrap();
         let scalar_q32 = ir.types.iter().find(|t| t.name == "TestScalar2").unwrap();
         let scalar_custom = ir.types.iter().find(|t| t.name == "CustomScalar").unwrap();
-        let scalar_fallback = ir.types.iter().find(|t| t.name == "TestFallback").unwrap();
 
         assert_eq!(rust_scalar_type(scalar_f32).unwrap(), "f32");
         assert_eq!(ts_scalar_type(scalar_f32).unwrap(), "number");
@@ -352,13 +347,10 @@ type Second {
 
         assert_eq!(rust_scalar_type(scalar_custom).unwrap(), "i64");
         assert_eq!(ts_scalar_type(scalar_custom).unwrap(), "bigint");
-
-        assert_eq!(rust_scalar_type(scalar_fallback).unwrap(), "String");
-        assert_eq!(ts_scalar_type(scalar_fallback).unwrap(), "unknown");
     }
 
     #[test]
-    fn render_emits_fallback_scalar_aliases_for_bunny_objects() {
+    fn render_rejects_custom_scalars_without_profiles() {
         let schema = r#"
             scalar ExternalId
 
@@ -368,13 +360,15 @@ type Second {
         "#;
         let ir = wesley_core::lower_schema_sdl(schema).unwrap();
 
-        let rust = render_rust(&ir, "hash", Path::new("schema.graphql")).unwrap();
-        assert!(rust.contains("pub type ExternalId = String;"));
-        assert!(rust.contains("pub id: ExternalId,"));
+        let rust_error = render_rust(&ir, "hash", Path::new("schema.graphql")).unwrap_err();
+        assert!(rust_error
+            .to_string()
+            .contains("Missing `@bunnyScalarProfile` directive on scalar 'ExternalId'"));
 
-        let ts = render_typescript(&ir, "hash", Path::new("schema.graphql")).unwrap();
-        assert!(ts.contains("export type ExternalId = unknown;"));
-        assert!(ts.contains("readonly id: ExternalId;"));
+        let ts_error = render_typescript(&ir, "hash", Path::new("schema.graphql")).unwrap_err();
+        assert!(ts_error
+            .to_string()
+            .contains("Missing `@bunnyScalarProfile` directive on scalar 'ExternalId'"));
     }
 
     #[test]
