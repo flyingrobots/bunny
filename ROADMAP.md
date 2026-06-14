@@ -129,7 +129,7 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
 * **Status**: Active; Pre-GP2 Completion Integrity Gate complete. Goalpost 2 is
-  next after the gate lands.
+  now in progress.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
@@ -179,9 +179,9 @@ fully satisfy the written acceptance criteria.
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 
 * **Description**: Zero-copy mesh deserialization.
-* **Status**: Next after the completed Pre-GP2 Completion Integrity Gate.
+* **Status**: Active.
 * **Slice Budget**: 3 Slices
 * **Slices**:
-  * **Slice 2.1**: Implement zero-copy PLY binary parser.
+  * **Slice 2.1**: Implement zero-copy PLY binary parser. [Active]
   * **Slice 2.2**: Implement zero-copy OBJ parser.
   * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes.
