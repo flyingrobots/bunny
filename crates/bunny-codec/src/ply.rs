@@ -170,14 +170,14 @@ pub fn parse_binary_ply(input: &[u8]) -> Result<PlyBinaryMesh<'_>, PlyError> {
     if input.len() < payload_end {
         return Err(PlyError::PayloadTooShort);
     }
-    if input.len() != payload_end {
-        return Err(PlyError::TrailingData);
-    }
 
     let vertex_bytes = take(input, payload_start, vertex_len)?;
     let face_bytes = take(input, face_start, face_len)?;
     validate_vertices(vertex_bytes, spec.vertex_count)?;
     validate_faces(face_bytes, spec.face_count, spec.vertex_count)?;
+    if input.len() != payload_end {
+        return Err(PlyError::TrailingData);
+    }
 
     Ok(PlyBinaryMesh {
         vertex_bytes,

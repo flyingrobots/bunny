@@ -241,6 +241,16 @@ fn rejects_non_triangular_faces() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn rejects_polygon_ply_payloads_as_non_triangular_faces() {
+    let mut bytes = canonical_triangle_ply();
+    let face_start = HEADER.len() + VERTEX_BYTES.len();
+    bytes[face_start] = 4;
+    bytes.extend_from_slice(&3_i32.to_le_bytes());
+
+    assert_eq!(parse_binary_ply(&bytes), Err(PlyError::NonTriangularFace));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn rejects_negative_face_indices() {
     let mut bytes = canonical_triangle_ply();
     let first_index_start = HEADER.len() + VERTEX_BYTES.len() + 1;
