@@ -1,3 +1,5 @@
+const MAX_MANTISSA_DIGITS: i32 = 19;
+
 #[allow(clippy::cast_possible_truncation)]
 pub(super) fn parse_ascii_float(text: &str) -> Option<f32> {
     if text.eq_ignore_ascii_case("nan") {
@@ -17,35 +19,74 @@ pub(super) fn parse_ascii_float(text: &str) -> Option<f32> {
     let bytes = text.as_bytes();
     let mut index = 0;
     let sign = parse_float_sign(bytes, &mut index);
-    let mut value = 0.0_f64;
-    let mut saw_digit = false;
-    let mut fractional_digits = 0_i32;
+    let mut mantissa = ParsedMantissa::default();
 
     while let Some(digit) = decimal_digit(bytes.get(index).copied()) {
-        value = value.mul_add(10.0, f64::from(digit));
-        saw_digit = true;
+        mantissa.push_integer_digit(digit);
         index += 1;
     }
 
     if bytes.get(index) == Some(&b'.') {
         index += 1;
         while let Some(digit) = decimal_digit(bytes.get(index).copied()) {
-            value = value.mul_add(10.0, f64::from(digit));
-            saw_digit = true;
-            fractional_digits = fractional_digits.saturating_add(1);
+            mantissa.push_fractional_digit(digit);
             index += 1;
         }
     }
 
-    if !saw_digit {
+    if !mantissa.saw_digit {
         return None;
     }
 
-    let exponent = parse_float_exponent(bytes, &mut index)?.saturating_sub(fractional_digits);
+    let exponent = mantissa.adjust_exponent(parse_float_exponent(bytes, &mut index)?);
     if index == bytes.len() {
-        Some((sign * value * 10_f64.powi(exponent)) as f32)
+        let value = if mantissa.value == 0.0 {
+            sign * 0.0
+        } else {
+            sign * mantissa.value * 10_f64.powi(exponent)
+        };
+        Some(value as f32)
     } else {
         None
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ParsedMantissa {
+    value: f64,
+    saw_digit: bool,
+    kept_digits: i32,
+    skipped_digits: i32,
+    fractional_digits: i32,
+}
+
+impl ParsedMantissa {
+    fn push_integer_digit(&mut self, digit: u8) {
+        self.push_digit(digit);
+    }
+
+    fn push_fractional_digit(&mut self, digit: u8) {
+        self.fractional_digits = self.fractional_digits.saturating_add(1);
+        self.push_digit(digit);
+    }
+
+    fn push_digit(&mut self, digit: u8) {
+        self.saw_digit = true;
+        if self.kept_digits == 0 && digit == 0 {
+            return;
+        }
+        if self.kept_digits < MAX_MANTISSA_DIGITS {
+            self.value = self.value.mul_add(10.0, f64::from(digit));
+            self.kept_digits += 1;
+        } else {
+            self.skipped_digits = self.skipped_digits.saturating_add(1);
+        }
+    }
+
+    const fn adjust_exponent(self, exponent: i32) -> i32 {
+        exponent
+            .saturating_add(self.skipped_digits)
+            .saturating_sub(self.fractional_digits)
     }
 }
 

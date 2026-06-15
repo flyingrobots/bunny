@@ -34,7 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `bunny-codec` now rejects non-finite OBJ/PLY vertex coordinates and
   out-of-bounds binary PLY face indices before returning borrowed mesh views.
 * `bunny-codec` now rejects duplicate or late PLY `format` directives and
-  handles extreme OBJ float exponents without panicking.
+  classifies non-triangle PLY polygon payloads before generic trailing-data
+  checks.
+* `bunny-codec` now handles extreme OBJ float exponents without panicking and
+  preserves finite OBJ coordinates with very large decimal mantissas.
 
 ## [0.3.0] - 2026-06-13
 

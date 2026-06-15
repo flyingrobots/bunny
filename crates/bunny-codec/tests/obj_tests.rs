@@ -161,6 +161,29 @@ f 1 2 3
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn parses_large_finite_obj_mantissas() {
+    let coordinate = format!("1{}e-400", "0".repeat(400));
+    let obj = format!(
+        "\
+v {coordinate} 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+"
+    );
+    let mesh = parse_obj_text(&obj).expect("scaled large mantissa should parse");
+
+    assert_eq!(
+        mesh.vertex(0),
+        Ok(ObjVertex {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        })
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn rejects_relative_or_zero_obj_indices() {
     let negative = "\
 v 0.0 0.0 0.0
