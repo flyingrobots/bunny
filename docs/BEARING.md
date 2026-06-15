@@ -11,8 +11,8 @@ goalpost documents.
 | Active release | `v0.4.0` - Quantized Meshes & Codecs |
 | Active branch | `goalpost/v0.4.0-gp3` |
 | Open PR | None |
-| Current gate | GP3 decoder design contract |
-| Next goalpost | `v0.4.0-GP3` compression decoders |
+| Current gate | GP3 local verification before PR |
+| Next goalpost | `v0.4.0-GP3` pull request and CI |
 
 ## Recent Truth
 
@@ -23,6 +23,9 @@ goalpost documents.
 * GP2 adds `bunny-codec`, including zero-copy binary PLY and OBJ parser
   contracts, Stanford Bunny-derived fixtures, native zero-allocation witnesses,
   and native/WASM regression tests.
+* GP3 now adds the Bunny-native compressed mesh decoder profile, a borrowed
+  zero-allocation compressed view, checked typed accessors, committed fixture
+  bytes, malformed-input corpus tests, and allocation evidence.
 * PR #104 merged GP2 into `main`. The GP2 goalpost now includes a captured
   witness table with repo-truth anchors for each completed implementation claim.
 * Codec ingress now rejects non-finite vertex coordinates and out-of-bounds PLY
@@ -32,13 +35,12 @@ goalpost documents.
 
 ## Immediate Next Work
 
-1. Finish the GP3 decoder design contract before implementation.
-2. Keep GP3 scoped to compression decoders; do not add new external file-format
+1. Run the full local GP3 verification gate, including native workspace tests,
+   WASM compile checks, `wasm-pack test --node crates/bunny-codec --locked`, and
+   Markdown lint over touched docs.
+2. Open the GP3 pull request after local verification is green.
+3. Keep GP3 scoped to compression decoders; do not add new external file-format
    profiles in this goalpost.
-3. Implement the smallest canonical byte-profile decoder after the contract is
-   explicit.
-4. Prove native and WASM determinism with corpus tests and malformed-input
-   regressions before marking GP3 complete.
 
 ## Watchpoints
 
@@ -46,8 +48,9 @@ goalpost documents.
   all support the claim.
 * Keep host-side tooling (`bunny-wesley`, `xtask`) distinct from
   WASM-compatible library crates in docs and CI claims.
-* Keep GP2 codec parser zero-copy claims intact. For GP3 decoders, state the
-  allocation contract explicitly before implementation and prove it with tests.
+* Keep GP2 codec parser zero-copy claims intact. GP3 decoder claims are limited
+  to borrowed raw payload sections plus typed checked accessors; no typed slice
+  reinterpretation is claimed.
 * Matrix and quaternion profiles are still absent from `bunny-linalg`; future
   transform work must either add them or explicitly stay out of that scope.
 

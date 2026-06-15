@@ -20,8 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   forward full-mesh traversal without quadratic indexed-access scans.
 * Captured GP2 witness table with repo-truth anchors for each completed file
   format adapter claim.
-* Initial GP3 compression decoder design contract for the canonical Bunny
-  compressed mesh byte profile.
+* GP3 Bunny-native compressed mesh decoder in `bunny-codec`, including
+  `decode_compressed_mesh`, a zero-allocation borrowed `CompressedMesh` view,
+  `CompressedIndexWidth`, typed compressed triangle variants, and explicit
+  malformed-input errors.
+* Canonical compressed triangle fixture bytes plus width-16, width-32,
+  malformed-input, native allocation, and WASM-compatible decoder regressions.
 
 ### Changed
 
@@ -42,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checks.
 * `bunny-codec` now handles extreme OBJ float exponents without panicking and
   preserves finite OBJ coordinates with very large decimal mantissas.
+* The GP3 compressed profile records its allocation contract explicitly: accepted
+  decoding borrows raw payload byte sections and exposes typed checked accessors,
+  rather than unsafely reinterpreting arbitrary bytes as typed slices.
 
 ## [0.3.0] - 2026-06-13
 

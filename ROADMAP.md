@@ -190,11 +190,16 @@ fully satisfy the written acceptance criteria.
 
 * **Description**: Decode a canonical Bunny compressed mesh byte stream into
   validated `bunny-mesh` buffers.
-* **Status**: Active; design contract is being established before implementation.
-* **Slice Budget**: 3 Slices
+* **Status**: Completed locally; awaiting pull request review and CI.
+* **Slice Budget**: 5 Slices
 * **Slices**:
   * **Slice 3.1**: Specify the canonical decoder byte profile, error model, and
-    deterministic validation gates. [Active]
-  * **Slice 3.2**: Implement the decoder against the documented profile. [Planned]
-  * **Slice 3.3**: Add native/WASM corpus tests, malformed-input regressions, and
-    allocation witnesses. [Planned]
+    deterministic validation gates. [Done]
+  * **Slice 3.2**: Expose the public decoder API, borrowed view, index-width
+    model, typed triangle variants, and explicit error model. [Done]
+  * **Slice 3.3**: Implement checked header, payload length, count, Q32.32 bounds,
+    and triangle-index validation. [Done]
+  * **Slice 3.4**: Add checked-in fixture bytes, width-16 and width-32 accepted
+    cases, malformed-input corpus tests, and WASM coverage. [Done]
+  * **Slice 3.5**: Prove the zero-allocation accepted path natively and record
+    evidence in the changelog and goalpost document. [Done]

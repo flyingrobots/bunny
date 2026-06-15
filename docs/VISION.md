@@ -36,7 +36,7 @@ The repo is organized around narrow crates:
 | `bunny-query` | Ray and closest-point query solvers |
 | `bunny-broadphase` | BVH and sweep-and-prune broadphase queries |
 | `bunny-mesh` | Quantized vertex layouts, triangle buffers, mesh hashes |
-| `bunny-codec` | Zero-copy PLY and OBJ mesh parser contracts |
+| `bunny-codec` | Zero-copy PLY/OBJ parsers and compressed mesh decoders |
 | `bunny-contract` | Shared contract surface for generated DTO boundaries |
 | `bunny-wesley` | Host-side GraphQL SDL contract generator |
 | `xtask` | Host-side repository automation |
@@ -67,5 +67,6 @@ The repo is organized around narrow crates:
 ## Near Horizon
 
 Release `v0.4.0` is in the mesh commons track. GP1 shipped compressed mesh
-layouts. GP2 merged file format adapters. GP3 is active and starts with a
-design contract for compression decoders before implementation begins.
+layouts. GP2 merged file format adapters. GP3 now adds a Bunny-native compressed
+mesh decoder with a documented byte profile, checked accessors, and native/WASM
+evidence.
