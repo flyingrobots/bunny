@@ -2,6 +2,7 @@
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use bunny_codec::{parse_binary_ply, parse_obj_text};
 
@@ -30,6 +31,7 @@ f 1 2 3
 
 static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 static TRACKING: AtomicBool = AtomicBool::new(false);
+static MEASUREMENT_LOCK: Mutex<()> = Mutex::new(());
 
 struct CountingAllocator;
 struct AllocationTrackingGuard;
@@ -68,6 +70,9 @@ fn canonical_triangle_ply() -> Vec<u8> {
 }
 
 fn allocations_during<T>(operation: impl FnOnce() -> T) -> (T, usize) {
+    let _measurement = MEASUREMENT_LOCK
+        .lock()
+        .expect("allocation measurement lock should not be poisoned");
     ALLOCATIONS.store(0, Ordering::SeqCst);
     TRACKING.store(true, Ordering::SeqCst);
     let guard = AllocationTrackingGuard;

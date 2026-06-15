@@ -32,6 +32,20 @@ fn parses_obj_triangle_as_borrowed_view() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn obj_accessors_reject_out_of_range_indices() {
+    let mesh = parse_obj_text(OBJ_TRIANGLE).expect("canonical OBJ should parse");
+
+    assert_eq!(
+        mesh.vertex(mesh.vertex_count()),
+        Err(ObjError::InvalidVertex)
+    );
+    assert_eq!(
+        mesh.triangle(mesh.face_count()),
+        Err(ObjError::IndexOutOfBounds)
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn parses_obj_records_with_inline_comments() {
     let obj = "\
 v 0.0 0.0 0.0 # origin

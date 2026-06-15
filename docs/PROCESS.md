@@ -33,6 +33,8 @@ tests, CI, or an explicit evidence artifact, it is not done.
 
 Do not use agent prefixes in branch names, commit messages, or PR titles. Do not
 rebase, amend, force-push, or create draft pull requests.
+These are contributor rules verified during review and handoff; they are not
+presented as local hook guarantees.
 
 ## Slice Discipline
 

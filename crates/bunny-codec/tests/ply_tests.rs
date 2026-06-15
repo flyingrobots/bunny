@@ -113,6 +113,31 @@ fn skips_properties_for_empty_auxiliary_elements() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn accepts_bare_comment_and_obj_info_header_lines() {
+    let header = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "comment\n",
+        "obj_info\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    let bytes = triangle_ply_with_header(header);
+
+    assert_eq!(
+        parse_binary_ply(&bytes)
+            .expect("bare comment metadata should be ignored")
+            .face_count(),
+        1
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn rejects_out_of_order_or_duplicate_ply_elements() {
     let face_before_vertex = concat!(
         "ply\n",

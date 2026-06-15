@@ -57,7 +57,12 @@ impl HeaderParseState {
 }
 
 fn parse_header_line(line: &str, state: &mut HeaderParseState) -> Result<(), PlyError> {
-    if line.starts_with("comment ") || line.starts_with("obj_info ") || line.is_empty() {
+    if line == "comment"
+        || line.starts_with("comment ")
+        || line == "obj_info"
+        || line.starts_with("obj_info ")
+        || line.is_empty()
+    {
         return Ok(());
     }
     let mut parts = line.split_whitespace();

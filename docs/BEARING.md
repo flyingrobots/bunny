@@ -48,10 +48,12 @@ goalpost documents.
 
 ## Last Known Local Verification
 
-The GP2 branch was verified with:
+The canonical checklist lives in `docs/TESTING.md`; this section is a status
+snapshot, not a replacement checklist. The GP2 branch was verified with:
 
 ```bash
 cargo +1.96.0 fmt --all -- --check
+git diff --check
 cargo +1.96.0 clippy --locked --workspace --all-targets -- -D warnings
 cargo +1.96.0 test --locked --workspace --all-targets
 cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
@@ -59,6 +61,9 @@ cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
   -p bunny-codec --target wasm32-unknown-unknown
 ```
 
-The full local WASM loop also passed for `bunny-num`, `bunny-linalg`,
-`bunny-geom`, `bunny-contract`, `bunny-query`, `bunny-broadphase`,
-`bunny-mesh`, and `bunny-codec` with `wasm-pack test --node --locked`.
+Documentation changes also ran Markdown lint over the touched Markdown files.
+The full local WASM loop used the explicit `RUSTUP_TOOLCHAIN=1.96.0
+wasm-pack test --node <crate> --locked` commands listed in
+`docs/TESTING.md#webassembly-gates` for all eight WASM-compatible library
+crates: `bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-contract`,
+`bunny-query`, `bunny-broadphase`, `bunny-mesh`, and `bunny-codec`.

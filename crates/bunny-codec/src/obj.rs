@@ -83,10 +83,11 @@ impl<'a> ObjMesh<'a> {
     /// Reads the requested triangle from the borrowed source.
     ///
     /// # Errors
-    /// Returns an `ObjError` if the index is out of range or the face record is invalid.
+    /// Returns `ObjError::IndexOutOfBounds` if the index is out of range,
+    /// or another `ObjError` if the face record is invalid.
     pub fn triangle(self, index: usize) -> Result<Triangle32, ObjError> {
         find_record(self.source, "f", index)
-            .ok_or(ObjError::NonTriangularFace)
+            .ok_or(ObjError::IndexOutOfBounds)
             .and_then(parse_face_line)
     }
 }
