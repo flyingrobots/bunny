@@ -32,6 +32,36 @@ fn parses_obj_triangle_as_borrowed_view() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn iterates_obj_records_in_source_order() {
+    let mesh = parse_obj_text(OBJ_TRIANGLE).expect("canonical OBJ should parse");
+
+    let vertices: Result<Vec<_>, _> = mesh.vertices().collect();
+    assert_eq!(
+        vertices,
+        Ok(vec![
+            ObjVertex {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            ObjVertex {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            ObjVertex {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        ])
+    );
+
+    let triangles: Result<Vec<_>, _> = mesh.triangles().collect();
+    assert_eq!(triangles, Ok(vec![Triangle32::new(0, 1, 2)]));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn obj_accessors_reject_out_of_range_indices() {
     let mesh = parse_obj_text(OBJ_TRIANGLE).expect("canonical OBJ should parse");
 

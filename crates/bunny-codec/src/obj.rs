@@ -1,47 +1,12 @@
-use std::fmt;
-
 use bunny_mesh::Triangle32;
 
+mod error;
 mod float;
+mod iter;
 
-/// Error returned when an OBJ mesh cannot be parsed as the Bunny text profile.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ObjError {
-    /// The OBJ source contains no vertex records.
-    MissingVertices,
-    /// The OBJ source contains no face records.
-    MissingFaces,
-    /// A numeric vertex coordinate could not be parsed.
-    InvalidVertex,
-    /// A vertex coordinate is NaN or infinity.
-    NonFiniteVertex,
-    /// A face is not a triangle.
-    NonTriangularFace,
-    /// A face index is zero, negative, relative, or not a valid integer.
-    InvalidIndex,
-    /// An accessor index or face vertex reference is outside the parsed range.
-    IndexOutOfBounds,
-    /// The OBJ statement is not part of the supported Bunny mesh profile.
-    UnsupportedStatement,
-}
-
-impl fmt::Display for ObjError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let message = match self {
-            Self::MissingVertices => "OBJ source contains no vertex records",
-            Self::MissingFaces => "OBJ source contains no face records",
-            Self::InvalidVertex => "OBJ vertex coordinate is invalid",
-            Self::NonFiniteVertex => "OBJ vertex coordinate is not finite",
-            Self::NonTriangularFace => "OBJ face is not triangular",
-            Self::InvalidIndex => "OBJ face index is invalid",
-            Self::IndexOutOfBounds => "OBJ face index is out of bounds",
-            Self::UnsupportedStatement => "OBJ statement is unsupported",
-        };
-        f.write_str(message)
-    }
-}
-
-impl std::error::Error for ObjError {}
+pub use error::ObjError;
+use iter::find_record;
+pub use iter::{ObjTriangles, ObjVertices};
 
 /// A borrowed OBJ mesh view over the original text input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +37,9 @@ impl<'a> ObjMesh<'a> {
 
     /// Reads the requested vertex from the borrowed source.
     ///
+    /// This performs a linear scan from the start of the source. Use
+    /// [`ObjMesh::vertices`] for full-mesh iteration.
+    ///
     /// # Errors
     /// Returns `ObjError::IndexOutOfBounds` if the index is out of range.
     pub fn vertex(self, index: usize) -> Result<ObjVertex, ObjError> {
@@ -82,6 +50,9 @@ impl<'a> ObjMesh<'a> {
 
     /// Reads the requested triangle from the borrowed source.
     ///
+    /// This performs a linear scan from the start of the source. Use
+    /// [`ObjMesh::triangles`] for full-mesh iteration.
+    ///
     /// # Errors
     /// Returns `ObjError::IndexOutOfBounds` if the index is out of range,
     /// or another `ObjError` if the face record is invalid.
@@ -89,6 +60,22 @@ impl<'a> ObjMesh<'a> {
         find_record(self.source, "f", index)
             .ok_or(ObjError::IndexOutOfBounds)
             .and_then(parse_face_line)
+    }
+
+    /// Returns a forward iterator over decoded OBJ vertex records.
+    ///
+    /// The iterator scans the borrowed source once and does not allocate.
+    #[must_use]
+    pub fn vertices(self) -> ObjVertices<'a> {
+        ObjVertices::new(self.source)
+    }
+
+    /// Returns a forward iterator over decoded OBJ triangle face records.
+    ///
+    /// The iterator scans the borrowed source once and does not allocate.
+    #[must_use]
+    pub fn triangles(self) -> ObjTriangles<'a> {
+        ObjTriangles::new(self.source, self.vertex_count)
     }
 }
 
@@ -194,19 +181,6 @@ fn statement_kind(line: &str) -> Result<Option<&str>, ObjError> {
 
 fn harmless_statement(kind: &str) -> bool {
     matches!(kind, "o" | "g" | "s" | "usemtl" | "mtllib" | "vt" | "vn")
-}
-
-fn find_record<'a>(source: &'a str, kind: &str, index: usize) -> Option<&'a str> {
-    let mut found = 0;
-    for line in source.lines() {
-        if statement_kind(line).ok().flatten() == Some(kind) {
-            if found == index {
-                return Some(line);
-            }
-            found += 1;
-        }
-    }
-    None
 }
 
 fn record_body(line: &str) -> &str {

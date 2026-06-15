@@ -4,7 +4,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use bunny_codec::{parse_binary_ply, parse_obj_text};
+use bunny_codec::{parse_binary_ply, parse_obj_text, ObjError};
 
 const HEADER: &str = concat!(
     "ply\n",
@@ -101,11 +101,17 @@ fn parsers_allocate_zero_times_after_warm_up() {
         1
     );
 
-    let (obj_mesh, obj_allocations) = allocations_during(|| parse_obj_text(OBJ_TRIANGLE));
+    let (obj_counts, obj_allocations) = allocations_during(|| {
+        let mesh = parse_obj_text(OBJ_TRIANGLE)?;
+        let vertices = mesh.vertices().try_fold(0, count_obj_record)?;
+        let triangles = mesh.triangles().try_fold(0, count_obj_record)?;
+        Ok::<_, ObjError>((vertices, triangles))
+    });
 
     assert_eq!(obj_allocations, 0, "OBJ parser allocated after warm-up");
-    assert_eq!(
-        obj_mesh.expect("canonical OBJ should parse").face_count(),
-        1
-    );
+    assert_eq!(obj_counts.expect("canonical OBJ should parse"), (3, 1));
+}
+
+fn count_obj_record<T>(count: usize, record: Result<T, ObjError>) -> Result<usize, ObjError> {
+    record.map(|_| count + 1)
 }
