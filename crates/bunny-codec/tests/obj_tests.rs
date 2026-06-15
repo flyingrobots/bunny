@@ -103,6 +103,34 @@ f 1 2 3
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn handles_extreme_obj_float_exponents_without_panicking() {
+    let underflow = "\
+v 1.23e-9999999999 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+";
+    let mesh = parse_obj_text(underflow).expect("extreme negative exponent should underflow");
+
+    assert_eq!(
+        mesh.vertex(0),
+        Ok(ObjVertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        })
+    );
+
+    let overflow = "\
+v 1e9999999999 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+";
+    assert_eq!(parse_obj_text(overflow), Err(ObjError::NonFiniteVertex));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn rejects_relative_or_zero_obj_indices() {
     let negative = "\
 v 0.0 0.0 0.0

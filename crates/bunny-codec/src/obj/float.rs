@@ -41,7 +41,7 @@ pub(super) fn parse_ascii_float(text: &str) -> Option<f32> {
         return None;
     }
 
-    let exponent = parse_float_exponent(bytes, &mut index)? - fractional_digits;
+    let exponent = parse_float_exponent(bytes, &mut index)?.saturating_sub(fractional_digits);
     if index == bytes.len() {
         Some((sign * value * 10_f64.powi(exponent)) as f32)
     } else {
