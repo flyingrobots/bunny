@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   borrowed mesh views and Stanford Bunny fixture regressions.
 * Zero-allocation OBJ vertex and triangle iterators in `bunny-codec` for
   forward full-mesh traversal without quadratic indexed-access scans.
+* Captured GP2 witness table with repo-truth anchors for each completed file
+  format adapter claim.
+* Initial GP3 compression decoder design contract for the canonical Bunny
+  compressed mesh byte profile.
 
 ### Changed
 

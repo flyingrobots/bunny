@@ -185,3 +185,16 @@ fully satisfy the written acceptance criteria.
   * **Slice 2.1**: Implement zero-copy PLY binary parser. [Done]
   * **Slice 2.2**: Implement zero-copy OBJ parser. [Done]
   * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes. [Done]
+
+### Goalpost 3: Compression Decoders (`bunny-codec`)
+
+* **Description**: Decode a canonical Bunny compressed mesh byte stream into
+  validated `bunny-mesh` buffers.
+* **Status**: Active; design contract is being established before implementation.
+* **Slice Budget**: 3 Slices
+* **Slices**:
+  * **Slice 3.1**: Specify the canonical decoder byte profile, error model, and
+    deterministic validation gates. [Active]
+  * **Slice 3.2**: Implement the decoder against the documented profile. [Planned]
+  * **Slice 3.3**: Add native/WASM corpus tests, malformed-input regressions, and
+    allocation witnesses. [Planned]

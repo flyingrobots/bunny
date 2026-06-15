@@ -9,9 +9,9 @@ goalpost documents.
 | Field | State |
 | --- | --- |
 | Active release | `v0.4.0` - Quantized Meshes & Codecs |
-| Active branch | `goalpost/v0.4.0-gp2` |
-| Open PR | #104 - Complete v0.4.0 GP2 file format adapters |
-| Current gate | CI and review for GP2 |
+| Active branch | `goalpost/v0.4.0-gp3` |
+| Open PR | None |
+| Current gate | GP3 decoder design contract |
 | Next goalpost | `v0.4.0-GP3` compression decoders |
 
 ## Recent Truth
@@ -23,6 +23,8 @@ goalpost documents.
 * GP2 adds `bunny-codec`, including zero-copy binary PLY and OBJ parser
   contracts, Stanford Bunny-derived fixtures, native zero-allocation witnesses,
   and native/WASM regression tests.
+* PR #104 merged GP2 into `main`. The GP2 goalpost now includes a captured
+  witness table with repo-truth anchors for each completed implementation claim.
 * Codec ingress now rejects non-finite vertex coordinates and out-of-bounds PLY
   face indices before returning borrowed mesh views.
 * CI is pinned to Rust 1.96.0 and runs native workspace tests plus headless
@@ -30,10 +32,13 @@ goalpost documents.
 
 ## Immediate Next Work
 
-1. Let PR #104 finish CI and review.
-2. Resolve any review threads without weakening the GP2 contract.
-3. Merge GP2 only after checks are green and review is clean.
-4. Sync `main`, then open the GP3 branch for compression decoders.
+1. Finish the GP3 decoder design contract before implementation.
+2. Keep GP3 scoped to compression decoders; do not add new external file-format
+   profiles in this goalpost.
+3. Implement the smallest canonical byte-profile decoder after the contract is
+   explicit.
+4. Prove native and WASM determinism with corpus tests and malformed-input
+   regressions before marking GP3 complete.
 
 ## Watchpoints
 
@@ -41,8 +46,8 @@ goalpost documents.
   all support the claim.
 * Keep host-side tooling (`bunny-wesley`, `xtask`) distinct from
   WASM-compatible library crates in docs and CI claims.
-* Keep codec parsers zero-copy on accepted paths while still validating payload
-  structure before returning borrowed views.
+* Keep GP2 codec parser zero-copy claims intact. For GP3 decoders, state the
+  allocation contract explicitly before implementation and prove it with tests.
 * Matrix and quaternion profiles are still absent from `bunny-linalg`; future
   transform work must either add them or explicitly stay out of that scope.
 

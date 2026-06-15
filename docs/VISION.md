@@ -67,6 +67,5 @@ The repo is organized around narrow crates:
 ## Near Horizon
 
 Release `v0.4.0` is in the mesh commons track. GP1 shipped compressed mesh
-layouts. GP2 has implemented file format adapters. GP3 is next and should focus
-on compression decoders only after GP2 is reviewed, merged, and synchronized
-back to `main`.
+layouts. GP2 merged file format adapters. GP3 is active and starts with a
+design contract for compression decoders before implementation begins.
