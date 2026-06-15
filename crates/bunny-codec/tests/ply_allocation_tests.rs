@@ -78,26 +78,29 @@ fn allocations_during<T>(operation: impl FnOnce() -> T) -> (T, usize) {
 }
 
 #[test]
-fn binary_ply_parse_allocates_zero_times() {
+fn parsers_allocate_zero_times_after_warm_up() {
     let bytes = canonical_triangle_ply();
     parse_binary_ply(&bytes).expect("warm-up binary PLY should parse");
+    parse_obj_text(OBJ_TRIANGLE).expect("warm-up OBJ should parse");
 
-    let (mesh, allocations) = allocations_during(|| parse_binary_ply(&bytes));
+    let (ply_mesh, ply_allocations) = allocations_during(|| parse_binary_ply(&bytes));
 
-    assert_eq!(allocations, 0, "binary PLY parser allocated after warm-up");
     assert_eq!(
-        mesh.expect("canonical binary PLY should parse")
+        ply_allocations, 0,
+        "binary PLY parser allocated after warm-up"
+    );
+    assert_eq!(
+        ply_mesh
+            .expect("canonical binary PLY should parse")
             .face_count(),
         1
     );
-}
 
-#[test]
-fn obj_text_parse_allocates_zero_times() {
-    parse_obj_text(OBJ_TRIANGLE).expect("warm-up OBJ should parse");
+    let (obj_mesh, obj_allocations) = allocations_during(|| parse_obj_text(OBJ_TRIANGLE));
 
-    let (mesh, allocations) = allocations_during(|| parse_obj_text(OBJ_TRIANGLE));
-
-    assert_eq!(allocations, 0, "OBJ parser allocated after warm-up");
-    assert_eq!(mesh.expect("canonical OBJ should parse").face_count(), 1);
+    assert_eq!(obj_allocations, 0, "OBJ parser allocated after warm-up");
+    assert_eq!(
+        obj_mesh.expect("canonical OBJ should parse").face_count(),
+        1
+    );
 }
