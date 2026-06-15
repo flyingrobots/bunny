@@ -11,7 +11,7 @@ goalpost documents.
 | Active release | `v0.4.0` - Quantized Meshes & Codecs |
 | Active branch | `goalpost/v0.4.0-gp3` |
 | Open PR | None |
-| Current gate | GP3 local verification before PR |
+| Current gate | GP3 pull request, GitHub CI, and review |
 | Next goalpost | `v0.4.0-GP3` pull request and CI |
 
 ## Recent Truth
@@ -35,10 +35,8 @@ goalpost documents.
 
 ## Immediate Next Work
 
-1. Run the full local GP3 verification gate, including native workspace tests,
-   WASM compile checks, `wasm-pack test --node crates/bunny-codec --locked`, and
-   Markdown lint over touched docs.
-2. Open the GP3 pull request after local verification is green.
+1. Open the GP3 pull request.
+2. Wait for GitHub CI, Code Rabbit, and human review.
 3. Keep GP3 scoped to compression decoders; do not add new external file-format
    profiles in this goalpost.
 
@@ -57,7 +55,7 @@ goalpost documents.
 ## Last Known Local Verification
 
 The canonical checklist lives in `docs/TESTING.md`; this section is a status
-snapshot, not a replacement checklist. The GP2 branch was verified with:
+snapshot, not a replacement checklist. The GP3 branch was verified with:
 
 ```bash
 cargo +1.96.0 fmt --all -- --check
@@ -67,6 +65,7 @@ cargo +1.96.0 test --locked --workspace --all-targets
 cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
   -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
   -p bunny-codec --target wasm32-unknown-unknown
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
 ```
 
 Documentation changes also ran Markdown lint over the touched Markdown files.

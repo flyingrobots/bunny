@@ -141,6 +141,14 @@ fn canonical_width32_payload_decodes_to_triangle32() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn rejects_out_of_bounds_width32_indices() {
+    let mut bytes = canonical_triangle32();
+    write_u32(&mut bytes, TRIANGLE16_OFFSET + 8, 3);
+
+    assert_decode_error(bytes, CompressedMeshError::IndexOutOfBounds);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn accessors_reject_out_of_range_records() {
     let bytes = canonical_triangle16();
     let mesh = decode_compressed_mesh(&bytes).expect("canonical compressed mesh should parse");
