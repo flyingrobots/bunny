@@ -37,7 +37,7 @@ fn obj_accessors_reject_out_of_range_indices() {
 
     assert_eq!(
         mesh.vertex(mesh.vertex_count()),
-        Err(ObjError::InvalidVertex)
+        Err(ObjError::IndexOutOfBounds)
     );
     assert_eq!(
         mesh.triangle(mesh.face_count()),

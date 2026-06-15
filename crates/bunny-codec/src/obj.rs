@@ -19,7 +19,7 @@ pub enum ObjError {
     NonTriangularFace,
     /// A face index is zero, negative, relative, or not a valid integer.
     InvalidIndex,
-    /// A face references a vertex outside the parsed vertex range.
+    /// An accessor index or face vertex reference is outside the parsed range.
     IndexOutOfBounds,
     /// The OBJ statement is not part of the supported Bunny mesh profile.
     UnsupportedStatement,
@@ -73,10 +73,10 @@ impl<'a> ObjMesh<'a> {
     /// Reads the requested vertex from the borrowed source.
     ///
     /// # Errors
-    /// Returns `ObjError::InvalidVertex` if the index is out of range.
+    /// Returns `ObjError::IndexOutOfBounds` if the index is out of range.
     pub fn vertex(self, index: usize) -> Result<ObjVertex, ObjError> {
         find_record(self.source, "v", index)
-            .ok_or(ObjError::InvalidVertex)
+            .ok_or(ObjError::IndexOutOfBounds)
             .and_then(parse_vertex_line)
     }
 
