@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Cryptographic SHA-256 content-addressable hashing for mesh vertex and index buffers (`bunny-mesh`).
 * Zero-copy binary PLY and OBJ text parser contracts in `bunny-codec`, with
   borrowed mesh views and Stanford Bunny fixture regressions.
+* Zero-allocation OBJ vertex and triangle iterators in `bunny-codec` for
+  forward full-mesh traversal without quadratic indexed-access scans.
 
 ### Changed
 
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   index buffers instead of panicking.
 * `bunny-codec` now rejects non-finite OBJ/PLY vertex coordinates and
   out-of-bounds binary PLY face indices before returning borrowed mesh views.
+* `bunny-codec` now rejects duplicate or late PLY `format` directives and
+  handles extreme OBJ float exponents without panicking.
 
 ## [0.3.0] - 2026-06-13
 
