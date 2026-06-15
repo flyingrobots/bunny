@@ -26,6 +26,13 @@ fn canonical_triangle_ply() -> Vec<u8> {
     bytes
 }
 
+fn triangle_ply_with_header(header: &str) -> Vec<u8> {
+    let mut bytes = Vec::from(header.as_bytes());
+    bytes.extend_from_slice(VERTEX_BYTES);
+    bytes.extend_from_slice(FACE_BYTES);
+    bytes
+}
+
 #[wasm_bindgen_test(unsupported = test)]
 fn parses_binary_triangle_ply_as_borrowed_view() {
     let bytes = canonical_triangle_ply();
@@ -53,6 +60,113 @@ fn parses_binary_triangle_ply_as_borrowed_view() {
 fn rejects_non_binary_little_endian_ply() {
     let bytes = b"ply\nformat ascii 1.0\nend_header\n";
     assert_eq!(parse_binary_ply(bytes), Err(PlyError::UnsupportedFormat));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn matches_end_header_only_as_header_line() {
+    let header = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "comment contains end_header\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    let bytes = triangle_ply_with_header(header);
+
+    assert_eq!(
+        parse_binary_ply(&bytes)
+            .expect("commented terminator text should not split header")
+            .face_count(),
+        1
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn skips_properties_for_empty_auxiliary_elements() {
+    let header = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element edge 0\n",
+        "property int vertex1\n",
+        "property int vertex2\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    let bytes = triangle_ply_with_header(header);
+
+    assert_eq!(
+        parse_binary_ply(&bytes)
+            .expect("zero-count auxiliary element should not require payload")
+            .face_count(),
+        1
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn rejects_out_of_order_or_duplicate_ply_elements() {
+    let face_before_vertex = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "end_header\n",
+    );
+    assert_eq!(
+        parse_binary_ply(&triangle_ply_with_header(face_before_vertex)),
+        Err(PlyError::MissingVertexElement)
+    );
+
+    let duplicate_vertex = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    assert_eq!(
+        parse_binary_ply(&triangle_ply_with_header(duplicate_vertex)),
+        Err(PlyError::UnsupportedElement)
+    );
+
+    let duplicate_face = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    assert_eq!(
+        parse_binary_ply(&triangle_ply_with_header(duplicate_face)),
+        Err(PlyError::UnsupportedElement)
+    );
 }
 
 #[wasm_bindgen_test(unsupported = test)]

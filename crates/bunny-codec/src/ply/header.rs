@@ -12,6 +12,7 @@ enum HeaderSection {
     None,
     Vertex,
     Face,
+    IgnoredEmptyElement,
 }
 
 #[derive(Default)]
@@ -99,22 +100,35 @@ fn parse_element<'a>(
     match name {
         "vertex" => set_vertex_element(state, count),
         "face" => set_face_element(state, count),
-        _ if count == 0 => state.section = HeaderSection::None,
-        _ => return Err(PlyError::UnsupportedElement),
+        _ if count == 0 => {
+            state.section = HeaderSection::IgnoredEmptyElement;
+            Ok(())
+        }
+        _ => Err(PlyError::UnsupportedElement),
     }
-    Ok(())
 }
 
-const fn set_vertex_element(state: &mut HeaderParseState, count: usize) {
+const fn set_vertex_element(state: &mut HeaderParseState, count: usize) -> Result<(), PlyError> {
+    if state.vertex_count.is_some() || state.face_count.is_some() {
+        return Err(PlyError::UnsupportedElement);
+    }
     state.vertex_count = Some(count);
     state.vertex_props = 0;
     state.section = HeaderSection::Vertex;
+    Ok(())
 }
 
-const fn set_face_element(state: &mut HeaderParseState, count: usize) {
+const fn set_face_element(state: &mut HeaderParseState, count: usize) -> Result<(), PlyError> {
+    if state.vertex_count.is_none() || state.vertex_props != 3 {
+        return Err(PlyError::MissingVertexElement);
+    }
+    if state.face_count.is_some() {
+        return Err(PlyError::UnsupportedElement);
+    }
     state.face_count = Some(count);
     state.face_property_seen = false;
     state.section = HeaderSection::Face;
+    Ok(())
 }
 
 fn parse_property<'a>(
@@ -124,6 +138,7 @@ fn parse_property<'a>(
     match state.section {
         HeaderSection::Vertex => parse_vertex_property(parts, state),
         HeaderSection::Face => parse_face_property(parts, state),
+        HeaderSection::IgnoredEmptyElement => Ok(()),
         HeaderSection::None => Err(PlyError::UnsupportedProperty),
     }
 }

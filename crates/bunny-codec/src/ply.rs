@@ -196,19 +196,25 @@ fn split_header(input: &[u8]) -> Result<(&str, usize), PlyError> {
 }
 
 fn header_bounds(input: &[u8]) -> Result<(usize, usize), PlyError> {
-    let lf = find_bytes(input, b"end_header\n").map(|pos| (pos, pos + 11));
-    let crlf = find_bytes(input, b"end_header\r\n").map(|pos| (pos, pos + 12));
-    match (lf, crlf) {
-        (Some(a), Some(b)) => Ok(if a.0 <= b.0 { a } else { b }),
-        (Some(bounds), None) | (None, Some(bounds)) => Ok(bounds),
-        (None, None) => Err(PlyError::MissingHeaderEnd),
+    let mut line_start = 0;
+    while line_start < input.len() {
+        let Some(relative_newline) = input[line_start..].iter().position(|byte| *byte == b'\n')
+        else {
+            return Err(PlyError::MissingHeaderEnd);
+        };
+        let line_end = line_start + relative_newline;
+        let content_end = if line_end > line_start && input[line_end - 1] == b'\r' {
+            line_end - 1
+        } else {
+            line_end
+        };
+        if input.get(line_start..content_end) == Some(b"end_header".as_slice()) {
+            return Ok((line_start, line_end + 1));
+        }
+        line_start = line_end + 1;
     }
-}
 
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
+    Err(PlyError::MissingHeaderEnd)
 }
 
 fn checked_offset(index: usize, stride: usize) -> Result<usize, PlyError> {

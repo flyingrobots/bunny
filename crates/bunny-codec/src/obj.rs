@@ -176,7 +176,7 @@ fn u32_index_is_valid(index: u32, vertex_count: usize) -> bool {
 }
 
 fn statement_kind(line: &str) -> Result<Option<&str>, ObjError> {
-    let mut parts = line.split_whitespace();
+    let mut parts = record_body(line).split_whitespace();
     let Some(kind) = parts.next() else {
         return Ok(None);
     };
@@ -206,8 +206,14 @@ fn find_record<'a>(source: &'a str, kind: &str, index: usize) -> Option<&'a str>
     None
 }
 
+fn record_body(line: &str) -> &str {
+    line.split_once('#')
+        .map_or(line, |(record, _comment)| record)
+        .trim()
+}
+
 fn parse_vertex_line(line: &str) -> Result<ObjVertex, ObjError> {
-    let mut parts = line.split_whitespace();
+    let mut parts = record_body(line).split_whitespace();
     if parts.next() != Some("v") {
         return Err(ObjError::InvalidVertex);
     }
@@ -234,7 +240,7 @@ fn parse_coord(value: Option<&str>) -> Result<f32, ObjError> {
 }
 
 fn parse_face_line(line: &str) -> Result<Triangle32, ObjError> {
-    let mut parts = line.split_whitespace();
+    let mut parts = record_body(line).split_whitespace();
     if parts.next() != Some("f") {
         return Err(ObjError::NonTriangularFace);
     }
@@ -252,10 +258,39 @@ fn parse_face_line(line: &str) -> Result<Triangle32, ObjError> {
 
 fn parse_index(token: Option<&str>) -> Result<u32, ObjError> {
     let token = token.ok_or(ObjError::NonTriangularFace)?;
-    let index_text = token.split('/').next().ok_or(ObjError::InvalidIndex)?;
+    let mut fields = token.split('/');
+    let vertex_index = parse_vertex_index(fields.next().ok_or(ObjError::InvalidIndex)?)?;
+    match (fields.next(), fields.next(), fields.next()) {
+        (None, None, None) => Ok(vertex_index),
+        (Some(texture), None, None) => {
+            parse_auxiliary_index(texture)?;
+            Ok(vertex_index)
+        }
+        (Some(texture), Some(normal), None) => {
+            if !texture.is_empty() {
+                parse_auxiliary_index(texture)?;
+            }
+            parse_auxiliary_index(normal)?;
+            Ok(vertex_index)
+        }
+        _ => Err(ObjError::InvalidIndex),
+    }
+}
+
+fn parse_vertex_index(index_text: &str) -> Result<u32, ObjError> {
     let one_based = index_text
         .parse::<i64>()
         .map_err(|_| ObjError::InvalidIndex)?;
     let zero_based = one_based.checked_sub(1).ok_or(ObjError::InvalidIndex)?;
     u32::try_from(zero_based).map_err(|_| ObjError::InvalidIndex)
+}
+
+fn parse_auxiliary_index(index_text: &str) -> Result<(), ObjError> {
+    let one_based = index_text
+        .parse::<i64>()
+        .map_err(|_| ObjError::InvalidIndex)?;
+    let zero_based = one_based.checked_sub(1).ok_or(ObjError::InvalidIndex)?;
+    u32::try_from(zero_based)
+        .map(|_| ())
+        .map_err(|_| ObjError::InvalidIndex)
 }
