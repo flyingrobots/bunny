@@ -2,6 +2,8 @@ use std::fmt;
 
 use bunny_mesh::Triangle32;
 
+mod float;
+
 /// Error returned when an OBJ mesh cannot be parsed as the Bunny text profile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ObjError {
@@ -233,10 +235,7 @@ fn parse_vertex_line(line: &str) -> Result<ObjVertex, ObjError> {
 }
 
 fn parse_coord(value: Option<&str>) -> Result<f32, ObjError> {
-    value
-        .ok_or(ObjError::InvalidVertex)?
-        .parse::<f32>()
-        .map_err(|_| ObjError::InvalidVertex)
+    float::parse_ascii_float(value.ok_or(ObjError::InvalidVertex)?).ok_or(ObjError::InvalidVertex)
 }
 
 fn parse_face_line(line: &str) -> Result<Triangle32, ObjError> {
