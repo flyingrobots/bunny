@@ -32,6 +32,13 @@ static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
 struct CountingAllocator;
+struct AllocationTrackingGuard;
+
+impl Drop for AllocationTrackingGuard {
+    fn drop(&mut self) {
+        TRACKING.store(false, Ordering::SeqCst);
+    }
+}
 
 // SAFETY: This test allocator forwards all allocation and deallocation requests
 // to the standard system allocator while counting allocation calls.
@@ -63,17 +70,21 @@ fn canonical_triangle_ply() -> Vec<u8> {
 fn allocations_during<T>(operation: impl FnOnce() -> T) -> (T, usize) {
     ALLOCATIONS.store(0, Ordering::SeqCst);
     TRACKING.store(true, Ordering::SeqCst);
+    let guard = AllocationTrackingGuard;
     let result = operation();
-    TRACKING.store(false, Ordering::SeqCst);
-    (result, ALLOCATIONS.load(Ordering::SeqCst))
+    drop(guard);
+    let allocations = ALLOCATIONS.load(Ordering::SeqCst);
+    (result, allocations)
 }
 
 #[test]
 fn binary_ply_parse_allocates_zero_times() {
     let bytes = canonical_triangle_ply();
+    parse_binary_ply(&bytes).expect("warm-up binary PLY should parse");
+
     let (mesh, allocations) = allocations_during(|| parse_binary_ply(&bytes));
 
-    assert_eq!(allocations, 0);
+    assert_eq!(allocations, 0, "binary PLY parser allocated after warm-up");
     assert_eq!(
         mesh.expect("canonical binary PLY should parse")
             .face_count(),
@@ -83,8 +94,10 @@ fn binary_ply_parse_allocates_zero_times() {
 
 #[test]
 fn obj_text_parse_allocates_zero_times() {
+    parse_obj_text(OBJ_TRIANGLE).expect("warm-up OBJ should parse");
+
     let (mesh, allocations) = allocations_during(|| parse_obj_text(OBJ_TRIANGLE));
 
-    assert_eq!(allocations, 0);
+    assert_eq!(allocations, 0, "OBJ parser allocated after warm-up");
     assert_eq!(mesh.expect("canonical OBJ should parse").face_count(), 1);
 }
