@@ -78,6 +78,9 @@ fn parse_format<'a>(
     parts: &mut impl Iterator<Item = &'a str>,
     state: &mut HeaderParseState,
 ) -> Result<(), PlyError> {
+    if state.format_seen || state.section != HeaderSection::None {
+        return Err(PlyError::UnsupportedFormat);
+    }
     let valid = parts.next() == Some("binary_little_endian")
         && parts.next() == Some("1.0")
         && parts.next().is_none();
@@ -93,6 +96,9 @@ fn parse_element<'a>(
     parts: &mut impl Iterator<Item = &'a str>,
     state: &mut HeaderParseState,
 ) -> Result<(), PlyError> {
+    if !state.format_seen {
+        return Err(PlyError::UnsupportedFormat);
+    }
     let name = parts.next().ok_or(PlyError::UnsupportedElement)?;
     let count = parts
         .next()

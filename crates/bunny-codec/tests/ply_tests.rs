@@ -63,6 +63,43 @@ fn rejects_non_binary_little_endian_ply() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn rejects_duplicate_or_late_ply_format_directives() {
+    let duplicate_format = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "format binary_little_endian 1.0\n",
+        "element vertex 3\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    assert_eq!(
+        parse_binary_ply(&triangle_ply_with_header(duplicate_format)),
+        Err(PlyError::UnsupportedFormat)
+    );
+
+    let late_format = concat!(
+        "ply\n",
+        "format binary_little_endian 1.0\n",
+        "element vertex 3\n",
+        "format binary_little_endian 1.0\n",
+        "property float x\n",
+        "property float y\n",
+        "property float z\n",
+        "element face 1\n",
+        "property list uchar int vertex_indices\n",
+        "end_header\n",
+    );
+    assert_eq!(
+        parse_binary_ply(&triangle_ply_with_header(late_format)),
+        Err(PlyError::UnsupportedFormat)
+    );
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn matches_end_header_only_as_header_line() {
     let header = concat!(
         "ply\n",
