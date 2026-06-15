@@ -1,0 +1,8 @@
+# Derived from Stanford-hosted Bunny OBJ mirror:
+# https://graphics.stanford.edu/~mdfisher/Data/Meshes/bunny.obj
+# Source vertices: 1069, 1647, 1578
+# Source face: f 1069 1647 1578
+v -8.6561940e-002 1.4249188e-001 8.4326800e-003
+v -8.9491020e-002 1.4392581e-001 1.2488490e-002
+v -8.9698390e-002 1.3971257e-001 1.3774760e-002
+f 1 2 3

@@ -128,8 +128,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
-* **Status**: Active; Pre-GP2 Completion Integrity Gate complete. Goalpost 2 is
-  next after the gate lands.
+* **Status**: Active; Pre-GP2 Completion Integrity Gate and Goalpost 2 are
+  complete. Goalpost 3 is next.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
@@ -157,6 +157,9 @@ This document outlines the versioned releases, goalposts, and slices for the **B
   * **Slice B+**: Finish the outstanding acceptance criteria discovered by
     Slice A. The number of slices is intentionally open-ended until the audit
     is complete. [Done]
+* **Audit Artifact**: `docs/goalposts/v0.4.0-pre-gp2.md` now records verified,
+  partial, and unsubstantiated completed-claim findings with repo-truth
+  evidence anchors.
 
 #### Outstanding Completed-Claim Acceptance Criteria
 
@@ -176,9 +179,9 @@ fully satisfy the written acceptance criteria.
 ### Goalpost 2: File Format Adapters (`bunny-codec`)
 
 * **Description**: Zero-copy mesh deserialization.
-* **Status**: Next after the completed Pre-GP2 Completion Integrity Gate.
+* **Status**: Completed.
 * **Slice Budget**: 3 Slices
 * **Slices**:
-  * **Slice 2.1**: Implement zero-copy PLY binary parser.
-  * **Slice 2.2**: Implement zero-copy OBJ parser.
-  * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes.
+  * **Slice 2.1**: Implement zero-copy PLY binary parser. [Done]
+  * **Slice 2.2**: Implement zero-copy OBJ parser. [Done]
+  * **Slice 2.3**: Create fixture regression suites using Stanford Bunny sample meshes. [Done]

@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/bunny-broadphase",
+  "crates/bunny-codec",
   "crates/bunny-contract",
   "crates/bunny-geom",
   "crates/bunny-linalg",

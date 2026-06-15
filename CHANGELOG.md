@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * 16-bit integer coordinate quantization mapping for 3D vertices relative to an AABB boundary (`bunny-mesh`).
 * Memory-stable, zero-allocation index buffer layouts with validation rules for 16-bit and 32-bit triangle indices (`bunny-mesh`).
 * Cryptographic SHA-256 content-addressable hashing for mesh vertex and index buffers (`bunny-mesh`).
+* Zero-copy binary PLY and OBJ text parser contracts in `bunny-codec`, with
+  borrowed mesh views and Stanford Bunny fixture regressions.
+* Zero-allocation OBJ vertex and triangle iterators in `bunny-codec` for
+  forward full-mesh traversal without quadratic indexed-access scans.
 
 ### Changed
 
@@ -27,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-finite and negative radii before fixed-point quantization.
 * BVH traversal now returns explicit errors for malformed node and primitive
   index buffers instead of panicking.
+* `bunny-codec` now rejects non-finite OBJ/PLY vertex coordinates and
+  out-of-bounds binary PLY face indices before returning borrowed mesh views.
+* `bunny-codec` now rejects duplicate or late PLY `format` directives and
+  classifies non-triangle PLY polygon payloads before generic trailing-data
+  checks.
+* `bunny-codec` now handles extreme OBJ float exponents without panicking and
+  preserves finite OBJ coordinates with very large decimal mantissas.
 
 ## [0.3.0] - 2026-06-13
 

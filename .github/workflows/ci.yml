@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feature/*, numeric/*, goalpost/* ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
 
       - name: Verify WebAssembly Portability
         run: |
-          cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh --target wasm32-unknown-unknown
+          cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh -p bunny-codec --target wasm32-unknown-unknown
 
   wasm-test:
     name: WebAssembly Headless Tests
@@ -84,3 +84,4 @@ jobs:
           wasm-pack test --node crates/bunny-query --locked
           wasm-pack test --node crates/bunny-broadphase --locked
           wasm-pack test --node crates/bunny-mesh --locked
+          wasm-pack test --node crates/bunny-codec --locked
