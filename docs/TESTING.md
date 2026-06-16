@@ -34,6 +34,12 @@ file:
 markdownlint-cli2 <changed-markdown-files>
 ```
 
+Release candidates must also verify every crates.io archive before tagging:
+
+```bash
+scripts/publish-crates.sh verify
+```
+
 ## WebAssembly Gates
 
 Every WASM-compatible library crate must run headless under Node.js:
@@ -62,6 +68,8 @@ Source files stay small. Public behavior is tested through integration tests:
 | `crates/<crate>/tests/` | Public API and regression tests |
 | `docs/goalposts/` | Acceptance evidence and completion notes |
 | `.github/workflows/ci.yml` | Cross-platform and WASM enforcement |
+| `.github/workflows/release.yml` | crates.io release publication |
+| `scripts/publish-crates.sh` | Local and CI package publication gate |
 
 ## Boundary Fixtures
 
@@ -85,6 +93,7 @@ GitHub Actions must run:
 * Workspace native tests across Linux, macOS, and Windows.
 * WASM compile checks for all WASM-compatible library crates.
 * Headless Node.js WASM tests for all WASM-compatible library crates.
+* Release archive verification before crates.io publication.
 
 If local and CI behavior diverge, CI wins until the difference is understood and
 documented.

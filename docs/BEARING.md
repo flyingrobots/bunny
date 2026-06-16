@@ -9,10 +9,10 @@ goalpost documents.
 | Field | State |
 | --- | --- |
 | Active release | `v0.4.0` - Quantized Meshes & Codecs |
-| Active branch | `goalpost/v0.4.0-gp3` |
-| Open PR | `#105` - GP3 compressed mesh decoder |
-| Current gate | PR #105 merge eligibility |
-| Next goalpost | `v0.4.0-GP3` merge gate |
+| Active branch | `main` |
+| Open PR | None |
+| Current gate | `v0.4.0` release verification and publication |
+| Next goalpost | Post-`v0.4.0` sync and `v0.5.0` planning |
 
 ## Recent Truth
 
@@ -26,20 +26,25 @@ goalpost documents.
 * GP3 now adds the Bunny-native compressed mesh decoder profile, a borrowed
   zero-allocation compressed view, checked typed accessors, committed fixture
   bytes, malformed-input corpus tests, and allocation evidence.
+* PR #105 merged GP3 into `main` in merge commit
+  `2227825ab83d7aa53de3ec0f5d538d2542ac4cf3`.
 * PR #104 merged GP2 into `main`. The GP2 goalpost now includes a captured
   witness table with repo-truth anchors for each completed implementation claim.
 * Codec ingress now rejects non-finite vertex coordinates and out-of-bounds PLY
   face indices before returning borrowed mesh views.
 * CI is pinned to Rust 1.96.0 and runs native workspace tests plus headless
   `wasm-pack test --node` for every WASM-compatible library crate.
+* Release publication is now gated by `.github/workflows/release.yml`, which
+  packages and publishes the public Bunny crates to crates.io in dependency
+  order after the GitHub Release is published.
 
 ## Immediate Next Work
 
-1. Complete the PR #105 merge eligibility check.
-2. Obtain any missing human approval required by the merge policy.
-3. Merge PR #105 only after the gate is open.
-4. Keep GP3 scoped to compression decoders; do not add new external file-format
-   profiles in this goalpost.
+1. Verify the release archive gate and required local quality gates.
+2. Push the release-prep commit to `main`.
+3. Tag `v0.4.0`, publish the GitHub Release, and confirm the crates.io workflow
+   publishes every public Bunny crate.
+4. Start the next roadmap branch only after release publication is confirmed.
 
 ## Watchpoints
 
@@ -56,7 +61,8 @@ goalpost documents.
 ## Last Known Local Verification
 
 The canonical checklist lives in `docs/TESTING.md`; this section is a status
-snapshot, not a replacement checklist. The GP3 branch was verified with:
+snapshot, not a replacement checklist. The `v0.4.0` release candidate must be
+verified with:
 
 ```bash
 cargo +1.96.0 fmt --all -- --check
@@ -67,6 +73,7 @@ cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
   -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
   -p bunny-codec --target wasm32-unknown-unknown
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
+scripts/publish-crates.sh verify
 ```
 
 Documentation changes also ran Markdown lint over the touched Markdown files.

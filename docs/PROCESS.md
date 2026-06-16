@@ -89,3 +89,34 @@ After a PR lands on `main`:
 3. Update `docs/BEARING.md` for the new current position.
 4. Update `CHANGELOG.md` if release-visible behavior changed.
 5. Start the next goalpost branch from current `main`.
+
+## Release Publication
+
+Release tags must match the publishable workspace crate version exactly:
+`v<workspace.package.version>`. The GitHub Release `published` event triggers
+`.github/workflows/release.yml`, which verifies package archives and then
+publishes all public Bunny crates to crates.io in dependency order.
+
+The release workflow requires the repository secret `CARGO_REGISTRY_TOKEN` with
+crates.io publish permission for the Bunny crates. `xtask` is intentionally not
+published.
+
+Before publishing a GitHub Release, run the release archive gate locally:
+
+```bash
+scripts/publish-crates.sh verify
+```
+
+For the first crates.io publication of a Bunny version, `verify` fully packages
+the independent root crates and checks the package file lists for crates whose
+internal Bunny dependencies are not visible in the crates.io index yet. The
+`publish` mode still runs `cargo publish` verification for every crate after its
+internal dependencies have landed.
+
+Manual workflow dispatch may run `verify`, `dry-run`, or `publish` against an
+explicit tag. Before a Bunny version exists in crates.io, `dry-run` follows the
+same first-publication split as `verify`; after internal dependencies exist in
+the registry, set `VERIFY_REGISTRY_DEPS=1` to dry-run every crate against the
+registry. The normal release path is still: merge to `main`, tag the verified
+release commit, publish the GitHub Release, then let the workflow push the
+crates.

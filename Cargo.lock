@@ -62,7 +62,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bunny-broadphase"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bunny-geom",
  "bunny-linalg",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "bunny-codec"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bunny-geom",
  "bunny-linalg",
@@ -84,11 +84,11 @@ dependencies = [
 
 [[package]]
 name = "bunny-contract"
-version = "0.1.0"
+version = "0.4.0"
 
 [[package]]
 name = "bunny-geom"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bunny-linalg",
  "bunny-num",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "bunny-linalg"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bunny-num",
  "wasm-bindgen-test",
@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "bunny-mesh"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bunny-geom",
  "bunny-linalg",
@@ -116,14 +116,14 @@ dependencies = [
 
 [[package]]
 name = "bunny-num"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "bunny-query"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bunny-geom",
  "bunny-linalg",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "bunny-wesley"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "serde_json",
  "sha2",

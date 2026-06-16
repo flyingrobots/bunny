@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.4.0] - Unreleased
+## [0.4.0] - 2026-06-16
 
 ### Added
 
@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   malformed-input errors.
 * Canonical compressed triangle fixture bytes plus width-16, width-32,
   malformed-input, native allocation, and WASM-compatible decoder regressions.
+* crates.io release automation that verifies publishable package archives and
+  publishes all public Bunny crates in dependency order when a GitHub Release is
+  published.
 
 ### Changed
 
@@ -52,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * The GP3 compressed decoder now classifies oversized declared payload lengths
   against the canonical profile length before host pointer-width-dependent slice
   checks.
+* The workspace crate version now matches the `v0.4.0` release tag, and
+  internal crate dependencies carry crates.io version requirements for publish.
 
 ## [0.3.0] - 2026-06-13
 

@@ -128,8 +128,8 @@ This document outlines the versioned releases, goalposts, and slices for the **B
 
 ## Release v0.4.0: Quantized Meshes & Codecs (The Mesh Commons)
 
-* **Status**: Active; Pre-GP2 Completion Integrity Gate and Goalpost 2 are
-  complete. Goalpost 3 is next.
+* **Status**: Complete; GP1, GP2, and GP3 have merged into `main`. The release
+  gate is `v0.4.0` publication through the crates.io release workflow.
 * **Description**: Adds compact mesh layouts, PLY/OBJ parser contracts, and compression decoders.
 
 ### Goalpost 1: Compressed Mesh Layouts (`bunny-mesh`)
@@ -190,8 +190,8 @@ fully satisfy the written acceptance criteria.
 
 * **Description**: Decode a canonical Bunny compressed mesh byte stream into
   validated `bunny-mesh` buffers.
-* **Status**: Implemented and verified locally; PR #105 has green GitHub CI,
-  CodeRabbit approval, and no inline review threads. Awaiting merge gate.
+* **Status**: Merged via PR #105 with green GitHub CI, CodeRabbit approval, and
+  no unresolved inline review threads.
 * **Slice Budget**: 5 Slices
 * **Slices**:
   * **Slice 3.1**: Specify the canonical decoder byte profile, error model, and

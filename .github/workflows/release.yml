@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to verify or publish, for example v0.4.0.
+        required: true
+        type: string
+      mode:
+        description: Verify packages, dry-run publish, or publish to crates.io.
+        required: true
+        type: choice
+        default: verify
+        options:
+          - verify
+          - dry-run
+          - publish
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  crates-io:
+    name: Publish crates.io Packages
+    runs-on: ubuntu-latest
+    if: github.repository == 'flyingrobots/bunny'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+
+      - name: Install Rust 1.96.0
+        run: rustup toolchain install 1.96.0 --profile minimal
+
+      - name: Verify Release Archives
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+        run: scripts/publish-crates.sh verify
+
+      - name: Run Requested Release Mode
+        if: github.event_name == 'release' || inputs.mode != 'verify'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          RUN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs.mode }}
+        run: scripts/publish-crates.sh "$RUN_MODE"

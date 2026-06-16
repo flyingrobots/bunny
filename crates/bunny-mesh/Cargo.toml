@@ -9,9 +9,9 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-geom = { path = "../bunny-geom" }
-bunny-linalg = { path = "../bunny-linalg" }
-bunny-num = { path = "../bunny-num" }
+bunny-geom = { path = "../bunny-geom", version = "0.4.0" }
+bunny-linalg = { path = "../bunny-linalg", version = "0.4.0" }
+bunny-num = { path = "../bunny-num", version = "0.4.0" }
 sha2 = { version = "0.10.9", default-features = false }
 
 [dev-dependencies]

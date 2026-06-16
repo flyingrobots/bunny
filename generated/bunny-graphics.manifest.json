@@ -1,5 +1,5 @@
 {
-  "generator": "bunny-wesley/0.1.0",
+  "generator": "bunny-wesley/0.4.0",
   "wesleyCore": "0.0.5",
   "schema": "schemas/bunny/v0/graphics.graphql",
   "schemaSha256": "71757e5b3bbd32a99936db03080f4a896265fdd03af201b3488ba80743941c92",
