@@ -114,9 +114,11 @@ internal Bunny dependencies are not visible in the crates.io index yet. The
 internal dependencies have landed.
 
 Manual workflow dispatch may run `verify`, `dry-run`, or `publish` against an
-explicit tag. Before a Bunny version exists in crates.io, `dry-run` follows the
-same first-publication split as `verify`; after internal dependencies exist in
-the registry, set `VERIFY_REGISTRY_DEPS=1` to dry-run every crate against the
-registry. The normal release path is still: merge to `main`, tag the verified
-release commit, publish the GitHub Release, then let the workflow push the
-crates.
+explicit tag and checkout ref. Before a Bunny version exists in crates.io,
+`dry-run` follows the same first-publication split as `verify`; after internal
+dependencies exist in the registry, set `VERIFY_REGISTRY_DEPS=1` to dry-run
+every crate against the registry. The `publish` mode is idempotent: it skips
+crate versions that are already visible and retries dependency-resolution
+failures caused by crates.io registry propagation. The normal release path is
+still: merge to `main`, tag the verified release commit, publish the GitHub
+Release, then let the workflow push the crates.

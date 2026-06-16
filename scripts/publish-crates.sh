@@ -130,36 +130,6 @@ crate_version_exists() {
   [[ "$status" == "200" ]]
 }
 
-crate_version_in_index() {
-  local crate="$1"
-  local version="$2"
-
-  cargo_cmd search "$crate" --limit 1 2>/dev/null \
-    | grep -Eq "^${crate} = \"${version}\""
-}
-
-wait_for_crate_version() {
-  local crate="$1"
-  local version="$2"
-
-  for attempt in $(seq 1 "$RETRY_LIMIT"); do
-    if crate_version_exists "$crate" "$version" \
-      && crate_version_in_index "$crate" "$version"; then
-      printf '%s %s is visible in crates.io API and Cargo index\n' \
-        "$crate" "$version"
-      return 0
-    fi
-
-    printf 'waiting for %s %s in crates.io API and Cargo index (%s/%s)\n' \
-      "$crate" "$version" "$attempt" "$RETRY_LIMIT"
-    sleep "$RETRY_SECONDS"
-  done
-
-  printf 'timed out waiting for %s %s in crates.io index\n' \
-    "$crate" "$version" >&2
-  exit 1
-}
-
 publish_packages() {
   : "${CARGO_REGISTRY_TOKEN:?CARGO_REGISTRY_TOKEN must be set for publish mode}"
 
@@ -167,26 +137,54 @@ publish_packages() {
   version="$(package_version "${CRATES[0]}")"
 
   for crate in "${CRATES[@]}"; do
+    publish_crate "$crate" "$version"
+  done
+}
+
+publish_crate() {
+  local crate="$1"
+  local version="$2"
+  local output_file
+
+  if crate_version_exists "$crate" "$version"; then
+    printf '%s %s is already published; skipping\n' "$crate" "$version"
+    return 0
+  fi
+
+  output_file="$(mktemp)"
+
+  for attempt in $(seq 1 "$RETRY_LIMIT"); do
+    printf '::group::cargo publish %s attempt %s/%s\n' \
+      "$crate" "$attempt" "$RETRY_LIMIT"
+    if cargo_cmd publish --locked --package "$crate" 2>&1 | tee "$output_file"; then
+      printf '::endgroup::\n'
+      rm -f "$output_file"
+      return 0
+    fi
+    printf '::endgroup::\n'
+
     if crate_version_exists "$crate" "$version"; then
-      printf '%s %s is already published; skipping\n' "$crate" "$version"
-      wait_for_crate_version "$crate" "$version"
+      printf '%s %s became visible after publish returned failure; continuing\n' \
+        "$crate" "$version"
+      rm -f "$output_file"
+      return 0
+    fi
+
+    if grep -Eq 'no matching package named|failed to select a version' "$output_file"; then
+      printf 'registry dependency for %s is not visible yet; retrying in %ss\n' \
+        "$crate" "$RETRY_SECONDS"
+      sleep "$RETRY_SECONDS"
       continue
     fi
 
-    printf '::group::cargo publish %s\n' "$crate"
-    if ! cargo_cmd publish --locked --package "$crate"; then
-      printf '::endgroup::\n'
-      if crate_version_exists "$crate" "$version"; then
-        printf '%s %s became visible after publish returned failure; continuing\n' \
-          "$crate" "$version"
-        wait_for_crate_version "$crate" "$version"
-        continue
-      fi
-      exit 1
-    fi
-    printf '::endgroup::\n'
-    wait_for_crate_version "$crate" "$version"
+    rm -f "$output_file"
+    return 1
   done
+
+  rm -f "$output_file"
+  printf 'timed out publishing %s %s after %s attempts\n' \
+    "$crate" "$version" "$RETRY_LIMIT" >&2
+  return 1
 }
 
 array_contains() {
