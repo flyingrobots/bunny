@@ -190,7 +190,8 @@ fully satisfy the written acceptance criteria.
 
 * **Description**: Decode a canonical Bunny compressed mesh byte stream into
   validated `bunny-mesh` buffers.
-* **Status**: Completed locally; awaiting pull request review and CI.
+* **Status**: Implemented and verified locally; PR #105 has green GitHub CI,
+  CodeRabbit approval, and no inline review threads. Awaiting merge gate.
 * **Slice Budget**: 5 Slices
 * **Slices**:
   * **Slice 3.1**: Specify the canonical decoder byte profile, error model, and

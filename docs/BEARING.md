@@ -11,7 +11,7 @@ goalpost documents.
 | Active release | `v0.4.0` - Quantized Meshes & Codecs |
 | Active branch | `goalpost/v0.4.0-gp3` |
 | Open PR | `#105` - GP3 compressed mesh decoder |
-| Current gate | PR #105 review, GitHub CI, and CodeRabbit credit status |
+| Current gate | PR #105 merge eligibility |
 | Next goalpost | `v0.4.0-GP3` merge gate |
 
 ## Recent Truth
@@ -35,9 +35,9 @@ goalpost documents.
 
 ## Immediate Next Work
 
-1. Push GP3 review-fix commits to PR #105.
-2. Confirm GitHub CI is green and unresolved PR review threads are zero.
-3. Account for CodeRabbit's insufficient-credits status before merge.
+1. Complete the PR #105 merge eligibility check.
+2. Obtain any missing human approval required by the merge policy.
+3. Merge PR #105 only after the gate is open.
 4. Keep GP3 scoped to compression decoders; do not add new external file-format
    profiles in this goalpost.
 
