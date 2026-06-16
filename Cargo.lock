@@ -75,7 +75,10 @@ dependencies = [
 name = "bunny-codec"
 version = "0.1.0"
 dependencies = [
+ "bunny-geom",
+ "bunny-linalg",
  "bunny-mesh",
+ "bunny-num",
  "wasm-bindgen-test",
 ]
 

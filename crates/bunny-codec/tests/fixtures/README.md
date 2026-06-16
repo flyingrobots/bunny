@@ -23,3 +23,17 @@ are a canonical binary little-endian fixture derived from the official Stanford
 * Source file reports `element vertex 35947` and `element face 69451`.
 * The fixture uses source vertices 21216, 21215, and 20399, and source face
   `3 21216 21215 20399`, remapped locally to face indices `0 1 2`.
+
+## Bunny Compressed Triangle
+
+`canonical_compressed_triangle.bunny.hex` is a generated Bunny-native compressed
+mesh profile v1 fixture:
+
+* Generated locally for GP3 on 2026-06-15 from the documented
+  `docs/goalposts/v0.4.0-gp3.md` byte profile.
+* Magic bytes are `BUNNYQZ!`, version is `1`, index width is `16`, flags are
+  `0`, vertex count is `3`, triangle count is `1`, and payload length is `24`.
+* Bounds are Q32.32 raw min `(0, 0, 0)` and max `(1, 1, 1)`.
+* Vertices are quantized `(0, 0, 0)`, `(65535, 0, 0)`, and `(0, 65535, 0)`.
+* The single triangle is `(0, 1, 2)`.
+* `compressed_tests.rs` asserts the fixture hex byte-for-byte before decoding it.

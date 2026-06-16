@@ -9,10 +9,10 @@ goalpost documents.
 | Field | State |
 | --- | --- |
 | Active release | `v0.4.0` - Quantized Meshes & Codecs |
-| Active branch | `goalpost/v0.4.0-gp2` |
-| Open PR | #104 - Complete v0.4.0 GP2 file format adapters |
-| Current gate | CI and review for GP2 |
-| Next goalpost | `v0.4.0-GP3` compression decoders |
+| Active branch | `goalpost/v0.4.0-gp3` |
+| Open PR | `#105` - GP3 compressed mesh decoder |
+| Current gate | PR #105 merge eligibility |
+| Next goalpost | `v0.4.0-GP3` merge gate |
 
 ## Recent Truth
 
@@ -23,6 +23,11 @@ goalpost documents.
 * GP2 adds `bunny-codec`, including zero-copy binary PLY and OBJ parser
   contracts, Stanford Bunny-derived fixtures, native zero-allocation witnesses,
   and native/WASM regression tests.
+* GP3 now adds the Bunny-native compressed mesh decoder profile, a borrowed
+  zero-allocation compressed view, checked typed accessors, committed fixture
+  bytes, malformed-input corpus tests, and allocation evidence.
+* PR #104 merged GP2 into `main`. The GP2 goalpost now includes a captured
+  witness table with repo-truth anchors for each completed implementation claim.
 * Codec ingress now rejects non-finite vertex coordinates and out-of-bounds PLY
   face indices before returning borrowed mesh views.
 * CI is pinned to Rust 1.96.0 and runs native workspace tests plus headless
@@ -30,10 +35,11 @@ goalpost documents.
 
 ## Immediate Next Work
 
-1. Let PR #104 finish CI and review.
-2. Resolve any review threads without weakening the GP2 contract.
-3. Merge GP2 only after checks are green and review is clean.
-4. Sync `main`, then open the GP3 branch for compression decoders.
+1. Complete the PR #105 merge eligibility check.
+2. Obtain any missing human approval required by the merge policy.
+3. Merge PR #105 only after the gate is open.
+4. Keep GP3 scoped to compression decoders; do not add new external file-format
+   profiles in this goalpost.
 
 ## Watchpoints
 
@@ -41,15 +47,16 @@ goalpost documents.
   all support the claim.
 * Keep host-side tooling (`bunny-wesley`, `xtask`) distinct from
   WASM-compatible library crates in docs and CI claims.
-* Keep codec parsers zero-copy on accepted paths while still validating payload
-  structure before returning borrowed views.
+* Keep GP2 codec parser zero-copy claims intact. GP3 decoder claims are limited
+  to borrowed raw payload sections plus typed checked accessors; no typed slice
+  reinterpretation is claimed.
 * Matrix and quaternion profiles are still absent from `bunny-linalg`; future
   transform work must either add them or explicitly stay out of that scope.
 
 ## Last Known Local Verification
 
 The canonical checklist lives in `docs/TESTING.md`; this section is a status
-snapshot, not a replacement checklist. The GP2 branch was verified with:
+snapshot, not a replacement checklist. The GP3 branch was verified with:
 
 ```bash
 cargo +1.96.0 fmt --all -- --check
@@ -59,6 +66,7 @@ cargo +1.96.0 test --locked --workspace --all-targets
 cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
   -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
   -p bunny-codec --target wasm32-unknown-unknown
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
 ```
 
 Documentation changes also ran Markdown lint over the touched Markdown files.
