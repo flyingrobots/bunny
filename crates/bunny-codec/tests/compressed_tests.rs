@@ -206,6 +206,17 @@ fn rejects_malformed_count_bounds_and_length_corpus() {
         invalid_payload_len,
         CompressedMeshError::InvalidPayloadLength,
     );
+
+    let mut oversized_payload_len = canonical_triangle16();
+    write_u64(
+        &mut oversized_payload_len,
+        PAYLOAD_LEN_OFFSET,
+        u64::from(u32::MAX) + 1,
+    );
+    assert_decode_error(
+        oversized_payload_len,
+        CompressedMeshError::InvalidPayloadLength,
+    );
 }
 
 #[wasm_bindgen_test(unsupported = test)]

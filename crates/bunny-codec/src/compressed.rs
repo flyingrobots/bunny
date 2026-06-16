@@ -25,21 +25,24 @@ const MAX_TRIANGLES: usize = 1_000_000;
 /// payload invariant is violated.
 pub fn decode_compressed_mesh(input: &[u8]) -> Result<CompressedMesh<'_>, CompressedMeshError> {
     let header = parse_header(input)?;
-    let payload_end = HEADER_LEN
+    let vertex_len = checked_payload_len(header.vertex_count, VERTEX_STRIDE)?;
+    let triangle_len = checked_payload_len(header.triangle_count, header.index_width.stride())?;
+    let expected_len = checked_add(vertex_len, triangle_len)?;
+    let expected_len_u64 =
+        u64::try_from(expected_len).map_err(|_| CompressedMeshError::IntegerOverflow)?;
+    let _declared_end = u64::try_from(HEADER_LEN)
+        .map_err(|_| CompressedMeshError::IntegerOverflow)?
         .checked_add(header.payload_len)
         .ok_or(CompressedMeshError::IntegerOverflow)?;
+    if header.payload_len != expected_len_u64 {
+        return Err(CompressedMeshError::InvalidPayloadLength);
+    }
+    let payload_end = checked_add(HEADER_LEN, expected_len)?;
     if input.len() < payload_end {
         return Err(CompressedMeshError::PayloadTooShort);
     }
     if input.len() != payload_end {
         return Err(CompressedMeshError::TrailingData);
-    }
-
-    let vertex_len = checked_payload_len(header.vertex_count, VERTEX_STRIDE)?;
-    let triangle_len = checked_payload_len(header.triangle_count, header.index_width.stride())?;
-    let expected_len = checked_add(vertex_len, triangle_len)?;
-    if header.payload_len != expected_len {
-        return Err(CompressedMeshError::InvalidPayloadLength);
     }
 
     let vertex_bytes = take(input, HEADER_LEN, vertex_len)?;

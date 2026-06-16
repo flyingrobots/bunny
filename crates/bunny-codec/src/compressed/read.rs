@@ -16,7 +16,7 @@ pub(super) struct Header {
     pub(super) bounds: FixedAabb3,
     pub(super) vertex_count: usize,
     pub(super) triangle_count: usize,
-    pub(super) payload_len: usize,
+    pub(super) payload_len: u64,
     pub(super) index_width: CompressedIndexWidth,
 }
 
@@ -38,8 +38,7 @@ pub(super) fn parse_header(input: &[u8]) -> Result<Header, CompressedMeshError> 
         bounds: read_bounds(input, 28)?,
         vertex_count,
         triangle_count,
-        payload_len: usize::try_from(read_u64(input, 20)?)
-            .map_err(|_| CompressedMeshError::IntegerOverflow)?,
+        payload_len: read_u64(input, 20)?,
         index_width,
     })
 }

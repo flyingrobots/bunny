@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * The GP3 compressed profile records its allocation contract explicitly: accepted
   decoding borrows raw payload byte sections and exposes typed checked accessors,
   rather than unsafely reinterpreting arbitrary bytes as typed slices.
+* The GP3 compressed decoder now classifies oversized declared payload lengths
+  against the canonical profile length before host pointer-width-dependent slice
+  checks.
 
 ## [0.3.0] - 2026-06-13
 
