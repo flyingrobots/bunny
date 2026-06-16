@@ -170,8 +170,8 @@ publish_crate() {
       return 0
     fi
 
-    if grep -Eq 'no matching package named|failed to select a version' "$output_file"; then
-      printf 'registry dependency for %s is not visible yet; retrying in %ss\n' \
+    if grep -Eiq 'no matching package named|failed to select a version|429 Too Many Requests|published too many new crates' "$output_file"; then
+      printf 'registry dependency or publish limit for %s is not ready; retrying in %ss\n' \
         "$crate" "$RETRY_SECONDS"
       sleep "$RETRY_SECONDS"
       continue
