@@ -37,11 +37,16 @@ Workflow:
 
 Jobs:
 
-- `dojo-ubuntu` — formatting, linting, dependency policy, unit tests,
-  repo-respect scripts, and WASM build check.
-- `determinism-matrix` — runs tests on Linux x64 and macOS ARM64 labels.
+- `dojo-ubuntu` — runs `cargo run --locked -p xtask -- code-dojo --all --ci`,
+  covering formatting, Rust AST policy, dependency policy, Clippy, native tests,
+  deterministic receipts, and wasm32 library checks.
+- `determinism-matrix` — runs workspace tests and deterministic receipt
+  enforcement on `ubuntu-latest`, `macos-26`, and `windows-latest`.
+- `wasm-headless` — runs headless Node `wasm-pack test` for each
+  WASM-compatible library crate.
 
-The workflow uses official GitHub actions and pinned Rust toolchain configuration from `rust-toolchain.toml`.
+The workflow uses GitHub Actions with Rust configured by `rust-toolchain.toml`;
+the third-party wasm-pack installer action is pinned by commit.
 
 ## Waivers
 

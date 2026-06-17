@@ -28,8 +28,8 @@ flow with the Rust Code Standards Editor's Edition and Code Dojo.
 * Release archive verification passes before any release tag is cut.
 
 All acceptance criteria are satisfied for the local standards-alignment gate.
-Release archive verification was run with `ALLOW_DIRTY=1` because the
-alignment work is still local and intentionally uncommitted.
+Release archive verification was run with `ALLOW_DIRTY=1` during local
+alignment before the pull request was finalized.
 
 ## Initial Gate Findings
 
