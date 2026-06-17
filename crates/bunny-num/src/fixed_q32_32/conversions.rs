@@ -30,13 +30,13 @@ pub fn from_f32(value: f32) -> i64 {
 // dojo: allow float-boundary -- explicit lossy display/API egress from Q32.32
 pub fn to_f32(raw: i64) -> f32 {
     if raw == 0 {
-        return 0.0;
+        return f32::from_bits(0);
     }
 
     let sign = raw.is_negative();
     let abs: u64 = raw.unsigned_abs();
     if abs == 0 {
-        return 0.0;
+        return f32::from_bits(0);
     }
 
     f32_from_abs_raw(sign, abs)

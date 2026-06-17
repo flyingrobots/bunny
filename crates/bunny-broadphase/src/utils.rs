@@ -28,14 +28,14 @@ pub fn surface_area(aabb: &FixedAabb3) -> FixedQ32_32 {
     let size_y = if aabb.max.y > aabb.min.y { aabb.max.y - aabb.min.y } else { FixedQ32_32::ZERO };
     let size_z = if aabb.max.z > aabb.min.z { aabb.max.z - aabb.min.z } else { FixedQ32_32::ZERO };
 
-    let two = FixedQ32_32::from_f32(2.0);
+    let two = FixedQ32_32::ONE + FixedQ32_32::ONE;
     two * (size_x * size_y + size_y * size_z + size_z * size_x)
 }
 
 /// Computes the centroid of an AABB.
 #[must_use]
 pub fn get_centroid(aabb: &FixedAabb3) -> FixedVec3 {
-    let two = FixedQ32_32::from_f32(2.0);
+    let two = FixedQ32_32::ONE + FixedQ32_32::ONE;
     FixedVec3::new(
         (aabb.min.x + aabb.max.x).checked_div(two).unwrap_or(FixedQ32_32::ZERO),
         (aabb.min.y + aabb.max.y).checked_div(two).unwrap_or(FixedQ32_32::ZERO),

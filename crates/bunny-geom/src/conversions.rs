@@ -33,7 +33,7 @@ fn validate_sphere3(center: Vec3, radius: Scalar) -> Result<(), GeomError> {
     if !is_finite(radius) {
         return Err(GeomError::NonFiniteRadius);
     }
-    if radius < 0.0 {
+    if radius < Scalar::from_bits(0) {
         return Err(GeomError::NegativeSphereRadius);
     }
     Ok(())

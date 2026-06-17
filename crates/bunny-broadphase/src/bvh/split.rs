@@ -37,7 +37,7 @@ struct SteppedAxis {
 
 impl AxisSpan {
     fn step(self) -> Option<FixedQ32_32> {
-        let step = (self.max - self.min).checked_div(FixedQ32_32::from_f32(4.0))?;
+        let step = (self.max - self.min).checked_div(fixed_units(4)?)?;
         (step != FixedQ32_32::ZERO).then_some(step)
     }
 }
