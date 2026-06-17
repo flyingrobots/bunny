@@ -906,8 +906,7 @@ impl PolicyVisitor<'_> {
                 "ambient-state",
                 "ambient environment/process access is banned in deterministic core crates",
             ))
-        } else if has_suffix(&segments, &["File", "open"]) || has_suffix(&segments, &["std", "fs"])
-        {
+        } else if is_filesystem_path(&segments) {
             Some(("ambient-state", "filesystem access is banned in deterministic core crates"))
         } else if has_suffix(&segments, &["TcpStream", "connect"])
             || has_suffix(&segments, &["UdpSocket", "bind"])
@@ -1168,6 +1167,17 @@ fn has_suffix(path: &[String], suffix: &[&str]) -> bool {
         && path.iter().rev().zip(suffix.iter().rev()).all(|(left, right)| left.as_str() == *right)
 }
 
+fn has_prefix(path: &[String], prefix: &[&str]) -> bool {
+    path.len() >= prefix.len()
+        && path.iter().zip(prefix.iter()).all(|(left, right)| left.as_str() == *right)
+}
+
+fn is_filesystem_path(path: &[String]) -> bool {
+    has_suffix(path, &["File", "open"])
+        || has_prefix(path, &["std", "fs"])
+        || has_prefix(path, &["fs"])
+}
+
 fn is_single_segment(path: &[String], segment: &str) -> bool {
     path.len() == 1 && path.first().is_some_and(|value| value == segment)
 }
@@ -1221,6 +1231,22 @@ mod tests {
         );
     }
 
+    fn core_policy_violations(source: &str) -> Vec<Violation> {
+        let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
+        let path = PathBuf::from("crates/bunny-num/src/lib.rs");
+        let category = Category::Core;
+        let context =
+            FileContext { path, category, limits: category.limits(), source, lines: &lines };
+        let mut violations = Vec::new();
+        check_textual_limits(&mut violations, &context);
+        check_ast(&mut violations, &context);
+        violations
+    }
+
+    fn has_rule(violations: &[Violation], rule: &str) -> bool {
+        violations.iter().any(|violation| violation.rule == rule)
+    }
+
     #[test]
     fn staged_rust_sources_are_read_from_index() {
         let temp = TempDir::new("staged-index");
@@ -1242,5 +1268,18 @@ mod tests {
             .expect("staged source should be present");
 
         assert!(staged.source.contains("panic!(\"staged\")"));
+    }
+
+    #[test]
+    fn core_policy_flags_std_fs_helper_calls() {
+        let source = r"
+pub fn read_path(path: &std::path::Path) {
+    let _bytes = std::fs::read(path);
+}
+";
+
+        let violations = core_policy_violations(source);
+
+        assert!(has_rule(&violations, "ambient-state"));
     }
 }
