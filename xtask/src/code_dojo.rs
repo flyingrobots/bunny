@@ -8,9 +8,9 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
-    BinOp, Block, Expr, ExprCall, ExprForLoop, ExprIf, ExprIndex, ExprLoop, ExprMacro, ExprMatch,
-    ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Path as SynPath, Signature,
-    Stmt, TraitItemFn, TypePath,
+    BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLoop, ExprMacro, ExprMatch, ExprMethodCall,
+    ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Path as SynPath, Signature, Stmt, TraitItemFn,
+    TypePath,
 };
 
 type DynError = Box<dyn Error>;
@@ -908,6 +908,11 @@ impl PolicyVisitor<'_> {
             ))
         } else if is_filesystem_path(&segments) {
             Some(("ambient-state", "filesystem access is banned in deterministic core crates"))
+        } else if is_nondeterministic_map_constructor(&segments) {
+            Some((
+                "nondeterministic-map",
+                "HashMap/HashSet constructors are banned in canonical core output paths",
+            ))
         } else if has_suffix(&segments, &["TcpStream", "connect"])
             || has_suffix(&segments, &["UdpSocket", "bind"])
         {
@@ -1010,14 +1015,6 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
             }
         }
         visit::visit_expr_macro(self, node);
-    }
-
-    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
-        let line = line_of(node.span());
-        if let Expr::Path(path) = node.func.as_ref() {
-            self.check_path_call(line, &path.path);
-        }
-        visit::visit_expr_call(self, node);
     }
 
     fn visit_expr_path(&mut self, node: &'ast ExprPath) {
@@ -1178,6 +1175,13 @@ fn is_filesystem_path(path: &[String]) -> bool {
         || has_prefix(path, &["fs"])
 }
 
+fn is_nondeterministic_map_constructor(path: &[String]) -> bool {
+    let [.., collection, constructor] = path else {
+        return false;
+    };
+    constructor == "new" && matches!(collection.as_str(), "HashMap" | "HashSet")
+}
+
 fn is_single_segment(path: &[String], segment: &str) -> bool {
     path.len() == 1 && path.first().is_some_and(|value| value == segment)
 }
@@ -1247,6 +1251,10 @@ mod tests {
         violations.iter().any(|violation| violation.rule == rule)
     }
 
+    fn rule_count(violations: &[Violation], rule: &str) -> usize {
+        violations.iter().filter(|violation| violation.rule == rule).count()
+    }
+
     #[test]
     fn staged_rust_sources_are_read_from_index() {
         let temp = TempDir::new("staged-index");
@@ -1281,5 +1289,23 @@ pub fn read_path(path: &std::path::Path) {
         let violations = core_policy_violations(source);
 
         assert!(has_rule(&violations, "ambient-state"));
+    }
+
+    #[test]
+    fn core_policy_flags_inferred_hash_map_and_set_constructors() {
+        let source = r"
+use std::collections::{HashMap, HashSet};
+
+pub fn build() {
+    let mut map = HashMap::new();
+    let mut set = HashSet::new();
+    let _old = map.insert(1, 2);
+    let _inserted = set.insert(1);
+}
+";
+
+        let violations = core_policy_violations(source);
+
+        assert_eq!(rule_count(&violations, "nondeterministic-map"), 2);
     }
 }
