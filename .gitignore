@@ -1,3 +1,5 @@
 /target/
 .obsidian/
+__pycache__/
+*.py[cod]
 rust-code-standards-repo-respect-pack*
