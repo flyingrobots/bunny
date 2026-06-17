@@ -22,7 +22,7 @@ flow with the Rust Code Standards Editor's Edition and Code Dojo.
 * `.github/workflows/code-dojo.yml` is the active quality workflow, with release
   publication kept in `.github/workflows/release.yml`.
 * Workspace and member manifests inherit the new lint baseline.
-* `python3 scripts/code-dojo/dojo.py --all` passes.
+* `cargo run --locked -p xtask -- code-dojo --all` passes.
 * Headless WASM tests pass for every WASM-compatible library crate.
 * Markdown checks pass for touched Markdown files when the tool is available.
 * Release archive verification passes before any release tag is cut.
@@ -50,14 +50,12 @@ alignment work is complete. Known initial categories:
 ## Evidence Log
 
 * `bash scripts/install-githooks.sh` installed `.githooks` as `core.hooksPath`.
-* `python3 -m py_compile scripts/code-dojo/*.py` passed.
 * `git diff --check` passed after installation edits.
 * `cargo metadata --locked --no-deps` parsed the workspace manifests.
-* `python3 scripts/code-dojo/check_determinism_manifest.py --enforce` failed
-  with missing deterministic receipt findings for the six current core crates.
-* `python3 scripts/code-dojo/check_files.py --all` failed through the
-  `xtask` Rust AST checker with source-shape alignment findings across the
-  existing Rust workspace.
+* `cargo run --locked -p xtask -- code-dojo-determinism --enforce` failed with
+  missing deterministic receipt findings for the six current core crates.
+* `cargo run --locked -p xtask -- code-dojo-rust --all` failed with
+  source-shape alignment findings across the existing Rust workspace.
 * `cargo run --locked -p xtask -- code-dojo-rust --all` compiled and reported
   AST-backed violations instead of regex-derived Rust findings.
 * `cargo fmt --all -- --check` passed after formatting the workspace under the
@@ -70,9 +68,9 @@ alignment work is complete. Known initial categories:
 * `cargo clippy --locked --workspace --all-targets --all-features --
   -D warnings` failed on missing package metadata, missing docs in generated
   contract output, and build-script formatting/docs findings.
-* `python3 scripts/code-dojo/dojo.py --all` passed after the AST checker,
-  deterministic receipts, formatting, workspace Clippy, strict package Clippy,
-  native tests, and wasm32 library checks were aligned.
+* `cargo run --locked -p xtask -- code-dojo --all` passed after the AST
+  checker, deterministic receipts, formatting, workspace Clippy, strict package
+  Clippy, native tests, and wasm32 library checks were aligned.
 * Code Dojo was tightened after completion review: full-gate source discovery
   now checks tracked and untracked nonignored Rust files, and rollout skip knobs
   for Cargo, deterministic receipts, and WASM checks were removed.
@@ -82,8 +80,10 @@ alignment work is complete. Known initial categories:
 * `cargo deny check` is active in Code Dojo. Duplicate transitive dependency
   versions from the current `wesley-core` graph remain visible warnings rather
   than hidden skip exemptions.
-* `python3 scripts/code-dojo/check_files.py --all` passed after the full-gate
-  file-discovery ratchet was tightened.
+* Code Dojo orchestration moved fully into `xtask` Rust commands; no Python
+  policy scripts remain.
+* `cargo run --locked -p xtask -- code-dojo-rust --all` passed after the
+  full-gate file-discovery ratchet was tightened.
 * Headless Node.js WASM tests passed for every WASM-compatible library crate:
   `bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-contract`, `bunny-query`,
   `bunny-broadphase`, `bunny-mesh`, and `bunny-codec`.

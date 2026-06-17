@@ -45,7 +45,7 @@ jobs:
         run: cargo install cargo-deny --locked --version 0.18.9
 
       - name: Run Code Dojo
-        run: python3 scripts/code-dojo/dojo.py --all --ci
+        run: cargo run --locked -p xtask -- code-dojo --all --ci
 
   determinism-matrix:
     name: Determinism / ${{ matrix.os }}
@@ -81,7 +81,7 @@ jobs:
         run: cargo test --locked --workspace --all-targets --all-features
 
       - name: Verify deterministic receipts
-        run: python scripts/code-dojo/check_determinism_manifest.py --enforce
+        run: cargo run --locked -p xtask -- code-dojo-determinism --enforce
 
   wasm-headless:
     name: WebAssembly / Headless Node

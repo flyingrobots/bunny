@@ -22,7 +22,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     match command.as_str() {
         "generate" => handle_generate(),
         "create-issues" => handle_removed_create_issues(),
-        "code-dojo-rust" => code_dojo::handle(args),
+        "code-dojo" => code_dojo::handle_full(args),
+        "code-dojo-pre-commit" => code_dojo::handle_pre_commit(),
+        "code-dojo-rust" => code_dojo::handle_rust(args),
+        "code-dojo-determinism" => code_dojo::handle_determinism(args),
+        "code-dojo-commit-msg" => code_dojo::handle_commit_msg(args),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
@@ -43,7 +47,14 @@ fn print_help() {
     println!("Commands:");
     println!("  generate        Regenerate Rust and TypeScript DTOs from graphics schema");
     println!("  create-issues   Removed; GitHub Issues are the canonical backlog");
+    println!("  code-dojo       Run the full Code Dojo quality gate");
+    println!("  code-dojo-pre-commit");
+    println!("                  Run the local pre-commit Code Dojo gate");
     println!("  code-dojo-rust  Run Rust AST repository policy checks");
+    println!("  code-dojo-determinism");
+    println!("                  Check deterministic golden-vector receipts");
+    println!("  code-dojo-commit-msg <path>");
+    println!("                  Check a commit message file");
     println!("  help            Show this help info");
 }
 

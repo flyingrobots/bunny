@@ -68,7 +68,7 @@ The canonical checklist lives in `docs/TESTING.md`; this section is a status
 snapshot, not a replacement checklist. The active local quality gate is:
 
 ```bash
-python3 scripts/code-dojo/dojo.py --all
+cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The current standards-alignment goalpost is complete locally. Evidence is

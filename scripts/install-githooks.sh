@@ -19,4 +19,4 @@ chmod +x .githooks/pre-commit .githooks/commit-msg .githooks/pre-push
 git config core.hooksPath .githooks
 
 echo "Code Dojo: installed repo-local hooks at .githooks"
-echo "Code Dojo: run 'python3 scripts/code-dojo/dojo.py --all' to test the full gate"
+echo "Code Dojo: run 'cargo run --locked -p xtask -- code-dojo --all' to test the full gate"

@@ -19,10 +19,48 @@ const CORE_CRATES: &[&str] =
     &["bunny-num", "bunny-linalg", "bunny-geom", "bunny-query", "bunny-broadphase", "bunny-mesh"];
 const GENERATOR_CRATES: &[&str] = &["bunny-wesley"];
 const TOOLING_CRATES: &[&str] = &["xtask"];
+const STRICT_CLIPPY_PACKAGES: &[&str] = &[
+    "bunny-num",
+    "bunny-linalg",
+    "bunny-geom",
+    "bunny-query",
+    "bunny-broadphase",
+    "bunny-mesh",
+    "bunny-codec",
+    "bunny-contract",
+];
+const WASM_PACKAGES: &[&str] = &[
+    "bunny-num",
+    "bunny-linalg",
+    "bunny-geom",
+    "bunny-contract",
+    "bunny-query",
+    "bunny-broadphase",
+    "bunny-mesh",
+    "bunny-codec",
+];
+const GOLDEN_TEST_NAMES: &[&str] =
+    &["golden_vectors.rs", "determinism.rs", "fixed_q32x32_vectors.rs", "geometry_degenerates.rs"];
+const MERGE_PREFIXES: &[&str] = &["Merge ", "Revert "];
+const AI_MARKERS: &[&str] = &[
+    "Co-Authored-By: ChatGPT",
+    "Co-authored-by: ChatGPT",
+    "AI-Assisted: true",
+    "AI-Authored: true",
+    "Generated-By: ChatGPT",
+    "Generated-By: OpenAI",
+];
+
 #[derive(Clone, Copy)]
 enum Mode {
     All,
     Staged,
+}
+
+#[derive(Default)]
+struct FullGateArgs {
+    all: bool,
+    ci: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -160,8 +198,47 @@ impl Display for Violation {
     }
 }
 
-pub(super) fn handle(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {
+pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {
+    let args = parse_full_gate_args(args)?;
+    if !args.all {
+        return Err(DojoError::new("code-dojo requires --all").into());
+    }
+    if args.ci {
+        println!("Code Dojo: CI mode");
+    }
+
+    check_rust(Mode::All)?;
+    check_determinism_receipts(true)?;
+    ensure_cargo_manifest("full gate")?;
+    run_quality_commands(true)?;
+    println!("Code Dojo: full gate clean");
+    Ok(())
+}
+
+pub(super) fn handle_pre_commit() -> Result<(), DynError> {
+    println!("Code Dojo: checking staged Rust changes");
+    check_rust(Mode::Staged)?;
+    ensure_cargo_manifest("pre-commit gate")?;
+    run_quality_commands(false)?;
+    Ok(())
+}
+
+pub(super) fn handle_rust(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {
     let mode = parse_mode(args)?;
+    check_rust(mode)
+}
+
+pub(super) fn handle_determinism(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {
+    let enforce = parse_determinism_args(args)?;
+    check_determinism_receipts(enforce)
+}
+
+pub(super) fn handle_commit_msg(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {
+    let path = parse_commit_msg_args(args)?;
+    check_commit_message(&path)
+}
+
+fn check_rust(mode: Mode) -> Result<(), DynError> {
     let root = git_root()?;
     let mut violations = Vec::new();
 
@@ -188,10 +265,28 @@ pub(super) fn handle(args: impl IntoIterator<Item = String>) -> Result<(), DynEr
     }
 
     eprintln!("Code Dojo Rust AST: violations found");
-    for violation in violations {
+    for violation in &violations {
         eprintln!("  {violation}");
     }
     Err(DojoError::new("Code Dojo Rust AST policy violations found").into())
+}
+
+fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {
+    let mut parsed = FullGateArgs::default();
+    for arg in args {
+        match arg.as_str() {
+            "--all" => parsed.all = true,
+            "--ci" => parsed.ci = true,
+            "--help" | "-h" => {
+                println!("Usage: cargo run -p xtask -- code-dojo --all [--ci]");
+                return Err(DojoError::new("help requested").into());
+            }
+            other => {
+                return Err(DojoError::new(format!("unknown code-dojo argument: {other}")).into())
+            }
+        }
+    }
+    Ok(parsed)
 }
 
 fn parse_mode(args: impl IntoIterator<Item = String>) -> Result<Mode, DynError> {
@@ -221,6 +316,318 @@ fn set_mode(mode: &mut Option<Mode>, next: Mode) -> Result<(), DynError> {
     }
     *mode = Some(next);
     Ok(())
+}
+
+fn parse_determinism_args(args: impl IntoIterator<Item = String>) -> Result<bool, DynError> {
+    let mut enforce = false;
+    for arg in args {
+        match arg.as_str() {
+            "--enforce" => enforce = true,
+            "--help" | "-h" => {
+                println!("Usage: cargo run -p xtask -- code-dojo-determinism [--enforce]");
+                return Err(DojoError::new("help requested").into());
+            }
+            other => {
+                return Err(DojoError::new(format!(
+                    "unknown code-dojo-determinism argument: {other}"
+                ))
+                .into())
+            }
+        }
+    }
+    Ok(enforce)
+}
+
+fn parse_commit_msg_args(args: impl IntoIterator<Item = String>) -> Result<PathBuf, DynError> {
+    let mut args = args.into_iter();
+    let Some(path) = args.next() else {
+        return Err(DojoError::new("usage: code-dojo-commit-msg <commit-msg-file>").into());
+    };
+    if args.next().is_some() {
+        return Err(DojoError::new("code-dojo-commit-msg accepts exactly one path").into());
+    }
+    Ok(PathBuf::from(path))
+}
+
+fn ensure_cargo_manifest(context: &str) -> Result<(), DynError> {
+    let root = git_root()?;
+    if root.join("Cargo.toml").exists() {
+        return Ok(());
+    }
+    Err(DojoError::new(format!("Code Dojo: Cargo.toml is required for the {context}")).into())
+}
+
+fn run_quality_commands(include_wasm_check: bool) -> Result<(), DynError> {
+    run_command(&["cargo", "fmt", "--all", "--", "--check"])?;
+    run_command(&[
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings",
+    ])?;
+    let strict_clippy = strict_clippy_command();
+    run_command_strings(&strict_clippy)?;
+    run_command(&["cargo", "deny", "check"])?;
+    run_command(&["cargo", "test", "--locked", "--workspace", "--all-targets", "--all-features"])?;
+
+    if include_wasm_check {
+        run_command(&["rustup", "target", "add", "wasm32-unknown-unknown"])?;
+        let wasm_check = wasm_check_command();
+        run_command_strings(&wasm_check)?;
+    }
+
+    Ok(())
+}
+
+fn strict_clippy_command() -> Vec<String> {
+    let mut args =
+        vec!["cargo", "clippy", "--locked"].into_iter().map(str::to_owned).collect::<Vec<_>>();
+    args.extend(package_args(STRICT_CLIPPY_PACKAGES));
+    args.extend(
+        [
+            "--all-features",
+            "--",
+            "-D",
+            "clippy::unwrap_used",
+            "-D",
+            "clippy::expect_used",
+            "-D",
+            "clippy::panic",
+            "-D",
+            "clippy::todo",
+            "-D",
+            "clippy::unimplemented",
+            "-D",
+            "clippy::indexing_slicing",
+        ]
+        .into_iter()
+        .map(str::to_owned),
+    );
+    args
+}
+
+fn wasm_check_command() -> Vec<String> {
+    let mut args =
+        vec!["cargo", "check", "--locked"].into_iter().map(str::to_owned).collect::<Vec<_>>();
+    args.extend(package_args(WASM_PACKAGES));
+    args.extend(
+        ["--target", "wasm32-unknown-unknown", "--all-features"].into_iter().map(str::to_owned),
+    );
+    args
+}
+
+fn package_args(packages: &[&str]) -> Vec<String> {
+    let mut args = Vec::with_capacity(packages.len() * 2);
+    for package in packages {
+        args.push("-p".to_string());
+        args.push((*package).to_string());
+    }
+    args
+}
+
+fn run_command(args: &[&str]) -> Result<(), DynError> {
+    let args = args.iter().map(|arg| (*arg).to_string()).collect::<Vec<_>>();
+    run_command_strings(&args)
+}
+
+fn run_command_strings(args: &[String]) -> Result<(), DynError> {
+    let Some((program, rest)) = args.split_first() else {
+        return Err(DojoError::new("empty command").into());
+    };
+    println!("Code Dojo: {}", args.join(" "));
+    let root = git_root()?;
+    let status = Command::new(program).args(rest).current_dir(root).status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(DojoError::new(format!("command failed: {}", args.join(" "))).into())
+    }
+}
+
+fn check_determinism_receipts(enforce: bool) -> Result<(), DynError> {
+    let root = git_root()?;
+    let mut violations = Vec::new();
+
+    for crate_name in sorted_names(CORE_CRATES) {
+        let crate_dir = root.join("crates").join(crate_name);
+        if !crate_dir.exists() {
+            continue;
+        }
+        if !crate_has_determinism_receipt(&crate_dir)? {
+            violations.push(Violation::new(
+                PathBuf::from("crates").join(crate_name),
+                0,
+                "determinism-tests",
+                "core crate should include deterministic golden-vector or degeneracy tests",
+            ));
+        }
+    }
+
+    if violations.is_empty() {
+        println!("Code Dojo: deterministic test receipts present");
+        return Ok(());
+    }
+
+    if enforce {
+        print_violations("Code Dojo: deterministic receipt violations found", &violations);
+        return Err(DojoError::new("deterministic receipt policy violations found").into());
+    }
+
+    println!("Code Dojo: deterministic test warnings");
+    for violation in violations {
+        println!("  {violation}");
+    }
+    Ok(())
+}
+
+fn sorted_names<'a>(names: &'a [&'a str]) -> Vec<&'a str> {
+    let mut names = names.to_vec();
+    names.sort_unstable();
+    names
+}
+
+fn crate_has_determinism_receipt(crate_dir: &Path) -> Result<bool, DynError> {
+    let tests_dir = crate_dir.join("tests");
+    if !tests_dir.exists() {
+        return Ok(false);
+    }
+    for path in rust_files_under(&tests_dir)? {
+        if path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .is_some_and(|name| GOLDEN_TEST_NAMES.contains(&name))
+        {
+            return Ok(true);
+        }
+        let text = std::fs::read_to_string(&path)?;
+        let lower = text.to_ascii_lowercase();
+        if lower.contains("golden") && lower.contains("determin") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn rust_files_under(root: &Path) -> Result<Vec<PathBuf>, DynError> {
+    let mut files = Vec::new();
+    collect_rust_files(root, &mut files)?;
+    Ok(files)
+}
+
+fn collect_rust_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), DynError> {
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_files(&path, files)?;
+        } else if path.extension() == Some(OsStr::new("rs")) {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn check_commit_message(path: &Path) -> Result<(), DynError> {
+    let text = std::fs::read_to_string(path)?;
+    let lines = text.lines().map(str::trim_end).collect::<Vec<_>>();
+    let non_comment = lines
+        .iter()
+        .copied()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .collect::<Vec<_>>();
+
+    let Some(subject) = non_comment.first().copied() else {
+        return commit_message_rejected(&["empty commit message".to_string()]);
+    };
+
+    if MERGE_PREFIXES.iter().any(|prefix| subject.starts_with(prefix)) {
+        return Ok(());
+    }
+
+    let mut failures = Vec::new();
+    if subject.len() > 72 {
+        failures.push(format!("subject is {} characters; keep it <= 72", subject.len()));
+    }
+    if !subject_has_required_shape(subject) {
+        failures.push("subject must look like '<scope>: <imperative summary>'".to_string());
+    }
+    if subject.ends_with('.') {
+        failures.push("subject must not end with a period".to_string());
+    }
+
+    let summary =
+        subject.split_once(':').map_or(subject, |(_, summary)| summary).trim().to_ascii_lowercase();
+    if matches!(
+        summary.as_str(),
+        "fix" | "update" | "changes" | "misc" | "wip" | "cleanup" | "stuff"
+    ) {
+        failures.push("subject is too vague; name the causal change".to_string());
+    }
+
+    let ai_assisted = AI_MARKERS.iter().any(|marker| text.contains(marker));
+    let has_receipt = non_comment.iter().any(|line| line.starts_with("Repo-Respect-Receipt:"));
+    if ai_assisted && !has_receipt {
+        failures.push(
+            "AI-assisted commits require 'Repo-Respect-Receipt: <id-or-path>' trailer".to_string(),
+        );
+    }
+
+    if failures.is_empty() {
+        println!("Code Dojo: commit message clean");
+        Ok(())
+    } else {
+        commit_message_rejected(&failures)
+    }
+}
+
+fn subject_has_required_shape(subject: &str) -> bool {
+    let Some((scope, summary)) = subject.split_once(": ") else {
+        return false;
+    };
+    valid_scope(scope) && valid_summary(summary)
+}
+
+fn valid_scope(scope: &str) -> bool {
+    !scope.is_empty() && scope.split('/').all(valid_scope_segment)
+}
+
+fn valid_scope_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'.' | b'-')
+        })
+}
+
+fn valid_summary(summary: &str) -> bool {
+    let mut chars = summary.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_lowercase()
+        && chars.next().is_some()
+        && !summary.contains('.')
+        && !summary.ends_with('.')
+}
+
+fn commit_message_rejected(failures: &[String]) -> Result<(), DynError> {
+    eprintln!("Code Dojo: commit message rejected");
+    for failure in failures {
+        eprintln!("  - {failure}");
+    }
+    eprintln!("\nExample: bunny-num: define checked Q32x32 multiplication");
+    Err(DojoError::new("commit message rejected").into())
+}
+
+fn print_violations(header: &str, violations: &[Violation]) {
+    eprintln!("{header}");
+    for violation in violations {
+        eprintln!("  {violation}");
+    }
 }
 
 fn git_root() -> Result<PathBuf, DynError> {

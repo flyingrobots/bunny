@@ -1,7 +1,7 @@
 # Code Dojo™
 
 Code Dojo is the repository-respect enforcement layer for this standard. It combines local Git hooks,
-CI gates, a Rust AST policy checker, strict Clippy passes, and small Python orchestration scripts.
+CI gates, a Rust AST policy checker, strict Clippy passes, and Rust `xtask` orchestration commands.
 
 ## Local Hooks
 
@@ -19,9 +19,13 @@ Hooks installed:
 - `commit-msg` — enforces focused commit subjects and AI receipt trailers when applicable.
 - `pre-push` — runs the full dojo, including deterministic manifest checks and WASM check.
 
+The stable local and CI entrypoint is:
+
+```sh
+cargo run --locked -p xtask -- code-dojo --all
+```
+
 Rust source-shape policy is parsed through `cargo run --locked -p xtask -- code-dojo-rust`.
-The Python `check_files.py` entrypoint exists so hooks and CI have one stable command to call.
-It does not parse Rust syntax.
 
 ## CI
 

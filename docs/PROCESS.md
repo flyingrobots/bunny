@@ -63,7 +63,7 @@ bash scripts/install-githooks.sh
 Before handoff, run:
 
 ```bash
-python3 scripts/code-dojo/dojo.py --all
+cargo run --locked -p xtask -- code-dojo --all
 ```
 
 Local hooks check staged Rust policy, commit subject shape, deterministic

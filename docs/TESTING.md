@@ -18,16 +18,16 @@ the roadmap says are complete.
 Run the Code Dojo gate before opening or updating a goalpost PR:
 
 ```bash
-python3 scripts/code-dojo/dojo.py --all
+cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The gate runs:
 
-* repo-respect source checks from `scripts/code-dojo/check_files.py`, backed by
-  the `xtask` Rust AST checker across tracked and untracked nonignored Rust
-  files;
+* repo-respect source checks from
+  `cargo run --locked -p xtask -- code-dojo-rust --all` across tracked and
+  untracked nonignored Rust files;
 * deterministic test receipt checks from
-  `scripts/code-dojo/check_determinism_manifest.py`;
+  `cargo run --locked -p xtask -- code-dojo-determinism --enforce`;
 * workspace formatting;
 * workspace Clippy with warnings denied;
 * strict package-scoped Clippy for unwrap/expect/panic/todo/unimplemented and
@@ -82,7 +82,7 @@ Source files stay small. Public behavior is tested through integration tests:
 | `.github/workflows/code-dojo.yml` | Code Dojo, cross-platform, and WASM enforcement |
 | `.github/workflows/release.yml` | crates.io release publication |
 | `.githooks/` | Repo-local pre-commit, commit-msg, and pre-push hooks |
-| `scripts/code-dojo/` | Local and CI repository-respect policy checks |
+| `xtask/src/code_dojo.rs` | Local and CI repository-respect policy checks |
 | `scripts/publish-crates.sh` | Local and CI package publication gate |
 
 ## Boundary Fixtures

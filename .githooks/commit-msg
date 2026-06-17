@@ -4,4 +4,4 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
-python3 scripts/code-dojo/check_commit_message.py "$1"
+cargo run --locked -p xtask -- code-dojo-commit-msg "$1"
