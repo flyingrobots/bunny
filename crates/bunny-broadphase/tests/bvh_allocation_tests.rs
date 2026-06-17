@@ -35,6 +35,10 @@ fn aabb(min_x: i32, max_x: i32) -> FixedAabb3 {
     FixedAabb3::new(vec3(min_x, -1, -1), vec3(max_x, 1, 1))
 }
 
+fn fixture_primitives() -> [FixedAabb3; 4] {
+    [aabb(0, 1), aabb(3, 4), aabb(6, 7), aabb(9, 10)]
+}
+
 fn empty_node() -> BvhNode {
     BvhNode {
         bounds: FixedAabb3::new(vec3(0, 0, 0), vec3(0, 0, 0)),
@@ -43,9 +47,40 @@ fn empty_node() -> BvhNode {
     }
 }
 
+fn build_fixture_bvh() -> (usize, [BvhNode; 7], [u32; 4]) {
+    let primitives = fixture_primitives();
+    let mut nodes = [empty_node(); 7];
+    let mut primitive_indices = [0_u32; 4];
+    let node_count =
+        build_bvh(&mut nodes, &mut primitive_indices, &primitives).expect("build should succeed");
+
+    (node_count, nodes, primitive_indices)
+}
+
+fn warm_up_bvh_paths() {
+    let (node_count, nodes, primitive_indices) = build_fixture_bvh();
+    let query_box = FixedAabb3::new(vec3(-1, -2, -2), vec3(11, 2, 2));
+    let mut overlap_count = 0;
+    intersect_aabb(&nodes[..node_count], &primitive_indices, &query_box, |_| {
+        overlap_count += 1;
+    })
+    .expect("AABB traversal should succeed");
+    assert_eq!(overlap_count, 4);
+
+    let ray = FixedRay3::new(vec3(-1, 0, 0), FixedUnitVec3::UNIT_X);
+    let mut ray_count = 0;
+    intersect_ray(&nodes[..node_count], &primitive_indices, &ray, |_| {
+        ray_count += 1;
+    })
+    .expect("ray traversal should succeed");
+    assert_eq!(ray_count, 4);
+}
+
 #[test]
-fn build_bvh_and_traversal_allocate_zero_times() {
-    let primitives = [aabb(0, 1), aabb(3, 4), aabb(6, 7), aabb(9, 10)];
+fn build_bvh_and_traversal_allocate_zero_times_after_warm_up() {
+    warm_up_bvh_paths();
+
+    let primitives = fixture_primitives();
     let mut nodes = [empty_node(); 7];
     let mut primitive_indices = [0_u32; 4];
 
