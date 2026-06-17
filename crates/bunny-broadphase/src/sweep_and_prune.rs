@@ -22,77 +22,147 @@ pub fn sweep_and_prune(
     }
 
     let n = primitives.len();
-    if prim_indices.len() < n {
+    init_indices(prim_indices, n)?;
+    let axis = choose_axis(primitives)?;
+    sort_indices(prim_indices, primitives, n, axis)?;
+    let input = SweepInput { prim_indices, primitives, n, axis };
+    let pair_count = collect_pairs(pairs, input)?;
+    sort_pairs(pairs, pair_count)?;
+    Some(pair_count)
+}
+
+fn init_indices(prim_indices: &mut [u32], n: usize) -> Option<()> {
+    if prim_indices.len() < n || n > u32::MAX as usize {
         return None;
     }
-
-    // Initialize indices
-    for (i, idx) in prim_indices.iter_mut().enumerate() {
-        *idx = i as u32;
+    for (i, idx) in prim_indices.iter_mut().take(n).enumerate() {
+        *idx = u32::try_from(i).ok()?;
     }
+    Some(())
+}
 
-    // 1. Choose optimal axis with largest centroid span
-    let mut centroid_min = get_centroid(&primitives[0]);
+fn choose_axis(primitives: &[FixedAabb3]) -> Option<usize> {
+    let first = primitives.first()?;
+    let mut centroid_min = get_centroid(first);
     let mut centroid_max = centroid_min;
     for prim in primitives.iter().skip(1) {
-        let c = get_centroid(prim);
-        centroid_min = min_vec(centroid_min, c);
-        centroid_max = max_vec(centroid_max, c);
+        let centroid = get_centroid(prim);
+        centroid_min = min_vec(centroid_min, centroid);
+        centroid_max = max_vec(centroid_max, centroid);
     }
+    Some(largest_span_axis(centroid_min, centroid_max))
+}
+
+fn largest_span_axis(
+    centroid_min: bunny_linalg::FixedVec3,
+    centroid_max: bunny_linalg::FixedVec3,
+) -> usize {
     let span_x = centroid_max.x - centroid_min.x;
     let span_y = centroid_max.y - centroid_min.y;
     let span_z = centroid_max.z - centroid_min.z;
-
-    let axis = if span_x >= span_y && span_x >= span_z {
+    if span_x >= span_y && span_x >= span_z {
         0
     } else if span_y >= span_z {
         1
     } else {
         2
-    };
+    }
+}
 
-    // 2. Sort indices stably along the chosen axis using unstable sort with unique fallback
-    prim_indices[..n].sort_unstable_by(|&a, &b| {
-        let val_a = get_axis_val(&primitives[a as usize].min, axis);
-        let val_b = get_axis_val(&primitives[b as usize].min, axis);
+fn sort_indices(
+    prim_indices: &mut [u32],
+    primitives: &[FixedAabb3],
+    n: usize,
+    axis: usize,
+) -> Option<()> {
+    let active = prim_indices.get_mut(..n)?;
+    active.sort_unstable_by(|&a, &b| {
+        let val_a = primitive_min_axis(primitives, a, axis);
+        let val_b = primitive_min_axis(primitives, b, axis);
         val_a.cmp(&val_b).then_with(|| a.cmp(&b))
     });
+    Some(())
+}
 
-    // 3. Sweep and check overlaps
-    let mut pair_count = 0;
-    for i in 0..n {
-        let idx_a = prim_indices[i];
-        let bounds_a = &primitives[idx_a as usize];
+fn primitive_min_axis(
+    primitives: &[FixedAabb3],
+    index: u32,
+    axis: usize,
+) -> bunny_num::FixedQ32_32 {
+    usize::try_from(index)
+        .ok()
+        .and_then(|idx| primitives.get(idx))
+        .map_or(bunny_num::FixedQ32_32::ZERO, |bounds| get_axis_val(&bounds.min, axis))
+}
 
-        for &idx_b in &prim_indices[(i + 1)..n] {
-            let bounds_b = &primitives[idx_b as usize];
+#[derive(Clone, Copy)]
+struct SweepInput<'a> {
+    prim_indices: &'a [u32],
+    primitives: &'a [FixedAabb3],
+    n: usize,
+    axis: usize,
+}
 
-            // Prune if coordinates along the chosen axis no longer overlap
-            let val_b_min = get_axis_val(&bounds_b.min, axis);
-            let val_a_max = get_axis_val(&bounds_a.max, axis);
-            if val_b_min > val_a_max {
-                break;
-            }
-
-            if aabbs_overlap(bounds_a, bounds_b) {
-                if pair_count >= pairs.len() {
-                    return None;
-                }
-
-                let pair = if idx_a < idx_b {
-                    (idx_a, idx_b)
-                } else {
-                    (idx_b, idx_a)
-                };
-
-                pairs[pair_count] = pair;
-                pair_count += 1;
-            }
-        }
+impl<'a> SweepInput<'a> {
+    fn primitive_index(&self, i: usize) -> Option<u32> {
+        self.prim_indices.get(i).copied()
     }
 
-    // 4. Stable sort the final pair output lexicographically
-    pairs[..pair_count].sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    fn remaining_indices(&self, i: usize) -> Option<&'a [u32]> {
+        self.prim_indices.get((i + 1)..self.n)
+    }
+}
 
-    Some(pair_count)
+fn collect_pairs(pairs: &mut [(u32, u32)], input: SweepInput<'_>) -> Option<usize> {
+    let mut collector = PairCollector { pairs, count: 0 };
+    for i in 0..input.n {
+        collect_pairs_for_index(&mut collector, input, i)?;
+    }
+    Some(collector.count)
+}
+
+struct PairCollector<'a> {
+    pairs: &'a mut [(u32, u32)],
+    count: usize,
+}
+
+impl PairCollector<'_> {
+    fn push(&mut self, idx_a: u32, idx_b: u32) -> Option<()> {
+        let pair = if idx_a < idx_b { (idx_a, idx_b) } else { (idx_b, idx_a) };
+        *self.pairs.get_mut(self.count)? = pair;
+        self.count += 1;
+        Some(())
+    }
+}
+
+fn collect_pairs_for_index(
+    collector: &mut PairCollector<'_>,
+    input: SweepInput<'_>,
+    i: usize,
+) -> Option<()> {
+    let idx_a = input.primitive_index(i)?;
+    let bounds_a = primitive_bounds(input.primitives, idx_a)?;
+    for &idx_b in input.remaining_indices(i)? {
+        let bounds_b = primitive_bounds(input.primitives, idx_b)?;
+        if should_stop_sweep(bounds_a, bounds_b, input.axis) {
+            break;
+        }
+        if aabbs_overlap(bounds_a, bounds_b) {
+            collector.push(idx_a, idx_b)?;
+        }
+    }
+    Some(())
+}
+
+fn primitive_bounds(primitives: &[FixedAabb3], index: u32) -> Option<&FixedAabb3> {
+    usize::try_from(index).ok().and_then(|idx| primitives.get(idx))
+}
+
+fn should_stop_sweep(bounds_a: &FixedAabb3, bounds_b: &FixedAabb3, axis: usize) -> bool {
+    get_axis_val(&bounds_b.min, axis) > get_axis_val(&bounds_a.max, axis)
+}
+
+fn sort_pairs(pairs: &mut [(u32, u32)], count: usize) -> Option<()> {
+    pairs.get_mut(..count)?.sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    Some(())
 }

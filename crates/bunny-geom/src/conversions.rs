@@ -149,10 +149,7 @@ impl FixedSphere3 {
     /// negative radius.
     pub fn try_from_float(sphere: Sphere3) -> Result<Self, GeomError> {
         validate_sphere3(sphere.center, sphere.radius)?;
-        Self::try_new(
-            FixedVec3::from(sphere.center),
-            FixedQ32_32::from_f32(sphere.radius),
-        )
+        Self::try_new(FixedVec3::from(sphere.center), FixedQ32_32::from_f32(sphere.radius))
     }
 
     /// Converts this fixed-point sphere into float coordinates without validation.
@@ -172,10 +169,7 @@ impl TryFrom<Ray3> for FixedRay3 {
 
 impl From<FixedRay3> for Ray3 {
     fn from(ray: FixedRay3) -> Self {
-        Self {
-            origin: Vec3::from(ray.origin),
-            direction: Vec3::from(ray.direction.into_inner()),
-        }
+        Self { origin: Vec3::from(ray.origin), direction: Vec3::from(ray.direction.into_inner()) }
     }
 }
 
@@ -189,10 +183,7 @@ impl TryFrom<Aabb3> for FixedAabb3 {
 
 impl From<FixedAabb3> for Aabb3 {
     fn from(aabb: FixedAabb3) -> Self {
-        Self {
-            min: Vec3::from(aabb.min),
-            max: Vec3::from(aabb.max),
-        }
+        Self { min: Vec3::from(aabb.min), max: Vec3::from(aabb.max) }
     }
 }
 
@@ -206,9 +197,6 @@ impl TryFrom<Sphere3> for FixedSphere3 {
 
 impl From<FixedSphere3> for Sphere3 {
     fn from(sphere: FixedSphere3) -> Self {
-        Self {
-            center: Vec3::from(sphere.center),
-            radius: sphere.radius.to_f32(),
-        }
+        Self { center: Vec3::from(sphere.center), radius: sphere.radius.to_f32() }
     }
 }

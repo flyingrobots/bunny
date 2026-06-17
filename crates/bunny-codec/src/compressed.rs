@@ -3,6 +3,7 @@ mod read;
 mod view;
 
 use read::{checked_add, checked_payload_len, parse_header, take, validate_triangles};
+use view::CompressedMeshParts;
 
 pub use error::CompressedMeshError;
 pub use view::{CompressedIndexWidth, CompressedMesh, CompressedTriangle};
@@ -25,41 +26,67 @@ const MAX_TRIANGLES: usize = 1_000_000;
 /// payload invariant is violated.
 pub fn decode_compressed_mesh(input: &[u8]) -> Result<CompressedMesh<'_>, CompressedMeshError> {
     let header = parse_header(input)?;
+    let layout = payload_layout(&header)?;
+    validate_total_len(input, layout.payload_end)?;
+    let sections = payload_sections(input, &layout)?;
+    validate_triangles(
+        sections.triangle_bytes,
+        header.triangle_count,
+        header.vertex_count,
+        header.index_width,
+    )?;
+    Ok(CompressedMesh::new(CompressedMeshParts {
+        bounds: header.bounds,
+        vertex_bytes: sections.vertex_bytes,
+        triangle_bytes: sections.triangle_bytes,
+        vertex_count: header.vertex_count,
+        triangle_count: header.triangle_count,
+        index_width: header.index_width,
+    }))
+}
+
+struct PayloadLayout {
+    vertex_len: usize,
+    triangle_len: usize,
+    triangle_start: usize,
+    payload_end: usize,
+}
+
+struct PayloadSections<'a> {
+    vertex_bytes: &'a [u8],
+    triangle_bytes: &'a [u8],
+}
+
+fn payload_layout(header: &read::Header) -> Result<PayloadLayout, CompressedMeshError> {
     let vertex_len = checked_payload_len(header.vertex_count, VERTEX_STRIDE)?;
     let triangle_len = checked_payload_len(header.triangle_count, header.index_width.stride())?;
     let expected_len = checked_add(vertex_len, triangle_len)?;
     let expected_len_u64 =
         u64::try_from(expected_len).map_err(|_| CompressedMeshError::IntegerOverflow)?;
-    let _declared_end = u64::try_from(HEADER_LEN)
-        .map_err(|_| CompressedMeshError::IntegerOverflow)?
-        .checked_add(header.payload_len)
-        .ok_or(CompressedMeshError::IntegerOverflow)?;
     if header.payload_len != expected_len_u64 {
         return Err(CompressedMeshError::InvalidPayloadLength);
     }
+    let triangle_start = checked_add(HEADER_LEN, vertex_len)?;
     let payload_end = checked_add(HEADER_LEN, expected_len)?;
+
+    Ok(PayloadLayout { vertex_len, triangle_len, triangle_start, payload_end })
+}
+
+const fn validate_total_len(input: &[u8], payload_end: usize) -> Result<(), CompressedMeshError> {
     if input.len() < payload_end {
         return Err(CompressedMeshError::PayloadTooShort);
     }
     if input.len() != payload_end {
         return Err(CompressedMeshError::TrailingData);
     }
+    Ok(())
+}
 
-    let vertex_bytes = take(input, HEADER_LEN, vertex_len)?;
-    let triangle_start = checked_add(HEADER_LEN, vertex_len)?;
-    let triangle_bytes = take(input, triangle_start, triangle_len)?;
-    validate_triangles(
-        triangle_bytes,
-        header.triangle_count,
-        header.vertex_count,
-        header.index_width,
-    )?;
-    Ok(CompressedMesh::new(
-        header.bounds,
-        vertex_bytes,
-        triangle_bytes,
-        header.vertex_count,
-        header.triangle_count,
-        header.index_width,
-    ))
+fn payload_sections<'a>(
+    input: &'a [u8],
+    layout: &PayloadLayout,
+) -> Result<PayloadSections<'a>, CompressedMeshError> {
+    let vertex_bytes = take(input, HEADER_LEN, layout.vertex_len)?;
+    let triangle_bytes = take(input, layout.triangle_start, layout.triangle_len)?;
+    Ok(PayloadSections { vertex_bytes, triangle_bytes })
 }

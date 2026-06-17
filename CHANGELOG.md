@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+* Rust Code Standards Editor's Edition docs, Numeric Constitution, Sensei's
+  Wisdom, Code Dojo docs, repo-local Git hooks, and repo-respect receipt
+  scaffolding.
+* Code Dojo local and CI enforcement scripts for source-shape policy,
+  deterministic test receipts, formatting, Clippy, tests, and WASM checks.
+* Deterministic receipt integration tests and crate README/package metadata
+  needed by the new standards gate.
+
+### Changed
+
+* Replaced the old quality CI workflow with `.github/workflows/code-dojo.yml`.
+* Root and crate manifests now inherit the workspace lint baseline from the new
+  standards pack.
+* Rust policy checks now run through the `xtask` AST-backed Code Dojo checker
+  plus strict package-scoped Clippy enforcement instead of regex source scans.
+* Code Dojo now scans tracked and untracked nonignored Rust files in full-gate
+  mode and no longer exposes rollout skip knobs for Cargo, deterministic
+  receipts, or WASM checks.
+* Dependency policy is now part of Code Dojo through `cargo deny check`.
+  Duplicate transitive-version findings from the current `wesley-core` graph
+  remain visible cargo-deny warnings rather than hidden skip exemptions.
+* Refactored broadphase, codec, numeric, query, mesh, and generated contract
+  code until the full Code Dojo and headless WASM gates pass.
+
 ## [0.4.0] - 2026-06-16
 
 ### Added

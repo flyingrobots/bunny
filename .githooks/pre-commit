@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+echo "Code Dojo: checking staged Rust changes"
+python3 scripts/code-dojo/check_files.py --staged
+
+if [[ ! -f Cargo.toml ]]; then
+  echo "Code Dojo: Cargo.toml is required for the pre-commit gate" >&2
+  exit 1
+fi
+
+echo "Code Dojo: cargo fmt --check"
+cargo fmt --all -- --check
+
+echo "Code Dojo: cargo clippy"
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+echo "Code Dojo: strict clippy policy"
+cargo clippy \
+  --locked \
+  -p bunny-num \
+  -p bunny-linalg \
+  -p bunny-geom \
+  -p bunny-query \
+  -p bunny-broadphase \
+  -p bunny-mesh \
+  -p bunny-codec \
+  -p bunny-contract \
+  --all-features \
+  -- \
+  -D clippy::unwrap_used \
+  -D clippy::expect_used \
+  -D clippy::panic \
+  -D clippy::todo \
+  -D clippy::unimplemented \
+  -D clippy::indexing_slicing
+
+echo "Code Dojo: cargo deny"
+cargo deny check
+
+echo "Code Dojo: cargo test"
+cargo test --locked --workspace --all-targets --all-features

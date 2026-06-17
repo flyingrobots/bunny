@@ -2,11 +2,17 @@
 name = "bunny-contract"
 description = "Contract helpers for Bunny schemas and generated types."
 authors.workspace = true
+categories = ["api-bindings", "encoding", "graphics"]
 edition.workspace = true
+keywords = ["bunny", "contract", "schema", "dto"]
 license.workspace = true
+readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[lints]
+workspace = true

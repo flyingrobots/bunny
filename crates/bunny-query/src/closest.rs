@@ -37,73 +37,134 @@ pub fn closest_point_triangle(
     v2: FixedVec3,
     p: FixedVec3,
 ) -> FixedVec3 {
-    let ab = v1 - v0;
-    let ac = v2 - v0;
-    let ap = p - v0;
+    let query = TriangleQuery::new(v0, v1, v2, p);
+    let dots = TriangleDots::new(&query);
 
-    let d1 = ab.dot(ap);
-    let d2 = ac.dot(ap);
-    if d1 <= FixedQ32_32::ZERO && d2 <= FixedQ32_32::ZERO {
-        return v0;
+    if let Some(point) = triangle_vertex_region(&query, &dots) {
+        return point;
     }
-
-    let bp = p - v1;
-    let d3 = ab.dot(bp);
-    let d4 = ac.dot(bp);
-    if d3 >= FixedQ32_32::ZERO && d4 <= d3 {
-        return v1;
+    if let Some(point) = triangle_edge_region(&query, &dots) {
+        return point;
     }
+    triangle_face_region(&query, &dots)
+}
 
-    let vc = d1 * d4 - d3 * d2;
-    if vc <= FixedQ32_32::ZERO && d1 >= FixedQ32_32::ZERO && d3 <= FixedQ32_32::ZERO {
-        let denom = d1 - d3;
-        let v = if denom == FixedQ32_32::ZERO {
-            FixedQ32_32::ZERO
-        } else {
-            d1.checked_div(denom).unwrap_or(FixedQ32_32::ZERO)
-        };
-        return v0 + ab * v;
+#[derive(Clone, Copy)]
+struct TriangleQuery {
+    v0: FixedVec3,
+    v1: FixedVec3,
+    v2: FixedVec3,
+    ab: FixedVec3,
+    ac: FixedVec3,
+    p: FixedVec3,
+}
+
+impl TriangleQuery {
+    fn new(v0: FixedVec3, v1: FixedVec3, v2: FixedVec3, p: FixedVec3) -> Self {
+        Self { v0, v1, v2, ab: v1 - v0, ac: v2 - v0, p }
     }
+}
 
-    let cp = p - v2;
-    let d5 = ab.dot(cp);
-    let d6 = ac.dot(cp);
-    if d6 >= FixedQ32_32::ZERO && d5 <= d6 {
-        return v2;
+#[derive(Clone, Copy)]
+struct TriangleDots {
+    d1: FixedQ32_32,
+    d2: FixedQ32_32,
+    d3: FixedQ32_32,
+    d4: FixedQ32_32,
+    d5: FixedQ32_32,
+    d6: FixedQ32_32,
+}
+
+impl TriangleDots {
+    fn new(query: &TriangleQuery) -> Self {
+        let ap = query.p - query.v0;
+        let bp = query.p - query.v1;
+        let cp = query.p - query.v2;
+        Self {
+            d1: query.ab.dot(ap),
+            d2: query.ac.dot(ap),
+            d3: query.ab.dot(bp),
+            d4: query.ac.dot(bp),
+            d5: query.ab.dot(cp),
+            d6: query.ac.dot(cp),
+        }
     }
+}
 
-    let vb = d5 * d2 - d1 * d6;
-    if vb <= FixedQ32_32::ZERO && d2 >= FixedQ32_32::ZERO && d6 <= FixedQ32_32::ZERO {
-        let denom = d2 - d6;
-        let w = if denom == FixedQ32_32::ZERO {
-            FixedQ32_32::ZERO
-        } else {
-            d2.checked_div(denom).unwrap_or(FixedQ32_32::ZERO)
-        };
-        return v0 + ac * w;
-    }
-
-    let va = d3 * d6 - d5 * d4;
-    if va <= FixedQ32_32::ZERO && (d4 - d3) >= FixedQ32_32::ZERO && (d5 - d6) >= FixedQ32_32::ZERO {
-        let denom = (d4 - d3) + (d5 - d6);
-        let w = if denom == FixedQ32_32::ZERO {
-            FixedQ32_32::ZERO
-        } else {
-            (d4 - d3).checked_div(denom).unwrap_or(FixedQ32_32::ZERO)
-        };
-        return v1 + (v2 - v1) * w;
-    }
-
-    let denom = va + vb + vc;
-    let (v, w) = if denom == FixedQ32_32::ZERO {
-        (FixedQ32_32::ZERO, FixedQ32_32::ZERO)
+fn triangle_vertex_region(query: &TriangleQuery, dots: &TriangleDots) -> Option<FixedVec3> {
+    if triangle_v0_region(dots) {
+        Some(query.v0)
+    } else if triangle_v1_region(dots) {
+        Some(query.v1)
+    } else if triangle_v2_region(dots) {
+        Some(query.v2)
     } else {
-        (
-            vb.checked_div(denom).unwrap_or(FixedQ32_32::ZERO),
-            vc.checked_div(denom).unwrap_or(FixedQ32_32::ZERO),
-        )
-    };
-    v0 + ab * v + ac * w
+        None
+    }
+}
+
+fn triangle_v0_region(dots: &TriangleDots) -> bool {
+    dots.d1 <= FixedQ32_32::ZERO && dots.d2 <= FixedQ32_32::ZERO
+}
+
+fn triangle_v1_region(dots: &TriangleDots) -> bool {
+    dots.d3 >= FixedQ32_32::ZERO && dots.d4 <= dots.d3
+}
+
+fn triangle_v2_region(dots: &TriangleDots) -> bool {
+    dots.d6 >= FixedQ32_32::ZERO && dots.d5 <= dots.d6
+}
+
+fn triangle_edge_region(query: &TriangleQuery, dots: &TriangleDots) -> Option<FixedVec3> {
+    if triangle_ab_region(dots) {
+        let v = ratio_or_zero(dots.d1, dots.d1 - dots.d3);
+        Some(query.v0 + query.ab * v)
+    } else if triangle_ac_region(dots) {
+        let w = ratio_or_zero(dots.d2, dots.d2 - dots.d6);
+        Some(query.v0 + query.ac * w)
+    } else if triangle_bc_region(dots) {
+        let w = ratio_or_zero(dots.d4 - dots.d3, (dots.d4 - dots.d3) + (dots.d5 - dots.d6));
+        Some(query.v1 + (query.v2 - query.v1) * w)
+    } else {
+        None
+    }
+}
+
+fn triangle_ab_region(dots: &TriangleDots) -> bool {
+    triangle_vc(dots) <= FixedQ32_32::ZERO
+        && dots.d1 >= FixedQ32_32::ZERO
+        && dots.d3 <= FixedQ32_32::ZERO
+}
+
+fn triangle_ac_region(dots: &TriangleDots) -> bool {
+    triangle_vb(dots) <= FixedQ32_32::ZERO
+        && dots.d2 >= FixedQ32_32::ZERO
+        && dots.d6 <= FixedQ32_32::ZERO
+}
+
+fn triangle_bc_region(dots: &TriangleDots) -> bool {
+    triangle_va(dots) <= FixedQ32_32::ZERO
+        && (dots.d4 - dots.d3) >= FixedQ32_32::ZERO
+        && (dots.d5 - dots.d6) >= FixedQ32_32::ZERO
+}
+
+fn triangle_face_region(query: &TriangleQuery, dots: &TriangleDots) -> FixedVec3 {
+    let denom = triangle_va(dots) + triangle_vb(dots) + triangle_vc(dots);
+    let v = ratio_or_zero(triangle_vb(dots), denom);
+    let w = ratio_or_zero(triangle_vc(dots), denom);
+    query.v0 + query.ab * v + query.ac * w
+}
+
+fn triangle_va(dots: &TriangleDots) -> FixedQ32_32 {
+    dots.d3 * dots.d6 - dots.d5 * dots.d4
+}
+
+fn triangle_vb(dots: &TriangleDots) -> FixedQ32_32 {
+    dots.d5 * dots.d2 - dots.d1 * dots.d6
+}
+
+fn triangle_vc(dots: &TriangleDots) -> FixedQ32_32 {
+    dots.d1 * dots.d4 - dots.d3 * dots.d2
 }
 
 /// Computes the closest points on two line segments, and returns the points (C1, C2).
@@ -117,82 +178,127 @@ pub fn closest_points_segments(
     p2: FixedVec3,
     q2: FixedVec3,
 ) -> (FixedVec3, FixedVec3) {
-    let d1 = q1 - p1;
-    let d2 = q2 - p2;
-    let r = p1 - p2;
+    let query = SegmentQuery::new(p1, q1, p2, q2);
+    let dots = SegmentDots::new(&query);
+    let params = SegmentParams::new(&dots).clamp_s(&dots).clamp_t(&dots);
+    let s = clamp(ratio_or_zero(params.s_num, params.s_denom), FixedQ32_32::ZERO, FixedQ32_32::ONE);
+    let t = clamp(ratio_or_zero(params.t_num, params.t_denom), FixedQ32_32::ZERO, FixedQ32_32::ONE);
+    (p1 + query.d1 * s, p2 + query.d2 * t)
+}
 
-    let a = d1.dot(d1);
-    let b = d1.dot(d2);
-    let c = d2.dot(d2);
-    let d = d1.dot(r);
-    let e = d2.dot(r);
+#[derive(Clone, Copy)]
+struct SegmentQuery {
+    d1: FixedVec3,
+    d2: FixedVec3,
+    r: FixedVec3,
+}
 
-    let denom = a * c - b * b;
+impl SegmentQuery {
+    fn new(p1: FixedVec3, q1: FixedVec3, p2: FixedVec3, q2: FixedVec3) -> Self {
+        Self { d1: q1 - p1, d2: q2 - p2, r: p1 - p2 }
+    }
+}
 
-    let mut s_num;
-    let mut s_denom = denom;
-    let mut t_num;
-    let mut t_denom = denom;
+#[derive(Clone, Copy)]
+struct SegmentDots {
+    d1_len_sq: FixedQ32_32,
+    d1_dot_d2: FixedQ32_32,
+    d2_len_sq: FixedQ32_32,
+    d1_dot_r: FixedQ32_32,
+    d2_dot_r: FixedQ32_32,
+    denom: FixedQ32_32,
+}
 
+impl SegmentDots {
+    fn new(query: &SegmentQuery) -> Self {
+        let d1_len_sq = query.d1.dot(query.d1);
+        let d1_dot_d2 = query.d1.dot(query.d2);
+        let d2_len_sq = query.d2.dot(query.d2);
+        let d1_dot_r = query.d1.dot(query.r);
+        let d2_dot_r = query.d2.dot(query.r);
+        let length_product = d1_len_sq * d2_len_sq;
+        let alignment_product = d1_dot_d2 * d1_dot_d2;
+        let denom = length_product - alignment_product;
+        Self { d1_len_sq, d1_dot_d2, d2_len_sq, d1_dot_r, d2_dot_r, denom }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SegmentParams {
+    s_num: FixedQ32_32,
+    s_denom: FixedQ32_32,
+    t_num: FixedQ32_32,
+    t_denom: FixedQ32_32,
+}
+
+impl SegmentParams {
+    fn new(dots: &SegmentDots) -> Self {
+        if dots.denom == FixedQ32_32::ZERO {
+            return Self::parallel(dots);
+        }
+        Self::skew(dots).clamp_initial_s(dots)
+    }
+
+    const fn parallel(dots: &SegmentDots) -> Self {
+        Self {
+            s_num: FixedQ32_32::ZERO,
+            s_denom: FixedQ32_32::ONE,
+            t_num: dots.d2_dot_r,
+            t_denom: dots.d2_len_sq,
+        }
+    }
+
+    fn skew(dots: &SegmentDots) -> Self {
+        Self {
+            s_num: dots.d1_dot_d2 * dots.d2_dot_r - dots.d2_len_sq * dots.d1_dot_r,
+            s_denom: dots.denom,
+            t_num: dots.d1_len_sq * dots.d2_dot_r - dots.d1_dot_d2 * dots.d1_dot_r,
+            t_denom: dots.denom,
+        }
+    }
+
+    fn clamp_initial_s(mut self, dots: &SegmentDots) -> Self {
+        if self.s_num < FixedQ32_32::ZERO {
+            self.s_num = FixedQ32_32::ZERO;
+            self.t_num = dots.d2_dot_r;
+            self.t_denom = dots.d2_len_sq;
+        } else if self.s_num > self.s_denom {
+            self.s_num = self.s_denom;
+            self.t_num = dots.d2_dot_r + dots.d1_dot_d2;
+            self.t_denom = dots.d2_len_sq;
+        }
+        self
+    }
+
+    fn clamp_s(mut self, dots: &SegmentDots) -> Self {
+        if self.t_num < FixedQ32_32::ZERO {
+            self.t_num = FixedQ32_32::ZERO;
+            self = self.project_s(-dots.d1_dot_r, dots.d1_len_sq);
+        }
+        self
+    }
+
+    fn clamp_t(mut self, dots: &SegmentDots) -> Self {
+        if self.t_num > self.t_denom {
+            self.t_num = self.t_denom;
+            self = self.project_s(-dots.d1_dot_r + dots.d1_dot_d2, dots.d1_len_sq);
+        }
+        self
+    }
+
+    fn project_s(mut self, value: FixedQ32_32, max: FixedQ32_32) -> Self {
+        self.s_num = clamp(value, FixedQ32_32::ZERO, max);
+        self.s_denom = max;
+        self
+    }
+}
+
+fn ratio_or_zero(numer: FixedQ32_32, denom: FixedQ32_32) -> FixedQ32_32 {
     if denom == FixedQ32_32::ZERO {
-        s_num = FixedQ32_32::ZERO;
-        s_denom = FixedQ32_32::ONE;
-        t_num = e;
-        t_denom = c;
-    } else {
-        s_num = b * e - c * d;
-        t_num = a * e - b * d;
-
-        if s_num < FixedQ32_32::ZERO {
-            s_num = FixedQ32_32::ZERO;
-            t_num = e;
-            t_denom = c;
-        } else if s_num > s_denom {
-            s_num = s_denom;
-            t_num = e + b;
-            t_denom = c;
-        }
-    }
-
-    if t_num < FixedQ32_32::ZERO {
-        t_num = FixedQ32_32::ZERO;
-        if -d < FixedQ32_32::ZERO {
-            s_num = FixedQ32_32::ZERO;
-        } else if -d > a {
-            s_num = a;
-            s_denom = a;
-        } else {
-            s_num = -d;
-            s_denom = a;
-        }
-    } else if t_num > t_denom {
-        t_num = t_denom;
-        if -d + b < FixedQ32_32::ZERO {
-            s_num = FixedQ32_32::ZERO;
-        } else if -d + b > a {
-            s_num = a;
-            s_denom = a;
-        } else {
-            s_num = -d + b;
-            s_denom = a;
-        }
-    }
-
-    let s = if s_denom == FixedQ32_32::ZERO {
         FixedQ32_32::ZERO
     } else {
-        s_num.checked_div(s_denom).unwrap_or(FixedQ32_32::ZERO)
-    };
-    let t = if t_denom == FixedQ32_32::ZERO {
-        FixedQ32_32::ZERO
-    } else {
-        t_num.checked_div(t_denom).unwrap_or(FixedQ32_32::ZERO)
-    };
-
-    let s_clamped = clamp(s, FixedQ32_32::ZERO, FixedQ32_32::ONE);
-    let t_clamped = clamp(t, FixedQ32_32::ZERO, FixedQ32_32::ONE);
-
-    (p1 + d1 * s_clamped, p2 + d2 * t_clamped)
+        numer.checked_div(denom).unwrap_or(FixedQ32_32::ZERO)
+    }
 }
 
 fn clamp(val: FixedQ32_32, min_val: FixedQ32_32, max_val: FixedQ32_32) -> FixedQ32_32 {

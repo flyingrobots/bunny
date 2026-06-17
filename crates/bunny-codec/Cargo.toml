@@ -2,7 +2,9 @@
 name = "bunny-codec"
 description = "Zero-copy mesh format adapters for Bunny."
 authors.workspace = true
+categories = ["encoding", "graphics", "parser-implementations"]
 edition.workspace = true
+keywords = ["bunny", "mesh", "codec", "ply", "obj"]
 license.workspace = true
 readme = "README.md"
 repository.workspace = true
@@ -18,5 +20,9 @@ bunny-num = { path = "../bunny-num", version = "0.4.0" }
 [lib]
 path = "src/lib.rs"
 
+[lints]
+workspace = true
+
 [dev-dependencies]
+dhat = "0.3.3"
 wasm-bindgen-test = "0.3"

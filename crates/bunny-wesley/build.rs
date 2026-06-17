@@ -1,4 +1,7 @@
+//! Build script for exposing the pinned `wesley-core` version to generated DTOs.
+
 use std::fs;
+
 use toml::Value;
 
 fn main() {
@@ -9,13 +12,13 @@ fn main() {
 
     let version = parsed
         .get("dependencies")
-        .and_then(|d| d.get("wesley-core"))
-        .and_then(|dep| match dep {
-            Value::String(v) => Some(v.clone()),
-            Value::Table(t) => t.get("version").and_then(Value::as_str).map(String::from),
+        .and_then(|dependencies| dependencies.get("wesley-core"))
+        .and_then(|dependency| match dependency {
+            Value::String(version) => Some(version.clone()),
+            Value::Table(table) => table.get("version").and_then(Value::as_str).map(String::from),
             _ => None,
         })
         .expect("Failed to find wesley-core version in [dependencies]");
 
-    println!("cargo:rustc-env=WESLEY_CORE_VERSION={}", version);
+    println!("cargo:rustc-env=WESLEY_CORE_VERSION={version}");
 }

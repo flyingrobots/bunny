@@ -142,6 +142,12 @@ pub struct PlyVertex {
     pub z: f32,
 }
 
+struct PlyPayload<'a> {
+    vertex_bytes: &'a [u8],
+    face_bytes: &'a [u8],
+    payload_end: usize,
+}
+
 impl PlyVertex {
     const fn is_finite(self) -> bool {
         self.x.is_finite() && self.y.is_finite() && self.z.is_finite()
@@ -159,55 +165,57 @@ impl PlyVertex {
 pub fn parse_binary_ply(input: &[u8]) -> Result<PlyBinaryMesh<'_>, PlyError> {
     let (header, payload_start) = split_header(input)?;
     let spec = parse_header(header)?;
-    let vertex_len = checked_offset(spec.vertex_count, VERTEX_STRIDE)?;
-    let face_len = checked_offset(spec.face_count, TRIANGLE_FACE_STRIDE)?;
-    let face_start = payload_start
-        .checked_add(vertex_len)
-        .ok_or(PlyError::IntegerOverflow)?;
-    let payload_end = face_start
-        .checked_add(face_len)
-        .ok_or(PlyError::IntegerOverflow)?;
+    let payload = split_payload(input, payload_start, spec.vertex_count, spec.face_count)?;
+    validate_vertices(payload.vertex_bytes, spec.vertex_count)?;
+    validate_faces(payload.face_bytes, spec.face_count, spec.vertex_count)?;
+    if input.len() != payload.payload_end {
+        return Err(PlyError::TrailingData);
+    }
+
+    Ok(PlyBinaryMesh {
+        vertex_bytes: payload.vertex_bytes,
+        face_bytes: payload.face_bytes,
+        vertex_count: spec.vertex_count,
+        face_count: spec.face_count,
+    })
+}
+
+fn split_payload(
+    input: &[u8],
+    payload_start: usize,
+    vertex_count: usize,
+    face_count: usize,
+) -> Result<PlyPayload<'_>, PlyError> {
+    let vertex_len = checked_offset(vertex_count, VERTEX_STRIDE)?;
+    let face_len = checked_offset(face_count, TRIANGLE_FACE_STRIDE)?;
+    let face_start = payload_start.checked_add(vertex_len).ok_or(PlyError::IntegerOverflow)?;
+    let payload_end = face_start.checked_add(face_len).ok_or(PlyError::IntegerOverflow)?;
     if input.len() < payload_end {
         return Err(PlyError::PayloadTooShort);
     }
 
     let vertex_bytes = take(input, payload_start, vertex_len)?;
     let face_bytes = take(input, face_start, face_len)?;
-    validate_vertices(vertex_bytes, spec.vertex_count)?;
-    validate_faces(face_bytes, spec.face_count, spec.vertex_count)?;
-    if input.len() != payload_end {
-        return Err(PlyError::TrailingData);
-    }
-
-    Ok(PlyBinaryMesh {
-        vertex_bytes,
-        face_bytes,
-        vertex_count: spec.vertex_count,
-        face_count: spec.face_count,
-    })
+    Ok(PlyPayload { vertex_bytes, face_bytes, payload_end })
 }
 
 fn split_header(input: &[u8]) -> Result<(&str, usize), PlyError> {
     let (header_end, payload_start) = header_bounds(input)?;
     let header = input.get(..header_end).ok_or(PlyError::MissingHeaderEnd)?;
-    str::from_utf8(header)
-        .map(|header| (header, payload_start))
-        .map_err(|_| PlyError::HeaderUtf8)
+    str::from_utf8(header).map(|header| (header, payload_start)).map_err(|_| PlyError::HeaderUtf8)
 }
 
 fn header_bounds(input: &[u8]) -> Result<(usize, usize), PlyError> {
     let mut line_start = 0;
     while line_start < input.len() {
-        let Some(relative_newline) = input[line_start..].iter().position(|byte| *byte == b'\n')
-        else {
+        let tail = input.get(line_start..).ok_or(PlyError::MissingHeaderEnd)?;
+        let Some(relative_newline) = tail.iter().position(|byte| *byte == b'\n') else {
             return Err(PlyError::MissingHeaderEnd);
         };
         let line_end = line_start + relative_newline;
-        let content_end = if line_end > line_start && input[line_end - 1] == b'\r' {
-            line_end - 1
-        } else {
-            line_end
-        };
+        let previous = line_end.checked_sub(1).and_then(|index| input.get(index)).copied();
+        let content_end =
+            if line_end > line_start && previous == Some(b'\r') { line_end - 1 } else { line_end };
         if input.get(line_start..content_end) == Some(b"end_header".as_slice()) {
             return Ok((line_start, line_end + 1));
         }
@@ -267,11 +275,7 @@ fn read_triangle(bytes: &[u8]) -> Result<Triangle32, PlyError> {
     if take(bytes, 0, 1)?.first().copied() != Some(3) {
         return Err(PlyError::NonTriangularFace);
     }
-    Ok(Triangle32::new(
-        read_index(bytes, 1)?,
-        read_index(bytes, 5)?,
-        read_index(bytes, 9)?,
-    ))
+    Ok(Triangle32::new(read_index(bytes, 1)?, read_index(bytes, 5)?, read_index(bytes, 9)?))
 }
 
 fn read_index(bytes: &[u8], start: usize) -> Result<u32, PlyError> {

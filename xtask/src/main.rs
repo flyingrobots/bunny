@@ -1,32 +1,37 @@
-use std::env;
+//! Bunny workspace automation tasks.
+
+mod code_dojo;
+
 use std::error::Error;
 use std::process::Command;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        print_help();
+    if let Err(err) = run() {
+        eprintln!("xtask error: {err}");
         std::process::exit(1);
     }
+}
 
-    let command = args[1].as_str();
-    let result = match command {
+fn run() -> Result<(), Box<dyn Error>> {
+    let mut args = std::env::args().skip(1);
+    let Some(command) = args.next() else {
+        print_help();
+        std::process::exit(1);
+    };
+
+    match command.as_str() {
         "generate" => handle_generate(),
         "create-issues" => handle_removed_create_issues(),
+        "code-dojo-rust" => code_dojo::handle(args),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
         }
         other => {
-            eprintln!("xtask: unknown command '{}'", other);
+            eprintln!("xtask: unknown command '{other}'");
             print_help();
             std::process::exit(1);
         }
-    };
-
-    if let Err(err) = result {
-        eprintln!("xtask error: {}", err);
-        std::process::exit(1);
     }
 }
 
@@ -38,6 +43,7 @@ fn print_help() {
     println!("Commands:");
     println!("  generate        Regenerate Rust and TypeScript DTOs from graphics schema");
     println!("  create-issues   Removed; GitHub Issues are the canonical backlog");
+    println!("  code-dojo-rust  Run Rust AST repository policy checks");
     println!("  help            Show this help info");
 }
 
@@ -81,9 +87,10 @@ mod tests {
 
     #[test]
     fn create_issues_command_is_fail_closed() {
-        let err = handle_removed_create_issues()
-            .expect_err("create-issues must not mutate GitHub from local roadmap data")
-            .to_string();
+        let err = match handle_removed_create_issues() {
+            Ok(()) => String::new(),
+            Err(err) => err.to_string(),
+        };
 
         assert!(err.contains("GitHub Issues are the canonical backlog"));
         assert!(err.contains("must not generate or mutate issues"));

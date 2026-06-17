@@ -2,8 +2,11 @@
 name = "bunny-mesh"
 description = "Quantized mesh layouts and verification hashes for Stanford Bunny."
 authors.workspace = true
+categories = ["encoding", "game-development", "graphics"]
 edition.workspace = true
+keywords = ["bunny", "mesh", "quantization", "hashing"]
 license.workspace = true
+readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
@@ -19,3 +22,6 @@ wasm-bindgen-test = "0.3"
 
 [lib]
 path = "src/lib.rs"
+
+[lints]
+workspace = true

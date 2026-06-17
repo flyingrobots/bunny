@@ -5,9 +5,9 @@
 Bunny owns shared graphics schemas and must prove that those schemas can drive
 cross-language DTO generation without making Echo or Geordi the schema owner.
 
-This slice establishes a minimal Bunny/Wesley extension path. Published
-`wesley-core` owns SDL lowering and registry hashing. Bunny owns the
-graphics-specific mapping from Wesley IR into Bunny DTOs and witnesses.
+This slice establishes a Bunny-owned schema generation path. `bunny-wesley`
+uses published `wesley-core` SDL lowering and owns the mapping from Wesley IR
+into Bunny DTOs and witnesses.
 
 ## Scope
 
@@ -16,7 +16,7 @@ In scope:
 - lower `schemas/bunny/v0/graphics.graphql` with `wesley-core`
 - emit Rust DTOs for `bunny-contract`
 - emit TypeScript DTOs for downstream projects
-- emit a manifest containing the Wesley registry SHA-256 hash
+- emit a manifest containing the authored schema SHA-256 hash
 - keep generated behavior out of the generator
 
 Out of scope:
@@ -46,16 +46,16 @@ generated/bunny-graphics.manifest.json
 The manifest records:
 
 - generator id
-- Wesley core version
+- `wesley-core` version
 - schema path
-- Wesley registry SHA-256 hash
+- authored schema SHA-256 hash
 - generated output paths
 
 ## Invariants
 
 - Generated DTOs are data contracts only.
 - Bunny core behavior stays handwritten and tested.
-- Field order follows Wesley IR order.
+- Field order follows the Wesley IR order.
 - Nullable GraphQL fields become nullable TypeScript fields and `Option<T>` in
   Rust.
 - Bunny schemas remain Bunny-owned even when downstream projects generate

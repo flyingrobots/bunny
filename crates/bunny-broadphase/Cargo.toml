@@ -2,8 +2,11 @@
 name = "bunny-broadphase"
 description = "Bounding volume hierarchy (BVH) and spatial broadphase acceleration structures for Bunny."
 authors.workspace = true
+categories = ["data-structures", "game-development", "graphics"]
 edition.workspace = true
+keywords = ["bunny", "bvh", "broadphase", "collision"]
 license.workspace = true
+readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
@@ -17,5 +20,9 @@ bunny-query = { path = "../bunny-query", version = "0.4.0" }
 [lib]
 path = "src/lib.rs"
 
+[lints]
+workspace = true
+
 [dev-dependencies]
+dhat = "0.3.3"
 wasm-bindgen-test = "0.3"

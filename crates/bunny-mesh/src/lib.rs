@@ -176,33 +176,30 @@ fn u32_index_is_valid(index: u32, vertex_count: usize) -> bool {
     usize::try_from(index).is_ok_and(|index| index < vertex_count)
 }
 
+fn triangle16_is_valid(face: Triangle16, vertex_count: usize) -> bool {
+    usize::from(face.v0) < vertex_count
+        && usize::from(face.v1) < vertex_count
+        && usize::from(face.v2) < vertex_count
+}
+
+fn triangle32_is_valid(face: &Triangle32, vertex_count: usize) -> bool {
+    u32_index_is_valid(face.v0, vertex_count)
+        && u32_index_is_valid(face.v1, vertex_count)
+        && u32_index_is_valid(face.v2, vertex_count)
+}
+
 impl IndexBufferLayout<'_> {
     /// Checks if all indices in the layout are valid for a given vertex buffer length.
     #[must_use]
     pub fn is_valid(self, vertex_count: usize) -> bool {
         match self {
             Self::Width16(faces) => {
-                for face in faces {
-                    if usize::from(face.v0) >= vertex_count
-                        || usize::from(face.v1) >= vertex_count
-                        || usize::from(face.v2) >= vertex_count
-                    {
-                        return false;
-                    }
-                }
+                faces.iter().copied().all(|face| triangle16_is_valid(face, vertex_count))
             }
             Self::Width32(faces) => {
-                for face in faces {
-                    if !u32_index_is_valid(face.v0, vertex_count)
-                        || !u32_index_is_valid(face.v1, vertex_count)
-                        || !u32_index_is_valid(face.v2, vertex_count)
-                    {
-                        return false;
-                    }
-                }
+                faces.iter().all(|face| triangle32_is_valid(face, vertex_count))
             }
         }
-        true
     }
 
     /// Gets the number of triangles in the index buffer.
@@ -276,7 +273,7 @@ fn update_bounds(hasher: &mut Sha256, bounds: &FixedAabb3) {
 #[must_use]
 pub fn compute_mesh_hash(
     vertices: &[QuantizedVertex],
-    indices: IndexBufferLayout,
+    indices: IndexBufferLayout<'_>,
     bounds: &FixedAabb3,
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();

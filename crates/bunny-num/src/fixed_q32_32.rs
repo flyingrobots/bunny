@@ -41,12 +41,14 @@ impl FixedQ32_32 {
 
     /// Converts a native `f32` into `FixedQ32_32`.
     #[must_use]
+    // dojo: allow float-boundary -- explicit ingress conversion into canonical Q32.32
     pub fn from_f32(value: f32) -> Self {
         Self(from_f32(value))
     }
 
     /// Converts `FixedQ32_32` into a native `f32`.
     #[must_use]
+    // dojo: allow float-boundary -- explicit lossy display/API egress from Q32.32
     pub fn to_f32(self) -> f32 {
         to_f32(self.0)
     }
@@ -75,11 +77,7 @@ impl FixedQ32_32 {
         let mut res = 0_u128;
         let mut one = 1_u128 << 126;
 
-        let leading = val.leading_zeros();
-        let shift = leading & !1;
-        if shift < 128 {
-            one >>= shift;
-        }
+        one >>= even_leading_shift(val);
 
         while one != 0 {
             if op >= res + one {
@@ -94,7 +92,7 @@ impl FixedQ32_32 {
         res
     }
 
-    /// Divides `self` by `rhs`, returning `None` if the divisor is zero or if the division overflows.
+    /// Divides `self` by `rhs`, returning `None` on zero divisor or overflow.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub const fn checked_div(self, rhs: Self) -> Option<Self> {
@@ -107,31 +105,9 @@ impl FixedQ32_32 {
         let abs_numer = if numer < 0 { -numer } else { numer };
         let abs_denom = if denom < 0 { -denom } else { denom };
 
-        let abs_q = abs_numer / abs_denom;
-        let abs_r = abs_numer % abs_denom;
-
-        let double_r = abs_r << 1;
-        let final_abs_q = if double_r > abs_denom {
-            abs_q + 1
-        } else if double_r < abs_denom {
-            abs_q
-        } else if (abs_q & 1) == 1 {
-            abs_q + 1
-        } else {
-            abs_q
-        };
-
-        let signed_q = if (self.0 < 0) ^ (rhs.0 < 0) {
-            -final_abs_q
-        } else {
-            final_abs_q
-        };
-
-        if signed_q < i64::MIN as i128 || signed_q > i64::MAX as i128 {
-            None
-        } else {
-            Some(Self(signed_q as i64))
-        }
+        let final_abs_q = rounded_abs_quotient(abs_numer, abs_denom);
+        let signed_q = signed_quotient(self.0, rhs.0, final_abs_q);
+        fixed_from_i128(signed_q)
     }
 }
 
@@ -184,11 +160,8 @@ impl Mul for FixedQ32_32 {
     fn mul(self, rhs: Self) -> Self {
         let prod = i128::from(self.0) * i128::from(rhs.0);
         let rounded = round_shift_right_u128(prod.unsigned_abs(), FRAC_BITS);
-        let signed_prod = if (self.0 < 0) ^ (rhs.0 < 0) {
-            -(rounded as i128)
-        } else {
-            rounded as i128
-        };
+        let signed_prod =
+            if (self.0 < 0) ^ (rhs.0 < 0) { -(rounded as i128) } else { rounded as i128 };
         Self(saturate_i128_to_i64(signed_prod))
     }
 }
@@ -207,19 +180,14 @@ impl Div for FixedQ32_32 {
             if self.0 == 0 {
                 return Self(0);
             }
-            return if self.0.is_negative() {
-                Self(i64::MIN)
-            } else {
-                Self(i64::MAX)
-            };
+            return if self.0.is_negative() { Self(i64::MIN) } else { Self(i64::MAX) };
         }
 
-        self.checked_div(rhs)
-            .unwrap_or(if (self.0 < 0) ^ (rhs.0 < 0) {
-                Self(i64::MIN)
-            } else {
-                Self(i64::MAX)
-            })
+        self.checked_div(rhs).unwrap_or(if (self.0 < 0) ^ (rhs.0 < 0) {
+            Self(i64::MIN)
+        } else {
+            Self(i64::MAX)
+        })
     }
 }
 
@@ -250,6 +218,42 @@ const fn round_shift_right_u128(value: u128, shift: u32) -> u128 {
         q + 1
     } else {
         q
+    }
+}
+
+const fn even_leading_shift(value: u128) -> u32 {
+    value.leading_zeros() & !1
+}
+
+const fn rounded_abs_quotient(abs_numer: i128, abs_denom: i128) -> i128 {
+    let abs_q = abs_numer / abs_denom;
+    let abs_r = abs_numer % abs_denom;
+    round_tie_to_even(abs_q, abs_r, abs_denom)
+}
+
+const fn round_tie_to_even(abs_q: i128, abs_r: i128, abs_denom: i128) -> i128 {
+    let double_r = abs_r << 1;
+    if double_r > abs_denom || (double_r == abs_denom && (abs_q & 1) == 1) {
+        abs_q + 1
+    } else {
+        abs_q
+    }
+}
+
+const fn signed_quotient(lhs: i64, rhs: i64, abs_q: i128) -> i128 {
+    if (lhs < 0) ^ (rhs < 0) {
+        -abs_q
+    } else {
+        abs_q
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)]
+const fn fixed_from_i128(value: i128) -> Option<FixedQ32_32> {
+    if value < i64::MIN as i128 || value > i64::MAX as i128 {
+        None
+    } else {
+        Some(FixedQ32_32(value as i64))
     }
 }
 

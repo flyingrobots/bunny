@@ -15,7 +15,7 @@ the `@bunnyScalarProfile` AST directive.
 ## Goals
 
 1. Parse and extract arguments from the `@bunnyScalarProfile` directive on
-   GraphQL scalar types in the Wesley IR.
+   GraphQL scalar types in the Bunny generator IR.
 2. Replace hardcoded scalar names (`BunnyScalar`, `BunnyFixedQ32_32Raw`) in
    `bunny-wesley/src/main.rs` with dynamic mapping lookups driven by directive
    arguments.
@@ -40,10 +40,10 @@ scalar BunnyScalar
   )
 ```
 
-### 2. AST Extraction in Wesley IR
+### 2. AST Extraction from Wesley IR
 
-In `bunny-wesley/src/main.rs`, we will parse the `directives` IndexMap attached
-to each `TypeDefinition` of kind `TypeKind::Scalar`:
+In `bunny-wesley`, we read scalar directive arguments from each Wesley
+`TypeDefinition` of kind `TypeKind::Scalar`:
 
 1. Find the directive named `"bunnyScalarProfile"`.
 2. Extract the `"name"` argument value.
@@ -54,8 +54,8 @@ to each `TypeDefinition` of kind `TypeKind::Scalar`:
 | `"f32"` | `f32` | `number` |
 | `"q32.32"` | `i64` | `bigint` |
 
-If a custom scalar lacks the directive, it will fall back to `String` (Rust)
-and `unknown` (TypeScript).
+If a custom scalar lacks the directive, generation fails. Silent scalar
+fallbacks are not allowed.
 
 ---
 
@@ -63,13 +63,13 @@ and `unknown` (TypeScript).
 
 ### 1. Automated Tests
 
-* Create unit tests in `crates/bunny-wesley/src/main.rs` (under the test
+* Create unit tests in `crates/bunny-wesley/src/render.rs` (under the test
   module) verifying that:
-    * An IR containing a scalar with `@bunnyScalarProfile(name: "q32.32")`
+  * An IR containing a scalar with `@bunnyScalarProfile(name: "q32.32")`
       correctly generates `i64` in Rust and `bigint` in TypeScript.
-    * An IR containing a scalar with `@bunnyScalarProfile(name: "f32")`
+  * An IR containing a scalar with `@bunnyScalarProfile(name: "f32")`
       correctly generates `f32` in Rust and `number` in TypeScript.
-    * A scalar without the directive fallback behaves correctly.
+  * A scalar without the directive fails generation.
 
 ### 2. Integration
 

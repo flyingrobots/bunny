@@ -108,11 +108,7 @@ pub fn parse_obj_text(source: &str) -> Result<ObjMesh<'_>, ObjError> {
         return Err(ObjError::MissingFaces);
     }
     validate_face_indices(source, counts.vertex_count)?;
-    Ok(ObjMesh {
-        source,
-        vertex_count: counts.vertex_count,
-        face_count: counts.face_count,
-    })
+    Ok(ObjMesh { source, vertex_count: counts.vertex_count, face_count: counts.face_count })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,10 +133,7 @@ fn count_records(source: &str) -> Result<ObjCounts, ObjError> {
             Some(_) | None => {}
         }
     }
-    Ok(ObjCounts {
-        vertex_count,
-        face_count,
-    })
+    Ok(ObjCounts { vertex_count, face_count })
 }
 
 fn validate_face_indices(source: &str, vertex_count: usize) -> Result<(), ObjError> {
@@ -184,9 +177,7 @@ fn harmless_statement(kind: &str) -> bool {
 }
 
 fn record_body(line: &str) -> &str {
-    line.split_once('#')
-        .map_or(line, |(record, _comment)| record)
-        .trim()
+    line.split_once('#').map_or(line, |(record, _comment)| record).trim()
 }
 
 fn parse_vertex_line(line: &str) -> Result<ObjVertex, ObjError> {
@@ -252,19 +243,13 @@ fn parse_index(token: Option<&str>) -> Result<u32, ObjError> {
 }
 
 fn parse_vertex_index(index_text: &str) -> Result<u32, ObjError> {
-    let one_based = index_text
-        .parse::<i64>()
-        .map_err(|_| ObjError::InvalidIndex)?;
+    let one_based = index_text.parse::<i64>().map_err(|_| ObjError::InvalidIndex)?;
     let zero_based = one_based.checked_sub(1).ok_or(ObjError::InvalidIndex)?;
     u32::try_from(zero_based).map_err(|_| ObjError::InvalidIndex)
 }
 
 fn parse_auxiliary_index(index_text: &str) -> Result<(), ObjError> {
-    let one_based = index_text
-        .parse::<i64>()
-        .map_err(|_| ObjError::InvalidIndex)?;
+    let one_based = index_text.parse::<i64>().map_err(|_| ObjError::InvalidIndex)?;
     let zero_based = one_based.checked_sub(1).ok_or(ObjError::InvalidIndex)?;
-    u32::try_from(zero_based)
-        .map(|_| ())
-        .map_err(|_| ObjError::InvalidIndex)
+    u32::try_from(zero_based).map(|_| ()).map_err(|_| ObjError::InvalidIndex)
 }

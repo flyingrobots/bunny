@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+echo "Code Dojo: running full pre-push gate"
+python3 scripts/code-dojo/dojo.py --all

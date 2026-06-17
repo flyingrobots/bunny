@@ -14,9 +14,7 @@ pub struct ObjVertices<'a> {
 
 impl<'a> ObjVertices<'a> {
     pub(super) fn new(source: &'a str) -> Self {
-        Self {
-            lines: source.lines(),
-        }
+        Self { lines: source.lines() }
     }
 }
 
@@ -37,10 +35,7 @@ pub struct ObjTriangles<'a> {
 
 impl<'a> ObjTriangles<'a> {
     pub(super) fn new(source: &'a str, vertex_count: usize) -> Self {
-        Self {
-            lines: source.lines(),
-            vertex_count,
-        }
+        Self { lines: source.lines(), vertex_count }
     }
 }
 
