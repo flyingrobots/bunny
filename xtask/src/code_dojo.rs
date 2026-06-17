@@ -175,6 +175,11 @@ struct FileContext<'a> {
     lines: &'a [String],
 }
 
+struct RustSource {
+    path: PathBuf,
+    source: String,
+}
+
 impl Violation {
     fn new(path: PathBuf, line: usize, rule: &'static str, message: impl Into<String>) -> Self {
         Self { path, line, rule, message: message.into() }
@@ -242,13 +247,12 @@ fn check_rust(mode: Mode) -> Result<(), DynError> {
     let root = git_root()?;
     let mut violations = Vec::new();
 
-    for path in rust_files(&root, mode)? {
-        let source = std::fs::read_to_string(&path)?;
+    for file in rust_sources(&root, mode)? {
+        let source = file.source;
         let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
-        let relative = relative_path(&root, &path);
-        let category = crate_category(&relative);
+        let category = crate_category(&file.path);
         let context = FileContext {
-            path: relative,
+            path: file.path,
             category,
             limits: category.limits(),
             source: &source,
@@ -640,6 +644,31 @@ fn git_root() -> Result<PathBuf, DynError> {
     Err(command_error("git rev-parse --show-toplevel", &output.stderr).into())
 }
 
+fn rust_sources(root: &Path, mode: Mode) -> Result<Vec<RustSource>, DynError> {
+    let mut sources = Vec::new();
+    for path in rust_files(root, mode)? {
+        sources.push(RustSource { source: read_rust_source(root, mode, &path)?, path });
+    }
+    Ok(sources)
+}
+
+fn read_rust_source(root: &Path, mode: Mode, path: &Path) -> Result<String, DynError> {
+    match mode {
+        Mode::All => Ok(std::fs::read_to_string(root.join(path))?),
+        Mode::Staged => read_staged_source(root, path),
+    }
+}
+
+fn read_staged_source(root: &Path, path: &Path) -> Result<String, DynError> {
+    let object = format!(":{}", path.to_string_lossy());
+    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    if output.status.success() {
+        return Ok(String::from_utf8(output.stdout)?);
+    }
+
+    Err(command_error("git show staged source", &output.stderr).into())
+}
+
 fn rust_files(root: &Path, mode: Mode) -> Result<Vec<PathBuf>, DynError> {
     let args = match mode {
         Mode::All => vec!["ls-files", "--cached", "--others", "--exclude-standard"],
@@ -658,9 +687,8 @@ fn rust_files(root: &Path, mode: Mode) -> Result<Vec<PathBuf>, DynError> {
             continue;
         }
 
-        let full_path = root.join(&relative);
-        if full_path.is_file() {
-            files.push(full_path);
+        if matches!(mode, Mode::Staged) || root.join(&relative).is_file() {
+            files.push(relative);
         }
     }
     Ok(files)
@@ -683,10 +711,6 @@ fn is_rust_source(path: &Path) -> bool {
             || part == OsStr::new("vendor")
             || part == OsStr::new("third_party")
     })
-}
-
-fn relative_path(root: &Path, path: &Path) -> PathBuf {
-    path.strip_prefix(root).map_or_else(|_| path.to_path_buf(), Path::to_path_buf)
 }
 
 fn crate_category(path: &Path) -> Category {
@@ -1150,4 +1174,73 @@ fn is_single_segment(path: &[String], segment: &str) -> bool {
 
 fn line_of(span: Span) -> usize {
     span.start().line
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let count = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("bunny-xtask-{name}-{}-{count}", std::process::id()));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("temporary directory should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn run_git(root: &Path, args: &[&str]) {
+        let output =
+            Command::new("git").args(args).current_dir(root).output().expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn staged_rust_sources_are_read_from_index() {
+        let temp = TempDir::new("staged-index");
+        run_git(temp.path(), &["init"]);
+        let relative = PathBuf::from("crates/bunny-num/src/lib.rs");
+        let source_path = temp.path().join(&relative);
+        fs::create_dir_all(source_path.parent().expect("fixture source should have a parent"))
+            .expect("fixture source directory should be created");
+        fs::write(&source_path, "pub fn staged() { panic!(\"staged\"); }\n")
+            .expect("staged fixture should be written");
+        run_git(temp.path(), &["add", "crates/bunny-num/src/lib.rs"]);
+        fs::write(&source_path, "pub fn staged() {}\n")
+            .expect("worktree fixture should be written");
+
+        let sources = rust_sources(temp.path(), Mode::Staged).expect("staged sources should load");
+        let staged = sources
+            .iter()
+            .find(|source| source.path == relative)
+            .expect("staged source should be present");
+
+        assert!(staged.source.contains("panic!(\"staged\")"));
+    }
 }
