@@ -8,9 +8,9 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
-    BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro, ExprMatch,
-    ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Lit, Macro, Path as SynPath,
-    Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
+    Attribute, BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro,
+    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, Lit, Macro,
+    Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
 };
 
 type DynError = Box<dyn Error>;
@@ -501,20 +501,42 @@ fn crate_has_determinism_receipt(crate_dir: &Path) -> Result<bool, DynError> {
         return Ok(false);
     }
     for path in rust_files_under(&tests_dir)? {
-        if path
+        let has_receipt_name = path
             .file_name()
             .and_then(OsStr::to_str)
-            .is_some_and(|name| GOLDEN_TEST_NAMES.contains(&name))
-        {
-            return Ok(true);
-        }
+            .is_some_and(|name| GOLDEN_TEST_NAMES.contains(&name));
         let text = std::fs::read_to_string(&path)?;
         let lower = text.to_ascii_lowercase();
-        if lower.contains("golden") && lower.contains("determin") {
+        let has_receipt_terms = lower.contains("golden") && lower.contains("determin");
+        if (has_receipt_name || has_receipt_terms) && rust_source_contains_test(&text)? {
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+fn rust_source_contains_test(source: &str) -> Result<bool, DynError> {
+    Ok(items_contain_test(&syn::parse_file(source)?.items))
+}
+
+fn items_contain_test(items: &[Item]) -> bool {
+    items.iter().any(|item| match item {
+        Item::Fn(function) => attrs_contain_test(&function.attrs),
+        Item::Mod(module) => {
+            module.content.as_ref().is_some_and(|(_, items)| items_contain_test(items))
+        }
+        _ => false,
+    })
+}
+
+fn attrs_contain_test(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(is_test_attr)
+}
+
+fn is_test_attr(attr: &Attribute) -> bool {
+    attr.path().segments.last().is_some_and(|segment| {
+        matches!(segment.ident.to_string().as_str(), "test" | "wasm_bindgen_test")
+    })
 }
 
 fn rust_files_under(root: &Path) -> Result<Vec<PathBuf>, DynError> {
@@ -1385,5 +1407,20 @@ pub fn scale(input: i32) -> i32 {
         let violations = core_policy_violations(source);
 
         assert_eq!(rule_count(&violations, "float-boundary"), 2);
+    }
+
+    #[test]
+    fn deterministic_receipts_require_real_tests() {
+        let temp = TempDir::new("determinism-receipt");
+        let tests_dir = temp.path().join("tests");
+        fs::create_dir_all(&tests_dir).expect("tests directory should be created");
+        let receipt = tests_dir.join("determinism.rs");
+
+        fs::write(&receipt, "// placeholder\n").expect("placeholder receipt should be written");
+        assert!(!crate_has_determinism_receipt(temp.path()).expect("receipt check should run"));
+
+        fs::write(&receipt, "#[test]\nfn golden_vector_is_stable() {}\n")
+            .expect("test receipt should be written");
+        assert!(crate_has_determinism_receipt(temp.path()).expect("receipt check should run"));
     }
 }
