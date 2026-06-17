@@ -9,8 +9,8 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
     BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLoop, ExprMacro, ExprMatch, ExprMethodCall,
-    ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Path as SynPath, Signature, Stmt, TraitItemFn,
-    TypePath,
+    ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Macro, Path as SynPath, Signature, Stmt,
+    StmtMacro, TraitItemFn, TypePath,
 };
 
 type DynError = Box<dyn Error>;
@@ -954,6 +954,24 @@ impl PolicyVisitor<'_> {
             );
         }
     }
+
+    fn check_macro(&mut self, span: Span, mac: &Macro) {
+        let line = line_of(span);
+        if self.limits.panics_allowed || self.waived(line, "panic-path") {
+            return;
+        }
+
+        let segments = path_segments(&mac.path);
+        if let Some(name) = segments.last() {
+            if is_panicking_macro(name) {
+                self.violation(
+                    line,
+                    "panic-path",
+                    format!("{name}! is banned in library/core code"),
+                );
+            }
+        }
+    }
 }
 
 impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
@@ -1001,20 +1019,13 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     }
 
     fn visit_expr_macro(&mut self, node: &'ast ExprMacro) {
-        let line = line_of(node.span());
-        if !self.limits.panics_allowed && !self.waived(line, "panic-path") {
-            let segments = path_segments(&node.mac.path);
-            if let Some(name) = segments.last() {
-                if matches!(name.as_str(), "panic" | "todo" | "unimplemented") {
-                    self.violation(
-                        line,
-                        "panic-path",
-                        format!("{name}! is banned in library/core code"),
-                    );
-                }
-            }
-        }
+        self.check_macro(node.span(), &node.mac);
         visit::visit_expr_macro(self, node);
+    }
+
+    fn visit_stmt_macro(&mut self, node: &'ast StmtMacro) {
+        self.check_macro(node.span(), &node.mac);
+        visit::visit_stmt_macro(self, node);
     }
 
     fn visit_expr_path(&mut self, node: &'ast ExprPath) {
@@ -1182,6 +1193,22 @@ fn is_nondeterministic_map_constructor(path: &[String]) -> bool {
     constructor == "new" && matches!(collection.as_str(), "HashMap" | "HashSet")
 }
 
+fn is_panicking_macro(name: &str) -> bool {
+    matches!(
+        name,
+        "assert"
+            | "assert_eq"
+            | "assert_ne"
+            | "debug_assert"
+            | "debug_assert_eq"
+            | "debug_assert_ne"
+            | "panic"
+            | "todo"
+            | "unimplemented"
+            | "unreachable"
+    )
+}
+
 fn is_single_segment(path: &[String], segment: &str) -> bool {
     path.len() == 1 && path.first().is_some_and(|value| value == segment)
 }
@@ -1307,5 +1334,20 @@ pub fn build() {
         let violations = core_policy_violations(source);
 
         assert_eq!(rule_count(&violations, "nondeterministic-map"), 2);
+    }
+
+    #[test]
+    fn core_policy_flags_assertion_and_unreachable_macros() {
+        let source = r"
+pub fn require(value: i32) {
+    assert!(value > 0);
+    debug_assert!(value < 100);
+    unreachable!();
+}
+";
+
+        let violations = core_policy_violations(source);
+
+        assert_eq!(rule_count(&violations, "panic-path"), 3);
     }
 }
