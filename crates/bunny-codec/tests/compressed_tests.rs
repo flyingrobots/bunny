@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use std::fmt::Write as _;
 
 use bunny_codec::{
@@ -26,15 +28,9 @@ fn canonical_triangle16() -> Vec<u8> {
 }
 
 fn parse_hex(input: &str) -> Vec<u8> {
-    let nybbles: Vec<_> = input
-        .bytes()
-        .filter(|byte| !byte.is_ascii_whitespace())
-        .collect();
+    let nybbles: Vec<_> = input.bytes().filter(|byte| !byte.is_ascii_whitespace()).collect();
     assert_eq!(nybbles.len() % 2, 0, "hex fixture must contain byte pairs");
-    nybbles
-        .chunks_exact(2)
-        .map(|pair| (hex_value(pair[0]) << 4) | hex_value(pair[1]))
-        .collect()
+    nybbles.chunks_exact(2).map(|pair| (hex_value(pair[0]) << 4) | hex_value(pair[1])).collect()
 }
 
 fn hex_value(byte: u8) -> u8 {
@@ -47,11 +43,7 @@ fn hex_value(byte: u8) -> u8 {
 }
 
 fn compact_hex(input: &str) -> String {
-    input
-        .bytes()
-        .filter(|byte| !byte.is_ascii_whitespace())
-        .map(char::from)
-        .collect()
+    input.bytes().filter(|byte| !byte.is_ascii_whitespace()).map(char::from).collect()
 }
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
@@ -96,8 +88,8 @@ fn canonical_triangle32() -> Vec<u8> {
     bytes
 }
 
-fn assert_decode_error(bytes: Vec<u8>, expected: CompressedMeshError) {
-    assert_eq!(decode_compressed_mesh(&bytes), Err(expected));
+fn assert_decode_error(bytes: &[u8], expected: CompressedMeshError) {
+    assert_eq!(decode_compressed_mesh(bytes), Err(expected));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -112,19 +104,10 @@ fn canonical_fixture_is_stable_and_borrowed() {
     assert_eq!(mesh.vertex_count(), 3);
     assert_eq!(mesh.triangle_count(), 1);
     assert_eq!(mesh.index_width(), CompressedIndexWidth::Width16);
-    assert_eq!(
-        mesh.vertex_bytes().as_ptr(),
-        bytes.as_ptr().wrapping_add(HEADER_LEN)
-    );
-    assert_eq!(
-        mesh.triangle_bytes().as_ptr(),
-        bytes.as_ptr().wrapping_add(TRIANGLE16_OFFSET)
-    );
+    assert_eq!(mesh.vertex_bytes().as_ptr(), bytes.as_ptr().wrapping_add(HEADER_LEN));
+    assert_eq!(mesh.triangle_bytes().as_ptr(), bytes.as_ptr().wrapping_add(TRIANGLE16_OFFSET));
     assert_eq!(mesh.vertex(1), Ok(QuantizedVertex::new(u16::MAX, 0, 0)));
-    assert_eq!(
-        mesh.triangle(0),
-        Ok(CompressedTriangle::Width16(Triangle16::new(0, 1, 2)))
-    );
+    assert_eq!(mesh.triangle(0), Ok(CompressedTriangle::Width16(Triangle16::new(0, 1, 2))));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -134,10 +117,7 @@ fn canonical_width32_payload_decodes_to_triangle32() {
 
     assert_eq!(mesh.index_width(), CompressedIndexWidth::Width32);
     assert_eq!(mesh.triangle_bytes().len(), 12);
-    assert_eq!(
-        mesh.triangle(0),
-        Ok(CompressedTriangle::Width32(Triangle32::new(0, 1, 2)))
-    );
+    assert_eq!(mesh.triangle(0), Ok(CompressedTriangle::Width32(Triangle32::new(0, 1, 2))));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -145,7 +125,7 @@ fn rejects_out_of_bounds_width32_indices() {
     let mut bytes = canonical_triangle32();
     write_u32(&mut bytes, TRIANGLE16_OFFSET + 8, 3);
 
-    assert_decode_error(bytes, CompressedMeshError::IndexOutOfBounds);
+    assert_decode_error(&bytes, CompressedMeshError::IndexOutOfBounds);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -159,81 +139,68 @@ fn accessors_reject_out_of_range_records() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn rejects_malformed_header_corpus() {
-    assert_eq!(
-        decode_compressed_mesh(&[]),
-        Err(CompressedMeshError::PayloadTooShort)
-    );
+    assert_eq!(decode_compressed_mesh(&[]), Err(CompressedMeshError::PayloadTooShort));
 
     let mut bad_magic = canonical_triangle16();
     bad_magic[0] = b'x';
-    assert_decode_error(bad_magic, CompressedMeshError::InvalidMagic);
+    assert_decode_error(&bad_magic, CompressedMeshError::InvalidMagic);
 
     let mut bad_version = canonical_triangle16();
     bad_version[VERSION_OFFSET] = 2;
-    assert_decode_error(bad_version, CompressedMeshError::UnsupportedVersion);
+    assert_decode_error(&bad_version, CompressedMeshError::UnsupportedVersion);
 
     let mut bad_width = canonical_triangle16();
     bad_width[INDEX_WIDTH_OFFSET] = 24;
-    assert_decode_error(bad_width, CompressedMeshError::InvalidIndexWidth);
+    assert_decode_error(&bad_width, CompressedMeshError::InvalidIndexWidth);
 
     let mut bad_flags = canonical_triangle16();
     write_u16(&mut bad_flags, FLAGS_OFFSET, 1);
-    assert_decode_error(bad_flags, CompressedMeshError::UnsupportedFlags);
+    assert_decode_error(&bad_flags, CompressedMeshError::UnsupportedFlags);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
 fn rejects_malformed_count_bounds_and_length_corpus() {
     let mut zero_vertices = canonical_triangle16();
     write_u32(&mut zero_vertices, VERTEX_COUNT_OFFSET, 0);
-    assert_decode_error(zero_vertices, CompressedMeshError::InvalidCount);
+    assert_decode_error(&zero_vertices, CompressedMeshError::InvalidCount);
 
     let mut zero_triangles = canonical_triangle16();
     write_u32(&mut zero_triangles, TRIANGLE_COUNT_OFFSET, 0);
-    assert_decode_error(zero_triangles, CompressedMeshError::InvalidCount);
+    assert_decode_error(&zero_triangles, CompressedMeshError::InvalidCount);
 
     let mut too_many_width16_vertices = canonical_triangle16();
     write_u32(&mut too_many_width16_vertices, VERTEX_COUNT_OFFSET, 65_537);
-    assert_decode_error(too_many_width16_vertices, CompressedMeshError::InvalidCount);
+    assert_decode_error(&too_many_width16_vertices, CompressedMeshError::InvalidCount);
 
     let mut inverted_bounds = canonical_triangle16();
     write_i64(&mut inverted_bounds, MIN_X_OFFSET, ONE_RAW * 2);
-    assert_decode_error(inverted_bounds, CompressedMeshError::InvalidBounds);
+    assert_decode_error(&inverted_bounds, CompressedMeshError::InvalidBounds);
 
     let mut invalid_payload_len = canonical_triangle16();
     write_u64(&mut invalid_payload_len, PAYLOAD_LEN_OFFSET, 23);
     invalid_payload_len.truncate(HEADER_LEN + 23);
-    assert_decode_error(
-        invalid_payload_len,
-        CompressedMeshError::InvalidPayloadLength,
-    );
+    assert_decode_error(&invalid_payload_len, CompressedMeshError::InvalidPayloadLength);
 
     let mut oversized_payload_len = canonical_triangle16();
-    write_u64(
-        &mut oversized_payload_len,
-        PAYLOAD_LEN_OFFSET,
-        u64::from(u32::MAX) + 1,
-    );
-    assert_decode_error(
-        oversized_payload_len,
-        CompressedMeshError::InvalidPayloadLength,
-    );
+    write_u64(&mut oversized_payload_len, PAYLOAD_LEN_OFFSET, u64::from(u32::MAX) + 1);
+    assert_decode_error(&oversized_payload_len, CompressedMeshError::InvalidPayloadLength);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
 fn rejects_malformed_payload_corpus() {
     let mut short_payload = canonical_triangle16();
     short_payload.pop();
-    assert_decode_error(short_payload, CompressedMeshError::PayloadTooShort);
+    assert_decode_error(&short_payload, CompressedMeshError::PayloadTooShort);
 
     let mut trailing_payload = canonical_triangle16();
     trailing_payload.push(0);
-    assert_decode_error(trailing_payload, CompressedMeshError::TrailingData);
+    assert_decode_error(&trailing_payload, CompressedMeshError::TrailingData);
 
     let mut invalid_index = canonical_triangle16();
     write_u16(&mut invalid_index, TRIANGLE16_OFFSET + 4, 3);
-    assert_decode_error(invalid_index, CompressedMeshError::IndexOutOfBounds);
+    assert_decode_error(&invalid_index, CompressedMeshError::IndexOutOfBounds);
 
     let mut overflowing_len = canonical_triangle16();
     write_u64(&mut overflowing_len, PAYLOAD_LEN_OFFSET, u64::MAX);
-    assert_decode_error(overflowing_len, CompressedMeshError::IntegerOverflow);
+    assert_decode_error(&overflowing_len, CompressedMeshError::InvalidPayloadLength);
 }

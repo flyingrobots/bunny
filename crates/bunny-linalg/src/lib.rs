@@ -189,46 +189,28 @@ pub struct FixedUnitVec3(FixedVec3);
 
 impl FixedUnitVec3 {
     /// The positive X axis unit vector.
-    pub const UNIT_X: Self = Self(FixedVec3::new(
-        FixedQ32_32::ONE,
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ZERO,
-    ));
+    pub const UNIT_X: Self =
+        Self(FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO));
 
     /// The negative X axis unit vector.
-    pub const NEG_UNIT_X: Self = Self(FixedVec3::new(
-        NEG_ONE,
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ZERO,
-    ));
+    pub const NEG_UNIT_X: Self =
+        Self(FixedVec3::new(NEG_ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO));
 
     /// The positive Y axis unit vector.
-    pub const UNIT_Y: Self = Self(FixedVec3::new(
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ONE,
-        FixedQ32_32::ZERO,
-    ));
+    pub const UNIT_Y: Self =
+        Self(FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ONE, FixedQ32_32::ZERO));
 
     /// The negative Y axis unit vector.
-    pub const NEG_UNIT_Y: Self = Self(FixedVec3::new(
-        FixedQ32_32::ZERO,
-        NEG_ONE,
-        FixedQ32_32::ZERO,
-    ));
+    pub const NEG_UNIT_Y: Self =
+        Self(FixedVec3::new(FixedQ32_32::ZERO, NEG_ONE, FixedQ32_32::ZERO));
 
     /// The positive Z axis unit vector.
-    pub const UNIT_Z: Self = Self(FixedVec3::new(
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ONE,
-    ));
+    pub const UNIT_Z: Self =
+        Self(FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ONE));
 
     /// The negative Z axis unit vector.
-    pub const NEG_UNIT_Z: Self = Self(FixedVec3::new(
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ZERO,
-        NEG_ONE,
-    ));
+    pub const NEG_UNIT_Z: Self =
+        Self(FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, NEG_ONE));
 
     /// Creates a new `FixedUnitVec3` by normalizing the given vector.
     ///

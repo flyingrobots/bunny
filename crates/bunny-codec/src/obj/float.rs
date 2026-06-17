@@ -2,6 +2,19 @@ const MAX_MANTISSA_DIGITS: i32 = 19;
 
 #[allow(clippy::cast_possible_truncation)]
 pub(super) fn parse_ascii_float(text: &str) -> Option<f32> {
+    if let Some(value) = parse_special_float(text) {
+        return Some(value);
+    }
+
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    let sign = parse_float_sign(bytes, &mut index);
+    let mantissa = parse_mantissa(bytes, &mut index)?;
+    let exponent = mantissa.adjust_exponent(parse_float_exponent(bytes, &mut index)?);
+    (index == bytes.len()).then(|| assemble_float(sign, mantissa.value, exponent))
+}
+
+const fn parse_special_float(text: &str) -> Option<f32> {
     if text.eq_ignore_ascii_case("nan") {
         return Some(f32::NAN);
     }
@@ -15,40 +28,35 @@ pub(super) fn parse_ascii_float(text: &str) -> Option<f32> {
     if text.eq_ignore_ascii_case("-inf") || text.eq_ignore_ascii_case("-infinity") {
         return Some(f32::NEG_INFINITY);
     }
+    None
+}
 
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    let sign = parse_float_sign(bytes, &mut index);
+fn parse_mantissa(bytes: &[u8], index: &mut usize) -> Option<ParsedMantissa> {
     let mut mantissa = ParsedMantissa::default();
 
-    while let Some(digit) = decimal_digit(bytes.get(index).copied()) {
+    while let Some(digit) = decimal_digit(bytes.get(*index).copied()) {
         mantissa.push_integer_digit(digit);
-        index += 1;
+        *index += 1;
     }
 
-    if bytes.get(index) == Some(&b'.') {
-        index += 1;
-        while let Some(digit) = decimal_digit(bytes.get(index).copied()) {
+    if bytes.get(*index) == Some(&b'.') {
+        *index += 1;
+        while let Some(digit) = decimal_digit(bytes.get(*index).copied()) {
             mantissa.push_fractional_digit(digit);
-            index += 1;
+            *index += 1;
         }
     }
 
     if !mantissa.saw_digit {
         return None;
     }
+    Some(mantissa)
+}
 
-    let exponent = mantissa.adjust_exponent(parse_float_exponent(bytes, &mut index)?);
-    if index == bytes.len() {
-        let value = if mantissa.value == 0.0 {
-            sign * 0.0
-        } else {
-            sign * mantissa.value * 10_f64.powi(exponent)
-        };
-        Some(value as f32)
-    } else {
-        None
-    }
+#[allow(clippy::cast_possible_truncation)]
+fn assemble_float(sign: f64, mantissa: f64, exponent: i32) -> f32 {
+    let value = if mantissa == 0.0 { sign * 0.0 } else { sign * mantissa * 10_f64.powi(exponent) };
+    value as f32
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -84,9 +92,7 @@ impl ParsedMantissa {
     }
 
     const fn adjust_exponent(self, exponent: i32) -> i32 {
-        exponent
-            .saturating_add(self.skipped_digits)
-            .saturating_sub(self.fractional_digits)
+        exponent.saturating_add(self.skipped_digits).saturating_sub(self.fractional_digits)
     }
 }
 

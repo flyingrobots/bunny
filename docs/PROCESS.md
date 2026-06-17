@@ -51,6 +51,25 @@ For each meaningful issue or slice:
 Documentation-only slices still need verification: Markdown lint, diff checks,
 and source anchors where claims are factual.
 
+## Code Dojo
+
+The repository uses Code Dojo as its local and CI enforcement layer. Install the
+repo-local hooks once per clone:
+
+```bash
+bash scripts/install-githooks.sh
+```
+
+Before handoff, run:
+
+```bash
+cargo run --locked -p xtask -- code-dojo --all
+```
+
+Local hooks check staged Rust policy, commit subject shape, deterministic
+receipt trailers for AI-assisted commits, and the full pre-push quality gate.
+The hooks are guardrails; CI remains the final merge gate.
+
 ## Review Discipline
 
 Self-review happens before PR and after substantial review feedback. It should

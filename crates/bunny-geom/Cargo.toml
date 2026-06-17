@@ -2,8 +2,11 @@
 name = "bunny-geom"
 description = "Geometry primitives for Bunny graphics contracts."
 authors.workspace = true
+categories = ["game-development", "graphics", "mathematics"]
 edition.workspace = true
+keywords = ["bunny", "geometry", "fixed-point", "aabb"]
 license.workspace = true
+readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
@@ -14,6 +17,9 @@ bunny-num = { path = "../bunny-num", version = "0.4.0" }
 
 [lib]
 path = "src/lib.rs"
+
+[lints]
+workspace = true
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

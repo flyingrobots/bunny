@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_broadphase::{build_bvh, intersect_aabb, intersect_ray, sweep_and_prune, BvhNode};
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_linalg::FixedVec3;
@@ -90,11 +92,7 @@ fn test_bvh_build_and_traverse() {
 
     // 3. Query Ray intersection: ray along X axis from (-2, 0, 0)
     let ray = FixedRay3::try_new(
-        FixedVec3::new(
-            FixedQ32_32::from_f32(-2.0),
-            FixedQ32_32::ZERO,
-            FixedQ32_32::ZERO,
-        ),
+        FixedVec3::new(FixedQ32_32::from_f32(-2.0), FixedQ32_32::ZERO, FixedQ32_32::ZERO),
         FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
     )
     .unwrap();
@@ -162,11 +160,7 @@ fn test_sweep_and_prune_solver() {
         // Box 4
         FixedAabb3::new(
             FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
-            FixedVec3::new(
-                FixedQ32_32::from_f32(2.0),
-                FixedQ32_32::ONE,
-                FixedQ32_32::ONE,
-            ),
+            FixedVec3::new(FixedQ32_32::from_f32(2.0), FixedQ32_32::ONE, FixedQ32_32::ONE),
         ),
     ];
 
@@ -202,7 +196,7 @@ fn test_traversal_stack_overflow() {
         if i % 2 == 0 && i < 160 {
             nodes.push(BvhNode {
                 bounds: FixedAabb3::new(zero, zero),
-                first_child_or_prim_idx: (i + 1) as u32,
+                first_child_or_prim_idx: u32::try_from(i + 1).expect("test index fits u32"),
                 prim_count: 0,
             });
         } else {
@@ -230,11 +224,7 @@ fn test_traversal_rejects_malformed_bvh_without_panic() {
 
     let zero = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
     let bounds = FixedAabb3::new(zero, zero);
-    let malformed_nodes = [BvhNode {
-        bounds,
-        first_child_or_prim_idx: 10,
-        prim_count: 0,
-    }];
+    let malformed_nodes = [BvhNode { bounds, first_child_or_prim_idx: 10, prim_count: 0 }];
     let prim_indices = [0_u32];
     let query_box = FixedAabb3::new(zero, zero);
 
@@ -247,11 +237,7 @@ fn test_traversal_rejects_malformed_bvh_without_panic() {
     );
 
     let ray = FixedRay3::try_new(
-        FixedVec3::new(
-            FixedQ32_32::from_f32(-1.0),
-            FixedQ32_32::ZERO,
-            FixedQ32_32::ZERO,
-        ),
+        FixedVec3::new(FixedQ32_32::from_f32(-1.0), FixedQ32_32::ZERO, FixedQ32_32::ZERO),
         FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
     )
     .unwrap();
@@ -263,11 +249,7 @@ fn test_traversal_rejects_malformed_bvh_without_panic() {
         Err(TraversalError::InvalidNodeIndex)
     );
 
-    let malformed_leaf_nodes = [BvhNode {
-        bounds,
-        first_child_or_prim_idx: 1,
-        prim_count: 2,
-    }];
+    let malformed_leaf_nodes = [BvhNode { bounds, first_child_or_prim_idx: 1, prim_count: 2 }];
     let leaf_result = std::panic::catch_unwind(|| {
         intersect_aabb(&malformed_leaf_nodes, &prim_indices, &query_box, |_idx| {})
     });

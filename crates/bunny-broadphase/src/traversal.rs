@@ -21,35 +21,8 @@ pub enum TraversalError {
 fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32], TraversalError> {
     let start = node.first_child_or_prim_idx as usize;
     let count = node.prim_count as usize;
-    let end = start
-        .checked_add(count)
-        .ok_or(TraversalError::InvalidPrimitiveRange)?;
-    prim_indices
-        .get(start..end)
-        .ok_or(TraversalError::InvalidPrimitiveRange)
-}
-
-fn push_stack(
-    stack: &mut [u32; STACK_CAPACITY],
-    stack_ptr: &mut usize,
-    node_idx: u32,
-) -> Result<(), TraversalError> {
-    if *stack_ptr >= STACK_CAPACITY {
-        return Err(TraversalError::StackOverflow);
-    }
-    *stack
-        .get_mut(*stack_ptr)
-        .ok_or(TraversalError::StackOverflow)? = node_idx;
-    *stack_ptr += 1;
-    Ok(())
-}
-
-fn pop_stack(stack: &[u32; STACK_CAPACITY], stack_ptr: &mut usize) -> Option<u32> {
-    if *stack_ptr == 0 {
-        return None;
-    }
-    *stack_ptr -= 1;
-    stack.get(*stack_ptr).copied()
+    let end = start.checked_add(count).ok_or(TraversalError::InvalidPrimitiveRange)?;
+    prim_indices.get(start..end).ok_or(TraversalError::InvalidPrimitiveRange)
 }
 
 /// Traverses the BVH to find primitives that overlap with a query AABB.
@@ -62,49 +35,12 @@ pub fn intersect_aabb<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
     query_box: &FixedAabb3,
-    mut overlap_leaf: F,
+    overlap_leaf: F,
 ) -> Result<(), TraversalError>
 where
     F: FnMut(u32),
 {
-    if nodes.is_empty() {
-        return Ok(());
-    }
-
-    let mut stack = [0_u32; STACK_CAPACITY];
-    let mut stack_ptr = 0;
-
-    push_stack(&mut stack, &mut stack_ptr, 0)?;
-
-    while let Some(node_idx) = pop_stack(&stack, &mut stack_ptr) {
-        let node_idx = node_idx as usize;
-        let node = nodes
-            .get(node_idx)
-            .ok_or(TraversalError::InvalidNodeIndex)?;
-
-        if !aabbs_overlap(&node.bounds, query_box) {
-            continue;
-        }
-
-        if node.prim_count > 0 {
-            for &prim_idx in leaf_indices(node, prim_indices)? {
-                overlap_leaf(prim_idx);
-            }
-        } else {
-            let left_child = node.first_child_or_prim_idx;
-            let right_child = left_child
-                .checked_add(1)
-                .ok_or(TraversalError::InvalidNodeIndex)?;
-
-            if STACK_CAPACITY - stack_ptr < 2 {
-                return Err(TraversalError::StackOverflow);
-            }
-
-            push_stack(&mut stack, &mut stack_ptr, left_child)?;
-            push_stack(&mut stack, &mut stack_ptr, right_child)?;
-        }
-    }
-    Ok(())
+    traverse(nodes, prim_indices, |node| aabbs_overlap(&node.bounds, query_box), overlap_leaf)
 }
 
 /// Traverses the BVH to find primitives intersected by a ray.
@@ -117,47 +53,89 @@ pub fn intersect_ray<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
     ray: &FixedRay3,
-    mut intersect_leaf: F,
+    intersect_leaf: F,
 ) -> Result<(), TraversalError>
 where
     F: FnMut(u32),
 {
-    if nodes.is_empty() {
-        return Ok(());
-    }
+    traverse(
+        nodes,
+        prim_indices,
+        |node| bunny_query::ray_intersects_aabb(ray, &node.bounds).is_some(),
+        intersect_leaf,
+    )
+}
 
-    let mut stack = [0_u32; STACK_CAPACITY];
-    let mut stack_ptr = 0;
-
-    push_stack(&mut stack, &mut stack_ptr, 0)?;
-
-    while let Some(node_idx) = pop_stack(&stack, &mut stack_ptr) {
-        let node_idx = node_idx as usize;
-        let node = nodes
-            .get(node_idx)
-            .ok_or(TraversalError::InvalidNodeIndex)?;
-
-        if bunny_query::ray_intersects_aabb(ray, &node.bounds).is_none() {
-            continue;
-        }
-
-        if node.prim_count > 0 {
-            for &prim_idx in leaf_indices(node, prim_indices)? {
-                intersect_leaf(prim_idx);
-            }
-        } else {
-            let left_child = node.first_child_or_prim_idx;
-            let right_child = left_child
-                .checked_add(1)
-                .ok_or(TraversalError::InvalidNodeIndex)?;
-
-            if STACK_CAPACITY - stack_ptr < 2 {
-                return Err(TraversalError::StackOverflow);
-            }
-
-            push_stack(&mut stack, &mut stack_ptr, left_child)?;
-            push_stack(&mut stack, &mut stack_ptr, right_child)?;
+fn traverse<Matches, Visit>(
+    nodes: &[BvhNode],
+    prim_indices: &[u32],
+    mut matches_node: Matches,
+    mut visit_leaf: Visit,
+) -> Result<(), TraversalError>
+where
+    Matches: FnMut(&BvhNode) -> bool,
+    Visit: FnMut(u32),
+{
+    let mut stack = TraversalStack::new(nodes)?;
+    while let Some(node_idx) = stack.pop() {
+        let node = nodes.get(node_idx as usize).ok_or(TraversalError::InvalidNodeIndex)?;
+        if matches_node(node) {
+            visit_matching_node(node, prim_indices, &mut stack, &mut visit_leaf)?;
         }
     }
     Ok(())
+}
+
+fn visit_matching_node<Visit>(
+    node: &BvhNode,
+    prim_indices: &[u32],
+    stack: &mut TraversalStack,
+    visit_leaf: &mut Visit,
+) -> Result<(), TraversalError>
+where
+    Visit: FnMut(u32),
+{
+    if node.prim_count > 0 {
+        for &prim_idx in leaf_indices(node, prim_indices)? {
+            visit_leaf(prim_idx);
+        }
+        return Ok(());
+    }
+    stack.push_children(node)
+}
+
+struct TraversalStack {
+    values: [u32; STACK_CAPACITY],
+    len: usize,
+}
+
+impl TraversalStack {
+    fn new(nodes: &[BvhNode]) -> Result<Self, TraversalError> {
+        let mut stack = Self { values: [0_u32; STACK_CAPACITY], len: 0 };
+        if !nodes.is_empty() {
+            stack.push(0)?;
+        }
+        Ok(stack)
+    }
+
+    fn push(&mut self, node_idx: u32) -> Result<(), TraversalError> {
+        if self.len >= STACK_CAPACITY {
+            return Err(TraversalError::StackOverflow);
+        }
+        *self.values.get_mut(self.len).ok_or(TraversalError::StackOverflow)? = node_idx;
+        self.len += 1;
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Option<u32> {
+        self.len = self.len.checked_sub(1)?;
+        self.values.get(self.len).copied()
+    }
+
+    fn push_children(&mut self, node: &BvhNode) -> Result<(), TraversalError> {
+        let left_child = node.first_child_or_prim_idx;
+        let right_child = left_child.checked_add(1).ok_or(TraversalError::InvalidNodeIndex)?;
+        self.push(left_child)?;
+        self.push(right_child)
+    }
 }

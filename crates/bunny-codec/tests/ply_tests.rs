@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_codec::{parse_binary_ply, PlyError, PlyVertex};
 use bunny_mesh::Triangle32;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -42,14 +44,7 @@ fn parses_binary_triangle_ply_as_borrowed_view() {
     assert_eq!(mesh.face_count(), 1);
     assert_eq!(mesh.vertex_bytes(), VERTEX_BYTES);
     assert_eq!(mesh.face_bytes(), FACE_BYTES);
-    assert_eq!(
-        mesh.vertex(1),
-        Ok(PlyVertex {
-            x: 1.0,
-            y: 0.0,
-            z: 0.0,
-        })
-    );
+    assert_eq!(mesh.vertex(1), Ok(PlyVertex { x: 1.0, y: 0.0, z: 0.0 }));
     assert_eq!(mesh.triangle(0), Ok(Triangle32::new(0, 1, 2)));
 
     let vertex_ptr = bytes.as_ptr().wrapping_add(HEADER.len());
@@ -167,9 +162,7 @@ fn accepts_bare_comment_and_obj_info_header_lines() {
     let bytes = triangle_ply_with_header(header);
 
     assert_eq!(
-        parse_binary_ply(&bytes)
-            .expect("bare comment metadata should be ignored")
-            .face_count(),
+        parse_binary_ply(&bytes).expect("bare comment metadata should be ignored").face_count(),
         1
     );
 }
@@ -278,10 +271,7 @@ fn rejects_non_finite_vertices() {
     let mut infinity_bytes = canonical_triangle_ply();
     infinity_bytes[vertex_start + 4..vertex_start + 8]
         .copy_from_slice(&f32::INFINITY.to_le_bytes());
-    assert_eq!(
-        parse_binary_ply(&infinity_bytes),
-        Err(PlyError::NonFiniteVertex)
-    );
+    assert_eq!(parse_binary_ply(&infinity_bytes), Err(PlyError::NonFiniteVertex));
 }
 
 #[wasm_bindgen_test(unsupported = test)]

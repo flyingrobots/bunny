@@ -8,11 +8,11 @@ goalpost documents.
 
 | Field | State |
 | --- | --- |
-| Active release | `v0.4.0` - Quantized Meshes & Codecs |
-| Active branch | `main` |
-| Open PR | None |
-| Current gate | `v0.4.0` release verification and publication |
-| Next goalpost | Post-`v0.4.0` sync and `v0.5.0` planning |
+| Active release | Post-`v0.4.0` standards alignment |
+| Active branch | `backlog-source-of-truth-guard` |
+| Open PR | #106 |
+| Current gate | Standards alignment complete locally |
+| Next goalpost | Prepare the standards alignment branch for review |
 
 ## Recent Truth
 
@@ -37,14 +37,18 @@ goalpost documents.
 * Release publication is now gated by `.github/workflows/release.yml`, which
   packages and publishes the public Bunny crates to crates.io in dependency
   order after the GitHub Release is published.
+* The Rust Code Standards Editor's Edition and Code Dojo enforcement layer are
+  installed as the active repository standards and quality gate.
+* The local standards-alignment gate is clean: Code Dojo, headless Node.js WASM
+  tests for all WASM-compatible library crates, and release archive verification
+  all pass.
 
 ## Immediate Next Work
 
-1. Verify the release archive gate and required local quality gates.
-2. Push the release-prep commit to `main`.
-3. Tag `v0.4.0`, publish the GitHub Release, and confirm the crates.io workflow
-   publishes every public Bunny crate.
-4. Start the next roadmap branch only after release publication is confirmed.
+1. Commit the local standards-alignment work.
+2. Reconcile the existing branch PR scope or open a dedicated PR from a clean
+   standards-alignment branch.
+3. Run CI and resolve any review findings without weakening the standards gate.
 
 ## Watchpoints
 
@@ -61,24 +65,11 @@ goalpost documents.
 ## Last Known Local Verification
 
 The canonical checklist lives in `docs/TESTING.md`; this section is a status
-snapshot, not a replacement checklist. The `v0.4.0` release candidate must be
-verified with:
+snapshot, not a replacement checklist. The active local quality gate is:
 
 ```bash
-cargo +1.96.0 fmt --all -- --check
-git diff --check
-cargo +1.96.0 clippy --locked --workspace --all-targets -- -D warnings
-cargo +1.96.0 test --locked --workspace --all-targets
-cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
-  -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
-  -p bunny-codec --target wasm32-unknown-unknown
-RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
-scripts/publish-crates.sh verify
+cargo run --locked -p xtask -- code-dojo --all
 ```
 
-Documentation changes also ran Markdown lint over the touched Markdown files.
-The full local WASM loop used the explicit `RUSTUP_TOOLCHAIN=1.96.0
-wasm-pack test --node <crate> --locked` commands listed in
-`docs/TESTING.md#webassembly-gates` for all eight WASM-compatible library
-crates: `bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-contract`,
-`bunny-query`, `bunny-broadphase`, `bunny-mesh`, and `bunny-codec`.
+The current standards-alignment goalpost is complete locally. Evidence is
+recorded in `docs/goalposts/post-v0.4.0-standards-alignment.md`.

@@ -1,6 +1,7 @@
 # Bunny Technical Teardown: Deterministic Math, Geometry, and Schema Contracts
 
 ## Table of Contents
+
 | Section | Line Range |
 | --- | --- |
 | [1. High-Level System Mind Map](#1-high-level-system-mind-map) | L22 - L52 |
@@ -26,7 +27,7 @@ mindmap
   root("Bunny Project")
     Contract Generation Crate ("bunny-wesley")
       SDL Source ("schemas/bunny/v0/graphics.graphql")
-      Parser ("wesley-core")
+      Parser ("wesley-core SDL lowerer")
       Rust DTO Emitter ("crates/bunny-contract/src/generated/graphics.rs")
       TS DTO Emitter ("generated/typescript/bunny-graphics.ts")
       Manifest Emitter ("generated/bunny-graphics.manifest.json")
@@ -56,8 +57,8 @@ mindmap
 | --- | --- | --- |
 | **DTO (Data Transfer Object)** | System Architecture | A stateless data representation generated to enforce schema contracts across language boundaries. |
 | **Q32.32 Fixed-Point** | Numerical Math | A fixed-point representation using a signed 64-bit integer, where 32 bits represent the integer part and 32 bits represent the fractional part. |
-| **Wesley Core** | Code Generation | An upstream compiler dependency (`wesley-core`) that lowers GraphQL Schema Definition Language (SDL) files into a intermediate JSON representation (IR). |
-| **Wesley IR** | Code Generation | An intermediate representation of data contracts containing parsed types, fields, nullability, lists, and metadata. |
+| **Wesley SDL Lowerer** | Code Generation | The `wesley-core::lower_schema_sdl()` compiler entry point that lowers GraphQL SDL into Wesley IR. |
+| **Wesley IR** | Code Generation | An intermediate representation of data contracts containing parsed types, fields, nullability, lists, and scalar profile metadata. |
 | **Ties-to-Even Rounding** | Numerical Math | An unbiased rounding strategy (also known as Banker's rounding) where numbers exactly halfway between two options are rounded to the nearest even number. |
 | **Saturating Arithmetic** | Numerical Math | An overflow policy where operations exceeding maximum or minimum limits return the limit value rather than wrapping. |
 | **Downstream Adapter** | System Integration | Optional crates or packages (like `bunny-echo` or `bunny-geordi`) that adapt Bunny's neutral data models into specific project architectures. |
@@ -100,6 +101,7 @@ classDiagram
 ```
 
 Downstream components consume Bunny according to strict architectural guidelines:
+
 * **Echo** owns the causal runtime, strand execution, transactions, and provenance. It imports Bunny to run deterministic math operations, wrapping Bunny's raw math outputs inside causal facts.
 * **Geordi** owns the authored scene IR, rendering backends, receipts, and feature negotiations. It uses Bunny for basic intersection, math, bounding box limits, and camera operations, rendering frames without learning about Echo's causal structure.
 * **jedit/Jim** handles the interactive editor frontend. It consumes Bunny primitives directly for execution-critical hot paths.
@@ -162,18 +164,15 @@ sequenceDiagram
     autonumber
     actor CLI as generate-contracts.sh
     participant W as bunny-wesley (Crate)
-    participant C as wesley-core (Library)
     participant FS as Local Filesystem
     
     CLI->>W: Invoke with schema path & output paths
     W->>FS: Read schemas/bunny/v0/graphics.graphql
     FS-->>W: GraphQL SDL text
-    W->>C: lower_schema_sdl(SDL)
-    C-->>W: WesleyIR (in-memory AST)
-    W->>C: compute_registry_hash(WesleyIR)
-    C-->>W: schema SHA-256 hash
-    W->>W: render_rust(WesleyIR, Hash)
-    W->>W: render_typescript(WesleyIR, Hash)
+    W->>W: lower_schema_sdl(SDL)
+    W->>W: compute authored schema SHA-256 hash
+    W->>W: render_rust(GeneratorIR, Hash)
+    W->>W: render_typescript(GeneratorIR, Hash)
     W->>W: render_manifest(Config, Hash)
     W->>FS: Write crates/bunny-contract/src/generated/graphics.rs
     W->>FS: Write generated/typescript/bunny-graphics.ts
@@ -189,10 +188,10 @@ When the generator is executed, it runs through the following sequence:
 
 1. **CLI Argument Parsing:**
    The arguments are scanned inside `parse_args()`. It expects exactly one positional argument pointing to the schema file, plus the `--rust`, `--typescript`, and `--manifest` flags.
-2. **Upstream SDL Lowering:**
-   The GraphQL SDL contents are passed into `wesley_core::lower_schema_sdl()`. This library parses the types, objects, and scalars, returning a structured `WesleyIR` containing a list of `TypeDefinition` nodes.
+2. **Wesley SDL Lowering:**
+   The GraphQL SDL contents are passed into `wesley_core::lower_schema_sdl()`. The published Wesley compiler returns a structured `WesleyIR` containing a list of `TypeDefinition` nodes.
 3. **Integrity Hash Generation:**
-   `wesley_core::compute_registry_hash()` calculates a stable SHA-256 hash representing the structural definition of the parsed schema registry. This hash acts as an API compatibility seal.
+   `bunny-wesley` calculates a stable SHA-256 hash of the authored schema text. This hash acts as an API compatibility seal for the checked-in witnesses.
 4. **Code Emission:**
    The generator loops through all parsed schema objects, selecting only definitions prefixed with `"Bunny"` (via `is_bunny_type()`).
    * **Rust Generator (`render_rust`)**: Creates Struct definitions and type aliases. Nullable fields are translated into `Option<T>`, lists are wrapped in `Vec<T>`, and custom scalars are mapped to native types:
@@ -213,6 +212,7 @@ When the generator is executed, it runs through the following sequence:
 This section traces a graphic contract definition (`BunnyContactPoint3`) through its multiple representations as it is parsed and compiled.
 
 ### 1. The Source: GraphQL SDL (`schemas/bunny/v0/graphics.graphql`)
+
 ```graphql
 type BunnyContactPoint3 {
   point: BunnyVec3!
@@ -221,7 +221,8 @@ type BunnyContactPoint3 {
 }
 ```
 
-### 2. The Intermediate Representation: `WesleyIR` (Conceptual JSON representation)
+### 2. The Intermediate Representation: Generator IR
+
 ```json
 {
   "name": "BunnyContactPoint3",
@@ -262,6 +263,7 @@ type BunnyContactPoint3 {
 ```
 
 ### 3. The Target: Generated Rust DTO (`crates/bunny-contract/src/generated/graphics.rs`)
+
 ```rust
 #[derive(Clone, Debug, PartialEq)]
 pub struct BunnyContactPoint3 {
@@ -272,6 +274,7 @@ pub struct BunnyContactPoint3 {
 ```
 
 ### 4. The Target: Generated TypeScript DTO (`generated/typescript/bunny-graphics.ts`)
+
 ```typescript
 export interface BunnyContactPoint3 {
   readonly point: BunnyVec3;
@@ -365,6 +368,7 @@ pub fn from_f32(value: f32) -> i64 {
         };
     }
 ```
+
 * **Rationale:** NaNs are mapped to `0` because fixed-point format does not support sentinel representation states. Infinities are saturated to the maximum and minimum boundaries of the signed 64-bit integer.
 
 ```rust
@@ -374,6 +378,7 @@ pub fn from_f32(value: f32) -> i64 {
     let exp = i32::from(exp_u8);
     let mant = bits & 0x7fffff;
 ```
+
 * **Rationale:** The 32-bit float bit pattern is unpacked according to IEEE 754 specifications:
   * Bit 31: Sign bit.
   * Bits 23-30: 8-bit biased exponent.
@@ -390,6 +395,7 @@ pub fn from_f32(value: f32) -> i64 {
         u64::from((1_u32 << 23) | mant)
     };
 ```
+
 * **Rationale:** If `exp == 0` and the mantissa is non-zero, the number is **subnormal**. The implicit leading 1 bit is omitted. If `exp > 0`, the number is **normal**, and the implicit leading 1 is reinserted at bit position 23.
 
 ```rust
@@ -397,7 +403,8 @@ pub fn from_f32(value: f32) -> i64 {
     let frac_i32 = FRAC_BITS as i32;
     let shift = unbiased + (frac_i32 - 23);
 ```
-* **Rationale:** 
+
+* **Rationale:**
   * The biased exponent is converted back into its real power-of-two exponent. Normal float exponent bias is `127`. Subnormal floats are evaluated at an exponent of `-126`.
   * We calculate the scaling offset required to move the binary point to match a Q32.32 format (shifting by the target fraction size `32` and subtracting the mantissa size `23`).
   * `shift = exponent + (32 - 23) = exponent + 9`.
@@ -416,7 +423,8 @@ pub fn from_f32(value: f32) -> i64 {
         i128::from(rounded)
     };
 ```
-* **Rationale:** 
+
+* **Rationale:**
   * If the exponent scaling factor is positive, the value is shifted left. A safety guard prevents shifting by more than 103 (which would overflow the 128-bit temporary container).
   * If the exponent scaling factor is negative, the value is shifted right, meaning fractional bits must be truncated. To avoid bias accumulation, the value is processed through `round_shift_right_u64()`.
 
@@ -425,6 +433,7 @@ pub fn from_f32(value: f32) -> i64 {
     saturate_i128_to_i64(signed_raw)
 }
 ```
+
 * **Rationale:** The negative sign is applied if needed, and the final 128-bit integer is safely downcast into a 64-bit signed integer. If the value falls outside `[i64::MIN, i64::MAX]`, it saturates at the respective boundary.
 
 ---
@@ -456,6 +465,7 @@ fn round_shift_right_u64(value: u64, shift: u32) -> u64 {
     }
 }
 ```
+
 * **Mathematical Rationale:**
   * `q` is the integer quotient after right-shifting by `shift` bits.
   * `r` captures the remainder (bits shifted out).
@@ -481,6 +491,7 @@ pub fn to_f32(raw: i64) -> f32 {
     let sign = raw.is_negative();
     let abs: u64 = raw.unsigned_abs();
 ```
+
 * **Rationale:** The sign is recorded, and operations are run on the absolute value.
 
 ```rust
@@ -488,6 +499,7 @@ pub fn to_f32(raw: i64) -> f32 {
     let frac_i32 = FRAC_BITS as i32;
     let mut exp = (k as i32) - frac_i32;
 ```
+
 * **Rationale:**
   * Finding the index of the highest set bit (`k`) allows us to determine the exponent: `exponent = highest_bit - 32`.
   * The absolute integer must be aligned so that the leading bit resides at position 23 (the float mantissa boundary).
@@ -506,6 +518,7 @@ pub fn to_f32(raw: i64) -> f32 {
         exp = exp.saturating_add(1);
     }
 ```
+
 * **Rationale:**
   * If the highest set bit is greater than 23, we right-shift and round the significand.
   * If it is less than 23, we shift left.
@@ -518,6 +531,7 @@ pub fn to_f32(raw: i64) -> f32 {
     f32::from_bits(bits)
 }
 ```
+
 * **Rationale:** The float's binary fields are reassembled:
   * The exponent is re-biased by adding `127`.
   * The implicit leading bit is masked off the significand.
@@ -530,17 +544,21 @@ pub fn to_f32(raw: i64) -> f32 {
 System safety and deterministic execution require strict behavior when edge cases occur.
 
 ### A. Generator Build-Time Failures
+
 * **Malformed Schemas:**
   If the schema SDL contains syntactic or structural errors, `wesley_core::lower_schema_sdl()` returns a parsing error. The code generator outputs the message to `stderr` and terminates with exit code `1`, halting the downstream build pipeline.
 * **Missing CLI Parameters:**
   If required arguments are omitted, the program prints the command-line usage pattern and exits.
+
   ```text
   usage: bunny-wesley <schema.graphql> --rust <path> --typescript <path> --manifest <path>
   ```
+
 * **Output Path Errors:**
   If output directories are protected by system permissions or if disk space is full, the compiler will panic and return a standard filesystem `io::Error`.
 
 ### B. Math Runtime Failures
+
 * **Floating-Point NaNs:**
   Converted to `0` inside `from_f32()`. This ensures that downstream code does not propagate poisonous, non-deterministic float state.
 * **Floating-Point Infinities:**
@@ -575,14 +593,16 @@ Bunny's architecture is intentionally designed around **single-threaded, synchro
   [bunny-linalg]   (Handwritten Vectors & Matrix Primitives)
   [bunny-num]      (Handwritten Numeric Rules)
 =========================== Border ===========================
-  [Standard Library (core/std)] / [wesley-core] (External Dependencies)
+  [Standard Library (core/std)] (External Dependencies)
 ```
 
 ### Dependency Stack
+
 * **Standard Library:** The core crates depend only on standard library features (such as `std::path::PathBuf`, `std::fs`, and `std::env`).
-* **Wesley Core:** The `bunny-wesley` generator depends on `wesley-core = "0.0.5"` to parse the GraphQL Schema.
+* **Bunny SDL Lowerer:** The `bunny-wesley` generator parses the Bunny GraphQL schema subset locally.
 
 ### Security Boundary Policy
+
 * **Zero Network/Disk Access at Runtime:**
   The runtime crates (`bunny-num`, `bunny-linalg`, `bunny-geom`, `bunny-contract`) perform zero system calls, read no environment variables, and do not access files or network sockets. This makes it impossible for external actors to inject malicious behaviors or cause memory leaks during math execution.
 * **Generated DTO Boundaries:**
@@ -606,13 +626,16 @@ To preserve deterministic execution, Bunny avoids runtime environment variable c
 ## 13. Architectural Trade-offs & System Decisions
 
 ### 1. Fixed-Point Math vs. Native Floating-Point Hardware
+
 * **Trade-off:** We exchange raw execution speed for absolute cross-platform consistency.
 * **Detail:** Modern CPUs compute native floating-point math inside highly optimized hardware FPU pipelines (sub-nanosecond latencies). In contrast, software-defined Q32.32 conversions require bitwise unpacking and division. However, hardware floating-point operations do not guarantee bit-level determinism across compilers, optimization levels, or platforms due to instruction choices (e.g., Fused Multiply-Add instructions). Software fixed-point guarantees identical bit-level results everywhere.
 
 ### 2. Static Code Generation vs. Runtime Reflection
+
 * **Trade-off:** We accept a separate compilation step (generating DTO files) to gain compile-time type safety and runtime speed.
 * **Detail:** Instead of loading GraphQL schemas dynamically at runtime and looking up fields via string hashing, Bunny generates Rust structures and TypeScript interfaces offline. This avoids parser overhead during startup and catches schema drift errors during compilation rather than at runtime.
 
 ### 3. Separation of Downstream Adapters
+
 * **Trade-off:** We split adapter crates (`bunny-echo`, `bunny-geordi`) from core crates.
 * **Detail:** This forces Bunny to remain project-neutral. It allows a developer working on the `Geordi` rendering pipeline to import `bunny-geom` without carrying the transaction execution model of the `Echo` causal engine.

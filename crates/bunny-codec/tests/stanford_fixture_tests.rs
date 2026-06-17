@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_codec::{parse_binary_ply, parse_obj_text, ObjVertex, PlyVertex};
 use bunny_mesh::Triangle32;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -38,11 +40,7 @@ fn parses_stanford_bunny_obj_subset_fixture() {
     assert_eq!(mesh.triangle(0), Ok(Triangle32::new(0, 1, 2)));
     assert_eq!(
         mesh.vertex(0),
-        Ok(ObjVertex {
-            x: -8.656_194e-2,
-            y: 1.424_918_8e-1,
-            z: 8.432_68e-3,
-        })
+        Ok(ObjVertex { x: -8.656_194e-2, y: 1.424_918_8e-1, z: 8.432_68e-3 })
     );
 }
 
@@ -54,12 +52,5 @@ fn parses_stanford_bunny_binary_ply_subset_fixture() {
     assert_eq!(mesh.vertex_count(), 3);
     assert_eq!(mesh.face_count(), 1);
     assert_eq!(mesh.triangle(0), Ok(Triangle32::new(0, 1, 2)));
-    assert_eq!(
-        mesh.vertex(0),
-        Ok(PlyVertex {
-            x: -0.092_314_4,
-            y: 0.132_364,
-            z: 0.018_222_2,
-        })
-    );
+    assert_eq!(mesh.vertex(0), Ok(PlyVertex { x: -0.092_314_4, y: 0.132_364, z: 0.018_222_2 }));
 }

@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_linalg::{FixedVec2, FixedVec3, Vec2, Vec3};
 use bunny_num::FixedQ32_32;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -98,13 +100,13 @@ fn test_conversions() {
         assert_eq!(vf_back.z, 3.0);
     }
 
-    let vf2 = Vec2::new(5.5, 6.5);
-    let vfx2 = FixedVec2::from(vf2);
-    let vf2_back = Vec2::from(vfx2);
+    let source_vec2 = Vec2::new(5.5, 6.5);
+    let fixed_vec2 = FixedVec2::from(source_vec2);
+    let roundtrip_vec2 = Vec2::from(fixed_vec2);
     #[allow(clippy::float_cmp)]
     {
-        assert_eq!(vf2_back.x, 5.5);
-        assert_eq!(vf2_back.y, 6.5);
+        assert_eq!(roundtrip_vec2.x, 5.5);
+        assert_eq!(roundtrip_vec2.y, 6.5);
     }
 }
 
@@ -113,14 +115,10 @@ fn test_tiny_vector_length() {
     // A vector with components so small that squaring them in Q32.32
     // would round to zero if we round back to Q32.32 before taking the square root.
     let tiny_v2 = FixedVec2::new(FixedQ32_32::from_raw(1), FixedQ32_32::from_raw(0));
-    let len_v2 = tiny_v2
-        .length()
-        .expect("Tiny FixedVec2 length should be computed");
+    let len_v2 = tiny_v2.length().expect("Tiny FixedVec2 length should be computed");
     assert_eq!(len_v2.to_raw(), 1);
 
-    let norm_v2 = tiny_v2
-        .normalize()
-        .expect("Tiny FixedVec2 normalize should succeed");
+    let norm_v2 = tiny_v2.normalize().expect("Tiny FixedVec2 normalize should succeed");
     assert_eq!(norm_v2.x, FixedQ32_32::ONE);
     assert_eq!(norm_v2.y, FixedQ32_32::ZERO);
 
@@ -129,14 +127,10 @@ fn test_tiny_vector_length() {
         FixedQ32_32::from_raw(1),
         FixedQ32_32::from_raw(0),
     );
-    let len_v3 = tiny_v3
-        .length()
-        .expect("Tiny FixedVec3 length should be computed");
+    let len_v3 = tiny_v3.length().expect("Tiny FixedVec3 length should be computed");
     assert_eq!(len_v3.to_raw(), 1);
 
-    let norm_v3 = tiny_v3
-        .normalize()
-        .expect("Tiny FixedVec3 normalize should succeed");
+    let norm_v3 = tiny_v3.normalize().expect("Tiny FixedVec3 normalize should succeed");
     assert_eq!(norm_v3.x, FixedQ32_32::ZERO);
     assert_eq!(norm_v3.y, FixedQ32_32::ONE);
     assert_eq!(norm_v3.z, FixedQ32_32::ZERO);
@@ -227,11 +221,8 @@ fn test_vector_saturation_and_boundaries() {
     assert_eq!(v3_max.normalize(), None);
 
     // Cross product saturation
-    let v3_cross_overflow = v3_max.cross(FixedVec3::new(
-        max_val * two,
-        max_val * neg_two,
-        max_val * two,
-    ));
+    let v3_cross_overflow =
+        v3_max.cross(FixedVec3::new(max_val * two, max_val * neg_two, max_val * two));
     assert_eq!(v3_cross_overflow.x, max_val);
 }
 
@@ -269,11 +260,8 @@ fn test_fixed_unit_vectors() {
     assert!((inner3.y.to_f32() - (3.0 / 7.0)).abs() < 1e-6);
     assert!((inner3.z.to_f32() - (6.0 / 7.0)).abs() < 1e-6);
 
-    let uv3_zero = FixedUnitVec3::new(FixedVec3::new(
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ZERO,
-        FixedQ32_32::ZERO,
-    ));
+    let uv3_zero =
+        FixedUnitVec3::new(FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO));
     assert!(uv3_zero.is_none());
     assert!(FixedUnitVec3::new(FixedVec3::new(
         FixedQ32_32::from_raw(i64::MAX),
@@ -281,10 +269,9 @@ fn test_fixed_unit_vectors() {
         FixedQ32_32::from_raw(i64::MAX),
     ))
     .is_none());
-    assert!(FixedUnitVec2::new(FixedVec2::new(
-        FixedQ32_32::from_raw(1),
-        FixedQ32_32::from_raw(1),
-    ))
+    assert!(FixedUnitVec2::new(
+        FixedVec2::new(FixedQ32_32::from_raw(1), FixedQ32_32::from_raw(1),)
+    )
     .is_none());
     assert!(FixedUnitVec3::new(FixedVec3::new(
         FixedQ32_32::from_raw(1),

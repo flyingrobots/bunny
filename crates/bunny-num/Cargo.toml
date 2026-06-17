@@ -2,14 +2,20 @@
 name = "bunny-num"
 description = "Deterministic numeric profiles for Bunny graphics primitives."
 authors.workspace = true
+categories = ["game-development", "graphics", "mathematics"]
 edition.workspace = true
+keywords = ["bunny", "fixed-point", "q32", "deterministic"]
 license.workspace = true
+readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[lints]
+workspace = true
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

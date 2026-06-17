@@ -204,3 +204,29 @@ fully satisfy the written acceptance criteria.
     cases, malformed-input corpus tests, and WASM coverage. [Done]
   * **Slice 3.5**: Prove the zero-allocation accepted path natively and record
     evidence in the changelog and goalpost document. [Done]
+
+---
+
+## Post-v0.4.0 Standards Alignment
+
+* **Status**: Completed.
+* **Description**: Replaces the older Rust code standards and CI-only quality
+  flow with the Rust Code Standards Editor's Edition and Code Dojo repository
+  enforcement layer.
+* **Goalpost Artifact**:
+  `docs/goalposts/post-v0.4.0-standards-alignment.md`
+
+### Goalpost 1: Align with the new code standards and pass all quality gates
+
+* **Description**: Install Code Dojo, make it the active local and CI quality
+  gate, then bring code, tests, docs, and generated witnesses into compliance.
+* **Slice Budget**: Closed after the full local Code Dojo, headless WASM, and
+  release archive verification gates passed.
+* **Slices**:
+  * **Slice 1.1**: Install standards docs, hooks, scripts, workflow, config, and
+    workspace lint inheritance. [Done]
+  * **Slice 1.2**: Run Code Dojo and record all failing alignment items. [Done]
+  * **Slice 1.3**: Replace regex Rust policy checks with an AST-backed gate
+    and package-scoped strict Clippy enforcement. [Done]
+  * **Slice 1.4**: Fix standards violations until Code Dojo, headless WASM,
+    Markdown, and release archive gates pass. [Done]

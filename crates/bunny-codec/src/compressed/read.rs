@@ -21,18 +21,12 @@ pub(super) struct Header {
 }
 
 pub(super) fn parse_header(input: &[u8]) -> Result<Header, CompressedMeshError> {
-    if take(input, 0, MAGIC.len())? != MAGIC.as_slice() {
-        return Err(CompressedMeshError::InvalidMagic);
-    }
-    if read_u8(input, 8)? != VERSION {
-        return Err(CompressedMeshError::UnsupportedVersion);
-    }
-    let index_width = parse_index_width(read_u8(input, 9)?)?;
-    if read_u16(input, 10)? != 0 {
-        return Err(CompressedMeshError::UnsupportedFlags);
-    }
-    let vertex_count = parse_count(read_u32(input, 12)?, MAX_VERTICES)?;
-    let triangle_count = parse_count(read_u32(input, 16)?, MAX_TRIANGLES)?;
+    validate_magic(input)?;
+    validate_version(input)?;
+    validate_flags(input)?;
+    let index_width = read_index_width(input)?;
+    let vertex_count = read_count(input, 12, MAX_VERTICES)?;
+    let triangle_count = read_count(input, 16, MAX_TRIANGLES)?;
     validate_width_capacity(index_width, vertex_count)?;
     Ok(Header {
         bounds: read_bounds(input, 28)?,
@@ -43,6 +37,38 @@ pub(super) fn parse_header(input: &[u8]) -> Result<Header, CompressedMeshError> 
     })
 }
 
+fn validate_magic(input: &[u8]) -> Result<(), CompressedMeshError> {
+    if take(input, 0, MAGIC.len())? == MAGIC.as_slice() {
+        Ok(())
+    } else {
+        Err(CompressedMeshError::InvalidMagic)
+    }
+}
+
+fn validate_version(input: &[u8]) -> Result<(), CompressedMeshError> {
+    if read_u8(input, 8)? == VERSION {
+        Ok(())
+    } else {
+        Err(CompressedMeshError::UnsupportedVersion)
+    }
+}
+
+fn validate_flags(input: &[u8]) -> Result<(), CompressedMeshError> {
+    if read_u16(input, 10)? == 0 {
+        Ok(())
+    } else {
+        Err(CompressedMeshError::UnsupportedFlags)
+    }
+}
+
+fn read_index_width(input: &[u8]) -> Result<CompressedIndexWidth, CompressedMeshError> {
+    parse_index_width(read_u8(input, 9)?)
+}
+
+fn read_count(input: &[u8], offset: usize, max: usize) -> Result<usize, CompressedMeshError> {
+    parse_count(read_u32(input, offset)?, max)
+}
+
 pub(super) fn validate_triangles(
     bytes: &[u8],
     count: usize,
@@ -50,10 +76,8 @@ pub(super) fn validate_triangles(
     index_width: CompressedIndexWidth,
 ) -> Result<(), CompressedMeshError> {
     for index in 0..count {
-        let triangle = read_triangle(
-            take_record(bytes, index, index_width.stride())?,
-            index_width,
-        )?;
+        let triangle =
+            read_triangle(take_record(bytes, index, index_width.stride())?, index_width)?;
         validate_triangle_bounds(triangle, vertex_count)?;
     }
     Ok(())
@@ -78,25 +102,18 @@ pub(super) fn read_triangle(
 }
 
 pub(super) fn read_vertex(bytes: &[u8]) -> Result<QuantizedVertex, CompressedMeshError> {
-    Ok(QuantizedVertex::new(
-        read_u16(bytes, 0)?,
-        read_u16(bytes, 2)?,
-        read_u16(bytes, 4)?,
-    ))
+    Ok(QuantizedVertex::new(read_u16(bytes, 0)?, read_u16(bytes, 2)?, read_u16(bytes, 4)?))
 }
 
 pub(super) fn checked_payload_len(
     count: usize,
     stride: usize,
 ) -> Result<usize, CompressedMeshError> {
-    count
-        .checked_mul(stride)
-        .ok_or(CompressedMeshError::IntegerOverflow)
+    count.checked_mul(stride).ok_or(CompressedMeshError::IntegerOverflow)
 }
 
 pub(super) fn checked_add(lhs: usize, rhs: usize) -> Result<usize, CompressedMeshError> {
-    lhs.checked_add(rhs)
-        .ok_or(CompressedMeshError::IntegerOverflow)
+    lhs.checked_add(rhs).ok_or(CompressedMeshError::IntegerOverflow)
 }
 
 pub(super) fn take_record(
@@ -109,9 +126,7 @@ pub(super) fn take_record(
 
 pub(super) fn take(input: &[u8], start: usize, len: usize) -> Result<&[u8], CompressedMeshError> {
     let end = checked_add(start, len)?;
-    input
-        .get(start..end)
-        .ok_or(CompressedMeshError::PayloadTooShort)
+    input.get(start..end).ok_or(CompressedMeshError::PayloadTooShort)
 }
 
 const fn parse_index_width(value: u8) -> Result<CompressedIndexWidth, CompressedMeshError> {
@@ -201,10 +216,7 @@ fn take_array<const N: usize>(input: &[u8], start: usize) -> Result<[u8; N], Com
 }
 
 fn read_u8(input: &[u8], start: usize) -> Result<u8, CompressedMeshError> {
-    take(input, start, 1)?
-        .first()
-        .copied()
-        .ok_or(CompressedMeshError::PayloadTooShort)
+    take(input, start, 1)?.first().copied().ok_or(CompressedMeshError::PayloadTooShort)
 }
 
 fn read_u16(input: &[u8], start: usize) -> Result<u16, CompressedMeshError> {

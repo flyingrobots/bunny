@@ -43,22 +43,25 @@ pub struct CompressedMesh<'a> {
     index_width: CompressedIndexWidth,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct CompressedMeshParts<'a> {
+    pub(super) bounds: FixedAabb3,
+    pub(super) vertex_bytes: &'a [u8],
+    pub(super) triangle_bytes: &'a [u8],
+    pub(super) vertex_count: usize,
+    pub(super) triangle_count: usize,
+    pub(super) index_width: CompressedIndexWidth,
+}
+
 impl<'a> CompressedMesh<'a> {
-    pub(super) const fn new(
-        bounds: FixedAabb3,
-        vertex_bytes: &'a [u8],
-        triangle_bytes: &'a [u8],
-        vertex_count: usize,
-        triangle_count: usize,
-        index_width: CompressedIndexWidth,
-    ) -> Self {
+    pub(super) const fn new(parts: CompressedMeshParts<'a>) -> Self {
         Self {
-            bounds,
-            vertex_bytes,
-            triangle_bytes,
-            vertex_count,
-            triangle_count,
-            index_width,
+            bounds: parts.bounds,
+            vertex_bytes: parts.vertex_bytes,
+            triangle_bytes: parts.triangle_bytes,
+            vertex_count: parts.vertex_count,
+            triangle_count: parts.triangle_count,
+            index_width: parts.index_width,
         }
     }
 

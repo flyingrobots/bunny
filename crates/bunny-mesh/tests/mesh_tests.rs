@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_mesh::{dequantize_vertex, quantize_vertex, QuantizedVertex};
@@ -103,10 +105,7 @@ fn test_quantization_uses_wide_single_rounding() {
         FixedQ32_32::from_f32(3.0),
     );
 
-    assert_eq!(
-        quantize_vertex(three, &narrow_bounds),
-        QuantizedVertex::new(19660, 19660, 19660)
-    );
+    assert_eq!(quantize_vertex(three, &narrow_bounds), QuantizedVertex::new(19660, 19660, 19660));
 
     let wide_bounds = FixedAabb3::new(
         FixedVec3::new(
@@ -122,10 +121,7 @@ fn test_quantization_uses_wide_single_rounding() {
     );
     let zero = FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO);
 
-    assert_eq!(
-        quantize_vertex(zero, &wide_bounds),
-        QuantizedVertex::new(32768, 32768, 32768)
-    );
+    assert_eq!(quantize_vertex(zero, &wide_bounds), QuantizedVertex::new(32768, 32768, 32768));
 }
 
 #[wasm_bindgen_test(unsupported = test)]

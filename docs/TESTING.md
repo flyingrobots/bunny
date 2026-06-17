@@ -15,20 +15,32 @@ the roadmap says are complete.
 
 ## Required Local Gates
 
-Run these before opening or updating a goalpost PR:
+Run the Code Dojo gate before opening or updating a goalpost PR:
 
 ```bash
-cargo +1.96.0 fmt --all -- --check
-git diff --check
-cargo +1.96.0 clippy --locked --workspace --all-targets -- -D warnings
-cargo +1.96.0 test --locked --workspace --all-targets
-cargo +1.96.0 check --locked -p bunny-num -p bunny-linalg -p bunny-geom \
-  -p bunny-contract -p bunny-query -p bunny-broadphase -p bunny-mesh \
-  -p bunny-codec --target wasm32-unknown-unknown
+cargo run --locked -p xtask -- code-dojo --all
 ```
 
+The gate runs:
+
+* repo-respect source checks from
+  `cargo run --locked -p xtask -- code-dojo-rust --all` across tracked and
+  untracked nonignored Rust files;
+* deterministic test receipt checks from
+  `cargo run --locked -p xtask -- code-dojo-determinism --enforce`;
+* workspace formatting;
+* workspace Clippy with warnings denied;
+* strict package-scoped Clippy for unwrap/expect/panic/todo/unimplemented and
+  unchecked indexing in library targets where those are standards violations;
+* dependency policy through `cargo deny check`;
+* workspace native tests;
+* `wasm32-unknown-unknown` checks for every WASM-compatible library crate.
+
+The full gate has no local skip flags for Cargo, deterministic receipts, or
+WASM. If a rule needs to change, change the standard and enforcement in review.
+
 Documentation changes should also run Markdown lint over every touched Markdown
-file:
+file when the tool is available:
 
 ```bash
 markdownlint-cli2 <changed-markdown-files>
@@ -67,8 +79,10 @@ Source files stay small. Public behavior is tested through integration tests:
 | `crates/<crate>/src/` | Library implementation |
 | `crates/<crate>/tests/` | Public API and regression tests |
 | `docs/goalposts/` | Acceptance evidence and completion notes |
-| `.github/workflows/ci.yml` | Cross-platform and WASM enforcement |
+| `.github/workflows/code-dojo.yml` | Code Dojo, cross-platform, and WASM enforcement |
 | `.github/workflows/release.yml` | crates.io release publication |
+| `.githooks/` | Repo-local pre-commit, commit-msg, and pre-push hooks |
+| `xtask/src/code_dojo.rs` | Local and CI repository-respect policy checks |
 | `scripts/publish-crates.sh` | Local and CI package publication gate |
 
 ## Boundary Fixtures
@@ -90,7 +104,10 @@ GitHub Actions must run:
 
 * Formatting.
 * Workspace Clippy with warnings denied.
+* Strict package-scoped Clippy for semantic library panic-path and indexing bans.
+* Dependency policy through `cargo deny check`.
 * Workspace native tests across Linux, macOS, and Windows.
+* Code Dojo repo-respect source and deterministic receipt checks.
 * WASM compile checks for all WASM-compatible library crates.
 * Headless Node.js WASM tests for all WASM-compatible library crates.
 * Release archive verification before crates.io publication.

@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_codec::{parse_obj_text, ObjError, ObjVertex};
 use bunny_mesh::Triangle32;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -20,14 +22,7 @@ fn parses_obj_triangle_as_borrowed_view() {
     assert_eq!(mesh.source().as_ptr(), OBJ_TRIANGLE.as_ptr());
     assert_eq!(mesh.vertex_count(), 3);
     assert_eq!(mesh.face_count(), 1);
-    assert_eq!(
-        mesh.vertex(2),
-        Ok(ObjVertex {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-        })
-    );
+    assert_eq!(mesh.vertex(2), Ok(ObjVertex { x: 0.0, y: 1.0, z: 0.0 }));
     assert_eq!(mesh.triangle(0), Ok(Triangle32::new(0, 1, 2)));
 }
 
@@ -39,21 +34,9 @@ fn iterates_obj_records_in_source_order() {
     assert_eq!(
         vertices,
         Ok(vec![
-            ObjVertex {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            ObjVertex {
-                x: 1.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            ObjVertex {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
+            ObjVertex { x: 0.0, y: 0.0, z: 0.0 },
+            ObjVertex { x: 1.0, y: 0.0, z: 0.0 },
+            ObjVertex { x: 0.0, y: 1.0, z: 0.0 },
         ])
     );
 
@@ -65,14 +48,8 @@ fn iterates_obj_records_in_source_order() {
 fn obj_accessors_reject_out_of_range_indices() {
     let mesh = parse_obj_text(OBJ_TRIANGLE).expect("canonical OBJ should parse");
 
-    assert_eq!(
-        mesh.vertex(mesh.vertex_count()),
-        Err(ObjError::IndexOutOfBounds)
-    );
-    assert_eq!(
-        mesh.triangle(mesh.face_count()),
-        Err(ObjError::IndexOutOfBounds)
-    );
+    assert_eq!(mesh.vertex(mesh.vertex_count()), Err(ObjError::IndexOutOfBounds));
+    assert_eq!(mesh.triangle(mesh.face_count()), Err(ObjError::IndexOutOfBounds));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -142,14 +119,7 @@ f 1 2 3
 ";
     let mesh = parse_obj_text(underflow).expect("extreme negative exponent should underflow");
 
-    assert_eq!(
-        mesh.vertex(0),
-        Ok(ObjVertex {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        })
-    );
+    assert_eq!(mesh.vertex(0), Ok(ObjVertex { x: 0.0, y: 0.0, z: 0.0 }));
 
     let overflow = "\
 v 1e9999999999 0.0 0.0
@@ -173,14 +143,7 @@ f 1 2 3
     );
     let mesh = parse_obj_text(&obj).expect("scaled large mantissa should parse");
 
-    assert_eq!(
-        mesh.vertex(0),
-        Ok(ObjVertex {
-            x: 1.0,
-            y: 0.0,
-            z: 0.0,
-        })
-    );
+    assert_eq!(mesh.vertex(0), Ok(ObjVertex { x: 1.0, y: 0.0, z: 0.0 }));
 }
 
 #[wasm_bindgen_test(unsupported = test)]

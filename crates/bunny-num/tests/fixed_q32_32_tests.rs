@@ -1,3 +1,5 @@
+//! Integration tests.
+
 use bunny_num::fixed_q32_32::{from_f32, to_f32, FRAC_BITS, ONE_RAW};
 use bunny_num::FixedQ32_32;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -111,7 +113,10 @@ fn test_fixed_q32_32_checked_div() {
     let b = FixedQ32_32::from_f32(2.0);
 
     let res = a.checked_div(b).expect("10.0 / 2.0 succeeds");
-    assert_eq!(res.to_f32(), 5.0);
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(res.to_f32(), 5.0);
+    }
 
     // Div by zero
     assert!(a.checked_div(FixedQ32_32::ZERO).is_none());

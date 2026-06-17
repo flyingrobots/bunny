@@ -1,3 +1,5 @@
+//! Bunny Wesley schema extension and DTO generator.
+
 mod render;
 
 use sha2::{Digest, Sha256};
@@ -30,10 +32,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     hasher.update(schema_source.as_bytes());
     let schema_hash = format!("{:x}", hasher.finalize());
 
-    write_file(
-        &config.rust,
-        &render::render_rust(&schema_ir, &schema_hash, &config.schema)?,
-    )?;
+    write_file(&config.rust, &render::render_rust(&schema_ir, &schema_hash, &config.schema)?)?;
     write_file(
         &config.typescript,
         &render::render_typescript(&schema_ir, &schema_hash, &config.schema)?,
@@ -44,34 +43,20 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, Box<dyn Error>> {
-    let mut schema = None;
-    let mut rust = None;
-    let mut typescript = None;
-    let mut manifest = None;
+    let mut slots = ArgSlots::default();
     let mut pending_flag = None::<String>;
 
     for arg in args {
         if let Some(flag) = pending_flag.take() {
-            match flag.as_str() {
-                "--rust" => rust = Some(PathBuf::from(arg)),
-                "--typescript" => typescript = Some(PathBuf::from(arg)),
-                "--manifest" => manifest = Some(PathBuf::from(arg)),
-                _ => return Err(format!("unknown flag {flag}").into()),
-            }
+            slots.apply_flag_value(&flag, arg)?;
             continue;
         }
 
         match arg.as_str() {
             "--rust" | "--typescript" | "--manifest" => pending_flag = Some(arg),
             "--help" | "-h" => return Err(usage().into()),
-            value if value.starts_with('-') => {
-                return Err(format!("unknown flag {value}\n{}", usage()).into());
-            }
-            value => {
-                if schema.replace(PathBuf::from(value)).is_some() {
-                    return Err(format!("multiple schema paths supplied\n{}", usage()).into());
-                }
-            }
+            value if value.starts_with('-') => return Err(unknown_flag(value).into()),
+            value => slots.apply_schema(value)?,
         }
     }
 
@@ -79,12 +64,47 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, Box<dyn Erro
         return Err(format!("missing value for {flag}").into());
     }
 
-    Ok(Config {
-        schema: schema.ok_or_else(usage)?,
-        rust: rust.ok_or_else(usage)?,
-        typescript: typescript.ok_or_else(usage)?,
-        manifest: manifest.ok_or_else(usage)?,
-    })
+    slots.finish()
+}
+
+#[derive(Default)]
+struct ArgSlots {
+    schema: Option<PathBuf>,
+    rust: Option<PathBuf>,
+    typescript: Option<PathBuf>,
+    manifest: Option<PathBuf>,
+}
+
+impl ArgSlots {
+    fn apply_flag_value(&mut self, flag: &str, value: String) -> Result<(), Box<dyn Error>> {
+        match flag {
+            "--rust" => self.rust = Some(PathBuf::from(value)),
+            "--typescript" => self.typescript = Some(PathBuf::from(value)),
+            "--manifest" => self.manifest = Some(PathBuf::from(value)),
+            _ => return Err(format!("unknown flag {flag}").into()),
+        }
+        Ok(())
+    }
+
+    fn apply_schema(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
+        if self.schema.replace(PathBuf::from(value)).is_some() {
+            return Err(format!("multiple schema paths supplied\n{}", usage()).into());
+        }
+        Ok(())
+    }
+
+    fn finish(self) -> Result<Config, Box<dyn Error>> {
+        Ok(Config {
+            schema: self.schema.ok_or_else(usage)?,
+            rust: self.rust.ok_or_else(usage)?,
+            typescript: self.typescript.ok_or_else(usage)?,
+            manifest: self.manifest.ok_or_else(usage)?,
+        })
+    }
+}
+
+fn unknown_flag(value: &str) -> String {
+    format!("unknown flag {value}\n{}", usage())
 }
 
 fn usage() -> String {
@@ -115,17 +135,14 @@ fn render_manifest(config: &Config, schema_sha256: &str) -> String {
     )
 }
 
-fn write_file(path: &Path, content: &str) -> Result<(), Box<dyn Error>> {
+fn write_file(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, content)?;
+    fs::write(path, contents)?;
     Ok(())
 }
 
 fn json_escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
+    value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
 }

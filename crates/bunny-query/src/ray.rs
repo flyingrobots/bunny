@@ -17,32 +17,40 @@ pub fn ray_intersects_sphere(
 ) -> Option<(FixedVec3, FixedVec3)> {
     let dir = ray.direction.into_inner();
     let v = sphere.center - ray.origin;
-    let tca = v.dot(dir);
-    let v_dot_v = v.dot(v);
-    let d2 = v_dot_v - tca * tca;
-
-    let r2 = sphere.radius * sphere.radius;
-    if d2 > r2 {
-        return None;
-    }
-
-    let thc2 = if r2 > d2 { r2 - d2 } else { FixedQ32_32::ZERO };
-    let thc = thc2.sqrt()?;
-
-    let t0 = tca - thc;
-    let t1 = tca + thc;
-
-    let t = if t0 >= FixedQ32_32::ZERO {
-        t0
-    } else if t1 >= FixedQ32_32::ZERO {
-        t1
-    } else {
-        return None;
-    };
-
+    let t = sphere_hit_distance(v, dir, sphere.radius)?;
     let hit_pos = ray.origin + dir * t;
     let normal = (hit_pos - sphere.center).normalize()?;
     Some((hit_pos, normal))
+}
+
+fn sphere_hit_distance(
+    center_delta: FixedVec3,
+    direction: FixedVec3,
+    radius: FixedQ32_32,
+) -> Option<FixedQ32_32> {
+    let tca = center_delta.dot(direction);
+    let d2 = center_delta.dot(center_delta) - tca * tca;
+    let r2 = radius * radius;
+    if d2 > r2 {
+        return None;
+    }
+    let thc = sphere_half_chord(r2, d2)?;
+    positive_sphere_hit(tca - thc, tca + thc)
+}
+
+fn sphere_half_chord(r2: FixedQ32_32, d2: FixedQ32_32) -> Option<FixedQ32_32> {
+    let thc2 = if r2 > d2 { r2 - d2 } else { FixedQ32_32::ZERO };
+    thc2.sqrt()
+}
+
+fn positive_sphere_hit(t0: FixedQ32_32, t1: FixedQ32_32) -> Option<FixedQ32_32> {
+    if t0 >= FixedQ32_32::ZERO {
+        Some(t0)
+    } else if t1 >= FixedQ32_32::ZERO {
+        Some(t1)
+    } else {
+        None
+    }
 }
 
 /// Computes the entry and exit intersection distances of a ray and an AABB.
@@ -56,50 +64,71 @@ pub fn ray_intersects_aabb(
     aabb: &FixedAabb3,
 ) -> Option<(FixedQ32_32, FixedQ32_32)> {
     let dir = ray.direction.into_inner();
-    let mut t_enter = FixedQ32_32::from_raw(i64::MIN);
-    let mut t_exit = FixedQ32_32::from_raw(i64::MAX);
+    let mut interval = RayInterval::unbounded();
 
-    // X axis
-    if dir.x == FixedQ32_32::ZERO {
-        if ray.origin.x < aabb.min.x || ray.origin.x > aabb.max.x {
-            return None;
-        }
-    } else {
-        let t0 = (aabb.min.x - ray.origin.x).checked_div(dir.x)?;
-        let t1 = (aabb.max.x - ray.origin.x).checked_div(dir.x)?;
-        t_enter = max(t_enter, min(t0, t1));
-        t_exit = min(t_exit, max(t0, t1));
-    }
+    interval.update(AxisBounds::new(ray.origin.x, dir.x, aabb.min.x, aabb.max.x))?;
+    interval.update(AxisBounds::new(ray.origin.y, dir.y, aabb.min.y, aabb.max.y))?;
+    interval.update(AxisBounds::new(ray.origin.z, dir.z, aabb.min.z, aabb.max.z))?;
 
-    // Y axis
-    if dir.y == FixedQ32_32::ZERO {
-        if ray.origin.y < aabb.min.y || ray.origin.y > aabb.max.y {
-            return None;
-        }
-    } else {
-        let t0 = (aabb.min.y - ray.origin.y).checked_div(dir.y)?;
-        let t1 = (aabb.max.y - ray.origin.y).checked_div(dir.y)?;
-        t_enter = max(t_enter, min(t0, t1));
-        t_exit = min(t_exit, max(t0, t1));
-    }
-
-    // Z axis
-    if dir.z == FixedQ32_32::ZERO {
-        if ray.origin.z < aabb.min.z || ray.origin.z > aabb.max.z {
-            return None;
-        }
-    } else {
-        let t0 = (aabb.min.z - ray.origin.z).checked_div(dir.z)?;
-        let t1 = (aabb.max.z - ray.origin.z).checked_div(dir.z)?;
-        t_enter = max(t_enter, min(t0, t1));
-        t_exit = min(t_exit, max(t0, t1));
-    }
-
-    if t_enter > t_exit || t_exit < FixedQ32_32::ZERO {
+    if interval.is_miss() {
         None
     } else {
-        Some((t_enter, t_exit))
+        Some((interval.enter, interval.exit))
     }
+}
+
+#[derive(Clone, Copy)]
+struct AxisBounds {
+    origin: FixedQ32_32,
+    direction: FixedQ32_32,
+    min_bound: FixedQ32_32,
+    max_bound: FixedQ32_32,
+}
+
+impl AxisBounds {
+    const fn new(
+        origin: FixedQ32_32,
+        direction: FixedQ32_32,
+        min_bound: FixedQ32_32,
+        max_bound: FixedQ32_32,
+    ) -> Self {
+        Self { origin, direction, min_bound, max_bound }
+    }
+}
+
+struct RayInterval {
+    enter: FixedQ32_32,
+    exit: FixedQ32_32,
+}
+
+impl RayInterval {
+    const fn unbounded() -> Self {
+        Self { enter: FixedQ32_32::from_raw(i64::MIN), exit: FixedQ32_32::from_raw(i64::MAX) }
+    }
+
+    fn update(&mut self, axis: AxisBounds) -> Option<()> {
+        if axis.direction == FixedQ32_32::ZERO {
+            return axis_contains_origin(axis.origin, axis.min_bound, axis.max_bound);
+        }
+
+        let t0 = (axis.min_bound - axis.origin).checked_div(axis.direction)?;
+        let t1 = (axis.max_bound - axis.origin).checked_div(axis.direction)?;
+        self.enter = max(self.enter, min(t0, t1));
+        self.exit = min(self.exit, max(t0, t1));
+        Some(())
+    }
+
+    fn is_miss(&self) -> bool {
+        self.enter > self.exit || self.exit < FixedQ32_32::ZERO
+    }
+}
+
+fn axis_contains_origin(
+    origin: FixedQ32_32,
+    min_bound: FixedQ32_32,
+    max_bound: FixedQ32_32,
+) -> Option<()> {
+    (origin >= min_bound && origin <= max_bound).then_some(())
 }
 
 /// Computes the intersection of a ray and a triangle defined by three vertices.
@@ -117,30 +146,44 @@ pub fn ray_intersects_triangle(
     let edge1 = v1 - v0;
     let edge2 = v2 - v0;
     let pvec = dir.cross(edge2);
-    let det = edge1.dot(pvec);
-
-    if det == FixedQ32_32::ZERO {
-        return None;
-    }
-
-    let inv_det = FixedQ32_32::ONE.checked_div(det)?;
-
+    let inv_det = inverse_triangle_determinant(edge1, pvec)?;
     let tvec = ray.origin - v0;
-    let u = tvec.dot(pvec) * inv_det;
-    if u < FixedQ32_32::ZERO || u > FixedQ32_32::ONE {
-        return None;
-    }
-
+    let u = triangle_u(tvec, pvec, inv_det)?;
     let qvec = tvec.cross(edge1);
-    let v = dir.dot(qvec) * inv_det;
-    if v < FixedQ32_32::ZERO || u + v > FixedQ32_32::ONE {
-        return None;
-    }
-
-    let t = edge2.dot(qvec) * inv_det;
-    if t < FixedQ32_32::ZERO {
-        return None;
-    }
-
+    triangle_v(dir, qvec, inv_det, u)?;
+    let t = triangle_t(edge2, qvec, inv_det)?;
     Some(ray.origin + dir * t)
+}
+
+fn inverse_triangle_determinant(edge1: FixedVec3, pvec: FixedVec3) -> Option<FixedQ32_32> {
+    let det = edge1.dot(pvec);
+    if det == FixedQ32_32::ZERO {
+        None
+    } else {
+        FixedQ32_32::ONE.checked_div(det)
+    }
+}
+
+fn triangle_u(tvec: FixedVec3, pvec: FixedVec3, inv_det: FixedQ32_32) -> Option<FixedQ32_32> {
+    let u = tvec.dot(pvec) * inv_det;
+    (u >= FixedQ32_32::ZERO && u <= FixedQ32_32::ONE).then_some(u)
+}
+
+fn triangle_v(
+    direction: FixedVec3,
+    qvec: FixedVec3,
+    inv_det: FixedQ32_32,
+    u: FixedQ32_32,
+) -> Option<FixedQ32_32> {
+    let v = direction.dot(qvec) * inv_det;
+    (!outside_triangle_v(v, u)).then_some(v)
+}
+
+fn triangle_t(edge2: FixedVec3, qvec: FixedVec3, inv_det: FixedQ32_32) -> Option<FixedQ32_32> {
+    let t = edge2.dot(qvec) * inv_det;
+    (t >= FixedQ32_32::ZERO).then_some(t)
+}
+
+fn outside_triangle_v(v: FixedQ32_32, u: FixedQ32_32) -> bool {
+    v < FixedQ32_32::ZERO || u + v > FixedQ32_32::ONE
 }

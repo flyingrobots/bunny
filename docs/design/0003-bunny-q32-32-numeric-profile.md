@@ -59,14 +59,15 @@ scalar BunnyFixedQ32_32Raw
 The generated Rust DTO maps this scalar to `i64`. The generated TypeScript DTO
 maps it to `bigint`.
 
-## Wesley Status
+## Generator Status
 
-The current `bunny-wesley` crate is a Bunny-specific Wesley extension:
+The current `bunny-wesley` crate is a Bunny-specific schema generator:
 
-- `wesley-core` lowers Bunny SDL and computes the registry hash.
+- Published `wesley-core` lowers the graphics schema while Bunny computes the
+  schema hash.
 - Bunny maps the resulting Wesley IR into graphics-specific Rust and
   TypeScript DTOs.
-- Generated witnesses record both the Bunny generator id and Wesley core
+- Generated witnesses record both the Bunny generator id and `wesley-core`
   version.
 
 Bunny may later move more emitter logic to published Wesley emitter crates when

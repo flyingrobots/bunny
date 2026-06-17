@@ -24,40 +24,22 @@ pub fn union_aabb(a: FixedAabb3, b: FixedAabb3) -> FixedAabb3 {
 /// Computes the surface area of an AABB.
 #[must_use]
 pub fn surface_area(aabb: &FixedAabb3) -> FixedQ32_32 {
-    let size_x = if aabb.max.x > aabb.min.x {
-        aabb.max.x - aabb.min.x
-    } else {
-        FixedQ32_32::ZERO
-    };
-    let size_y = if aabb.max.y > aabb.min.y {
-        aabb.max.y - aabb.min.y
-    } else {
-        FixedQ32_32::ZERO
-    };
-    let size_z = if aabb.max.z > aabb.min.z {
-        aabb.max.z - aabb.min.z
-    } else {
-        FixedQ32_32::ZERO
-    };
+    let size_x = if aabb.max.x > aabb.min.x { aabb.max.x - aabb.min.x } else { FixedQ32_32::ZERO };
+    let size_y = if aabb.max.y > aabb.min.y { aabb.max.y - aabb.min.y } else { FixedQ32_32::ZERO };
+    let size_z = if aabb.max.z > aabb.min.z { aabb.max.z - aabb.min.z } else { FixedQ32_32::ZERO };
 
-    let two = FixedQ32_32::from_f32(2.0);
+    let two = FixedQ32_32::ONE + FixedQ32_32::ONE;
     two * (size_x * size_y + size_y * size_z + size_z * size_x)
 }
 
 /// Computes the centroid of an AABB.
 #[must_use]
 pub fn get_centroid(aabb: &FixedAabb3) -> FixedVec3 {
-    let two = FixedQ32_32::from_f32(2.0);
+    let two = FixedQ32_32::ONE + FixedQ32_32::ONE;
     FixedVec3::new(
-        (aabb.min.x + aabb.max.x)
-            .checked_div(two)
-            .unwrap_or(FixedQ32_32::ZERO),
-        (aabb.min.y + aabb.max.y)
-            .checked_div(two)
-            .unwrap_or(FixedQ32_32::ZERO),
-        (aabb.min.z + aabb.max.z)
-            .checked_div(two)
-            .unwrap_or(FixedQ32_32::ZERO),
+        (aabb.min.x + aabb.max.x).checked_div(two).unwrap_or(FixedQ32_32::ZERO),
+        (aabb.min.y + aabb.max.y).checked_div(two).unwrap_or(FixedQ32_32::ZERO),
+        (aabb.min.z + aabb.max.z).checked_div(two).unwrap_or(FixedQ32_32::ZERO),
     )
 }
 
@@ -74,21 +56,13 @@ pub const fn get_axis_val(v: &FixedVec3, axis: usize) -> FixedQ32_32 {
 /// Computes the element-wise minimum of two vectors.
 #[must_use]
 pub fn min_vec(a: FixedVec3, b: FixedVec3) -> FixedVec3 {
-    FixedVec3::new(
-        std::cmp::min(a.x, b.x),
-        std::cmp::min(a.y, b.y),
-        std::cmp::min(a.z, b.z),
-    )
+    FixedVec3::new(std::cmp::min(a.x, b.x), std::cmp::min(a.y, b.y), std::cmp::min(a.z, b.z))
 }
 
 /// Computes the element-wise maximum of two vectors.
 #[must_use]
 pub fn max_vec(a: FixedVec3, b: FixedVec3) -> FixedVec3 {
-    FixedVec3::new(
-        std::cmp::max(a.x, b.x),
-        std::cmp::max(a.y, b.y),
-        std::cmp::max(a.z, b.z),
-    )
+    FixedVec3::new(std::cmp::max(a.x, b.x), std::cmp::max(a.y, b.y), std::cmp::max(a.z, b.z))
 }
 
 /// Checks if two AABBs overlap.
