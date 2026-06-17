@@ -8,9 +8,9 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
-    BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLoop, ExprMacro, ExprMatch, ExprMethodCall,
-    ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Macro, Path as SynPath, Signature, Stmt,
-    StmtMacro, TraitItemFn, TypePath,
+    BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro, ExprMatch,
+    ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, ItemFn, Lit, Macro, Path as SynPath,
+    Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
 };
 
 type DynError = Box<dyn Error>;
@@ -955,6 +955,21 @@ impl PolicyVisitor<'_> {
         }
     }
 
+    fn check_float_literal(&mut self, span: Span) {
+        if self.category != Category::Core {
+            return;
+        }
+
+        let line = line_of(span);
+        if !self.waived(line, "float-boundary") {
+            self.violation(
+                line,
+                "float-boundary",
+                "inferred float literals in core require explicit boundary conversion to canonical fixed-point",
+            );
+        }
+    }
+
     fn check_macro(&mut self, span: Span, mac: &Macro) {
         let line = line_of(span);
         if self.limits.panics_allowed || self.waived(line, "panic-path") {
@@ -1000,6 +1015,13 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
             );
         }
         visit::visit_expr_index(self, node);
+    }
+
+    fn visit_expr_lit(&mut self, node: &'ast ExprLit) {
+        if matches!(node.lit, Lit::Float(_)) {
+            self.check_float_literal(node.span());
+        }
+        visit::visit_expr_lit(self, node);
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
@@ -1349,5 +1371,19 @@ pub fn require(value: i32) {
         let violations = core_policy_violations(source);
 
         assert_eq!(rule_count(&violations, "panic-path"), 3);
+    }
+
+    #[test]
+    fn core_policy_flags_inferred_float_literals() {
+        let source = r"
+pub fn scale(input: i32) -> i32 {
+    let gain = 0.5;
+    if gain > 0.0 { input } else { 0 }
+}
+";
+
+        let violations = core_policy_violations(source);
+
+        assert_eq!(rule_count(&violations, "float-boundary"), 2);
     }
 }
