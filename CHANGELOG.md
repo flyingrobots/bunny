@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Code Dojo now scans tracked and untracked nonignored Rust files in full-gate
   mode and no longer exposes rollout skip knobs for Cargo, deterministic
   receipts, or WASM checks.
+* `ROADMAP.md` now reserves `v0.5.0` for this standards and numeric-law release,
+  and shifts the planned math and geometry feature train to `v0.6.0` onward.
+* `docs/BEARING.md` now avoids branch and pull-request tracking, leaving live
+  work state to GitHub while keeping durable release posture in the repo.
 * Dependency policy is now part of Code Dojo through `cargo deny check`.
   Duplicate transitive-version findings from the current `wesley-core` graph
   remain visible cargo-deny warnings rather than hidden skip exemptions.

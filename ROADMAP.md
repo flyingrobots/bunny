@@ -280,6 +280,18 @@ fully satisfy the written acceptance criteria.
 
 ---
 
+## Release v0.5.0: Standards, Numeric Law, and Release Hygiene
+
+* **Status**: Release candidate in PR #185.
+* **Description**: Ships the repository standards alignment, Code Dojo quality
+  gates, numeric law hardening, validated fixed-point ingress, release archive
+  verification, and roadmap source-of-truth cleanup completed after `v0.4.0`.
+* **Evidence**: `CHANGELOG.md` records the `v0.5.0` release contents; PR #184
+  landed the numeric law and roadmap source-of-truth work, and PR #185 prepares
+  the publishable workspace version.
+
+---
+
 ## Planned Release Train
 
 The following releases implement the build order in
@@ -292,10 +304,10 @@ of completion.
 
 ---
 
-## Release v0.5.0: Math Foundations (The Frame Commons)
+## Release v0.6.0: Math Foundations (The Frame Commons)
 
 * **Status**: Planned.
-* **GitHub Milestone**: `v0.5.0 Math Foundations`
+* **GitHub Milestone**: `v0.6.0 Math Foundations`
 * **Description**: Locks coordinate law, numeric preconditions, matrices,
   transforms, projection, orientation, angle, interpolation, and curve math.
 
@@ -347,10 +359,10 @@ of completion.
 
 ---
 
-## Release v0.6.0: Geometry Law and Primitive Coverage
+## Release v0.7.0: Geometry Law and Primitive Coverage
 
 * **Status**: Planned.
-* **GitHub Milestone**: `v0.6.0 Geometry Law and Primitive Coverage`
+* **GitHub Milestone**: `v0.7.0 Geometry Law and Primitive Coverage`
 * **Description**: Defines degeneracy behavior, robust predicates, richer shape
   families, 2D coverage, clipping, bounds, topology, and mass properties.
 
@@ -397,10 +409,10 @@ of completion.
 
 ---
 
-## Release v0.7.0: Collision and Contact
+## Release v0.8.0: Collision and Contact
 
 * **Status**: Planned.
-* **GitHub Milestone**: `v0.7.0 Collision and Contact`
+* **GitHub Milestone**: `v0.8.0 Collision and Contact`
 * **Description**: Adds deterministic narrowphase, SAT, support mapping,
   GJK/EPA, contact manifolds, swept queries, and collision architecture.
 
@@ -442,11 +454,11 @@ of completion.
 
 ---
 
-## Release v0.8.0: Acceleration, Visibility, and Ray Tracing
+## Release v0.9.0: Acceleration, Visibility, and Ray Tracing
 
 * **Status**: Planned.
 * **GitHub Milestone**:
-  `v0.8.0 Acceleration, Visibility, and Ray Tracing`
+  `v0.9.0 Acceleration, Visibility, and Ray Tracing`
 * **Description**: Adds dynamic broadphase, spatial hashing, mesh BVHs,
   occlusion, visibility batching, and ray-tracing hit suites.
 
@@ -486,10 +498,10 @@ of completion.
 
 ---
 
-## Release v0.9.0: Optics, SIMD, and Codec Completion
+## Release v0.10.0: Optics, SIMD, and Codec Completion
 
 * **Status**: Planned.
-* **GitHub Milestone**: `v0.9.0 Optics, SIMD, and Codec Completion`
+* **GitHub Milestone**: `v0.10.0 Optics, SIMD, and Codec Completion`
 * **Description**: Adds camera and optics math, deterministic SIMD exploration,
   benchmark evidence, no_std audit, codec encoder, checksums, external mesh
   profiles, and fuzzing.
@@ -540,11 +552,11 @@ of completion.
 
 ---
 
-## Release v0.10.0: Consumer Confidence and Public Readiness
+## Release v0.11.0: Consumer Confidence and Public Readiness
 
 * **Status**: Planned.
 * **GitHub Milestone**:
-  `v0.10.0 Consumer Confidence and Public Readiness`
+  `v0.11.0 Consumer Confidence and Public Readiness`
 * **Description**: Adds examples, fixtures, generated-contract parity,
   docs.rs readiness, and optional boundary adapter exploration.
 
