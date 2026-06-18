@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TryFrom<f32>`, and the raw `fixed_q32_32::try_from_f32` helper.
 * Math and geometry capability map covering Bunny's owned surface, non-goals,
   missing deterministic math layers, SIMD policy, and recommended build order.
+* Planned post-v0.4.0 roadmap release train with GitHub milestones, goalpost
+  trackers, and slice issue references.
 
 ### Changed
 

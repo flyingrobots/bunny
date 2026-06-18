@@ -234,3 +234,348 @@ fully satisfy the written acceptance criteria.
     and package-scoped strict Clippy enforcement. [Done]
   * **Slice 1.4**: Fix standards violations until Code Dojo, headless WASM,
     Markdown, and release archive gates pass. [Done]
+
+---
+
+## Maintenance Rail: v0.4.x Source-of-Truth Hygiene
+
+* **Status**: Planned.
+* **GitHub Milestone**:
+  `v0.4.x Maintenance and Source-of-Truth Hygiene`
+* **Description**: Keeps publication, stale tracker cleanup, repo-truth docs,
+  and standards ratchets out of the feature release train.
+
+### Goalpost 1: Repo Truth and Release Hygiene
+
+* **Tracker**: #165
+* **Description**: Close non-feature work that blocks clean planning and
+  publication discipline.
+* **Slice Budget**: 12 Slices
+* **Slices**:
+  * **Slice 1.1**: Make `FixedQ32_32` raw field private. [Planned: #112]
+  * **Slice 1.2**: Align `FixedQ32_32` float ingress with rejection policy.
+    [Planned: #113]
+  * **Slice 1.3**: Delete or replace `VISION` and `BEARING` as current-state
+    docs. [Planned: #133]
+  * **Slice 1.4**: Refresh README, crate READMEs, and technical teardown to
+    current repo surface. [Planned: #134]
+  * **Slice 1.5**: Close stale completed roadmap issues and normalize backlog
+    source of truth. [Planned: #135]
+  * **Slice 1.6**: Track the `v0.4.0` crates.io publication gate.
+    [Planned: #136]
+  * **Slice 1.7**: Remove or tightly gate `ALLOW_DIRTY` release packaging.
+    [Planned: #141]
+  * **Slice 1.8**: Ratchet workspace lint allowances or document each permanent
+    exception. [Planned: #142]
+  * **Slice 1.9**: Make README examples model fallible APIs instead of
+    unwrap-heavy happy paths. [Planned: #143]
+  * **Slice 1.10**: Clarify historical evidence links that reference retired
+    CI workflow names. [Planned: #144]
+  * **Slice 1.11**: Derive `Hash` for `FixedQ32_32` as required by the Numeric
+    Constitution. [Planned: #153]
+  * **Slice 1.12**: Align the canonical raw accessor name with the Numeric
+    Constitution. [Planned: #154]
+
+---
+
+## Planned Release Train
+
+The following releases implement the build order in
+`docs/MATH_GEOMETRY_CAPABILITY_MAP.md`: math foundations first, geometry law
+second, collision third, acceleration and visibility fourth, optics/performance
+fifth, and consumer confidence last.
+
+Issue numbers are GitHub tracker items. They are planning anchors, not evidence
+of completion.
+
+---
+
+## Release v0.5.0: Math Foundations (The Frame Commons)
+
+* **Status**: Planned.
+* **GitHub Milestone**: `v0.5.0 Math Foundations`
+* **Description**: Locks coordinate law, numeric preconditions, matrices,
+  transforms, projection, orientation, angle, interpolation, and curve math.
+
+### Goalpost 1: Coordinate Law and Numeric Preconditions
+
+* **Tracker**: #166
+* **Description**: Define coordinate spaces, handedness, units, and numeric
+  preconditions before more geometry consumes them.
+* **Slice Budget**: 3 Slices
+* **Slices**:
+  * **Slice 1.1**: Define coordinate-space, handedness, and units policy.
+    [Planned: #164]
+  * **Slice 1.2**: Audit saturating arithmetic before geometry consumes invalid
+    values. [Planned: #114]
+  * **Slice 1.3**: Add property tests for Q32.32 and geometry invariants.
+    [Planned: #129]
+
+### Goalpost 2: Matrix and Transform Primitives
+
+* **Tracker**: #167
+* **Description**: Add deterministic matrix, affine transform, projection, and
+  bounds-propagation primitives.
+* **Slice Budget**: 4 Slices
+* **Slices**:
+  * **Slice 2.1**: Implement deterministic fixed matrix types.
+    [Planned: #107]
+  * **Slice 2.2**: Implement deterministic affine transform types.
+    [Planned: #108]
+  * **Slice 2.3**: Add transform-aware bounds propagation.
+    [Planned: #119]
+  * **Slice 2.4**: Add deterministic projection, unprojection, and viewport
+    mapping. [Planned: #150]
+
+### Goalpost 3: Orientation, Angles, Interpolation, and Curves
+
+* **Tracker**: #168
+* **Description**: Provide orientation and parametric math that collision,
+  visibility, and optics work can reuse.
+* **Slice Budget**: 4 Slices
+* **Slices**:
+  * **Slice 3.1**: Implement deterministic quaternion rotations.
+    [Planned: #109]
+  * **Slice 3.2**: Define canonical angle and trigonometry policy.
+    [Planned: #110]
+  * **Slice 3.3**: Add fixed interpolation, clamp, min-max, and remap
+    primitives. [Planned: #111]
+  * **Slice 3.4**: Add deterministic curve primitives for Bezier and splines.
+    [Planned: #152]
+
+---
+
+## Release v0.6.0: Geometry Law and Primitive Coverage
+
+* **Status**: Planned.
+* **GitHub Milestone**: `v0.6.0 Geometry Law and Primitive Coverage`
+* **Description**: Defines degeneracy behavior, robust predicates, richer shape
+  families, 2D coverage, clipping, bounds, topology, and mass properties.
+
+### Goalpost 1: Degeneracy and Robust Predicate Law
+
+* **Tracker**: #169
+* **Description**: Define invalid and degenerate geometry behavior before
+  expanding the supported shape set.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 1.1**: Define a degeneracy policy for every shape and query.
+    [Planned: #116]
+  * **Slice 1.2**: Add robust fixed geometric predicates.
+    [Planned: #145]
+
+### Goalpost 2: Shape Library and 2D Coverage
+
+* **Tracker**: #170
+* **Description**: Expand Bunny's fixed geometry vocabulary while keeping
+  construction and validation policy consistent.
+* **Slice Budget**: 3 Slices
+* **Slices**:
+  * **Slice 2.1**: Expand fixed shape library beyond rays, AABBs, and spheres.
+    [Planned: #115]
+  * **Slice 2.2**: Add deterministic frustum and culling primitives.
+    [Planned: #146]
+  * **Slice 2.3**: Add a 2D primitive and query suite. [Planned: #149]
+
+### Goalpost 3: Clipping, Bounds, Topology, and Mass Properties
+
+* **Tracker**: #171
+* **Description**: Add geometry utilities that make later collision and mesh
+  queries composable.
+* **Slice Budget**: 4 Slices
+* **Slices**:
+  * **Slice 3.1**: Add deterministic clipping and half-space operations.
+    [Planned: #162]
+  * **Slice 3.2**: Add bounding volume conversion and merge utilities.
+    [Planned: #151]
+  * **Slice 3.3**: Add topology validation for quantized triangle meshes.
+    [Planned: #122]
+  * **Slice 3.4**: Add deterministic mass properties for primitive shapes and
+    meshes. [Planned: #163]
+
+---
+
+## Release v0.7.0: Collision and Contact
+
+* **Status**: Planned.
+* **GitHub Milestone**: `v0.7.0 Collision and Contact`
+* **Description**: Adds deterministic narrowphase, SAT, support mapping,
+  GJK/EPA, contact manifolds, swept queries, and collision architecture.
+
+### Goalpost 1: Primitive Narrowphase Coverage
+
+* **Tracker**: #172
+* **Description**: Fill out deterministic primitive-pair query coverage for the
+  shape families Bunny owns.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 1.1**: Implement OBB, capsule, and plane query solvers.
+    [Planned: #117]
+  * **Slice 1.2**: Add SAT-based convex collision helpers.
+    [Planned: #147]
+
+### Goalpost 2: Support Mapping, GJK, and EPA
+
+* **Tracker**: #173
+* **Description**: Add support-mapping primitives and convex
+  distance/penetration algorithms without importing simulation policy.
+* **Slice Budget**: 1 Slice
+* **Slices**:
+  * **Slice 2.1**: Add support-mapping and GJK/EPA collision primitives.
+    [Planned: #139]
+
+### Goalpost 3: Collision Architecture, Manifolds, and Swept Queries
+
+* **Tracker**: #174
+* **Description**: Define a composable collision query architecture that returns
+  deterministic contacts without owning physics stepping.
+* **Slice Budget**: 3 Slices
+* **Slices**:
+  * **Slice 3.1**: Define deterministic collision detection architecture.
+    [Planned: #157]
+  * **Slice 3.2**: Add deterministic contact manifold generation.
+    [Planned: #118]
+  * **Slice 3.3**: Add continuous collision and swept shape queries.
+    [Planned: #148]
+
+---
+
+## Release v0.8.0: Acceleration, Visibility, and Ray Tracing
+
+* **Status**: Planned.
+* **GitHub Milestone**:
+  `v0.8.0 Acceleration, Visibility, and Ray Tracing`
+* **Description**: Adds dynamic broadphase, spatial hashing, mesh BVHs,
+  occlusion, visibility batching, and ray-tracing hit suites.
+
+### Goalpost 1: Dynamic Broadphase and Spatial Hashing
+
+* **Tracker**: #175
+* **Description**: Add update-friendly spatial acceleration structures for
+  larger dynamic scenes while preserving stable output order.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 1.1**: Add deterministic dynamic update and refit APIs.
+    [Planned: #120]
+  * **Slice 1.2**: Add deterministic spatial hash or uniform grid solver.
+    [Planned: #121]
+
+### Goalpost 2: Mesh BVH and Triangle Query Acceleration
+
+* **Tracker**: #176
+* **Description**: Connect mesh buffers to deterministic acceleration structures
+  for ray and closest-point work.
+* **Slice Budget**: 1 Slice
+* **Slices**:
+  * **Slice 2.1**: Add BVH-backed mesh ray and closest-point queries.
+    [Planned: #123]
+
+### Goalpost 3: Visibility and Ray Tracing Hit Suites
+
+* **Tracker**: #177
+* **Description**: Expose deterministic visibility, occlusion, and ray hit
+  records that renderers and simulators can consume.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 3.1**: Add deterministic occlusion and visibility query primitives.
+    [Planned: #158]
+  * **Slice 3.2**: Add deterministic ray tracing primitive intersection suite.
+    [Planned: #159]
+
+---
+
+## Release v0.9.0: Optics, SIMD, and Codec Completion
+
+* **Status**: Planned.
+* **GitHub Milestone**: `v0.9.0 Optics, SIMD, and Codec Completion`
+* **Description**: Adds camera and optics math, deterministic SIMD exploration,
+  benchmark evidence, no_std audit, codec encoder, checksums, external mesh
+  profiles, and fuzzing.
+
+### Goalpost 1: Deterministic Camera and Optics Math
+
+* **Tracker**: #178
+* **Description**: Add deterministic camera, ray-generation, lighting, and
+  optics primitives without becoming a renderer.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 1.1**: Add `bunny-optics` deterministic camera and ray-generation
+    primitives. [Planned: #138]
+  * **Slice 1.2**: Add deterministic lighting and BRDF math primitives.
+    [Planned: #160]
+
+### Goalpost 2: Deterministic SIMD and Performance Evidence
+
+* **Tracker**: #179
+* **Description**: Explore acceleration only after scalar behavior is locked and
+  measurable.
+* **Slice Budget**: 3 Slices
+* **Slices**:
+  * **Slice 2.1**: Explore optional deterministic SIMD backends with scalar
+    parity gates. [Planned: #161]
+  * **Slice 2.2**: Add benchmark harnesses for math, codecs, mesh, and
+    broadphase. [Planned: #130]
+  * **Slice 2.3**: Audit `no_std` support for core math crates.
+    [Planned: #156]
+
+### Goalpost 3: Codec Encoder and External Mesh Profiles
+
+* **Tracker**: #180
+* **Description**: Complete Bunny's mesh codec story with canonical encoding,
+  stronger validation, external profiles, and fuzzing.
+* **Slice Budget**: 5 Slices
+* **Slices**:
+  * **Slice 3.1**: Implement Bunny compressed mesh encoder.
+    [Planned: #124]
+  * **Slice 3.2**: Define compressed mesh profile v2 with checksum support.
+    [Planned: #125]
+  * **Slice 3.3**: Add deterministic glTF mesh import profile.
+    [Planned: #126]
+  * **Slice 3.4**: Add deterministic STL mesh import profile.
+    [Planned: #127]
+  * **Slice 3.5**: Add fuzzing harnesses for PLY, OBJ, and compressed mesh
+    decoders. [Planned: #128]
+
+---
+
+## Release v0.10.0: Consumer Confidence and Public Readiness
+
+* **Status**: Planned.
+* **GitHub Milestone**:
+  `v0.10.0 Consumer Confidence and Public Readiness`
+* **Description**: Adds examples, fixtures, generated-contract parity,
+  docs.rs readiness, and optional boundary adapter exploration.
+
+### Goalpost 1: Examples and Fixture Corpora
+
+* **Tracker**: #181
+* **Description**: Make public APIs easier to consume correctly by adding
+  runnable examples and shared deterministic fixtures.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 1.1**: Add runnable examples for downstream consumers.
+    [Planned: #131]
+  * **Slice 1.2**: Add `bunny-fixtures` crate for deterministic corpora and
+    parity witnesses. [Planned: #137]
+
+### Goalpost 2: Generated Contract and Public Documentation Readiness
+
+* **Tracker**: #182
+* **Description**: Prove generated contracts and public docs are ready for
+  downstream consumers.
+* **Slice Budget**: 2 Slices
+* **Slices**:
+  * **Slice 2.1**: Add TypeScript DTO compile and parity checks.
+    [Planned: #132]
+  * **Slice 2.2**: Add rustdoc and docs.rs readiness checks for public crates.
+    [Planned: #155]
+
+### Goalpost 3: Boundary Adapter Exploration
+
+* **Tracker**: #183
+* **Description**: Decide whether optional Echo and Geordi adapter crates belong
+  at Bunny's repository boundary without compromising the project-neutral core.
+* **Slice Budget**: 1 Slice
+* **Slices**:
+  * **Slice 3.1**: Add optional Echo and Geordi adapter crates at repository
+    boundaries. [Planned: #140]
