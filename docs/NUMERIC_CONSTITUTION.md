@@ -48,7 +48,7 @@ Construction must be explicit:
 
 - `from_raw(i64)` preserves exact raw bits.
 - `from_i32`, `from_i64`, or similar integer constructors must check or document range.
-- Validated float ingress is a boundary operation and must reject `NaN`, `+∞`,
+- Validated float ingress is a boundary operation that must reject `NaN`, `+∞`,
   `-∞`, and values outside representable range.
 - Float ingress must document rounding mode and must not be used inside core canonical algorithms.
 - Saturating float conversion helpers may exist only when their names or docs
