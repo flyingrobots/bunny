@@ -59,10 +59,23 @@ fn validate_sphere3(center: Vec3, radius: Scalar) -> Result<(), GeomError> {
 impl Ray3 {
     /// Creates a float ray that is valid for fixed-point boundary conversion.
     ///
+    /// ```
+    /// use bunny_geom::{GeomError, Ray3};
+    /// use bunny_linalg::Vec3;
+    ///
+    /// let ray = Ray3::try_new(
+    ///     Vec3::new(3_000_000_000.0, 0.0, 0.0),
+    ///     Vec3::new(1.0, 0.0, 0.0),
+    /// );
+    ///
+    /// assert_eq!(ray, Err(GeomError::FixedValueOutOfRange));
+    /// ```
+    ///
     /// # Errors
     /// Returns `GeomError::NonFiniteCoordinate` if any component is not finite,
-    /// or `GeomError::InvalidRayDirection` if the direction cannot be
-    /// represented as a fixed unit vector.
+    /// `GeomError::FixedValueOutOfRange` if any finite component is outside the
+    /// Q32.32 range, or `GeomError::InvalidRayDirection` if the direction cannot
+    /// be represented as a fixed unit vector.
     pub fn try_new(origin: Vec3, direction: Vec3) -> Result<Self, GeomError> {
         validate_ray3(origin, direction)?;
         Ok(Self { origin, direction })
@@ -71,8 +84,10 @@ impl Ray3 {
     /// Converts this float ray into fixed-point coordinates with validation.
     ///
     /// # Errors
-    /// Returns a `GeomError` if the ray contains non-finite coordinates or the
-    /// direction cannot be represented as a fixed unit vector.
+    /// Returns `GeomError::NonFiniteCoordinate` if any component is not finite,
+    /// `GeomError::FixedValueOutOfRange` if any finite component is outside the
+    /// Q32.32 range, or `GeomError::InvalidRayDirection` if the direction cannot
+    /// be represented as a fixed unit vector.
     pub fn try_into_fixed(self) -> Result<FixedRay3, GeomError> {
         FixedRay3::try_from_float(self)
     }
@@ -83,8 +98,9 @@ impl Aabb3 {
     ///
     /// # Errors
     /// Returns `GeomError::NonFiniteCoordinate` if any component is not finite,
-    /// or `GeomError::InvalidAabbBounds` if any minimum component exceeds its
-    /// matching maximum component.
+    /// `GeomError::InvalidAabbBounds` if any minimum component exceeds its
+    /// matching maximum component, or `GeomError::FixedValueOutOfRange` if any
+    /// finite component is outside the Q32.32 range.
     pub fn try_new(min: Vec3, max: Vec3) -> Result<Self, GeomError> {
         validate_aabb3(min, max)?;
         Ok(Self { min, max })
@@ -93,8 +109,10 @@ impl Aabb3 {
     /// Converts this float AABB into fixed-point coordinates with validation.
     ///
     /// # Errors
-    /// Returns a `GeomError` if the AABB contains non-finite coordinates or
-    /// invalid bounds.
+    /// Returns `GeomError::NonFiniteCoordinate` if any component is not finite,
+    /// `GeomError::InvalidAabbBounds` if any minimum component exceeds its
+    /// matching maximum component, or `GeomError::FixedValueOutOfRange` if any
+    /// finite component is outside the Q32.32 range.
     pub fn try_into_fixed(self) -> Result<FixedAabb3, GeomError> {
         FixedAabb3::try_from_float(self)
     }
@@ -106,7 +124,9 @@ impl Sphere3 {
     /// # Errors
     /// Returns `GeomError::NonFiniteCoordinate` if the center contains a
     /// non-finite component, `GeomError::NonFiniteRadius` if the radius is not
-    /// finite, or `GeomError::NegativeSphereRadius` if the radius is negative.
+    /// finite, `GeomError::NegativeSphereRadius` if the radius is negative, or
+    /// `GeomError::FixedValueOutOfRange` if any finite value is outside the
+    /// Q32.32 range.
     pub fn try_new(center: Vec3, radius: Scalar) -> Result<Self, GeomError> {
         validate_sphere3(center, radius)?;
         Ok(Self { center, radius })
@@ -115,8 +135,11 @@ impl Sphere3 {
     /// Converts this float sphere into fixed-point coordinates with validation.
     ///
     /// # Errors
-    /// Returns a `GeomError` if the sphere contains non-finite values or a
-    /// negative radius.
+    /// Returns `GeomError::NonFiniteCoordinate` if the center contains a
+    /// non-finite component, `GeomError::NonFiniteRadius` if the radius is not
+    /// finite, `GeomError::NegativeSphereRadius` if the radius is negative, or
+    /// `GeomError::FixedValueOutOfRange` if any finite value is outside the
+    /// Q32.32 range.
     pub fn try_into_fixed(self) -> Result<FixedSphere3, GeomError> {
         FixedSphere3::try_from_float(self)
     }
@@ -126,8 +149,10 @@ impl FixedRay3 {
     /// Converts a float ray into fixed-point coordinates with validation.
     ///
     /// # Errors
-    /// Returns a `GeomError` if the ray contains non-finite coordinates or the
-    /// direction cannot be represented as a fixed unit vector.
+    /// Returns `GeomError::NonFiniteCoordinate` if any component is not finite,
+    /// `GeomError::FixedValueOutOfRange` if any finite component is outside the
+    /// Q32.32 range, or `GeomError::InvalidRayDirection` if the direction cannot
+    /// be represented as a fixed unit vector.
     pub fn try_from_float(ray: Ray3) -> Result<Self, GeomError> {
         validate_ray3(ray.origin, ray.direction)?;
         Self::try_new(fixed_vec3_from_float(ray.origin)?, fixed_vec3_from_float(ray.direction)?)
@@ -144,8 +169,10 @@ impl FixedAabb3 {
     /// Converts a float AABB into fixed-point coordinates with validation.
     ///
     /// # Errors
-    /// Returns a `GeomError` if the AABB contains non-finite coordinates or
-    /// invalid bounds.
+    /// Returns `GeomError::NonFiniteCoordinate` if any component is not finite,
+    /// `GeomError::InvalidAabbBounds` if any minimum component exceeds its
+    /// matching maximum component, or `GeomError::FixedValueOutOfRange` if any
+    /// finite component is outside the Q32.32 range.
     pub fn try_from_float(aabb: Aabb3) -> Result<Self, GeomError> {
         validate_aabb3(aabb.min, aabb.max)?;
         Self::try_new(fixed_vec3_from_float(aabb.min)?, fixed_vec3_from_float(aabb.max)?)
@@ -162,8 +189,11 @@ impl FixedSphere3 {
     /// Converts a float sphere into fixed-point coordinates with validation.
     ///
     /// # Errors
-    /// Returns a `GeomError` if the sphere contains non-finite values or a
-    /// negative radius.
+    /// Returns `GeomError::NonFiniteCoordinate` if the center contains a
+    /// non-finite component, `GeomError::NonFiniteRadius` if the radius is not
+    /// finite, `GeomError::NegativeSphereRadius` if the radius is negative, or
+    /// `GeomError::FixedValueOutOfRange` if any finite value is outside the
+    /// Q32.32 range.
     pub fn try_from_float(sphere: Sphere3) -> Result<Self, GeomError> {
         validate_sphere3(sphere.center, sphere.radius)?;
         Self::try_new(
