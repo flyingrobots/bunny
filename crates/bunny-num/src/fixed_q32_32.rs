@@ -8,7 +8,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssi
 /// Floating point conversion algorithms.
 pub mod conversions;
 
-pub use conversions::{from_f32, to_f32};
+pub use conversions::{from_f32, to_f32, try_from_f32, FloatConversionError};
 
 /// Number of fractional bits in the Q32.32 fixed-point encoding.
 pub const FRAC_BITS: u32 = 32;
@@ -17,10 +17,22 @@ pub const FRAC_BITS: u32 = 32;
 pub const ONE_RAW: i64 = 1_i64 << FRAC_BITS;
 
 /// Type-safe newtype wrapper representing a Q32.32 fixed-point value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FixedQ32_32(pub i64);
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FixedQ32_32(i64);
 
 impl FixedQ32_32 {
+    /// Number of fractional bits in this fixed-point representation.
+    pub const FRACTIONAL_BITS: u32 = FRAC_BITS;
+
+    /// Scaling factor for converting whole units into raw Q32.32 values.
+    pub const SCALE: i128 = 1_i128 << Self::FRACTIONAL_BITS;
+
+    /// Minimum representable raw Q32.32 value.
+    pub const MIN_RAW: i64 = i64::MIN;
+
+    /// Maximum representable raw Q32.32 value.
+    pub const MAX_RAW: i64 = i64::MAX;
+
     /// The constant representation of `0.0`.
     pub const ZERO: Self = Self(0);
 
@@ -35,11 +47,33 @@ impl FixedQ32_32 {
 
     /// Retrieves the underlying raw `i64` representation.
     #[must_use]
-    pub const fn to_raw(self) -> i64 {
+    pub const fn raw(self) -> i64 {
         self.0
     }
 
+    /// Retrieves the underlying raw `i64` representation.
+    ///
+    /// This compatibility alias is equivalent to [`Self::raw`].
+    #[must_use]
+    pub const fn to_raw(self) -> i64 {
+        self.raw()
+    }
+
+    /// Validates and converts a native `f32` into `FixedQ32_32`.
+    ///
+    /// # Errors
+    /// Returns `FloatConversionError::NonFinite` for `NaN` or infinity and
+    /// `FloatConversionError::OutOfRange` when the finite value cannot be
+    /// represented as Q32.32 after deterministic rounding.
+    // dojo: allow float-boundary -- explicit validated ingress conversion into canonical Q32.32
+    pub fn try_from_f32(value: f32) -> Result<Self, FloatConversionError> {
+        conversions::try_from_f32(value).map(Self)
+    }
+
     /// Converts a native `f32` into `FixedQ32_32`.
+    ///
+    /// This is the saturating convenience path. Use [`Self::try_from_f32`] for
+    /// validating external ingress before canonical geometry/math use.
     #[must_use]
     // dojo: allow float-boundary -- explicit ingress conversion into canonical Q32.32
     pub fn from_f32(value: f32) -> Self {
@@ -194,6 +228,16 @@ impl Div for FixedQ32_32 {
 impl DivAssign for FixedQ32_32 {
     fn div_assign(&mut self, rhs: Self) {
         *self = *self / rhs;
+    }
+}
+
+// dojo: allow float-boundary -- standard validated f32 ingress trait for Q32.32
+impl TryFrom<f32> for FixedQ32_32 {
+    type Error = FloatConversionError;
+
+    // dojo: allow float-boundary -- standard validated f32 ingress trait for Q32.32
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        Self::try_from_f32(value)
     }
 }
 

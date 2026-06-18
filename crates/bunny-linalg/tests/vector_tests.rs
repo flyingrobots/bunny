@@ -1,7 +1,7 @@
 //! Integration tests.
 
 use bunny_linalg::{FixedVec2, FixedVec3, Vec2, Vec3};
-use bunny_num::FixedQ32_32;
+use bunny_num::{FixedQ32_32, FloatConversionError};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -108,6 +108,25 @@ fn test_conversions() {
         assert_eq!(roundtrip_vec2.x, 5.5);
         assert_eq!(roundtrip_vec2.y, 6.5);
     }
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn fallible_float_vector_conversions_reject_invalid_components() {
+    assert_eq!(
+        FixedVec2::try_from_float(Vec2::new(1.0, 2.0)),
+        Ok(FixedVec2::new(
+            FixedQ32_32::ONE,
+            FixedQ32_32::from_raw(2 * bunny_num::fixed_q32_32::ONE_RAW)
+        ))
+    );
+    assert_eq!(
+        FixedVec2::try_from_float(Vec2::new(f32::NAN, 0.0)),
+        Err(FloatConversionError::NonFinite)
+    );
+    assert_eq!(
+        FixedVec3::try_from_float(Vec3::new(0.0, 3_000_000_000.0, 0.0)),
+        Err(FloatConversionError::OutOfRange)
+    );
 }
 
 #[wasm_bindgen_test(unsupported = test)]

@@ -3,7 +3,7 @@
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::Vec3;
-use bunny_num::FixedQ32_32;
+use bunny_num::{FixedQ32_32, FloatConversionError};
 
 /// Three-dimensional vector using deterministic Q32.32 fixed-point representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +65,20 @@ impl FixedVec3 {
         } else {
             Some(self / len)
         }
+    }
+
+    /// Validates and converts a float vector into fixed-point coordinates.
+    ///
+    /// # Errors
+    /// Returns `FloatConversionError` when any component is non-finite or
+    /// outside the Q32.32 range.
+    // dojo: allow float-boundary -- explicit validated ingress conversion into canonical Q32.32
+    pub fn try_from_float(v: Vec3) -> Result<Self, FloatConversionError> {
+        Ok(Self::new(
+            FixedQ32_32::try_from_f32(v.x)?,
+            FixedQ32_32::try_from_f32(v.y)?,
+            FixedQ32_32::try_from_f32(v.z)?,
+        ))
     }
 }
 

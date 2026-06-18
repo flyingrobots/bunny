@@ -26,6 +26,8 @@ pub enum GeomError {
     NonFiniteRadius,
     /// Ray direction normalization failed (zero length or overflow).
     InvalidRayDirection,
+    /// A finite float boundary value is outside the Q32.32 fixed-point range.
+    FixedValueOutOfRange,
 }
 
 impl fmt::Display for GeomError {
@@ -36,6 +38,7 @@ impl fmt::Display for GeomError {
             Self::NegativeSphereRadius => "sphere radius is negative",
             Self::NonFiniteRadius => "sphere radius is not finite",
             Self::InvalidRayDirection => "ray direction normalization failed",
+            Self::FixedValueOutOfRange => "value is outside the Q32.32 range",
         };
         f.write_str(message)
     }

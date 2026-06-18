@@ -1,6 +1,11 @@
 //! Integration tests.
 
-use bunny_num::fixed_q32_32::{from_f32, to_f32, FRAC_BITS, ONE_RAW};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+use bunny_num::fixed_q32_32::{
+    from_f32, to_f32, try_from_f32, FloatConversionError, FRAC_BITS, ONE_RAW,
+};
 use bunny_num::FixedQ32_32;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -8,6 +13,12 @@ use wasm_bindgen_test::wasm_bindgen_test;
 fn constants_and_raw_encoding_are_q32_32() {
     assert_eq!(FRAC_BITS, 32);
     assert_eq!(ONE_RAW, 1_i64 << 32);
+    assert_eq!(FixedQ32_32::FRACTIONAL_BITS, FRAC_BITS);
+    assert_eq!(FixedQ32_32::SCALE, i128::from(ONE_RAW));
+    assert_eq!(FixedQ32_32::MIN_RAW, i64::MIN);
+    assert_eq!(FixedQ32_32::MAX_RAW, i64::MAX);
+    assert_eq!(FixedQ32_32::ONE.raw(), ONE_RAW);
+    assert_eq!(FixedQ32_32::ONE.to_raw(), FixedQ32_32::ONE.raw());
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -35,6 +46,31 @@ fn non_finite_inputs_use_canonical_policy() {
     assert_eq!(from_f32(f32::NAN), 0);
     assert_eq!(from_f32(f32::INFINITY), i64::MAX);
     assert_eq!(from_f32(f32::NEG_INFINITY), i64::MIN);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn fallible_f32_ingress_rejects_invalid_values() {
+    assert_eq!(try_from_f32(1.5), Ok(ONE_RAW + (ONE_RAW / 2)));
+    assert_eq!(FixedQ32_32::try_from_f32(1.5), Ok(FixedQ32_32::from_raw(ONE_RAW + (ONE_RAW / 2))));
+    assert_eq!(FixedQ32_32::try_from(1.5_f32), Ok(FixedQ32_32::from_raw(ONE_RAW + (ONE_RAW / 2))));
+
+    assert_eq!(try_from_f32(f32::NAN), Err(FloatConversionError::NonFinite));
+    assert_eq!(try_from_f32(f32::INFINITY), Err(FloatConversionError::NonFinite));
+    assert_eq!(try_from_f32(f32::NEG_INFINITY), Err(FloatConversionError::NonFinite));
+    assert_eq!(try_from_f32(3_000_000_000.0), Err(FloatConversionError::OutOfRange));
+    assert_eq!(try_from_f32(-3_000_000_000.0), Err(FloatConversionError::OutOfRange));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn fixed_q32_32_hashes_by_raw_value() {
+    fn hash_value(value: FixedQ32_32) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    assert_eq!(hash_value(FixedQ32_32::from_raw(42)), hash_value(FixedQ32_32::from_raw(42)));
+    assert_ne!(hash_value(FixedQ32_32::from_raw(42)), hash_value(FixedQ32_32::from_raw(43)));
 }
 
 #[wasm_bindgen_test(unsupported = test)]

@@ -8,7 +8,7 @@
 
 pub mod fixed_q32_32;
 
-pub use fixed_q32_32::FixedQ32_32;
+pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
 
 /// Bunny's first scalar representation.
 ///

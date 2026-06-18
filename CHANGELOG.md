@@ -18,9 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic test receipts, formatting, Clippy, tests, and WASM checks.
 * Deterministic receipt integration tests and crate README/package metadata
   needed by the new standards gate.
+* Validating Q32.32 float ingress through `FixedQ32_32::try_from_f32`,
+  `TryFrom<f32>`, and the raw `fixed_q32_32::try_from_f32` helper.
+* Math and geometry capability map covering Bunny's owned surface, non-goals,
+  missing deterministic math layers, SIMD policy, and recommended build order.
+* Planned post-v0.4.0 roadmap release train with GitHub milestones, goalpost
+  trackers, and slice issue references.
 
 ### Changed
 
+* `FixedQ32_32` now keeps its raw field private, derives `Hash`, exposes
+  `raw()` as the canonical raw accessor, and keeps `to_raw()` as a compatibility
+  alias.
+* Float-to-fixed geometry ingress now rejects finite values outside the Q32.32
+  range instead of allowing them to saturate silently.
 * Replaced the old quality CI workflow with `.github/workflows/code-dojo.yml`.
 * Root and crate manifests now inherit the workspace lint baseline from the new
   standards pack.

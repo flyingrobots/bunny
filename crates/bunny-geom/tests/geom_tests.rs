@@ -131,6 +131,12 @@ fn test_ray3_conversion_rejects_invalid_direction() {
     let converted_direction: Result<FixedRay3, GeomError> =
         FixedRay3::try_from(non_finite_direction);
     assert_eq!(converted_direction, Err(GeomError::NonFiniteCoordinate));
+
+    let out_of_range_origin =
+        Ray3 { origin: Vec3::new(3_000_000_000.0, 0.0, 0.0), direction: Vec3::new(1.0, 0.0, 0.0) };
+    let converted_out_of_range_origin: Result<FixedRay3, GeomError> =
+        FixedRay3::try_from(out_of_range_origin);
+    assert_eq!(converted_out_of_range_origin, Err(GeomError::FixedValueOutOfRange));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -145,6 +151,7 @@ fn test_geom_error_implements_std_error() {
     assert_eq!(GeomError::NegativeSphereRadius.to_string(), "sphere radius is negative");
     assert_eq!(GeomError::NonFiniteRadius.to_string(), "sphere radius is not finite");
     assert_eq!(GeomError::InvalidRayDirection.to_string(), "ray direction normalization failed");
+    assert_eq!(GeomError::FixedValueOutOfRange.to_string(), "value is outside the Q32.32 range");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -165,6 +172,12 @@ fn test_float_shape_conversions_reject_invalid_bounds() {
         FixedAabb3::try_from(non_finite_aabb);
     assert_eq!(converted_non_finite_aabb, Err(GeomError::NonFiniteCoordinate));
 
+    let out_of_range_aabb =
+        Aabb3 { min: Vec3::new(0.0, 0.0, 0.0), max: Vec3::new(3_000_000_000.0, 1.0, 1.0) };
+    let converted_out_of_range_aabb: Result<FixedAabb3, GeomError> =
+        FixedAabb3::try_from(out_of_range_aabb);
+    assert_eq!(converted_out_of_range_aabb, Err(GeomError::FixedValueOutOfRange));
+
     let invalid_sphere = Sphere3 { center: Vec3::new(0.0, 0.0, 0.0), radius: -1.0 };
     let converted_sphere: Result<FixedSphere3, GeomError> = FixedSphere3::try_from(invalid_sphere);
     assert_eq!(converted_sphere, Err(GeomError::NegativeSphereRadius));
@@ -184,6 +197,11 @@ fn test_float_shape_conversions_reject_invalid_bounds() {
     let converted_non_finite_center_sphere: Result<FixedSphere3, GeomError> =
         FixedSphere3::try_from(non_finite_center_sphere);
     assert_eq!(converted_non_finite_center_sphere, Err(GeomError::NonFiniteCoordinate));
+
+    let out_of_range_sphere = Sphere3 { center: Vec3::new(0.0, 0.0, 0.0), radius: 3_000_000_000.0 };
+    let converted_out_of_range_sphere: Result<FixedSphere3, GeomError> =
+        FixedSphere3::try_from(out_of_range_sphere);
+    assert_eq!(converted_out_of_range_sphere, Err(GeomError::FixedValueOutOfRange));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -215,6 +233,10 @@ fn test_explicit_float_boundary_conversion_apis() {
         Aabb3::try_new(Vec3::new(f32::INFINITY, 0.0, 0.0), Vec3::new(1.0, 1.0, 1.0)),
         Err(GeomError::NonFiniteCoordinate)
     );
+    assert_eq!(
+        Aabb3::try_new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(3_000_000_000.0, 1.0, 1.0)),
+        Err(GeomError::FixedValueOutOfRange)
+    );
 
     let sphere =
         Sphere3::try_new(Vec3::new(0.5, 1.5, 2.5), 3.5).expect("valid sphere should be accepted");
@@ -232,5 +254,9 @@ fn test_explicit_float_boundary_conversion_apis() {
     assert_eq!(
         Sphere3::try_new(Vec3::new(0.0, 0.0, 0.0), f32::INFINITY),
         Err(GeomError::NonFiniteRadius)
+    );
+    assert_eq!(
+        Sphere3::try_new(Vec3::new(0.0, 0.0, 0.0), 3_000_000_000.0),
+        Err(GeomError::FixedValueOutOfRange)
     );
 }

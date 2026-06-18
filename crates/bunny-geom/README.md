@@ -15,7 +15,8 @@ queries, collision detection, and ray-casting.
   radii through `Sphere3::try_new`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
-  egress is infallible through `into_float` and `From<Fixed*>`.
+  egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects
+  non-finite and finite out-of-range values before fixed-point conversion.
 * **Safe & Portable**: Compiles under `#![deny(unsafe_code)]` with zero runtime
   dependencies.
 

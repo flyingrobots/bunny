@@ -18,28 +18,21 @@ bit-level deterministic coordinate math for graphics pipelines.
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Arithmetic Operator Overloads**: Complete suite of standard vector
   operations (`Add`, `Sub`, `Neg`, scalar `Mul` / `Div`, and assign variants).
-* **Boundary Conversions**: Straightforward `From` and `Into` mappings to
-  convert coordinates between float DTOs and deterministic fixed-point space.
+* **Boundary Conversions**: `try_from_float` validates float DTO coordinates
+  before fixed-point ingress; `From` remains available only as a saturating
+  convenience conversion.
 * **Safe & Portable**: Declares `#![deny(unsafe_code)]` and compiles cleanly on
   all platforms including WebAssembly (`wasm32-unknown-unknown`).
 
 ## Usage
 
 ```rust
-use bunny_linalg::FixedVec3;
-use bunny_num::FixedQ32_32;
+use bunny_linalg::{FixedVec3, Vec3};
+use bunny_num::FloatConversionError;
 
-fn main() {
-    let a = FixedVec3::new(
-        FixedQ32_32::from_f32(1.0),
-        FixedQ32_32::from_f32(2.0),
-        FixedQ32_32::from_f32(3.0),
-    );
-    let b = FixedVec3::new(
-        FixedQ32_32::from_f32(4.0),
-        FixedQ32_32::from_f32(5.0),
-        FixedQ32_32::from_f32(6.0),
-    );
+fn main() -> Result<(), FloatConversionError> {
+    let a = FixedVec3::try_from_float(Vec3::new(1.0, 2.0, 3.0))?;
+    let b = FixedVec3::try_from_float(Vec3::new(4.0, 5.0, 6.0))?;
 
     // Vector operations
     let sum = a + b;
@@ -47,8 +40,16 @@ fn main() {
     let cross = a.cross(b); // Returns [-3.0, 6.0, -3.0]
 
     // Length and normalization
-    let len = a.length().unwrap();
-    let norm = a.normalize().unwrap();
+    let len = a.length();
+    let norm = a.normalize();
+
+    assert_eq!(sum.x.to_f32(), 5.0);
+    assert_eq!(dot.to_f32(), 32.0);
+    assert_eq!(cross.x.to_f32(), -3.0);
+    assert!(len.is_some());
+    assert!(norm.is_some());
+
+    Ok(())
 }
 ```
 
