@@ -9,13 +9,13 @@ Use a private newtype:
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Q32x32(i64);
+pub struct FixedQ32_32(i64);
 ```
 
 Required associated constants:
 
 ```rust
-impl Q32x32 {
+impl FixedQ32_32 {
     pub const FRACTIONAL_BITS: u32 = 32;
     pub const SCALE: i128 = 1_i128 << Self::FRACTIONAL_BITS;
     pub const MIN_RAW: i64 = i64::MIN;
@@ -31,7 +31,8 @@ impl Q32x32 {
 }
 ```
 
-Do not expose the field publicly.
+Do not expose the field publicly. A compatibility accessor such as `to_raw` may
+exist, but `raw` is the canonical name in this document.
 
 ## Raw Representation
 
@@ -47,8 +48,12 @@ Construction must be explicit:
 
 - `from_raw(i64)` preserves exact raw bits.
 - `from_i32`, `from_i64`, or similar integer constructors must check or document range.
-- Float ingress is a boundary operation and must reject `NaN`, `+∞`, `-∞`, and values outside representable range.
+- Validated float ingress is a boundary operation and must reject `NaN`, `+∞`,
+  `-∞`, and values outside representable range.
 - Float ingress must document rounding mode and must not be used inside core canonical algorithms.
+- Saturating float conversion helpers may exist only when their names or docs
+  make the saturation policy explicit. They must not be used where API
+  validation claims rejection.
 
 ## Rounding Policy
 

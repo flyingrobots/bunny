@@ -2,17 +2,30 @@ use crate::{vec3_is_finite, Aabb3, FixedAabb3, FixedRay3, FixedSphere3, GeomErro
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
-fn fixed_direction_is_normalizable(direction: Vec3) -> bool {
-    FixedUnitVec3::new(FixedVec3::from(direction)).is_some()
+fn fixed_vec3_from_float(value: Vec3) -> Result<FixedVec3, GeomError> {
+    FixedVec3::try_from_float(value).map_err(|_| GeomError::FixedValueOutOfRange)
+}
+
+fn fixed_scalar_from_float(value: Scalar) -> Result<FixedQ32_32, GeomError> {
+    FixedQ32_32::try_from_f32(value).map_err(|_| GeomError::FixedValueOutOfRange)
+}
+
+fn validate_fixed_vec3(value: Vec3) -> Result<(), GeomError> {
+    fixed_vec3_from_float(value).map(|_| ())
+}
+
+fn validate_fixed_direction(direction: Vec3) -> Result<(), GeomError> {
+    FixedUnitVec3::new(fixed_vec3_from_float(direction)?)
+        .map(|_| ())
+        .ok_or(GeomError::InvalidRayDirection)
 }
 
 fn validate_ray3(origin: Vec3, direction: Vec3) -> Result<(), GeomError> {
     if !vec3_is_finite(origin) || !vec3_is_finite(direction) {
         return Err(GeomError::NonFiniteCoordinate);
     }
-    if !fixed_direction_is_normalizable(direction) {
-        return Err(GeomError::InvalidRayDirection);
-    }
+    validate_fixed_vec3(origin)?;
+    validate_fixed_direction(direction)?;
     Ok(())
 }
 
@@ -23,6 +36,8 @@ fn validate_aabb3(min: Vec3, max: Vec3) -> Result<(), GeomError> {
     if min.x > max.x || min.y > max.y || min.z > max.z {
         return Err(GeomError::InvalidAabbBounds);
     }
+    validate_fixed_vec3(min)?;
+    validate_fixed_vec3(max)?;
     Ok(())
 }
 
@@ -36,6 +51,8 @@ fn validate_sphere3(center: Vec3, radius: Scalar) -> Result<(), GeomError> {
     if radius < Scalar::from_bits(0) {
         return Err(GeomError::NegativeSphereRadius);
     }
+    validate_fixed_vec3(center)?;
+    fixed_scalar_from_float(radius)?;
     Ok(())
 }
 
@@ -113,7 +130,7 @@ impl FixedRay3 {
     /// direction cannot be represented as a fixed unit vector.
     pub fn try_from_float(ray: Ray3) -> Result<Self, GeomError> {
         validate_ray3(ray.origin, ray.direction)?;
-        Self::try_new(FixedVec3::from(ray.origin), FixedVec3::from(ray.direction))
+        Self::try_new(fixed_vec3_from_float(ray.origin)?, fixed_vec3_from_float(ray.direction)?)
     }
 
     /// Converts this fixed-point ray into float coordinates without validation.
@@ -131,7 +148,7 @@ impl FixedAabb3 {
     /// invalid bounds.
     pub fn try_from_float(aabb: Aabb3) -> Result<Self, GeomError> {
         validate_aabb3(aabb.min, aabb.max)?;
-        Self::try_new(FixedVec3::from(aabb.min), FixedVec3::from(aabb.max))
+        Self::try_new(fixed_vec3_from_float(aabb.min)?, fixed_vec3_from_float(aabb.max)?)
     }
 
     /// Converts this fixed-point AABB into float coordinates without validation.
@@ -149,7 +166,10 @@ impl FixedSphere3 {
     /// negative radius.
     pub fn try_from_float(sphere: Sphere3) -> Result<Self, GeomError> {
         validate_sphere3(sphere.center, sphere.radius)?;
-        Self::try_new(FixedVec3::from(sphere.center), FixedQ32_32::from_f32(sphere.radius))
+        Self::try_new(
+            fixed_vec3_from_float(sphere.center)?,
+            fixed_scalar_from_float(sphere.radius)?,
+        )
     }
 
     /// Converts this fixed-point sphere into float coordinates without validation.

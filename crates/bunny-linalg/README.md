@@ -18,8 +18,9 @@ bit-level deterministic coordinate math for graphics pipelines.
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Arithmetic Operator Overloads**: Complete suite of standard vector
   operations (`Add`, `Sub`, `Neg`, scalar `Mul` / `Div`, and assign variants).
-* **Boundary Conversions**: Straightforward `From` and `Into` mappings to
-  convert coordinates between float DTOs and deterministic fixed-point space.
+* **Boundary Conversions**: `try_from_float` validates float DTO coordinates
+  before fixed-point ingress; `From` remains available only as a saturating
+  convenience conversion.
 * **Safe & Portable**: Declares `#![deny(unsafe_code)]` and compiles cleanly on
   all platforms including WebAssembly (`wasm32-unknown-unknown`).
 
