@@ -239,7 +239,8 @@ fully satisfy the written acceptance criteria.
 
 ## Maintenance Rail: v0.4.x Source-of-Truth Hygiene
 
-* **Status**: Planned.
+* **Status**: Planned; four source-of-truth cleanup slices are completed by
+  PR #184, and the remaining slices stay open.
 * **GitHub Milestone**:
   `v0.4.x Maintenance and Source-of-Truth Hygiene`
 * **Description**: Keeps publication, stale tracker cleanup, repo-truth docs,
@@ -252,9 +253,10 @@ fully satisfy the written acceptance criteria.
   publication discipline.
 * **Slice Budget**: 12 Slices
 * **Slices**:
-  * **Slice 1.1**: Make `FixedQ32_32` raw field private. [Planned: #112]
+  * **Slice 1.1**: Make `FixedQ32_32` raw field private.
+    [Done in PR #184: #112]
   * **Slice 1.2**: Align `FixedQ32_32` float ingress with rejection policy.
-    [Planned: #113]
+    [Done in PR #184: #113]
   * **Slice 1.3**: Delete or replace `VISION` and `BEARING` as current-state
     docs. [Planned: #133]
   * **Slice 1.4**: Refresh README, crate READMEs, and technical teardown to
@@ -272,9 +274,9 @@ fully satisfy the written acceptance criteria.
   * **Slice 1.10**: Clarify historical evidence links that reference retired
     CI workflow names. [Planned: #144]
   * **Slice 1.11**: Derive `Hash` for `FixedQ32_32` as required by the Numeric
-    Constitution. [Planned: #153]
+    Constitution. [Done in PR #184: #153]
   * **Slice 1.12**: Align the canonical raw accessor name with the Numeric
-    Constitution. [Planned: #154]
+    Constitution. [Done in PR #184: #154]
 
 ---
 
