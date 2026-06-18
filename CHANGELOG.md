@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   needed by the new standards gate.
 * Validating Q32.32 float ingress through `FixedQ32_32::try_from_f32`,
   `TryFrom<f32>`, and the raw `fixed_q32_32::try_from_f32` helper.
+* Math and geometry capability map covering Bunny's owned surface, non-goals,
+  missing deterministic math layers, SIMD policy, and recommended build order.
 
 ### Changed
 

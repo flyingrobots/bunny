@@ -2,6 +2,10 @@
 
 This document outlines the versioned releases, goalposts, and slices for the **Bunny** project, using the METHOD lightweight process framework.
 
+The stable ownership and backlog surface for deterministic math, geometry,
+collision, ray, visibility, optics, SIMD, and validation work lives in
+`docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
+
 ---
 
 ## Release v0.1.0: Core Deterministic Math (The Math Commons)
