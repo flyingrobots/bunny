@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-18
+
 ### Added
 
 * Rust Code Standards Editor's Edition docs, Numeric Constitution, Sensei's
@@ -45,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remain visible cargo-deny warnings rather than hidden skip exemptions.
 * Refactored broadphase, codec, numeric, query, mesh, and generated contract
   code until the full Code Dojo and headless WASM gates pass.
+
+### Fixed
+
+* crates.io publication recovery now tolerates registry propagation delays and
+  rate-limit responses while publishing workspace crates in dependency order.
+
+### Removed
+
+* Removed the local issue generator in favor of GitHub as the backlog source of
+  truth.
 
 ## [0.4.0] - 2026-06-16
 
