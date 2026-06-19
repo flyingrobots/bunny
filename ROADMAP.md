@@ -239,8 +239,8 @@ fully satisfy the written acceptance criteria.
 
 ## Maintenance Rail: v0.4.x Source-of-Truth Hygiene
 
-* **Status**: Planned; four source-of-truth cleanup slices are completed by
-  PR #184, and the remaining slices stay open.
+* **Status**: Planned; six source-of-truth cleanup slices are completed by
+  PR #184 and the signpost refresh, and the remaining slices stay open.
 * **GitHub Milestone**:
   `v0.4.x Maintenance and Source-of-Truth Hygiene`
 * **Description**: Keeps publication, stale tracker cleanup, repo-truth docs,
@@ -258,9 +258,9 @@ fully satisfy the written acceptance criteria.
   * **Slice 1.2**: Align `FixedQ32_32` float ingress with rejection policy.
     [Done in PR #184: #113]
   * **Slice 1.3**: Delete or replace `VISION` and `BEARING` as current-state
-    docs. [Planned: #133]
+    docs. [Done: #133]
   * **Slice 1.4**: Refresh README, crate READMEs, and technical teardown to
-    current repo surface. [Planned: #134]
+    current repo surface. [Done: #134]
   * **Slice 1.5**: Close stale completed roadmap issues and normalize backlog
     source of truth. [Planned: #135]
   * **Slice 1.6**: Track the `v0.4.0` crates.io publication gate.
@@ -282,13 +282,15 @@ fully satisfy the written acceptance criteria.
 
 ## Release v0.5.0: Standards, Numeric Law, and Release Hygiene
 
-* **Status**: Release candidate in PR #185.
+* **Status**: Merged to `main`; pending release tag and GitHub Release
+  publication.
 * **Description**: Ships the repository standards alignment, Code Dojo quality
   gates, numeric law hardening, validated fixed-point ingress, release archive
   verification, and roadmap source-of-truth cleanup completed after `v0.4.0`.
 * **Evidence**: `CHANGELOG.md` records the `v0.5.0` release contents; PR #184
-  landed the numeric law and roadmap source-of-truth work, and PR #185 prepares
-  the publishable workspace version.
+  landed the numeric law and roadmap source-of-truth work, and PR #185 merged
+  the publishable workspace version at
+  `5c15363b6e6da609df76bd37db8bc3b41215ff05`.
 
 ---
 

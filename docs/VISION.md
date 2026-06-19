@@ -60,13 +60,17 @@ The repo is organized around narrow crates:
 | `CODE_STANDARDS.md` | Determinism and Rust quality rules |
 | `ROADMAP.md` | Versioned releases, goalposts, and slice state |
 | `docs/VISION.md` | Long-lived purpose and boundaries |
-| `docs/BEARING.md` | Current operating position and next work |
+| `docs/BEARING.md` | Durable release posture, next step, and watchpoints |
 | `docs/PROCESS.md` | How work moves from goalpost to merge |
 | `docs/TESTING.md` | Required verification strategy and commands |
 
 ## Near Horizon
 
-Release `v0.4.0` is in the mesh commons track. GP1 shipped compressed mesh
-layouts. GP2 merged file format adapters. GP3 now adds a Bunny-native compressed
-mesh decoder with a documented byte profile, checked accessors, and native/WASM
-evidence.
+Release `v0.5.0` is the standards, numeric-law, and release-hygiene line. It
+locks Code Dojo as the active quality gate, validates fixed-point ingress, and
+turns generated witness provenance into a release check.
+
+The next feature train starts with `v0.6.0` Math Foundations. That work should
+close the frame-commons gaps before broader collision and rendering math depend
+on them: coordinate-space policy, matrix types, transforms, projection,
+quaternions, angle/trigonometry policy, interpolation, and curve primitives.

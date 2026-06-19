@@ -105,7 +105,8 @@ After a PR lands on `main`:
 
 1. Fetch and update local `main`.
 2. Confirm the merge commit and PR state.
-3. Update `docs/BEARING.md` for the new current position.
+3. Update `docs/BEARING.md` only for durable release posture and watchpoints;
+   keep branch, PR, CI, and assignment state in GitHub.
 4. Update `CHANGELOG.md` if release-visible behavior changed.
 5. Start the next goalpost branch from current `main`.
 

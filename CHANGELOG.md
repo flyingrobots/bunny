@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-06-18
+## [0.5.0] - 2026-06-19
 
 ### Added
 
@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and shifts the planned math and geometry feature train to `v0.6.0` onward.
 * `docs/BEARING.md` now avoids branch and pull-request tracking, leaving live
   work state to GitHub while keeping durable release posture in the repo.
+* Front-door signposts now describe the current workspace crate surface,
+  generator command, release posture, and future math train without claiming
+  shipped crates or volatile PR state as planned work.
 * Dependency policy is now part of Code Dojo through `cargo deny check`.
   Duplicate transitive-version findings from the current `wesley-core` graph
   remain visible cargo-deny warnings rather than hidden skip exemptions.

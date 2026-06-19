@@ -8,9 +8,10 @@ work state belongs in GitHub issues and pull requests.
 
 | Field | State |
 | --- | --- |
-| Release focus | `v0.5.0`: standards, numeric law, and release hygiene |
-| Previous release baseline | `v0.4.0` |
+| Release focus | `v0.5.0`: merged to `main`, pending tag and publication |
+| Previous release baseline | `v0.4.0`, published on crates.io |
 | Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
+| Next release step | Tag the verified `main` tip as `v0.5.0`, then publish the GitHub Release |
 | Next feature train | `v0.6.0` Math Foundations |
 
 ## Recent Truth
@@ -41,15 +42,19 @@ work state belongs in GitHub issues and pull requests.
 * PR #184 landed the numeric law cleanup: private `FixedQ32_32` raw storage,
   canonical `raw()` access, validating float ingress, `Hash`, and geometry
   out-of-Q32.32 rejection.
-* The `v0.5.0` release candidate promotes the standards and numeric-law work into
-  a publishable workspace version.
+* PR #185 merged the `v0.5.0` release prep into `main` in merge commit
+  `5c15363b6e6da609df76bd37db8bc3b41215ff05`.
+* `v0.5.0` promotes the standards and numeric-law work into a publishable
+  workspace version.
 
 ## Release Sequence
 
-1. Merge the `v0.5.0` release-prep PR after review and CI are clean.
-2. Tag the merge commit as `v0.5.0`.
-3. Publish the GitHub Release so the release workflow can verify and publish the
-   public crates.
+1. Confirm `main` is at a verified commit that includes the release prep and
+   signpost refresh.
+2. Tag the verified `main` tip as `v0.5.0`.
+3. Publish the GitHub Release so the release workflow can verify and publish
+   the public crates.
+4. Confirm crates.io visibility for every published Bunny crate.
 
 ## Watchpoints
 
@@ -73,5 +78,6 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The standards-alignment goalpost is complete. Evidence is recorded in
-`docs/goalposts/post-v0.4.0-standards-alignment.md`; the release candidate also
-passes `RELEASE_TAG=v0.5.0 scripts/publish-crates.sh verify`.
+`docs/goalposts/post-v0.4.0-standards-alignment.md`; the merged release prep also
+passed `RELEASE_TAG=v0.5.0 scripts/publish-crates.sh verify`, full Code Dojo,
+GitHub Actions, and CodeRabbit review.

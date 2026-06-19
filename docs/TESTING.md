@@ -52,6 +52,8 @@ Release candidates must also verify every crates.io archive before tagging:
 scripts/publish-crates.sh verify
 ```
 
+Set `RELEASE_TAG=v<version>` when verifying a specific release tag.
+
 ## WebAssembly Gates
 
 Every WASM-compatible library crate must run headless under Node.js:

@@ -79,9 +79,9 @@ generated witnesses, and graphics-specific scalar mapping.
 Run:
 
 ```bash
-cargo run --bin xtask generate
-cargo fmt --check --all
-cargo test --workspace
-npx --yes markdownlint-cli README.md docs/design/*.md
+cargo run --locked -p xtask -- generate
+cargo fmt --all -- --check
+cargo test --locked --workspace
+markdownlint-cli2 README.md docs/design/*.md
 git diff --check
 ```

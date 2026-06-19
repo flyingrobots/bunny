@@ -20,11 +20,12 @@ queries, collision detection, and ray-casting.
 * **Safe & Portable**: Compiles under `#![deny(unsafe_code)]` with zero runtime
   dependencies.
 
-## Planned Features
+## Related Crates
 
-* Ray-Sphere, Ray-AABB, and Ray-Triangle intersection solvers.
-* Swept volume collision checks.
-* Stable bounding volume hierarchy (BVH) structures.
+* `bunny-query` owns ray, triangle, closest-point, and overlap solvers.
+* `bunny-broadphase` owns BVH and sweep-and-prune acceleration structures.
+* Future collision, swept-volume, and richer shape coverage is tracked in
+  `ROADMAP.md` rather than claimed as current `bunny-geom` behavior.
 
 ## License
 
