@@ -87,6 +87,12 @@ Future crate candidates in the roadmap include `bunny-optics`,
 quaternions, optics, deterministic SIMD, richer collision, and public examples
 are tracked in `ROADMAP.md` and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
 
+## Deep Dive
+
+For a package-by-package walkthrough of the execution entry points, runtime
+golden paths, payload shapes, error handling, and release flow, see
+`docs/TECHNICAL_TEARDOWN.md`.
+
 ## Contract Generation
 
 Bunny owns its shared graphics schemas under `schemas/bunny`.
