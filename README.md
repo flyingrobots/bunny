@@ -1,6 +1,8 @@
 # Bunny
 
-Bunny is a neutral, open-source Rust graphics commons that provides deterministic math, geometry, ray-casting queries, mesh layouts, optics, and render-contract primitives.
+Bunny is a neutral, open-source Rust graphics commons that provides
+deterministic math, geometry, ray-casting queries, broadphase acceleration,
+mesh layouts, mesh codecs, and render-contract primitives.
 
 Named after the iconic **Stanford Bunny** (a computer graphics 3D test model), the project exists to establish absolute, bit-level CPU mathematical determinism across all platforms and compilation targets. By decoupling these primitives into a shared, runtime-neutral library, downstream systems can compute consistent graphics and geometric invariants without importing heavy app behaviors, causal database runtimes, or rendering backends.
 
@@ -41,11 +43,11 @@ To understand Bunny, it helps to understand the downstream projects in the ecosy
 | Project | Role | Integration |
 | :--- | :--- | :--- |
 | **[Echo](https://github.com/flyingrobots/echo)** | Causal database & transaction engine tracking Strands, Braids, and Provenance. | Depends on Bunny to compute deterministic geometric results, wrapping them as causal facts. |
-| **[Geordi](https://github.com/flyingrobots/geordi)** | Deterministic rendering backend. | Consumes Bunny's math, mesh, and optics specifications to guarantee rendered geometry matches calculated inputs. |
+| **[Geordi](https://github.com/flyingrobots/geordi)** | Deterministic rendering backend. | Consumes Bunny's math, mesh, codec, and planned optics specifications to guarantee rendered geometry matches calculated inputs. |
 | **[jedit](https://github.com/flyingrobots/jedit)** | Interactive editor application & workspace interface. | Consumes Bunny and Echo to present visual editor states and behaviors to the user. |
 | **[Wesley](https://github.com/flyingrobots/wesley)** | Schema compiler translating GraphQL SDL to DTOs. | Extended by `bunny-wesley` to generate shared Rust and TypeScript types from graphics schemas. |
 
-## Initial Crate Map
+## Workspace Crate Map
 
 ```text
 crates/
@@ -53,21 +55,37 @@ crates/
     deterministic scalar profiles, finite-number policy, Q32.32 helpers
 
   bunny-linalg
-    vectors, matrices, quaternions, transforms
+    deterministic 2D/3D vectors and unit-vector invariants
 
   bunny-geom
-    shapes, contacts, rays, segments, triangles, boxes, spheres
+    validated rays, AABBs, spheres, and fixed/float boundary conversion
+
+  bunny-query
+    deterministic ray intersections and closest-point solvers
+
+  bunny-broadphase
+    BVH and sweep-and-prune broadphase helpers
+
+  bunny-mesh
+    quantized vertex layouts, triangle buffers, and mesh hashes
+
+  bunny-codec
+    zero-copy PLY/OBJ parsers and Bunny compressed mesh decoder
 
   bunny-contract
     schema and canonical contract helpers
 
   bunny-wesley
     Wesley-backed schema extension and DTO generator
+
+  xtask
+    host-side automation for generation and Code Dojo quality gates
 ```
 
-Planned crates include `bunny-query`, `bunny-broadphase`, `bunny-mesh`,
-`bunny-optics`, `bunny-codec`, `bunny-fixtures`, `bunny-echo`, and
-`bunny-geordi`.
+Future crate candidates in the roadmap include `bunny-optics`,
+`bunny-fixtures`, and optional boundary adapter crates. Matrices, transforms,
+quaternions, optics, deterministic SIMD, richer collision, and public examples
+are tracked in `ROADMAP.md` and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
 
 ## Contract Generation
 
@@ -76,7 +94,7 @@ Bunny owns its shared graphics schemas under `schemas/bunny`.
 Regenerate checked-in DTO witnesses with:
 
 ```bash
-cargo run --bin xtask generate
+cargo run --locked -p xtask -- generate
 ```
 
 The current generator emits:
@@ -104,7 +122,8 @@ Q32.32 conversion helpers live in `bunny-num::fixed_q32_32`.
 
 * Bunny is project-neutral.
 * Bunny owns its own GraphQL schema files.
-* `bunny-wesley` generates shared Rust and TypeScript contract types.
+* `bunny-wesley` generates shared Rust and TypeScript contract types, and the
+  generated witnesses record the generator and `wesley-core` versions.
 * Echo deterministic math primitives should migrate into Bunny when they are
   generally useful graphics primitives.
 * Echo keeps causal wrappers, provenance, and runtime authority.

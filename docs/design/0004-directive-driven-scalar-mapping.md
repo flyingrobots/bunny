@@ -73,6 +73,6 @@ fallbacks are not allowed.
 
 ### 2. Integration
 
-* Run `cargo run --bin xtask generate` to confirm DTO regeneration and check
+* Run `cargo run --locked -p xtask -- generate` to confirm DTO regeneration and check
   that the manifest SHA-256 remains valid and the compiler builds
   successfully.

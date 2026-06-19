@@ -185,7 +185,7 @@ A Geordi primitive stays in Geordi when any are true:
 
 The first implementation goalpost should prove:
 
-- the workspace builds with `cargo test --workspace`
+- the workspace builds with `cargo test --locked --workspace`
 - the authored GraphQL schema is lintable or parseable by the chosen tool
 - generated Rust and TypeScript DTOs are planned but not hand-waved
 - at least one primitive exists in Rust and SDL
