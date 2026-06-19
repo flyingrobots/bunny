@@ -78,8 +78,8 @@ crates/
   bunny-wesley
     Wesley-backed schema extension and DTO generator
 
-  xtask
-    host-side automation for generation and Code Dojo quality gates
+xtask/
+  host-side automation for generation and Code Dojo quality gates
 ```
 
 Future crate candidates in the roadmap include `bunny-optics`,

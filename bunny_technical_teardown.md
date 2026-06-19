@@ -87,8 +87,9 @@ The generator records:
 2. Float ingress validates non-finite and out-of-range values before Q32.32
    conversion.
 3. Fixed-point primitives carry the canonical deterministic values.
-4. Geometry/query/broadphase/mesh/codecs return explicit errors or `Option`
-   values for invalid caller input instead of panicking.
+4. Geometry/query/broadphase/codecs return explicit errors or `Option` values
+   for invalid caller input instead of panicking; mesh exposes boolean layout
+   validation and deterministic hash framing.
 5. Downstream projects may wrap Bunny values in their own provenance, render, or
    UI concepts; Bunny does not depend on those concepts.
 
