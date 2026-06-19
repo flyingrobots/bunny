@@ -1,18 +1,17 @@
 # Bunny - Bearing
 
-This is the living signpost for what the repo is doing now. It should be short,
-current, and honest. Deeper history belongs in `ROADMAP.md`, `CHANGELOG.md`, and
-goalpost documents.
+This is a short repository signpost, not a branch, PR, or CI tracker. Deeper
+history belongs in `ROADMAP.md`, `CHANGELOG.md`, and goalpost documents; live
+work state belongs in GitHub issues and pull requests.
 
 ## Current Position
 
 | Field | State |
 | --- | --- |
-| Active release | Post-`v0.4.0` standards alignment |
-| Active branch | `backlog-source-of-truth-guard` |
-| Open PR | #106 |
-| Current gate | Standards alignment complete locally |
-| Next goalpost | Prepare the standards alignment branch for review |
+| Release focus | `v0.5.0`: standards, numeric law, and release hygiene |
+| Previous release baseline | `v0.4.0` |
+| Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
+| Next feature train | `v0.6.0` Math Foundations |
 
 ## Recent Truth
 
@@ -39,16 +38,18 @@ goalpost documents.
   order after the GitHub Release is published.
 * The Rust Code Standards Editor's Edition and Code Dojo enforcement layer are
   installed as the active repository standards and quality gate.
-* The local standards-alignment gate is clean: Code Dojo, headless Node.js WASM
-  tests for all WASM-compatible library crates, and release archive verification
-  all pass.
+* PR #184 landed the numeric law cleanup: private `FixedQ32_32` raw storage,
+  canonical `raw()` access, validating float ingress, `Hash`, and geometry
+  out-of-Q32.32 rejection.
+* The `v0.5.0` release candidate promotes the standards and numeric-law work into
+  a publishable workspace version.
 
-## Immediate Next Work
+## Release Sequence
 
-1. Commit the local standards-alignment work.
-2. Reconcile the existing branch PR scope or open a dedicated PR from a clean
-   standards-alignment branch.
-3. Run CI and resolve any review findings without weakening the standards gate.
+1. Merge the `v0.5.0` release-prep PR after review and CI are clean.
+2. Tag the merge commit as `v0.5.0`.
+3. Publish the GitHub Release so the release workflow can verify and publish the
+   public crates.
 
 ## Watchpoints
 
@@ -71,5 +72,6 @@ snapshot, not a replacement checklist. The active local quality gate is:
 cargo run --locked -p xtask -- code-dojo --all
 ```
 
-The current standards-alignment goalpost is complete locally. Evidence is
-recorded in `docs/goalposts/post-v0.4.0-standards-alignment.md`.
+The standards-alignment goalpost is complete. Evidence is recorded in
+`docs/goalposts/post-v0.4.0-standards-alignment.md`; the release candidate also
+passes `RELEASE_TAG=v0.5.0 scripts/publish-crates.sh verify`.

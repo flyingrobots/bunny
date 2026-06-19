@@ -12,10 +12,10 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-geom = { path = "../bunny-geom", version = "0.4.0" }
-bunny-linalg = { path = "../bunny-linalg", version = "0.4.0" }
-bunny-num = { path = "../bunny-num", version = "0.4.0" }
-bunny-query = { path = "../bunny-query", version = "0.4.0" }
+bunny-geom = { path = "../bunny-geom", version = "0.5.0" }
+bunny-linalg = { path = "../bunny-linalg", version = "0.5.0" }
+bunny-num = { path = "../bunny-num", version = "0.5.0" }
+bunny-query = { path = "../bunny-query", version = "0.5.0" }
 
 [lib]
 path = "src/lib.rs"
