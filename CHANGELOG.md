@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * crates.io publication recovery now tolerates registry propagation delays and
   rate-limit responses while publishing workspace crates in dependency order.
+* Generated contract witnesses now report the `bunny-wesley/0.5.0` generator
+  identifier used by this release.
 
 ### Removed
 

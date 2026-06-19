@@ -3,7 +3,7 @@
 
 export const BUNNY_GRAPHICS_SCHEMA_SHA256 = "71757e5b3bbd32a99936db03080f4a896265fdd03af201b3488ba80743941c92" as const;
 
-export const BUNNY_WESLEY_GENERATOR = "bunny-wesley/0.4.0" as const;
+export const BUNNY_WESLEY_GENERATOR = "bunny-wesley/0.5.0" as const;
 export const BUNNY_WESLEY_CORE_VERSION = "0.0.5" as const;
 
 export type BunnyFixedQ32_32Raw = bigint;
