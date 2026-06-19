@@ -1,91 +1,134 @@
 # Bunny
 
-Bunny is a neutral, open-source Rust graphics commons that provides
-deterministic math, geometry, ray-casting queries, broadphase acceleration,
-mesh layouts, mesh codecs, and render-contract primitives.
+![Bunny project mascot](./bunny.jpg)
 
-Named after the iconic **Stanford Bunny** (a computer graphics 3D test model), the project exists to establish absolute, bit-level CPU mathematical determinism across all platforms and compilation targets. By decoupling these primitives into a shared, runtime-neutral library, downstream systems can compute consistent graphics and geometric invariants without importing heavy app behaviors, causal database runtimes, or rendering backends.
+**Deterministic math, geometry, spatial query, broadphase, and mesh tools for
+Rust graphics projects.**
 
----
+Bunny is a lightweight, open-source Rust workspace for graphics-adjacent
+primitives that need repeatable, bit-for-bit behavior across supported native
+and WebAssembly targets.
 
-## Rationale: Why Determinism?
+It provides fixed-point scalar math, validated geometry types, deterministic ray
+and closest-point queries, broadphase acceleration structures, quantized mesh
+layouts, zero-copy mesh decoders, and schema-generated contract types. It does
+not try to be a renderer, game engine, physics engine, editor framework,
+database, or application runtime.
 
-In modern multi-platform applications, minor differences in CPU floating-point calculations (e.g., due to compiler optimizations, CPU instructions like FMA, or target architectures) can lead to drift. Over time, these minute deviations cause split-brain behavior in simulated physics, collision detection, and ray-casting.
+Named after the Stanford Bunny 3D test model, Bunny exists so downstream tools
+can share the same geometry and mesh logic without inheriting each other's app
+behavior.
 
-Bunny solves this by utilizing a fixed-point numerical profile (`FixedQ32_32`) and ensuring that all geometric operations (like dot products, normalization, and square roots) produce identical bitwise results across Linux, macOS, Windows, and WebAssembly (`wasm32-unknown-unknown`).
+## Why Bunny?
 
----
+Graphics, simulation, and editor code often needs answers that stay identical
+across machines. Tiny floating-point differences can change a ray hit, reorder a
+collision candidate, perturb a mesh hash, or make a deterministic replay drift
+from one target to another.
 
-## Role
+Bunny's answer is deliberately conservative:
 
-Bunny answers:
+- canonical math uses `FixedQ32_32`, a signed Q32.32 fixed-point type;
+- float ingress and egress happen at explicit, validated boundaries;
+- geometry constructors reject malformed shapes instead of normalizing surprises;
+- golden-vector tests lock down exact raw outputs;
+- native and WebAssembly quality gates run the same deterministic contract.
+
+The goal is not to make every operation fast at any cost. The goal is to make
+the result auditable, portable, and boring in the best way: the same input should
+produce the same observable output on every supported target.
+
+## What Bunny Provides
+
+| Crate | What it does |
+| --- | --- |
+| `bunny-num` | Deterministic scalar profile and `FixedQ32_32` helpers. |
+| `bunny-linalg` | Fixed-point 2D/3D vectors and unit-vector invariants. |
+| `bunny-geom` | Validated rays, AABBs, spheres, and fixed/float conversion boundaries. |
+| `bunny-query` | Deterministic ray intersections and closest-point solvers. |
+| `bunny-broadphase` | BVH construction, BVH traversal helpers, and sweep-and-prune broadphase pairs. |
+| `bunny-mesh` | Quantized vertex layouts, triangle buffers, and stable mesh hashes. |
+| `bunny-codec` | Zero-copy OBJ/PLY parsers and Bunny compressed mesh decoding. |
+| `bunny-contract` | Generated Rust DTOs and schema/version witnesses. |
+| `bunny-wesley` | Wesley-backed GraphQL schema lowering and Rust/TypeScript DTO generation. |
+
+The workspace also includes `xtask`, the host-side automation package for
+schema generation and Code Dojo quality gates.
+
+## Quick Start
+
+Install the crates you need. For a basic deterministic ray/AABB query:
+
+```bash
+cargo add bunny-num bunny-linalg bunny-geom bunny-query
+```
+
+```rust
+use bunny_geom::{FixedAabb3, FixedRay3};
+use bunny_linalg::FixedVec3;
+use bunny_num::{fixed_q32_32::ONE_RAW, FixedQ32_32};
+use bunny_query::ray_intersects_aabb;
+
+fn fixed(units: i64) -> FixedQ32_32 {
+    FixedQ32_32::from_raw(units * ONE_RAW)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let origin = FixedVec3::new(fixed(0), fixed(0), fixed(0));
+    let direction = FixedVec3::new(fixed(1), fixed(0), fixed(0));
+
+    let min = FixedVec3::new(fixed(2), fixed(-1), fixed(-1));
+    let max = FixedVec3::new(fixed(4), fixed(1), fixed(1));
+
+    let ray = FixedRay3::try_new(origin, direction)?;
+    let aabb = FixedAabb3::try_new(min, max)?;
+
+    if let Some((enter, exit)) = ray_intersects_aabb(&ray, &aabb) {
+        println!("hit from raw t={} to {}", enter.raw(), exit.raw());
+    }
+
+    Ok(())
+}
+```
+
+For broadphase traversal, mesh parsing, compressed mesh decoding, and contract
+generation, start with the crate READMEs and the technical teardown.
+
+## Project Shape
+
+Bunny is intentionally a library workspace, not a framework.
+
+It answers:
 
 ```text
-What is the deterministic graphics, math, geometry, or render-contract operation?
+What is the deterministic graphics, math, geometry, mesh, or contract operation?
 ```
 
 It does not answer:
 
 ```text
 What causal database events occurred?
-What hardware renderer drew or rasterized a frame?
-What interactive editor workflows or product layouts are active?
+What hardware renderer drew a frame?
+What editor workflow is active?
+What physics solver integrates this scene?
 ```
 
-Those jobs belong to downstream projects.
+Those jobs belong to downstream systems. Bunny stays focused on the shared
+primitives those systems can agree on.
 
----
+## Ecosystem Context
 
-## Ecosystem Context & Relationships
+Bunny is designed to sit underneath several related projects:
 
-To understand Bunny, it helps to understand the downstream projects in the ecosystem:
+| Project | Role | Relationship |
+| --- | --- | --- |
+| [Echo](https://github.com/flyingrobots/echo) | Causal database and provenance engine. | Can wrap Bunny's deterministic geometry results as causal facts. |
+| [Geordi](https://github.com/flyingrobots/geordi) | Deterministic rendering backend. | Can consume Bunny math, mesh, codec, and future optics primitives. |
+| [jedit](https://github.com/flyingrobots/jedit) | Interactive editor and workspace interface. | Can build editor behavior on top of Bunny and Echo primitives. |
+| [Wesley](https://github.com/flyingrobots/wesley) | GraphQL SDL to DTO compiler. | Provides the schema-lowering core extended by `bunny-wesley`. |
 
-| Project | Role | Integration |
-| :--- | :--- | :--- |
-| **[Echo](https://github.com/flyingrobots/echo)** | Causal database & transaction engine tracking Strands, Braids, and Provenance. | Depends on Bunny to compute deterministic geometric results, wrapping them as causal facts. |
-| **[Geordi](https://github.com/flyingrobots/geordi)** | Deterministic rendering backend. | Consumes Bunny's math, mesh, codec, and planned optics specifications to guarantee rendered geometry matches calculated inputs. |
-| **[jedit](https://github.com/flyingrobots/jedit)** | Interactive editor application & workspace interface. | Consumes Bunny and Echo to present visual editor states and behaviors to the user. |
-| **[Wesley](https://github.com/flyingrobots/wesley)** | Schema compiler translating GraphQL SDL to DTOs. | Extended by `bunny-wesley` to generate shared Rust and TypeScript types from graphics schemas. |
-
-## Workspace Crate Map
-
-```text
-crates/
-  bunny-num
-    deterministic scalar profiles, finite-number policy, Q32.32 helpers
-
-  bunny-linalg
-    deterministic 2D/3D vectors and unit-vector invariants
-
-  bunny-geom
-    validated rays, AABBs, spheres, and fixed/float boundary conversion
-
-  bunny-query
-    deterministic ray intersections and closest-point solvers
-
-  bunny-broadphase
-    BVH and sweep-and-prune broadphase helpers
-
-  bunny-mesh
-    quantized vertex layouts, triangle buffers, and mesh hashes
-
-  bunny-codec
-    zero-copy PLY/OBJ parsers and Bunny compressed mesh decoder
-
-  bunny-contract
-    schema and canonical contract helpers
-
-  bunny-wesley
-    Wesley-backed schema extension and DTO generator
-
-xtask/
-  host-side automation for generation and Code Dojo quality gates
-```
-
-Future crate candidates in the roadmap include `bunny-optics`,
-`bunny-fixtures`, and optional boundary adapter crates. Matrices, transforms,
-quaternions, optics, deterministic SIMD, richer collision, and public examples
-are tracked in `ROADMAP.md` and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
+You do not need those projects to use Bunny. They are context for why the
+library is strict about determinism and runtime neutrality.
 
 ## Contract Generation
 
@@ -97,41 +140,31 @@ Regenerate checked-in DTO witnesses with:
 cargo run --locked -p xtask -- generate
 ```
 
-The current generator emits:
+The generator emits:
 
-* **Rust DTOs**: Emitted directly into the shared contracts package at `crates/bunny-contract/src/generated/graphics.rs`.
-* **TypeScript DTOs**: Emitted for downstream browser/Node.js clients at `generated/typescript/bunny-graphics.ts`.
-* **Manifest**: Emitted at `generated/bunny-graphics.manifest.json`, detailing the schema SHA-256 hash and generated output file paths.
+- Rust DTOs at `crates/bunny-contract/src/generated/graphics.rs`;
+- TypeScript DTOs at `generated/typescript/bunny-graphics.ts`;
+- a manifest at `generated/bunny-graphics.manifest.json`;
+- generated version witnesses that record Bunny and `wesley-core` versions.
 
-The generator uses published Wesley SDL lowering:
+## Development Standards
 
-* `bunny-wesley` lowers Bunny SDL through `wesley-core`.
-* Bunny maps the Wesley IR into graphics-specific Rust and TypeScript DTOs.
-* Bunny records the `wesley-core` version in generated witnesses.
+Bunny's core crates deny unsafe code and are held to strict local gates. Code
+Dojo combines formatting, Clippy, dependency policy, deterministic test receipts,
+AST policy checks, workspace tests, and WebAssembly checks.
 
-## Numeric Profiles
+Useful starting points:
 
-Bunny currently defines:
+- [Code standards](CODE_STANDARDS.md)
+- [Code Dojo](docs/CODE_DOJO.md)
+- [Testing guide](docs/TESTING.md)
+- [Math and geometry capability map](docs/MATH_GEOMETRY_CAPABILITY_MAP.md)
+- [Technical teardown](docs/TECHNICAL_TEARDOWN.md)
+- [Roadmap](ROADMAP.md)
 
-* `BunnyScalar`: finite `f32` graphics scalar profile.
-* `BunnyFixedQ32_32Raw`: signed Q32.32 fixed-point raw `i64` profile.
-
-Q32.32 conversion helpers live in `bunny-num::fixed_q32_32`.
-
-## Invariants
-
-* Bunny is project-neutral.
-* Bunny owns its own GraphQL schema files.
-* `bunny-wesley` generates shared Rust and TypeScript contract types, and the
-  generated witnesses record the generator and `wesley-core` versions.
-* Echo deterministic math primitives should migrate into Bunny when they are
-  generally useful graphics primitives.
-* Echo keeps causal wrappers, provenance, and runtime authority.
-* Geordi keeps IR, render backends, text-rendering policy, receipts, and proof
-  claims.
-* Bunny core crates do not know about Echo strands, Geordi receipts, jedit
-  editor state, DOM nodes, Unity objects, or browser compatibility quirks.
-* Deterministic CPU semantics come before GPU acceleration.
+Current roadmap work includes matrices, transforms, quaternions, richer shape
+coverage, collision/contact layers, visibility and ray-tracing primitives,
+optics math, deterministic SIMD experiments, and stronger public examples.
 
 ## License
 
