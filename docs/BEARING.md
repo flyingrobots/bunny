@@ -11,7 +11,7 @@ work state belongs in GitHub issues and pull requests.
 | Release focus | `v0.5.0`: merged to `main`, pending tag and publication |
 | Previous release baseline | `v0.4.0`, published on crates.io |
 | Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
-| Next release step | Tag merge commit `5c15363` as `v0.5.0`, then publish the GitHub Release |
+| Next release step | Tag the verified `main` tip as `v0.5.0`, then publish the GitHub Release |
 | Next feature train | `v0.6.0` Math Foundations |
 
 ## Recent Truth
@@ -49,8 +49,9 @@ work state belongs in GitHub issues and pull requests.
 
 ## Release Sequence
 
-1. Confirm `main` is still at the verified merge commit.
-2. Tag the merge commit as `v0.5.0`.
+1. Confirm `main` is at a verified commit that includes the release prep and
+   signpost refresh.
+2. Tag the verified `main` tip as `v0.5.0`.
 3. Publish the GitHub Release so the release workflow can verify and publish
    the public crates.
 4. Confirm crates.io visibility for every published Bunny crate.
