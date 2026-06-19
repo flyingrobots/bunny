@@ -11,6 +11,68 @@ accounts, and no runtime authentication flow. Its core job is to provide
 portable math, geometry, mesh, codec, contract, and validation components that
 downstream projects can trust across native and WebAssembly targets.
 
+## Project Mind Map
+
+```mermaid
+mindmap
+  root((Bunny))
+    Deterministic runtime crates
+      bunny-num
+        Q32.32 scalar law
+        fallible float ingress
+      bunny-linalg
+        fixed vectors
+        unit direction proofs
+      bunny-geom
+        validated shapes
+        explicit construction errors
+      bunny-query
+        ray intersections
+        closest-point solvers
+      bunny-broadphase
+        BVH build
+        sweep-and-prune pairs
+    Mesh and data ingress
+      bunny-mesh
+        quantized vertex buffers
+        stable mesh hashing
+      bunny-codec
+        OBJ parser
+        PLY parser
+        compressed mesh decoder
+    Contract generation
+      schemas
+        GraphQL SDL
+      bunny-wesley
+        Rust DTO output
+        TypeScript DTO output
+        manifest witness
+      bunny-contract
+        generated Rust DTOs
+        version witness tests
+    Quality system
+      xtask
+        generate
+        code-dojo
+        issue guardrails
+      GitHub Actions
+        native determinism checks
+        WebAssembly checks
+      release workflow
+        crate archive verification
+        crates.io publication
+    Planning and evidence
+      ROADMAP
+        goalposts
+        slices
+      GitHub Issues
+        canonical backlog
+        milestones
+      tests
+        golden vectors
+        malformed input corpus
+```
+
 ## Domain Dictionary
 
 These terms appear throughout the workspace.
