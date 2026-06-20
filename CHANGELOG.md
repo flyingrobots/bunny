@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* `scripts/publish-crates.sh publish` now refuses dirty worktrees
+  unconditionally; `ALLOW_DIRTY=1` is limited to local `verify` and `dry-run`
+  diagnostics.
+* Removed global `clippy::module_name_repetitions` and
+  `clippy::must_use_candidate` allowances after auditing that the workspace
+  passes without them.
+
+### Fixed
+
+* Historical goalpost evidence now distinguishes retired `ci.yml` anchors from
+  the current Code Dojo workflow.
+
 ## [0.5.0] - 2026-06-19
 
 ### Added

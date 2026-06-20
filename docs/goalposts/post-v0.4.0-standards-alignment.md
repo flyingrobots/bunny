@@ -29,7 +29,9 @@ flow with the Rust Code Standards Editor's Edition and Code Dojo.
 
 All acceptance criteria are satisfied for the local standards-alignment gate.
 Release archive verification was run with `ALLOW_DIRTY=1` during local
-alignment before the pull request was finalized.
+alignment before the pull request was finalized. Current release tooling treats
+that setting as local-only for `verify` and `dry-run`; `publish` mode refuses
+dirty worktrees.
 
 ## Initial Gate Findings
 
@@ -90,6 +92,6 @@ alignment work is complete. Known initial categories:
 * `markdownlint-cli2 CHANGELOG.md ROADMAP.md docs/BEARING.md
   docs/goalposts/post-v0.4.0-standards-alignment.md` passed.
 * `git diff --check` passed after the standards-alignment edits.
-* `ALLOW_DIRTY=1 scripts/publish-crates.sh verify` passed, including full
-  package verification for the root crates and archive file-list verification
-  for the remaining publishable crates.
+* Historical local check: `ALLOW_DIRTY=1 scripts/publish-crates.sh verify`
+  passed, including full package verification for the root crates and archive
+  file-list verification for the remaining publishable crates.

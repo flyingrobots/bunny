@@ -127,6 +127,11 @@ Before publishing a GitHub Release, run the release archive gate locally:
 scripts/publish-crates.sh verify
 ```
 
+`ALLOW_DIRTY=1` may be used only for local `verify` or `dry-run` diagnostics
+while preparing a PR. It passes Cargo's `--allow-dirty` flag to packaging
+commands and prints a warning that the mode is local-only. `publish` mode
+unconditionally refuses dirty worktrees, even when `ALLOW_DIRTY=1` is set.
+
 For the first crates.io publication of a Bunny version, `verify` fully packages
 the independent root crates and checks the package file lists for crates whose
 internal Bunny dependencies are not visible in the crates.io index yet. The

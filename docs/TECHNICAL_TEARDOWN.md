@@ -1263,14 +1263,15 @@ types and functions. Tooling and release scripts do have knobs.
 | --- | --- | --- |
 | `RUST_TOOLCHAIN` | `scripts/publish-crates.sh` | Selects the Rust toolchain for packaging. Defaults to `1.96.0`. |
 | `RELEASE_TAG` | Release script | Guards that the tag matches crate version, for example `v0.5.0`. |
-| `ALLOW_DIRTY=1` | Release script | Passes `--allow-dirty` to Cargo packaging commands. This is intentionally visible debt. |
+| `ALLOW_DIRTY=1` | Release script | Local-only `verify`/`dry-run` diagnostic mode that passes `--allow-dirty`; `publish` mode refuses dirty worktrees. |
 | `CARGO_REGISTRY_TOKEN` | Release script | Required for crates.io publish mode. |
 | `CRATES_IO_RETRY_LIMIT` | Release script | Controls registry publish retry attempts. |
 | `CRATES_IO_RETRY_SECONDS` | Release script | Controls sleep duration between retry attempts. |
 | `VERIFY_REGISTRY_DEPS=1` | Release script | Forces deeper package verification for crates with registry-visible internal dependencies. |
 
-The most sensitive knob is `ALLOW_DIRTY`. It is useful for emergency packaging
-diagnostics, but release discipline prefers clean-tree verification.
+The most sensitive knob is `ALLOW_DIRTY`. It is useful for local packaging
+diagnostics before a PR is finalized, but the release path still requires a
+clean tree before publication.
 
 ## Error Handling Philosophy
 
