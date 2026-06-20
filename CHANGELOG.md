@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   convention, NDC reservations, and documentation source-of-truth rules.
 * Added `docs/README.md` as the documentation spine for living topic chapters,
   test plans, historical design records, and PR documentation gates.
+* Added `cargo run --locked -p xtask -- topic-docs` and wired it into Code
+  Dojo so topic test plans validate stable requirement IDs, case IDs, explicit
+  oracles, evidence status, and implemented Rust test names.
 * Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
   reference with compact tables for navigation and issue anchors.
 * `scripts/publish-crates.sh publish` now refuses dirty worktrees

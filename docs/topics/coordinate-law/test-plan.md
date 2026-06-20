@@ -40,6 +40,11 @@ Reserved future APIs are tracked as open gaps until those APIs exist.
 
 ## Requirements
 
+The table is the human-readable view. The fenced TOML block immediately after
+it is the contract graph consumed by `cargo run --locked -p xtask --
+topic-docs`. Tooling reads only the structured block, not visual Markdown table
+formatting.
+
 | ID | Requirement | Current Source |
 | --- | --- | --- |
 | CL-REQ-001 | Bunny's canonical 3D frame is right-handed. | `README.md#canonical-3d-frame` |
@@ -54,6 +59,72 @@ Reserved future APIs are tracked as open gaps until those APIs exist.
 | CL-REQ-010 | Bounds require `min <= max`, inclusive boundary contact, and explicit emptiness. | `README.md#bounds-and-boundary-contact` |
 | CL-REQ-011 | Future canonical NDC uses `x/y` in `[-1, 1]`, `z` in `[0, 1]`, and positive `y` up. | `README.md#projection-and-ndc-reservations` |
 | CL-REQ-012 | External boundary adapters document source convention and exact conversion into Bunny convention. | `README.md#external-format-boundaries` |
+
+```toml
+[[requirement]]
+id = "CL-REQ-001"
+summary = "Bunny's canonical 3D frame is right-handed."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-002"
+summary = "+X cross +Y is +Z, with cyclic basis products following the right-hand rule."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-003"
+summary = "Reversing cross-product operands negates the basis result."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-004"
+summary = "Bunny's default 2D plane is the XY plane."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-005"
+summary = "Counter-clockwise XY winding viewed from +Z produces a +Z normal."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-006"
+summary = "Bunny coordinates are unitless fixed-point Bunny units."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-007"
+summary = "Future transforms are named target_from_source."
+status = "reserved"
+
+[[requirement]]
+id = "CL-REQ-008"
+summary = "Future matrix transforms use column-vector semantics and right-to-left composition."
+status = "reserved"
+
+[[requirement]]
+id = "CL-REQ-009"
+summary = "Positive rotation follows the right-hand rule."
+status = "reserved"
+
+[[requirement]]
+id = "CL-REQ-010"
+summary = "Bounds require min <= max, inclusive boundary contact, and explicit emptiness."
+status = "reserved"
+
+[[requirement]]
+id = "CL-REQ-011"
+summary = "Future canonical NDC uses x/y in [-1, 1], z in [0, 1], and positive y up."
+status = "reserved"
+
+[[requirement]]
+id = "CL-REQ-012"
+summary = "External boundary adapters document source convention and exact conversion into Bunny convention."
+status = "reserved"
+```
+
+Reserved requirements are part of the coordinate-law vocabulary, but they do
+not become active verification obligations until Bunny exposes the API surface
+that can satisfy or reject them.
 
 ## Fixtures
 
@@ -80,8 +151,38 @@ fixtures. Each fixture must document:
 | --- | --- | --- | --- | --- |
 | CL-TP-001 | Golden path, determinism | CL-REQ-001, CL-REQ-002, CL-REQ-003 | Exact `FixedVec3` equality for public cross-product outputs. | `coordinate_law_tests::cl_tp_001_canonical_basis_is_right_handed` |
 | CL-TP-002 | Golden path, winding | CL-REQ-004, CL-REQ-005 | Exact `FixedVec3` equality for `(b - a).cross(c - a)` and reversed winding. | `coordinate_law_tests::cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z` |
+| CL-TP-003 | Golden path, unit policy | CL-REQ-006 | Exact raw Q32.32 values for whole Bunny-unit coordinates. | `coordinate_law_tests::cl_tp_003_bunny_units_are_unitless_fixed_raw_values` |
 
-## Determinism Proof
+```toml
+[[case]]
+id = "CL-TP-001"
+requirements = ["CL-REQ-001", "CL-REQ-002", "CL-REQ-003"]
+evidence = "test"
+test = "cl_tp_001_canonical_basis_is_right_handed"
+oracle = "Exact FixedVec3 equality for public cross-product outputs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-002"
+requirements = ["CL-REQ-004", "CL-REQ-005"]
+evidence = "test"
+test = "cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z"
+oracle = "Exact FixedVec3 equality for public winding-derived normal outputs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-003"
+requirements = ["CL-REQ-006"]
+evidence = "test"
+test = "cl_tp_003_bunny_units_are_unitless_fixed_raw_values"
+oracle = "Exact raw Q32.32 values for whole Bunny-unit coordinates."
+tier = "fast"
+status = "implemented"
+```
+
+## Determinism Obligations And Evidence
 
 The current tests use only public deterministic fixed-point operations:
 

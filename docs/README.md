@@ -9,7 +9,9 @@ and release chronology must not compete with each other.
 ## Current Truth
 
 Living topic chapters describe how Bunny works now. They are updated in place
-when code, public behavior, invariants, or supported usage changes.
+when code, public behavior, invariants, or supported usage changes. They do
+not describe intended behavior before the implementation and executable
+evidence exist.
 
 | Chapter | Owns |
 | --- | --- |
@@ -30,7 +32,7 @@ Recommended files:
 | File | Required | Role |
 | --- | --- | --- |
 | `README.md` | Yes | Current behavior and invariants for the topic. |
-| `test-plan.md` | Yes | Current verification design: requirements, fixtures, cases, oracles, determinism proof, and gaps. |
+| `test-plan.md` | Yes | Verification design: requirements, fixtures, cases, oracles, determinism obligations and evidence, and gaps. |
 | `architecture.md` | Optional | Structure, data flow, and module boundaries when the topic is large enough to need them. |
 | `rationale.md` | Optional | Durable tradeoffs and rejected approaches that still help maintainers. |
 
@@ -55,19 +57,27 @@ to the relevant living topic chapter instead of rewriting the whole record.
 
 Before implementing a nontrivial behavior change:
 
-1. Update the living topic chapter or create a new topic folder.
-2. Update the topic test plan with requirements, fixtures, oracles, and test
-   cases before implementation.
-3. Write tests from the plan.
+1. Write or update a proposal, RFC, or rationale note when the change needs
+   real design discussion.
+2. Add or update planned cases in `test-plan.md` before implementation.
+3. Write the smallest failing executable evidence for the planned case.
 4. Implement the behavior.
-5. Update the test-plan matrix with the actual test names.
-6. Record release-visible changes in `CHANGELOG.md`.
+5. Update the living topic chapter so it describes the behavior now present in
+   `HEAD`.
+6. Mark the planned cases as implemented evidence and record the actual test
+   names, fixtures, or artifact anchors.
+7. Record release-visible changes in `CHANGELOG.md`.
 
 For small bug fixes, the same discipline can be scaled down, but every behavior
 change still needs a test or a written reason why the existing tests already
 cover it.
 
 ## Test Plan Standard
+
+Topic test plans are both prose and a small contract graph. The prose explains
+intent for humans. Fenced `toml` metadata blocks define stable requirement IDs,
+case IDs, explicit oracles, evidence types, status, and test or artifact
+anchors for `cargo run --locked -p xtask -- topic-docs`.
 
 Topic test plans should cover:
 
@@ -76,7 +86,7 @@ Topic test plans should cover:
 - edge cases
 - unusual inputs
 - stable error kinds
-- determinism proofs
+- determinism obligations and evidence
 - invariants and property tests
 - metamorphic or differential checks when no simple oracle exists
 - stress, fuzz, and replay strategy

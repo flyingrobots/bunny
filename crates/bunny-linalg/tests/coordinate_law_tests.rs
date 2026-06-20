@@ -41,3 +41,14 @@ fn cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z() {
     assert_eq!(counter_clockwise_normal, vec3(0, 0, 1));
     assert_eq!(clockwise_normal, vec3(0, 0, -1));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn cl_tp_003_bunny_units_are_unitless_fixed_raw_values() {
+    let one_unit = q32(1);
+    let coordinate = vec3(2, -3, 5);
+
+    assert_eq!(one_unit.raw(), ONE_RAW);
+    assert_eq!(coordinate.x.raw(), 2_i64 * ONE_RAW);
+    assert_eq!(coordinate.y.raw(), -3_i64 * ONE_RAW);
+    assert_eq!(coordinate.z.raw(), 5_i64 * ONE_RAW);
+}

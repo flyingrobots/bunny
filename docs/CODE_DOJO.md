@@ -1,7 +1,8 @@
 # Code Dojo™
 
 Code Dojo is the repository-respect enforcement layer for this standard. It combines local Git hooks,
-CI gates, a Rust AST policy checker, strict Clippy passes, and Rust `xtask` orchestration commands.
+CI gates, a Rust AST policy checker, topic documentation contract checks,
+strict Clippy passes, and Rust `xtask` orchestration commands.
 
 ## Local Hooks
 
@@ -14,8 +15,9 @@ bash scripts/install-githooks.sh
 Hooks installed:
 
 - `pre-commit` — checks staged Rust files with the AST policy gate, then runs
-  `cargo fmt --check`, workspace Clippy, strict package-scoped library Clippy,
-  dependency policy, and `cargo test`.
+  topic documentation contract checks, `cargo fmt --check`, workspace Clippy,
+  strict package-scoped library Clippy, dependency policy, `cargo test`, and
+  doctests.
 - `commit-msg` — enforces focused commit subjects and AI receipt trailers when applicable.
 - `pre-push` — runs the full dojo, including deterministic manifest checks and WASM check.
 
@@ -26,6 +28,8 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 Rust source-shape policy is parsed through `cargo run --locked -p xtask -- code-dojo-rust`.
+Topic documentation contract metadata is checked through
+`cargo run --locked -p xtask -- topic-docs`.
 
 ## CI
 
@@ -39,7 +43,8 @@ Jobs:
 
 - `dojo-ubuntu` — runs `cargo run --locked -p xtask -- code-dojo --all --ci`,
   covering formatting, Rust AST policy, dependency policy, Clippy, native tests,
-  deterministic receipts, and wasm32 library checks.
+  doctests, topic documentation contract metadata, deterministic receipts, and
+  wasm32 library checks.
 - `determinism-matrix` — runs workspace tests and deterministic receipt
   enforcement on `ubuntu-latest`, `macos-26`, and `windows-latest`.
 - `wasm-headless` — runs headless Node `wasm-pack test` for each
