@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Added `docs/COORDINATE_LAW.md` as the living reference for Bunny's
+  right-handed coordinate frame, unit policy, transform naming convention, NDC
+  reservations, and documentation source-of-truth rules.
 * `scripts/publish-crates.sh publish` now refuses dirty worktrees
   unconditionally; `ALLOW_DIRTY=1` is limited to local `verify` and `dry-run`
   diagnostics.

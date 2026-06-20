@@ -51,6 +51,24 @@ For each meaningful issue or slice:
 Documentation-only slices still need verification: Markdown lint, diff checks,
 and source anchors where claims are factual.
 
+## Documentation Source of Truth
+
+Current feature behavior belongs in a living reference document that is updated
+in place as the code changes. Historical design documents, goalpost notes,
+issues, and pull requests explain why decisions happened; they must not become
+competing current references.
+
+When a feature changes:
+
+1. Update the living reference in the same pull request.
+2. Leave historical design documents intact unless they are factually wrong.
+3. Add a short superseded note to historical documents when readers could
+   otherwise mistake them for current truth.
+4. Keep release chronology in `CHANGELOG.md`.
+
+Examples of living references include `docs/NUMERIC_CONSTITUTION.md`,
+`docs/COORDINATE_LAW.md`, and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
+
 ## Code Dojo
 
 The repository uses Code Dojo as its local and CI enforcement layer. Install the
