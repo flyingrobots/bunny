@@ -35,7 +35,7 @@ Environment:
   RELEASE_TAG                 Optional tag guard; must equal v<crate-version>.
   CARGO_REGISTRY_TOKEN        Required by cargo for publish mode.
   RUST_TOOLCHAIN              Rust toolchain to use; defaults to 1.96.0.
-  ALLOW_DIRTY=1               Pass --allow-dirty to Cargo packaging commands.
+  ALLOW_DIRTY=1               Local-only verify/dry-run escape hatch.
   CRATES_IO_RETRY_LIMIT       Registry search attempts after each publish.
   CRATES_IO_RETRY_SECONDS     Sleep duration between registry attempts.
 USAGE
@@ -74,13 +74,33 @@ validate_versions() {
   printf 'validated publishable crate version: %s\n' "$expected"
 }
 
-cargo_dirty_args() {
-  [[ "${ALLOW_DIRTY:-}" == "1" ]]
+dirty_worktree_status() {
+  git status --porcelain
+}
+
+require_clean_publish_tree() {
+  local status
+  status="$(dirty_worktree_status)"
+  if [[ -n "$status" ]]; then
+    printf 'publish mode requires a clean git worktree; refusing dirty state.\n' >&2
+    printf '%s\n' "$status" >&2
+    return 1
+  fi
+}
+
+local_dirty_args_enabled() {
+  local mode="$1"
+  if [[ "${ALLOW_DIRTY:-}" == "1" ]]; then
+    printf 'ALLOW_DIRTY=1 is local-only for %s; publish mode never honors it.\n' \
+      "$mode" >&2
+    return 0
+  fi
+  return 1
 }
 
 verify_packages() {
   local -a dirty_args=()
-  if cargo_dirty_args; then
+  if local_dirty_args_enabled verify; then
     dirty_args=(--allow-dirty)
   fi
 
@@ -100,7 +120,7 @@ verify_packages() {
 
 dry_run_publish() {
   local -a dirty_args=()
-  if cargo_dirty_args; then
+  if local_dirty_args_enabled dry-run; then
     dirty_args=(--allow-dirty)
   fi
 
@@ -131,6 +151,7 @@ crate_version_exists() {
 }
 
 publish_packages() {
+  require_clean_publish_tree
   : "${CARGO_REGISTRY_TOKEN:?CARGO_REGISTRY_TOKEN must be set for publish mode}"
 
   local version

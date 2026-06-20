@@ -6,7 +6,7 @@ profile: "Strict Deterministic Math & Geometry"
 repository-family: "Bunny"
 ---
 
-# Rust Code Standards — Editor's Edition™
+## Rust Code Standards — Editor's Edition™
 
 This is the engineering doctrine for deterministic Rust math and geometry crates.
 It is written under one assumption: this codebase must be read, refactored, tested,
@@ -282,6 +282,23 @@ Recommended stance:
 
 Clippy suggestions may be rejected when they reduce determinism, local reasoning, or API clarity.
 Rejected suggestions require a local allow comment with a reason.
+
+### Audited Workspace Allowance
+
+| Lint | Status | Rationale |
+| --- | --- | --- |
+| `clippy::multiple_crate_versions` | Permanent until the `wesley-core` graph converges. | The current generator dependency graph brings duplicate `hashbrown`, `thiserror`, `thiserror-impl`, and `tower` versions through `wesley-core` and its parser stack. `cargo deny check` keeps these duplicates visible as warnings, but denying this Clippy lint would block the workspace for dependencies Bunny does not directly own. |
+
+The former workspace allowances for `clippy::module_name_repetitions` and
+`clippy::must_use_candidate` were removed after an audit showed the current
+workspace passes with those lints re-enabled. Narrow local
+`module_name_repetitions` allowances remain where module names are part of a
+public API boundary.
+
+To ratchet the remaining allowance, first run Clippy with
+`clippy::multiple_crate_versions` re-enabled and record the dependency surface.
+Remove the allowance once the transitive generator stack converges to a single
+version for each duplicated crate.
 
 ## Rule 11: Tests Prove Behavior, Not Choreography
 
