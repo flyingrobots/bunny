@@ -15,7 +15,7 @@ fn vec3(x: i32, y: i32, z: i32) -> FixedVec3 {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn canonical_basis_is_right_handed() {
+fn cl_tp_001_canonical_basis_is_right_handed() {
     let unit_x = vec3(1, 0, 0);
     let unit_y = vec3(0, 1, 0);
     let unit_z = vec3(0, 0, 1);
@@ -30,7 +30,7 @@ fn canonical_basis_is_right_handed() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn xy_counter_clockwise_winding_points_toward_positive_z() {
+fn cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z() {
     let a = vec3(0, 0, 0);
     let b = vec3(1, 0, 0);
     let c = vec3(0, 1, 0);

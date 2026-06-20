@@ -51,7 +51,7 @@ For each meaningful issue or slice:
 Documentation-only slices still need verification: Markdown lint, diff checks,
 and source anchors where claims are factual.
 
-## Documentation Source of Truth
+## Documentation Source Of Truth
 
 Current feature behavior belongs in a living reference document that is updated
 in place as the code changes. Historical design documents, goalpost notes,
@@ -60,14 +60,32 @@ competing current references.
 
 When a feature changes:
 
-1. Update the living reference in the same pull request.
-2. Leave historical design documents intact unless they are factually wrong.
-3. Add a short superseded note to historical documents when readers could
+1. Update the living topic chapter in the same pull request.
+2. Update the topic test plan before implementation when behavior, invariants,
+   fixtures, or verification strategy changes.
+3. Write tests from the plan and update the plan with the actual test names.
+4. Leave historical design documents intact unless they are factually wrong.
+5. Add a short superseded note to historical documents when readers could
    otherwise mistake them for current truth.
-4. Keep release chronology in `CHANGELOG.md`.
+6. Keep release chronology in `CHANGELOG.md`.
 
 Examples of living references include `docs/NUMERIC_CONSTITUTION.md`,
-`docs/COORDINATE_LAW.md`, and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
+`docs/topics/coordinate-law/`, and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
+
+Durable concepts that will be changed by more than one pull request should use
+the topic-folder shape documented in `docs/README.md`:
+
+```text
+docs/topics/<topic>/
+  README.md
+  test-plan.md
+  architecture.md  # optional
+  rationale.md     # optional
+```
+
+`README.md` is current behavior. `test-plan.md` is current verification design.
+Historical proposals belong in `docs/design/`, and delivery evidence belongs in
+`docs/goalposts/`.
 
 ## Code Dojo
 

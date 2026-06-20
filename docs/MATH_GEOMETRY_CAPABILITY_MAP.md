@@ -87,7 +87,7 @@ Missing surface:
 - Projection and camera-space math. See #150.
 - Curves, splines, and path primitives. See #152.
 - Coordinate-space, handedness, and units policy is defined by
-  `docs/COORDINATE_LAW.md`. See #164.
+  `docs/topics/coordinate-law/`. See #164.
 
 ### Geometry Primitives
 
@@ -225,8 +225,8 @@ The missing stack should land bottom-up. Do not build collision or optics on
 ambiguous coordinate or transform semantics.
 
 1. Lock coordinate law: spaces, handedness, units, angle policy, and transform
-   composition. `docs/COORDINATE_LAW.md` defines the current law; see #164,
-   #107, #108, #109, #110.
+   composition. `docs/topics/coordinate-law/` defines the current law; see
+   #164, #107, #108, #109, #110.
 2. Harden geometry law: degeneracy, predicates, richer shape types, clipping,
    bounds, and 2D coverage. See #116, #145, #115, #162, #151, #149.
 3. Expand query coverage: OBB/capsule/plane tests, SAT, GJK/EPA, manifolds,

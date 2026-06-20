@@ -3,8 +3,8 @@
 This document defines the arithmetic law for Bunny's canonical fixed-point math.
 When this document and implementation disagree, one of them is wrong. Usually both need tests.
 
-`docs/COORDINATE_LAW.md` defines what canonical numbers mean when they are used
-as coordinates, vectors, directions, normals, transforms, projections, or
+`docs/topics/coordinate-law/` defines what canonical numbers mean when they are
+used as coordinates, vectors, directions, normals, transforms, projections, or
 viewport values.
 
 ## Canonical Type

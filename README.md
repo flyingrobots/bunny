@@ -156,9 +156,10 @@ AST policy checks, workspace tests, and WebAssembly checks.
 Useful starting points:
 
 - [Code standards](CODE_STANDARDS.md)
+- [Documentation guide](docs/README.md)
 - [Code Dojo](docs/CODE_DOJO.md)
 - [Testing guide](docs/TESTING.md)
-- [Coordinate law](docs/COORDINATE_LAW.md)
+- [Coordinate law](docs/topics/coordinate-law/)
 - [Math and geometry capability map](docs/MATH_GEOMETRY_CAPABILITY_MAP.md)
 - [Technical teardown](docs/TECHNICAL_TEARDOWN.md)
 - [Roadmap](ROADMAP.md)
