@@ -16,9 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   convention, NDC reservations, and documentation source-of-truth rules.
 * Added `docs/README.md` as the documentation spine for living topic chapters,
   test plans, historical design records, and PR documentation gates.
-* Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a table-first planning
-  reference for easier scanning of ownership, missing capability, and build
-  order.
+* Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
+  reference with compact tables for navigation and issue anchors.
 * `scripts/publish-crates.sh publish` now refuses dirty worktrees
   unconditionally; `ALLOW_DIRTY=1` is limited to local `verify` and `dry-run`
   diagnostics.
