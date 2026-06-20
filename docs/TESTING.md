@@ -11,6 +11,9 @@ the roadmap says are complete.
 * Non-finite float inputs must be rejected before they enter deterministic
   geometry or mesh contracts.
 * Randomized corpora must have fixed seeds and committed expected outputs.
+* Property corpora use committed seed constants. A failing generated case must
+  be recorded with its seed and case index, then minimized into a permanent
+  deterministic regression when it exposes a real defect.
 * Allocation claims require direct witnesses, not inference from code shape.
 
 ## Required Local Gates
@@ -86,6 +89,25 @@ Source files stay small. Public behavior is tested through integration tests:
 | `.githooks/` | Repo-local pre-commit, commit-msg, and pre-push hooks |
 | `xtask/src/code_dojo.rs` | Local and CI repository-respect policy checks |
 | `scripts/publish-crates.sh` | Local and CI package publication gate |
+
+## Deterministic Property Corpus
+
+Bunny's property-test framework is a repo-local seeded corpus harness. It uses
+small deterministic generators inside integration tests rather than ambient
+randomness, time, thread scheduling, filesystem order, or host-specific
+configuration. The initial property suites cover:
+
+* `bunny-num`: raw round trips, raw ordering, and checked arithmetic
+  round-trip identities.
+* `bunny-linalg`: dot-product commutativity, cross-product
+  anti-commutativity, self-cross zero, and length-squared identity.
+* `bunny-query`: segment closest-point symmetry and AABB closest-point bounds.
+* `bunny-mesh`: quantization monotonicity and representative quantized-code
+  round trips.
+
+Each generated assertion should include enough seed and case metadata to replay
+the failure. A property test discovers classes of defects; a minimized
+regression fixture preserves a specific fixed defect.
 
 ## Boundary Fixtures
 

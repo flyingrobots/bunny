@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added checked Q32.32 addition, subtraction, negation, and multiplication APIs
   so geometry code can reject overflow instead of consuming saturated
   intermediates.
+* Added deterministic seeded property-test corpora for Q32.32 raw/order
+  invariants, vector algebra identities, query symmetry and bounds, and mesh
+  quantization round trips.
 * Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
   reference with compact tables for navigation and issue anchors.
 * Ray intersection queries now return `None` when checked intermediate
