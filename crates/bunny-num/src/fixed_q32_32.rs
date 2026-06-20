@@ -100,6 +100,45 @@ impl FixedQ32_32 {
         Some(Self(Self::sqrt_u128(val_u128) as i64))
     }
 
+    /// Adds `self` and `rhs`.
+    ///
+    /// Returns `None` when the exact raw result is not representable.
+    #[must_use]
+    pub const fn checked_add(self, rhs: Self) -> Option<Self> {
+        fixed_from_i128(self.0 as i128 + rhs.0 as i128)
+    }
+
+    /// Subtracts `rhs` from `self`.
+    ///
+    /// Returns `None` when the exact raw result is not representable.
+    #[must_use]
+    pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
+        fixed_from_i128(self.0 as i128 - rhs.0 as i128)
+    }
+
+    /// Negates `self`, returning `None` when the exact raw result is not representable.
+    #[must_use]
+    pub const fn checked_neg(self) -> Option<Self> {
+        if self.0 == i64::MIN {
+            None
+        } else {
+            Some(Self(-self.0))
+        }
+    }
+
+    /// Multiplies `self` and `rhs`.
+    ///
+    /// Returns `None` when the rounded Q32.32 result is not representable.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub const fn checked_mul(self, rhs: Self) -> Option<Self> {
+        let prod = self.0 as i128 * rhs.0 as i128;
+        let rounded = round_shift_right_u128(prod.unsigned_abs(), FRAC_BITS);
+        let signed_prod =
+            if (self.0 < 0) ^ (rhs.0 < 0) { -(rounded as i128) } else { rounded as i128 };
+        fixed_from_i128(signed_prod)
+    }
+
     /// Computes the integer square root of a `u128` value.
     #[must_use]
     pub const fn sqrt_u128(val: u128) -> u128 {

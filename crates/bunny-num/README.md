@@ -19,6 +19,9 @@ ecosystem to guarantee bit-level CPU determinism.
   on division remainders and multiplication products to prevent systematic bias.
 * **Saturating Bounds**: Arithmetic operations clamp to `i64::MIN` or
   `i64::MAX` instead of wrapping.
+* **Checked Arithmetic**: `checked_add`, `checked_sub`, `checked_neg`,
+  `checked_mul`, and `checked_div` return `None` when overflow or division by
+  zero would make the result invalid for geometry code.
 * **Deterministic Square Root**: Integer square root (`sqrt()`) implemented via
   digit-by-digit calculations on wide integers.
 * **Zero Dependency & No-Unsafe**: Compiled under `#![deny(unsafe_code)]` with
