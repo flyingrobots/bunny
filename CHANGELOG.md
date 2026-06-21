@@ -21,9 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added `cargo run --locked -p xtask -- topic-docs` and wired it into Code
   Dojo so topic test plans validate stable requirement IDs, case IDs, explicit
   oracles, evidence status, and implemented Rust test names.
+* Added universal repo-respect receipt enforcement to Code Dojo and local Git
+  hooks, plus `cargo run --locked -p xtask -- repo-respect receipt
+  <short-topic>` for creating receipt templates before commit or PR handoff.
 * Added checked Q32.32 addition, subtraction, negation, and multiplication APIs
   so geometry code can reject overflow instead of consuming saturated
   intermediates.
+* Added deterministic `FixedMat2`, `FixedMat3`, and `FixedMat4` matrix
+  primitives with row-major layout, checked multiplication, determinant, and
+  inverse behavior.
 * Added deterministic seeded property-test corpora for Q32.32 raw/order
   invariants, vector algebra identities, query symmetry and bounds, and mesh
   quantization round trips.
