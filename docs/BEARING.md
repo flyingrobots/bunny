@@ -8,11 +8,11 @@ work state belongs in GitHub issues and pull requests.
 
 | Field | State |
 | --- | --- |
-| Release focus | `v0.5.0`: merged to `main`, pending tag and publication |
-| Previous release baseline | `v0.4.0`, published on crates.io |
+| Release focus | `v0.6.0`: Math Foundations active; GP1 merged |
+| Previous release baseline | `v0.5.0`, tagged and published on 2026-06-19 |
 | Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
-| Next release step | Tag the verified `main` tip as `v0.5.0`, then publish the GitHub Release |
-| Next feature train | `v0.6.0` Math Foundations |
+| Next release step | Complete the remaining `v0.6.0` goalposts, then open the release-prep PR |
+| Next feature train | `v0.7.0` Geometry Law and Primitive Coverage |
 
 ## Recent Truth
 
@@ -46,15 +46,23 @@ work state belongs in GitHub issues and pull requests.
   `5c15363b6e6da609df76bd37db8bc3b41215ff05`.
 * `v0.5.0` promotes the standards and numeric-law work into a publishable
   workspace version.
+* `v0.5.0` was tagged and published through the GitHub Release workflow on
+  2026-06-19.
+* PR #189 merged the first `v0.6.0` Math Foundations goalpost into `main`,
+  covering coordinate law, numeric preconditions, and deterministic property
+  corpora.
 
 ## Release Sequence
 
-1. Confirm `main` is at a verified commit that includes the release prep and
-   signpost refresh.
-2. Tag the verified `main` tip as `v0.5.0`.
-3. Publish the GitHub Release so the release workflow can verify and publish
-   the public crates.
-4. Confirm crates.io visibility for every published Bunny crate.
+1. Complete the remaining `v0.6.0` Math Foundations goalposts.
+2. Open a release-prep pull request that bumps the workspace version to
+   `0.6.0`, updates release notes and signposts, and passes Code Dojo plus
+   release archive verification.
+3. Merge the verified release-prep pull request to `main`.
+4. Tag the verified `main` tip as `v0.6.0`.
+5. Publish the GitHub Release so the release workflow can verify and publish the
+   public crates.
+6. Confirm crates.io visibility for every published Bunny crate.
 
 ## Watchpoints
 
@@ -78,6 +86,6 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The standards-alignment goalpost is complete. Evidence is recorded in
-`docs/goalposts/post-v0.4.0-standards-alignment.md`; the merged release prep also
-passed `RELEASE_TAG=v0.5.0 scripts/publish-crates.sh verify`, full Code Dojo,
-GitHub Actions, and CodeRabbit review.
+`docs/goalposts/post-v0.4.0-standards-alignment.md`; the merged `v0.5.0` release
+prep also passed `RELEASE_TAG=v0.5.0 scripts/publish-crates.sh verify`, full
+Code Dojo, GitHub Actions, and CodeRabbit review.

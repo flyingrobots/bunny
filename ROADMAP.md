@@ -282,8 +282,7 @@ fully satisfy the written acceptance criteria.
 
 ## Release v0.5.0: Standards, Numeric Law, and Release Hygiene
 
-* **Status**: Merged to `main`; pending release tag and GitHub Release
-  publication.
+* **Status**: Published.
 * **Description**: Ships the repository standards alignment, Code Dojo quality
   gates, numeric law hardening, validated fixed-point ingress, release archive
   verification, and roadmap source-of-truth cleanup completed after `v0.4.0`.
@@ -291,6 +290,8 @@ fully satisfy the written acceptance criteria.
   landed the numeric law and roadmap source-of-truth work, and PR #185 merged
   the publishable workspace version at
   `5c15363b6e6da609df76bd37db8bc3b41215ff05`.
+* **Release Cut**: Tagged at `v0.5.0` and published through the GitHub Release
+  workflow on 2026-06-19.
 
 ---
 
@@ -304,28 +305,61 @@ fifth, and consumer confidence last.
 Issue numbers are GitHub tracker items. They are planning anchors, not evidence
 of completion.
 
+Release headings are the durable release milestones. A matching GitHub milestone
+is the normal execution surface for the issues and pull requests that complete
+that release. The release is cut only after the milestone's must-ship scope has
+landed, the release-prep pull request has bumped the workspace version, Code
+Dojo and release archive verification are green, and `CHANGELOG.md` records the
+shipped surface.
+
+Patch releases are reserved for bug fixes, packaging fixes, standards-gate
+repairs, and documentation corrections for behavior that already exists. New
+math, geometry, collision, visibility, optics, SIMD, or codec capability belongs
+on the next minor release train unless the roadmap explicitly moves the release
+cut.
+
+| Release | Cut Trigger | Scope |
+| --- | --- | --- |
+| `v0.6.0` | `v0.6.0 Math Foundations` milestone complete. | Coordinate law, numeric preconditions, matrices, transforms, projections, orientation, interpolation, and curves. |
+| `v0.7.0` | `v0.7.0 Geometry Law and Primitive Coverage` milestone complete. | Degeneracy law, robust predicates, shape expansion, 2D coverage, clipping, bounds, topology, and mass properties. |
+| `v0.8.0` | `v0.8.0 Collision and Contact` milestone complete. | Narrowphase, support mapping, GJK/EPA, collision architecture, manifolds, and swept queries. |
+| `v0.9.0` | `v0.9.0 Acceleration, Visibility, and Ray Tracing` milestone complete. | Dynamic broadphase, spatial hashing, mesh BVHs, visibility, occlusion, and ray-tracing hit suites. |
+| `v0.10.0` | `v0.10.0 Optics, SIMD, and Codec Completion` milestone complete. | Optics, deterministic SIMD exploration, benchmarks, no-std audit, codec encoder, external mesh profiles, and fuzzing. |
+| `v0.11.0` | `v0.11.0 Consumer Confidence and Public Readiness` milestone complete. | Examples, fixtures, generated-contract parity, docs.rs readiness, and boundary adapter decisions. |
+
 ---
 
 ## Release v0.6.0: Math Foundations (The Frame Commons)
 
-* **Status**: Planned.
+* **Status**: Active; Goalpost 1 has merged to `main`.
 * **GitHub Milestone**: `v0.6.0 Math Foundations`
 * **Description**: Locks coordinate law, numeric preconditions, matrices,
   transforms, projection, orientation, angle, interpolation, and curve math.
+* **Release Cut**: Cut `v0.6.0` when Goalposts 1-3 are merged, the release-prep
+  PR bumps the workspace version to `0.6.0`, Code Dojo is green, release archive
+  verification passes, and the changelog records the math-foundation surface.
+* **Must Ship**: Coordinate law, numeric preconditions, deterministic matrices,
+  affine transforms, projection and viewport mapping, quaternion orientation,
+  angle policy, interpolation helpers, and curve primitives.
+* **May Slip**: Nonessential convenience overloads and extended examples that do
+  not change the core math contract.
+* **Not Included**: New collision solvers, new visibility acceleration
+  structures, optics, SIMD backends, and codec feature expansion.
 
 ### Goalpost 1: Coordinate Law and Numeric Preconditions
 
 * **Tracker**: #166
+* **Status**: Done; merged through PR #189.
 * **Description**: Define coordinate spaces, handedness, units, and numeric
   preconditions before more geometry consumes them.
 * **Slice Budget**: 3 Slices
 * **Slices**:
   * **Slice 1.1**: Define coordinate-space, handedness, and units policy.
-    [Planned: #164]
+    [Done: #164]
   * **Slice 1.2**: Audit saturating arithmetic before geometry consumes invalid
-    values. [Planned: #114]
+    values. [Done: #114]
   * **Slice 1.3**: Add property tests for Q32.32 and geometry invariants.
-    [Planned: #129]
+    [Done: #129]
 
 ### Goalpost 2: Matrix and Transform Primitives
 
@@ -367,6 +401,16 @@ of completion.
 * **GitHub Milestone**: `v0.7.0 Geometry Law and Primitive Coverage`
 * **Description**: Defines degeneracy behavior, robust predicates, richer shape
   families, 2D coverage, clipping, bounds, topology, and mass properties.
+* **Release Cut**: Cut `v0.7.0` when Goalposts 1-3 are merged, the release-prep
+  PR bumps the workspace version to `0.7.0`, Code Dojo is green, release archive
+  verification passes, and the changelog records the geometry-law surface.
+* **Must Ship**: Degeneracy policy, robust predicates, expanded fixed shapes,
+  frustum and culling primitives, 2D query coverage, clipping, bounds merging,
+  topology validation, and deterministic mass properties.
+* **May Slip**: Extra shape families whose semantics are not needed by the
+  collision train.
+* **Not Included**: Contact manifold generation, GJK/EPA, dynamic broadphase,
+  optics, SIMD, and codec encoder work.
 
 ### Goalpost 1: Degeneracy and Robust Predicate Law
 
@@ -417,6 +461,16 @@ of completion.
 * **GitHub Milestone**: `v0.8.0 Collision and Contact`
 * **Description**: Adds deterministic narrowphase, SAT, support mapping,
   GJK/EPA, contact manifolds, swept queries, and collision architecture.
+* **Release Cut**: Cut `v0.8.0` when Goalposts 1-3 are merged, the release-prep
+  PR bumps the workspace version to `0.8.0`, Code Dojo is green, release archive
+  verification passes, and the changelog records the collision/contact surface.
+* **Must Ship**: Primitive-pair narrowphase coverage, SAT helpers,
+  support-mapping primitives, GJK/EPA, collision query architecture, contact
+  manifolds, and continuous/swept queries.
+* **May Slip**: Higher-level physics stepping, solver integration helpers, and
+  broad scene-management conveniences.
+* **Not Included**: Owning a physics engine, renderer integration, mesh BVH
+  acceleration, optics, SIMD, and codec encoder work.
 
 ### Goalpost 1: Primitive Narrowphase Coverage
 
@@ -463,6 +517,17 @@ of completion.
   `v0.9.0 Acceleration, Visibility, and Ray Tracing`
 * **Description**: Adds dynamic broadphase, spatial hashing, mesh BVHs,
   occlusion, visibility batching, and ray-tracing hit suites.
+* **Release Cut**: Cut `v0.9.0` when Goalposts 1-3 are merged, the release-prep
+  PR bumps the workspace version to `0.9.0`, Code Dojo is green, release archive
+  verification passes, and the changelog records the acceleration and visibility
+  surface.
+* **Must Ship**: Dynamic broadphase update/refit APIs, spatial hash or uniform
+  grid solver, BVH-backed mesh ray and closest-point queries, visibility and
+  occlusion primitives, and ray-tracing primitive intersection records.
+* **May Slip**: Renderer-specific batching conveniences and optional
+  acceleration-structure variants beyond the primary deterministic design.
+* **Not Included**: Lighting/BRDF math, SIMD backend selection, compressed mesh
+  encoder, external mesh profiles, and public readiness polish.
 
 ### Goalpost 1: Dynamic Broadphase and Spatial Hashing
 
@@ -507,6 +572,18 @@ of completion.
 * **Description**: Adds camera and optics math, deterministic SIMD exploration,
   benchmark evidence, no_std audit, codec encoder, checksums, external mesh
   profiles, and fuzzing.
+* **Release Cut**: Cut `v0.10.0` when Goalposts 1-3 are merged, the
+  release-prep PR bumps the workspace version to `0.10.0`, Code Dojo is green,
+  release archive verification passes, and the changelog records the optics,
+  performance, and codec-completion surface.
+* **Must Ship**: Camera and ray-generation primitives, lighting and BRDF math,
+  deterministic SIMD parity exploration, benchmark harnesses, no-std audit,
+  compressed mesh encoder, checksum profile, glTF/STL import profiles, and
+  decoder fuzzing harnesses.
+* **May Slip**: SIMD implementation backends that fail scalar parity or do not
+  beat scalar code with clear evidence.
+* **Not Included**: Downstream application adapters, broad public tutorial
+  expansion, and generated TypeScript parity beyond existing contract checks.
 
 ### Goalpost 1: Deterministic Camera and Optics Math
 
@@ -561,6 +638,17 @@ of completion.
   `v0.11.0 Consumer Confidence and Public Readiness`
 * **Description**: Adds examples, fixtures, generated-contract parity,
   docs.rs readiness, and optional boundary adapter exploration.
+* **Release Cut**: Cut `v0.11.0` when Goalposts 1-3 are merged, the
+  release-prep PR bumps the workspace version to `0.11.0`, Code Dojo is green,
+  release archive verification passes, and the changelog records the public
+  readiness surface.
+* **Must Ship**: Runnable examples, shared deterministic fixtures, TypeScript
+  DTO compile/parity checks, rustdoc/docs.rs readiness checks, and an explicit
+  decision on Echo/Geordi boundary adapters.
+* **May Slip**: Optional adapter crates if they compromise Bunny's
+  project-neutral core or lack stable downstream contracts.
+* **Not Included**: New foundational math, collision, visibility, optics, SIMD,
+  or codec capabilities that should have shipped in earlier release trains.
 
 ### Goalpost 1: Examples and Fixture Corpora
 

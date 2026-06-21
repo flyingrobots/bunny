@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   convention, NDC reservations, and documentation source-of-truth rules.
 * Added `docs/README.md` as the documentation spine for living topic chapters,
   test plans, historical design records, and PR documentation gates.
+* Added `CONTRIBUTING.md` to explain Bunny's current-truth documentation
+  technique and contract-graph workflow for new contributors.
 * Added `cargo run --locked -p xtask -- topic-docs` and wired it into Code
   Dojo so topic test plans validate stable requirement IDs, case IDs, explicit
   oracles, evidence status, and implemented Rust test names.
@@ -27,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quantization round trips.
 * Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
   reference with compact tables for navigation and issue anchors.
+* Added explicit release cut policy and cut gates to `ROADMAP.md`, including
+  must-ship, may-slip, and not-included boundaries for the planned release
+  train, and refreshed `docs/BEARING.md` to point at the active `v0.6.0`
+  release sequence.
 * Ray intersection queries now return `None` when checked intermediate
   arithmetic overflows, rather than accepting saturated Q32.32 values as valid
   geometric hits.
