@@ -1,6 +1,7 @@
 //! Bunny workspace automation tasks.
 
 mod code_dojo;
+mod repo_respect;
 mod topic_docs;
 
 use std::error::Error;
@@ -28,6 +29,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "code-dojo-rust" => code_dojo::handle_rust(args),
         "code-dojo-determinism" => code_dojo::handle_determinism(args),
         "code-dojo-commit-msg" => code_dojo::handle_commit_msg(args),
+        "repo-respect" => repo_respect::handle(args),
         "topic-docs" => topic_docs::handle(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -57,6 +59,7 @@ fn print_help() {
     println!("                  Check deterministic golden-vector receipts");
     println!("  code-dojo-commit-msg <path>");
     println!("                  Check a commit message file");
+    println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
     println!("  help            Show this help info");
 }

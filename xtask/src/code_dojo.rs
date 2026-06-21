@@ -42,14 +42,6 @@ const WASM_PACKAGES: &[&str] = &[
 const GOLDEN_TEST_NAMES: &[&str] =
     &["golden_vectors.rs", "determinism.rs", "fixed_q32x32_vectors.rs", "geometry_degenerates.rs"];
 const MERGE_PREFIXES: &[&str] = &["Merge ", "Revert "];
-const AI_MARKERS: &[&str] = &[
-    "Co-Authored-By: ChatGPT",
-    "Co-authored-by: ChatGPT",
-    "AI-Assisted: true",
-    "AI-Authored: true",
-    "Generated-By: ChatGPT",
-    "Generated-By: OpenAI",
-];
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -214,6 +206,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
 
     check_rust(Mode::All)?;
     crate::topic_docs::check()?;
+    crate::repo_respect::check_branch()?;
     check_determinism_receipts(true)?;
     ensure_cargo_manifest("full gate")?;
     run_quality_commands(true)?;
@@ -225,6 +218,7 @@ pub(super) fn handle_pre_commit() -> Result<(), DynError> {
     println!("Code Dojo: checking staged Rust changes");
     check_rust(Mode::Staged)?;
     crate::topic_docs::check_staged()?;
+    crate::repo_respect::check_staged()?;
     ensure_cargo_manifest("pre-commit gate")?;
     run_quality_commands(false)?;
     Ok(())
@@ -448,7 +442,8 @@ fn run_command_strings(args: &[String]) -> Result<(), DynError> {
     };
     println!("Code Dojo: {}", args.join(" "));
     let root = git_root()?;
-    let status = Command::new(program).args(rest).current_dir(root).status()?;
+    let status =
+        Command::new(program).args(rest).current_dir(root).env_remove("GIT_INDEX_FILE").status()?;
     if status.success() {
         Ok(())
     } else {
@@ -598,13 +593,7 @@ fn check_commit_message(path: &Path) -> Result<(), DynError> {
         failures.push("subject is too vague; name the causal change".to_string());
     }
 
-    let ai_assisted = AI_MARKERS.iter().any(|marker| text.contains(marker));
-    let has_receipt = non_comment.iter().any(|line| line.starts_with("Repo-Respect-Receipt:"));
-    if ai_assisted && !has_receipt {
-        failures.push(
-            "AI-assisted commits require 'Repo-Respect-Receipt: <id-or-path>' trailer".to_string(),
-        );
-    }
+    failures.extend(crate::repo_respect::commit_message_failures(&non_comment)?);
 
     if failures.is_empty() {
         println!("Code Dojo: commit message clean");
@@ -686,7 +675,7 @@ fn read_rust_source(root: &Path, mode: Mode, path: &Path) -> Result<String, DynE
 
 fn read_staged_source(root: &Path, path: &Path) -> Result<String, DynError> {
     let object = format!(":{}", path.to_string_lossy());
-    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    let output = git_command(root).args(["show", &object]).output()?;
     if output.status.success() {
         return Ok(String::from_utf8(output.stdout)?);
     }
@@ -699,7 +688,7 @@ fn rust_files(root: &Path, mode: Mode) -> Result<Vec<PathBuf>, DynError> {
         Mode::All => vec!["ls-files", "--cached", "--others", "--exclude-standard"],
         Mode::Staged => vec!["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
     };
-    let output = Command::new("git").args(args).current_dir(root).output()?;
+    let output = git_command(root).args(args).output()?;
     if !output.status.success() {
         return Err(command_error("git file listing", &output.stderr).into());
     }
@@ -722,6 +711,24 @@ fn rust_files(root: &Path, mode: Mode) -> Result<Vec<PathBuf>, DynError> {
 fn command_error(command: &str, stderr: &[u8]) -> DojoError {
     let detail = String::from_utf8_lossy(stderr);
     DojoError::new(format!("{command} failed: {}", detail.trim()))
+}
+
+fn git_command(root: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.current_dir(root);
+    sanitize_inherited_git_index(root, &mut command);
+    command
+}
+
+fn sanitize_inherited_git_index(root: &Path, command: &mut Command) {
+    let Ok(index) = std::env::var("GIT_INDEX_FILE") else {
+        return;
+    };
+    let index_path = PathBuf::from(index);
+    let absolute_index = if index_path.is_absolute() { index_path } else { root.join(index_path) };
+    if !absolute_index.starts_with(root.join(".git")) {
+        command.env_remove("GIT_INDEX_FILE");
+    }
 }
 
 fn is_rust_source(path: &Path) -> bool {
@@ -1299,8 +1306,7 @@ mod tests {
     }
 
     fn run_git(root: &Path, args: &[&str]) {
-        let output =
-            Command::new("git").args(args).current_dir(root).output().expect("git should run");
+        let output = git_command(root).args(args).output().expect("git should run");
         assert!(
             output.status.success(),
             "git {:?} failed: {}",

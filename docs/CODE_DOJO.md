@@ -15,11 +15,12 @@ bash scripts/install-githooks.sh
 Hooks installed:
 
 - `pre-commit` — checks staged Rust files with the AST policy gate, then runs
-  topic documentation contract checks, `cargo fmt --check`, workspace Clippy,
-  strict package-scoped library Clippy, dependency policy, `cargo test`, and
-  doctests.
-- `commit-msg` — enforces focused commit subjects and AI receipt trailers when applicable.
-- `pre-push` — runs the full dojo, including deterministic manifest checks and WASM check.
+  topic documentation contract checks, repo-respect receipt coverage,
+  `cargo fmt --check`, workspace Clippy, strict package-scoped library Clippy,
+  dependency policy, `cargo test`, and doctests.
+- `commit-msg` — enforces focused commit subjects and repo-respect receipt trailers.
+- `pre-push` — runs the full dojo, including repo-respect receipt coverage,
+  deterministic manifest checks, and WASM check.
 
 The stable local and CI entrypoint is:
 
@@ -30,6 +31,8 @@ cargo run --locked -p xtask -- code-dojo --all
 Rust source-shape policy is parsed through `cargo run --locked -p xtask -- code-dojo-rust`.
 Topic documentation contract metadata is checked through
 `cargo run --locked -p xtask -- topic-docs`.
+Repo-respect receipt templates and checks are handled through
+`cargo run --locked -p xtask -- repo-respect`.
 
 ## CI
 
@@ -43,8 +46,8 @@ Jobs:
 
 - `dojo-ubuntu` — runs `cargo run --locked -p xtask -- code-dojo --all --ci`,
   covering formatting, Rust AST policy, dependency policy, Clippy, native tests,
-  doctests, topic documentation contract metadata, deterministic receipts, and
-  wasm32 library checks.
+  doctests, topic documentation contract metadata, repo-respect receipt
+  coverage, deterministic receipts, and wasm32 library checks.
 - `determinism-matrix` — runs workspace tests and deterministic receipt
   enforcement on `ubuntu-latest`, `macos-26`, and `windows-latest`.
 - `wasm-headless` — runs headless Node `wasm-pack test` for each

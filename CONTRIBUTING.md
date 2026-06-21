@@ -130,6 +130,22 @@ reviewable, and tied to a clear contract change.
 
 ## Local Checks
 
+Every pull request must add or update a repo-respect receipt, and every
+non-merge commit must reference that receipt with a commit trailer. Receipts are
+required for all contributors and contribution methods.
+
+Create a receipt template before committing substantive changes:
+
+```bash
+cargo run --locked -p xtask -- repo-respect receipt <short-topic>
+```
+
+Then stage the receipt and add this trailer to each non-merge commit message:
+
+```text
+Repo-Respect-Receipt: .repo-respect/receipts/<id>.md
+```
+
 Run focused checks first, then broaden as the change becomes ready for handoff.
 For documentation-only changes, start with:
 
@@ -137,6 +153,7 @@ For documentation-only changes, start with:
 markdownlint-cli2 CONTRIBUTING.md CHANGELOG.md docs/**/*.md README.md ROADMAP.md
 git diff --check
 cargo run --locked -p xtask -- topic-docs
+cargo run --locked -p xtask -- repo-respect check --staged
 ```
 
 Before opening or updating a goalpost pull request, run the full local gate:
