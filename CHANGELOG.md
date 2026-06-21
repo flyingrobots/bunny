@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quantization round trips.
 * Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
   reference with compact tables for navigation and issue anchors.
+* Added explicit release cut policy and cut gates to `ROADMAP.md`, including
+  must-ship, may-slip, and not-included boundaries for the planned release
+  train.
 * Ray intersection queries now return `None` when checked intermediate
   arithmetic overflows, rather than accepting saturated Q32.32 values as valid
   geometric hits.
