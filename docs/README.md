@@ -16,7 +16,7 @@ evidence exist.
 | Chapter | Owns |
 | --- | --- |
 | [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection reservations. |
-| [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, multiplication semantics, determinants, inverses, and transform-boundary reservations. |
+| [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, affine point/vector transforms, determinants, inverses, and transform-boundary reservations. |
 | [`NUMERIC_CONSTITUTION.md`](NUMERIC_CONSTITUTION.md) | Q32.32 arithmetic law, construction policy, rounding, overflow, and numeric golden-vector expectations. |
 | [`MATH_GEOMETRY_CAPABILITY_MAP.md`](MATH_GEOMETRY_CAPABILITY_MAP.md) | Bunny's durable math/geometry ownership boundary, non-goals, missing surface, and build order. |
 | [`CODE_DOJO.md`](CODE_DOJO.md) | Local and CI quality gate behavior. |

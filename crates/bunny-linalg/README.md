@@ -2,9 +2,9 @@
 
 Deterministic linear algebra primitives for the Bunny graphics commons.
 
-This crate provides 2D and 3D vector representations plus fixed matrix types
-designed to enforce bit-level deterministic coordinate math for graphics
-pipelines.
+This crate provides 2D and 3D vector representations plus fixed matrix and
+affine transform types designed to enforce bit-level deterministic coordinate
+math for graphics pipelines.
 
 ## Core Features
 
@@ -18,6 +18,9 @@ pipelines.
 * **Fixed-Point Matrices (`FixedMat2`, `FixedMat3`, `FixedMat4`)**:
   Row-major deterministic matrix primitives with column-vector multiplication
   semantics.
+* **Affine Transforms (`FixedAffine2`, `FixedAffine3`)**: Checked transform
+  wrappers that translate points, preserve vector translation-invariance, and
+  compose right-to-left.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix

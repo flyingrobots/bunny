@@ -1,25 +1,29 @@
-# Matrix Types Test Plan
+# Matrix And Affine Transform Types Test Plan
 
-This document defines how Bunny verifies the fixed-point matrix contract.
+This document defines how Bunny verifies the fixed-point matrix and affine
+transform contract.
 
-The current matrix chapter is [`README.md`](README.md). This test plan is a
+The current topic chapter is [`README.md`](README.md). This test plan is a
 living verification design. It records active requirements, executable
-evidence, and open gaps for future transform and projection work.
+evidence, and open gaps for future bounds, projection, and orientation work.
 
 ## Scope
 
-This plan covers `FixedMat2`, `FixedMat3`, and `FixedMat4` in `bunny-linalg`:
+This plan covers `FixedMat2`, `FixedMat3`, `FixedMat4`, `FixedAffine2`, and
+`FixedAffine3` in `bunny-linalg`:
 
 - row-major layout;
 - row and column accessors;
 - column-vector multiplication semantics;
 - checked matrix-vector and matrix-matrix multiplication;
+- checked affine point and vector transforms;
+- checked affine composition;
 - identity and transpose;
 - determinant and inverse behavior;
 - singular and overflowing input handling.
 
-Transform-specific point, vector, normal, bounds, projection, and viewport
-semantics are out of scope until later roadmap slices expose those APIs.
+Normal, bounds, projection, and viewport semantics are out of scope until later
+roadmap slices expose those APIs.
 
 ## Test Goals
 
@@ -28,6 +32,10 @@ semantics are out of scope until later roadmap slices expose those APIs.
 - Assert exact raw Q32.32 outputs for representative products and inverses.
 - Prove that determinant and inverse APIs return `None` for singular or
   overflowing cases instead of panicking or silently saturating.
+- Prove that affine point transforms apply translation while affine vector
+  transforms do not.
+- Prove that affine composition follows the same right-to-left column-vector
+  convention as matrix multiplication.
 - Keep the evidence native and WASM-compatible through normal `bunny-linalg`
   test coverage.
 - Avoid private helpers, stdout, stderr, logs, and documentation prose as test
@@ -48,7 +56,10 @@ formatting.
 | MT-REQ-004 | Multiplication APIs return `None` when checked Q32.32 arithmetic overflows. | `README.md#multiplication` |
 | MT-REQ-005 | Identity and transpose are stable for 2x2, 3x3, and 4x4 matrices. | `README.md#identity-and-transpose` |
 | MT-REQ-006 | Determinant and inverse APIs return exact values when representable and `None` for singular or overflowing cases. | `README.md#determinant-and-inverse` |
-| MT-REQ-007 | `FixedMat4` does not yet claim transform, projection, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
+| MT-REQ-007 | `FixedMat4` does not yet claim affine transform, projection, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
+| MT-REQ-008 | Affine point transforms apply translation while affine vector transforms do not. | `README.md#affine-transforms` |
+| MT-REQ-009 | Affine composition is right-to-left for column-vector semantics. | `README.md#affine-transforms` |
+| MT-REQ-010 | Affine inverse APIs return exact values when representable and `None` for singular or overflowing cases. | `README.md#affine-transforms` |
 
 ```toml
 [[requirement]]
@@ -83,7 +94,22 @@ status = "active"
 
 [[requirement]]
 id = "MT-REQ-007"
-summary = "FixedMat4 does not yet claim transform, projection, normal, or bounds propagation semantics."
+summary = "FixedMat4 does not yet claim affine transform, projection, normal, or bounds propagation semantics."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-008"
+summary = "Affine point transforms apply translation while affine vector transforms do not."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-009"
+summary = "Affine composition is right-to-left for column-vector semantics."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-010"
+summary = "Affine inverse APIs return exact values when representable and None for singular or overflowing cases."
 status = "active"
 ```
 
@@ -99,9 +125,11 @@ values:
 - `FixedVec3::new`;
 - `FixedMat2::new`;
 - `FixedMat3::from_rows`;
-- `FixedMat4::from_rows`.
+- `FixedMat4::from_rows`;
+- `FixedAffine2::from_parts`;
+- `FixedAffine3::from_parts`.
 
-Future transform or projection slices may add checked-in fixtures. Each fixture
+Future bounds or projection slices may add checked-in fixtures. Each fixture
 must document its source, generation command or hand-computation proof, oracle,
 and regeneration policy.
 
@@ -115,6 +143,11 @@ and regeneration policy.
 | MT-TP-004 | 4x4 identity, transpose, determinant, inverse | MT-REQ-003, MT-REQ-005, MT-REQ-006, MT-REQ-007 | Exact determinant, transpose accessors, inverse rows, and identity product. | `crates/bunny-linalg/tests/matrix_tests.rs::fixed_mat4_identity_transpose_and_matrix_multiply_are_stable` |
 | MT-TP-005 | Negative and overflow behavior | MT-REQ-004, MT-REQ-006 | Singular matrices and overflowing products return `None`. | `crates/bunny-linalg/tests/matrix_tests.rs::matrix_inverse_returns_none_for_degenerate_or_overflowing_cases` |
 | MT-TP-006 | Fractional inverse raw outputs | MT-REQ-006 | Exact raw Q32.32 half-unit inverse entries. | `crates/bunny-linalg/tests/matrix_tests.rs::fixed_mat2_fractional_inverse_uses_q32_32_raw_outputs` |
+| MT-TP-007 | Affine point and vector semantics | MT-REQ-008 | Exact point output includes translation while vector output excludes translation. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_007_fixed_affine2_points_translate_but_vectors_do_not` |
+| MT-TP-008 | Affine composition | MT-REQ-009 | Combined transform applies the inner transform before the outer transform. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_008_fixed_affine2_composition_is_right_to_left` |
+| MT-TP-009 | Affine inverse | MT-REQ-010 | Exact inverse round trip restores transformed points and vectors. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_009_fixed_affine_inverse_round_trips_points_and_vectors` |
+| MT-TP-010 | Affine overflow and singular inverse | MT-REQ-008, MT-REQ-010 | Overflowing point transforms and singular inverse attempts return `None`. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_010_affine_transform_overflow_and_singular_inverse_return_none` |
+| MT-TP-011 | Affine inverse boundary regression | MT-REQ-010 | Minimum raw translation is scaled before negation when the inverse translation is representable. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_011_affine_inverse_scales_min_translation_before_negating` |
 
 ```toml
 [[case]]
@@ -170,15 +203,62 @@ test = "crates/bunny-linalg/tests/matrix_tests.rs::fixed_mat2_fractional_inverse
 oracle = "Exact raw Q32.32 half-unit inverse entries."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "MT-TP-007"
+requirements = ["MT-REQ-008"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_007_fixed_affine2_points_translate_but_vectors_do_not"
+oracle = "Exact point output includes translation while vector output excludes translation."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-008"
+requirements = ["MT-REQ-009"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_008_fixed_affine2_composition_is_right_to_left"
+oracle = "Combined transform applies the inner transform before the outer transform."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-009"
+requirements = ["MT-REQ-010"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_009_fixed_affine_inverse_round_trips_points_and_vectors"
+oracle = "Exact inverse round trip restores transformed points and vectors."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-010"
+requirements = ["MT-REQ-008", "MT-REQ-010"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_010_affine_transform_overflow_and_singular_inverse_return_none"
+oracle = "Overflowing point transforms and singular inverse attempts return None."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-011"
+requirements = ["MT-REQ-010"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_011_affine_inverse_scales_min_translation_before_negating"
+oracle = "Minimum raw translation is scaled before negation when the inverse translation is representable."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
 
-Current matrix tests use only public deterministic fixed-point operations:
+Current matrix and affine tests use only public deterministic fixed-point
+operations:
 
 - integer raw construction;
 - checked Q32.32 multiplication, addition, subtraction, negation, and division;
 - exact equality on fixed-point matrix and vector values;
+- exact equality on fixed-point affine transform outputs;
 - exact raw Q32.32 comparisons for representative outputs.
 
 There is no randomness, time, filesystem access, locale-sensitive formatting,
@@ -186,13 +266,11 @@ parallel scheduling, map iteration, stdout, stderr, or logging in the oracle.
 
 ## Known Failures
 
-The current executable surface has no known failing matrix cases.
+The current executable surface has no known failing matrix or affine cases.
 
 Future implementation work must add explicit negative tests for:
 
-- point/vector transform misuse;
-- invalid affine transform construction;
-- non-invertible transform wrappers;
+- normal transform misuse;
 - projection parameters that would produce invalid clip-space mappings;
 - bounds propagation cases where transformed corners overflow.
 
@@ -202,6 +280,8 @@ Current tests cover:
 
 - singular 2x2, 3x3, and 4x4 matrices;
 - checked multiplication overflow;
+- checked affine point-translation overflow;
+- minimum raw affine translation that becomes representable after inverse scale;
 - fractional inverse entries that must compare by raw Q32.32 value;
 - identity composition for 4x4 matrices.
 
@@ -232,7 +312,6 @@ case with a stable test name.
 
 | Gap | Blocking API |
 | --- | --- |
-| Typed affine transforms and point/vector distinction. | Slice 2.2 transform types. |
 | Transform-aware bounds propagation. | Slice 2.3 bounds propagation APIs. |
 | Projection, unprojection, and viewport mapping. | Slice 2.4 projection APIs. |
 | Quaternion-to-matrix conversion. | v0.6.0-GP3 orientation APIs. |

@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added deterministic `FixedMat2`, `FixedMat3`, and `FixedMat4` matrix
   primitives with row-major layout, checked multiplication, determinant, and
   inverse behavior.
+* Added deterministic `FixedAffine2` and `FixedAffine3` affine transform
+  primitives with checked point transforms, vector transforms, composition, and
+  inverse behavior.
 * Added deterministic seeded property-test corpora for Q32.32 raw/order
   invariants, vector algebra identities, query symmetry and bounds, and mesh
   quantization round trips.
@@ -51,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Affine inverse computation now applies the inverse linear transform before
+  negating translation, so minimum raw translations can still invert when the
+  scaled inverse translation is representable.
 * Historical goalpost evidence now distinguishes retired `ci.yml` anchors from
   the current Code Dojo workflow.
 

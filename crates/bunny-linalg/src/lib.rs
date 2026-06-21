@@ -8,6 +8,8 @@
 
 use bunny_num::{FixedQ32_32, Scalar};
 
+mod fixed_affine2;
+mod fixed_affine3;
 mod fixed_mat2;
 mod fixed_mat3;
 mod fixed_mat4;
@@ -16,6 +18,8 @@ mod fixed_vec2;
 mod fixed_vec3;
 pub(crate) mod matrix_common;
 
+pub use fixed_affine2::FixedAffine2;
+pub use fixed_affine3::FixedAffine3;
 pub use fixed_mat2::FixedMat2;
 pub use fixed_mat3::FixedMat3;
 pub use fixed_mat4::FixedMat4;

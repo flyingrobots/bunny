@@ -369,9 +369,9 @@ cut.
 * **Slice Budget**: 4 Slices
 * **Slices**:
   * **Slice 2.1**: Implement deterministic fixed matrix types.
-    [Planned: #107]
+    [Done: #107, PR #191]
   * **Slice 2.2**: Implement deterministic affine transform types.
-    [Planned: #108]
+    [Done: #108]
   * **Slice 2.3**: Add transform-aware bounds propagation.
     [Planned: #119]
   * **Slice 2.4**: Add deterministic projection, unprojection, and viewport

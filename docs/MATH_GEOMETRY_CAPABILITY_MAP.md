@@ -124,10 +124,10 @@ Open work:
 
 ### Linear Algebra
 
-`bunny-linalg` owns deterministic vector math and the future frame algebra that
-will support transforms, projection, orientation, and camera work. Coordinate
-handedness and unit policy are now defined in `docs/topics/coordinate-law/`;
-future matrix and transform APIs must respect that law.
+`bunny-linalg` owns deterministic vector math and the frame algebra that will
+support projection, orientation, and camera work. Coordinate handedness and unit
+policy are now defined in `docs/topics/coordinate-law/`; current matrix and
+affine transform APIs respect that law.
 
 Current surface:
 
@@ -135,14 +135,14 @@ Current surface:
 - dot and cross products
 - length and normalization
 - fixed unit-vector wrappers
+- `FixedMat2`, `FixedMat3`, and `FixedMat4`
+- `FixedAffine2` and `FixedAffine3`
 - coordinate-law convention tests
 
 Open work:
 
 | Capability | Issues |
 | --- | --- |
-| Matrix types | #107 |
-| Affine transforms | #108 |
 | Quaternion rotations | #109 |
 | Angle and trigonometry policy | #110 |
 | Interpolation and remap helpers | #111 |
