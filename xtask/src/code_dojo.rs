@@ -213,6 +213,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     }
 
     check_rust(Mode::All)?;
+    crate::topic_docs::check()?;
     check_determinism_receipts(true)?;
     ensure_cargo_manifest("full gate")?;
     run_quality_commands(true)?;
@@ -223,6 +224,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
 pub(super) fn handle_pre_commit() -> Result<(), DynError> {
     println!("Code Dojo: checking staged Rust changes");
     check_rust(Mode::Staged)?;
+    crate::topic_docs::check_staged()?;
     ensure_cargo_manifest("pre-commit gate")?;
     run_quality_commands(false)?;
     Ok(())
@@ -378,6 +380,7 @@ fn run_quality_commands(include_wasm_check: bool) -> Result<(), DynError> {
     run_command_strings(&strict_clippy)?;
     run_command(&["cargo", "deny", "check"])?;
     run_command(&["cargo", "test", "--locked", "--workspace", "--all-targets", "--all-features"])?;
+    run_command(&["cargo", "test", "--locked", "--workspace", "--doc", "--all-features"])?;
 
     if include_wasm_check {
         run_command(&["rustup", "target", "add", "wasm32-unknown-unknown"])?;

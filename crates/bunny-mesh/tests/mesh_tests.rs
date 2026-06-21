@@ -149,6 +149,38 @@ fn test_dequantization_uses_wide_single_rounding() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn test_dequantization_extreme_bounds_do_not_wrap() {
+    let wide_bounds = FixedAabb3::new(
+        FixedVec3::new(
+            FixedQ32_32::from_raw(i64::MIN),
+            FixedQ32_32::from_raw(i64::MIN),
+            FixedQ32_32::from_raw(i64::MIN),
+        ),
+        FixedVec3::new(
+            FixedQ32_32::from_raw(i64::MAX),
+            FixedQ32_32::from_raw(i64::MAX),
+            FixedQ32_32::from_raw(i64::MAX),
+        ),
+    );
+
+    let decoded_min = dequantize_vertex(QuantizedVertex::new(0, 0, 0), &wide_bounds);
+    let decoded_near_min = dequantize_vertex(QuantizedVertex::new(1, 1, 1), &wide_bounds);
+    let decoded_near_max = dequantize_vertex(
+        QuantizedVertex::new(u16::MAX - 1, u16::MAX - 1, u16::MAX - 1),
+        &wide_bounds,
+    );
+    let decoded_max =
+        dequantize_vertex(QuantizedVertex::new(u16::MAX, u16::MAX, u16::MAX), &wide_bounds);
+
+    assert_eq!(decoded_min, wide_bounds.min);
+    assert_eq!(decoded_max, wide_bounds.max);
+    assert!(decoded_near_min.x.raw() > i64::MIN);
+    assert!(decoded_near_min.x.raw() < 0);
+    assert!(decoded_near_max.x.raw() > 0);
+    assert!(decoded_near_max.x.raw() < i64::MAX);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn test_quantization_clamping() {
     let bounds = FixedAabb3::new(
         FixedVec3::new(FixedQ32_32::ZERO, FixedQ32_32::ZERO, FixedQ32_32::ZERO),

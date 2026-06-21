@@ -1,7 +1,7 @@
 //! Integration tests.
 
 use bunny_geom::{FixedAabb3, FixedRay3, FixedSphere3};
-use bunny_linalg::FixedVec3;
+use bunny_linalg::{FixedUnitVec3, FixedVec3};
 use bunny_num::FixedQ32_32;
 use bunny_query::{
     aabb_intersects_sphere, closest_point_aabb, closest_point_triangle, closest_points_segments,
@@ -13,6 +13,10 @@ const ONE_RAW: i64 = bunny_num::fixed_q32_32::ONE_RAW;
 
 fn raw(value: i32) -> i64 {
     i64::from(value) * ONE_RAW
+}
+
+fn q32(value: i32) -> FixedQ32_32 {
+    FixedQ32_32::from_raw(raw(value))
 }
 
 fn assert_q32(value: FixedQ32_32, expected: i32) {
@@ -54,6 +58,22 @@ fn test_ray_sphere_intersection() {
     let (hit3, normal3) = ray_intersects_sphere(&ray3, &sphere).expect("should hit from inside");
     assert_q32(hit3.z, 6);
     assert_q32(normal3.z, 1);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn ray_sphere_diagonal_center_hit_clamps_negative_perpendicular_residue() {
+    let zero = FixedQ32_32::ZERO;
+    let direction = FixedUnitVec3::new(FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ONE, zero))
+        .expect("diagonal direction should normalize");
+    let direction_vec = direction.into_inner();
+    let origin = FixedVec3::new(zero, zero, zero);
+    let ray = FixedRay3::new(origin, direction);
+    let sphere = FixedSphere3::new(direction_vec * q32(15), FixedQ32_32::ONE);
+
+    let (hit, normal) = ray_intersects_sphere(&ray, &sphere).expect("centerline ray should hit");
+
+    assert_eq!(hit, direction_vec * q32(14));
+    assert_eq!(normal, -direction_vec);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -128,6 +148,38 @@ fn test_ray_triangle_intersection() {
     )
     .unwrap();
     assert!(ray_intersects_triangle(&ray2, v0, v1, v2).is_none());
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn ray_queries_return_none_when_checked_arithmetic_overflows() {
+    let min = FixedQ32_32::from_raw(i64::MIN);
+    let max = FixedQ32_32::from_raw(i64::MAX);
+    let zero = FixedQ32_32::ZERO;
+    let one = FixedQ32_32::ONE;
+
+    let sphere_overflow_ray =
+        FixedRay3::new(FixedVec3::new(min, zero, zero), FixedUnitVec3::UNIT_X);
+    let sphere = FixedSphere3::new(FixedVec3::new(max, zero, zero), one);
+    assert_eq!(ray_intersects_sphere(&sphere_overflow_ray, &sphere), None);
+
+    let aabb_overflow_ray = FixedRay3::new(FixedVec3::new(max, zero, zero), FixedUnitVec3::UNIT_X);
+    let aabb = FixedAabb3::new(
+        FixedVec3::new(min, FixedQ32_32::from_raw(-ONE_RAW), FixedQ32_32::from_raw(-ONE_RAW)),
+        FixedVec3::new(max, one, one),
+    );
+    assert_eq!(ray_intersects_aabb(&aabb_overflow_ray, &aabb), None);
+
+    let triangle_overflow_ray =
+        FixedRay3::new(FixedVec3::new(zero, zero, zero), FixedUnitVec3::UNIT_Z);
+    assert_eq!(
+        ray_intersects_triangle(
+            &triangle_overflow_ray,
+            FixedVec3::new(min, zero, one),
+            FixedVec3::new(max, zero, one),
+            FixedVec3::new(zero, max, one),
+        ),
+        None
+    );
 }
 
 #[wasm_bindgen_test(unsupported = test)]

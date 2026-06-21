@@ -1,246 +1,363 @@
 # Bunny Math and Geometry Capability Map
 
-This document defines the durable capability boundary for Bunny's deterministic
-math and geometry stack.
+This document defines Bunny's durable math and geometry capability boundary. It
+is written for planning and orientation: what Bunny owns, what it refuses to
+own, what already exists, and what should be built next.
 
-It is not a release checklist, pull request ledger, or current CI status page.
+This is not a release checklist, pull request ledger, or CI status page.
 `ROADMAP.md` records versioned delivery. GitHub Issues track executable backlog
-items. Source code, tests, and checked-in fixtures remain the final evidence for
-what the repository actually implements.
+items. Source code, tests, fixtures, and crate docs remain the final evidence
+for what the repository actually implements.
 
-## Scope Contract
+## Reader's Map
 
-Bunny owns deterministic, reusable primitives that downstream projects can trust
-as a mathematical substrate:
+Use this page when you need the shape of the math and geometry stack. Use the
+linked current-truth documents when you need a binding contract for a specific
+concept.
 
-- Fixed-point numeric law, rounding, checked ingress, and golden vectors.
-- Linear algebra primitives, coordinate transforms, and orientation math.
-- Geometry shapes, robust predicates, degeneracy policy, and bounds utilities.
-- Ray, closest-point, overlap, swept, and contact-query algorithms.
-- Broadphase and spatial acceleration structures with stable traversal order.
-- Mesh layouts, topology helpers, quantization, hashing, and codecs.
-- Visibility, occlusion, frustum, and ray-tracing primitive intersection math.
-- Optics and lighting math that can be evaluated deterministically.
-- Validation fixtures, property tests, native/WASM parity, and benchmark gates.
-- Optional acceleration backends only when they prove scalar parity.
+| Need | Start here |
+| --- | --- |
+| Project boundary | [Ownership Boundary](#ownership-boundary) |
+| Hard invariants | [Non-Negotiables](#non-negotiables) |
+| Layer inventory | [Capability Layers](#capability-layers) |
+| Build sequence | [Build Order](#build-order) |
+| Coordinate law | `docs/topics/coordinate-law/` |
+| Numeric law | `docs/NUMERIC_CONSTITUTION.md` |
+| Version plan | `ROADMAP.md` |
+| Completed evidence | `docs/goalposts/` |
 
-Bunny does not own higher-level application behavior:
+## Ownership Boundary
 
-- Physics world stepping, force integration, sleep islands, or gameplay policy.
-- Renderer backends, shader systems, material authoring, or texture pipelines.
-- Scene graphs, entity-component frameworks, editors, or asset browsers.
-- Echo causality, Geordi receipt semantics, or jedit user-interface workflows.
-- Nondeterministic fast-math behavior as canonical output.
+Bunny owns deterministic, reusable primitives that downstream projects can use
+as a mathematical substrate. The library should produce stable numbers,
+records, buffers, and query results. It should not decide how an application
+simulates, renders, edits, stores, or presents those results.
 
-Those projects may consume Bunny primitives, but Bunny should not absorb their
-domain policy.
+Bunny owns:
+
+- fixed-point numeric law, rounding, checked ingress, and golden vectors
+- linear algebra primitives, coordinate transforms, and orientation math
+- geometry shapes, predicates, degeneracy policy, and bounds utilities
+- ray, closest-point, overlap, swept, and contact-query algorithms
+- broadphase and spatial acceleration structures with stable traversal order
+- mesh layouts, topology helpers, quantization, hashing, and codecs
+- visibility, occlusion, frustum, and ray-tracing primitive intersection math
+- optics and lighting math that can be evaluated deterministically
+- validation fixtures, property tests, native/WASM parity, and benchmark gates
+- optional acceleration backends only when they prove scalar parity
+
+Bunny does not own:
+
+- physics world stepping, force integration, sleep islands, or gameplay policy
+- renderer backends, shader systems, material authoring, or texture pipelines
+- scene graphs, entity-component frameworks, editors, or asset browsers
+- Echo causality, Geordi receipt semantics, or jedit user-interface workflows
+- nondeterministic fast-math behavior as canonical output
 
 ## Non-Negotiables
 
-- Canonical math is fixed-point unless a boundary API explicitly says otherwise.
-- Floating-point ingress is fallible and must reject non-finite or
-  out-of-range inputs before canonicalization.
-- Floating-point egress is diagnostic or presentation oriented, not equality
-  truth.
-- Public APIs must return explicit errors or `Option` for invalid geometry,
-  malformed payloads, degenerate inputs, overflow, and division by zero.
-- The scalar implementation is the reference implementation.
-- SIMD, target intrinsics, and future GPU kernels are optional accelerators.
-  They must prove byte-for-byte or raw-value parity with the scalar path.
-- Algorithms that claim zero allocation, stable ordering, or bounded memory must
-  carry tests that measure or directly prove those claims.
-- Golden vectors must exercise edge cases, not just pleasant examples.
+These rules are the floor for future math and geometry work. A feature that
+violates them belongs outside Bunny or needs a quarantined boundary with an
+explicit deterministic contract.
+
+| Rule | Proof |
+| --- | --- |
+| Fixed-point is canonical. | Raw-value tests |
+| Float ingress is fallible. | Rejection tests |
+| Float egress is diagnostic. | Fixed-value assertions |
+| Invalid input is explicit. | Error-kind tests |
+| Scalar is the reference path. | Reference fixtures |
+| SIMD is optional acceleration. | Scalar parity tests |
+| Allocation claims are proved. | Allocation witnesses |
+| Golden vectors include ugly cases. | Edge-case fixtures |
+
+Canonical math uses Bunny-defined fixed-point values unless an API explicitly
+says it is a boundary format. Floats are acceptable at ingress, egress,
+diagnostic, and adapter boundaries, but they do not define equality truth inside
+core algorithms.
+
+Invalid geometry, malformed payloads, degenerate inputs, overflow, and division
+by zero must return explicit `Result` or `Option` outcomes. Panic paths,
+ambient state, unordered iteration, and target-specific fast math are not
+acceptable sources of canonical behavior.
 
 ## Capability Layers
 
+Bunny's stack should grow bottom-up. Lower layers define the laws and primitive
+contracts that higher layers consume. Higher layers may depend on lower layers;
+lower layers should not absorb renderer, editor, physics-engine, or application
+policy from their consumers.
+
+| Layer | Current | Next |
+| --- | --- | --- |
+| Numeric law | Q32.32 scalar math | Saturation audit |
+| Linear algebra | Vectors, unit vectors | Matrices and transforms |
+| Geometry primitives | Rays, AABBs, spheres | Degeneracy and shapes |
+| Collision and contact | Ray and closest queries | Narrowphase coverage |
+| Acceleration | BVH, sweep-and-prune | Dynamic structures |
+| Mesh and codecs | Quantized mesh, PLY/OBJ, decoder | Topology and encoder |
+| Visibility and optics | Ray and BVH ingredients | Camera and visibility math |
+| SIMD and performance | Scalar reference | Parity and benchmarks |
+| Consumer confidence | Docs, witnesses, gates | Examples and fixtures |
+
 ### Numeric Law
 
-Baseline surface:
+`bunny-num` owns the canonical Q32.32 scalar profile. Its job is to make the
+raw numeric truth boring: deterministic rounding, explicit construction policy,
+fallible float ingress, documented overflow behavior, and raw-value equality.
+The detailed arithmetic contract lives in `docs/NUMERIC_CONSTITUTION.md`.
 
-- `bunny-num` exposes canonical Q32.32 fixed-point math.
-- Arithmetic uses deterministic rounding and checked or documented overflow
-  behavior.
-- Float ingress is now validated through fallible conversion APIs.
-- `docs/NUMERIC_CONSTITUTION.md` defines the arithmetic law.
+Current surface:
 
-Backlog pressure:
+- `FixedQ32_32`
+- raw round-trip and golden-vector tests
+- deterministic arithmetic operators
+- fallible float ingress through `try_from_f32`
+- compatibility egress and diagnostic float helpers
 
-- Audit saturating arithmetic and decide where checked arithmetic should replace
-  saturation. See #114.
-- Add property-based numeric tests and generated edge-case corpora. See #129.
+Open work:
+
+| Capability | Issues |
+| --- | --- |
+| Saturating arithmetic audit | #114 |
+| Property-based numeric tests | #129 |
 
 ### Linear Algebra
 
-Baseline surface:
+`bunny-linalg` owns deterministic vector math and the future frame algebra that
+will support transforms, projection, orientation, and camera work. Coordinate
+handedness and unit policy are now defined in `docs/topics/coordinate-law/`;
+future matrix and transform APIs must respect that law.
 
-- `bunny-linalg` provides deterministic 2D and 3D vectors.
-- Dot, cross, length, normalization, and unit-vector wrappers exist for the
-  current fixed-point shape.
+Current surface:
 
-Missing surface:
+- `FixedVec2` and `FixedVec3`
+- dot and cross products
+- length and normalization
+- fixed unit-vector wrappers
+- coordinate-law convention tests
 
-- Matrix types and multiplication policy. See #107.
-- Transform types for points, vectors, normals, and frames. See #108.
-- Quaternion or other orientation representation. See #109.
-- Deterministic angle and trigonometry profile. See #110.
-- Interpolation, easing, and spline-safe blend operations. See #111.
-- Projection and camera-space math. See #150.
-- Curves, splines, and path primitives. See #152.
-- Coordinate-space, handedness, and units policy. See #164.
+Open work:
+
+| Capability | Issues |
+| --- | --- |
+| Matrix types | #107 |
+| Affine transforms | #108 |
+| Quaternion rotations | #109 |
+| Angle and trigonometry policy | #110 |
+| Interpolation and remap helpers | #111 |
+| Projection and viewport mapping | #150 |
+| Curves and splines | #152 |
 
 ### Geometry Primitives
 
-Baseline surface:
+Geometry primitives define the vocabulary for later query, collision,
+visibility, and mesh operations. Bunny already has the first fixed shape set,
+but the shape library needs richer coverage and a clear degeneracy law before
+more algorithms build on top of it.
 
-- `bunny-geom` defines rays, AABBs, spheres, fixed variants, and validated
-  ingress.
-- `bunny-query` implements the first ray and closest-point solvers.
+Current surface:
 
-Missing surface:
+- `FixedRay3`
+- `FixedAabb3`
+- `FixedSphere3`
+- validated fixed/float boundary conversions
+- ray and closest-point query inputs
 
-- Richer shape library: planes, OBBs, capsules, cylinders, cones, segments,
-  triangles, polygons, frusta, and 2D variants. See #115, #117, #146, #149.
-- Shared degeneracy policy for zero area, zero length, coplanarity, and
-  coincident shapes. See #116.
-- Robust geometric predicates with deterministic tolerance-free semantics where
-  possible. See #145.
-- Clipping, half-space, and constructive primitive operations. See #162.
-- Bounds propagation and bounds utility APIs. See #119, #151.
+Open work:
 
-### Collision and Contact Queries
+| Capability | Issues |
+| --- | --- |
+| Shape library expansion | #115, #117, #146, #149 |
+| Degeneracy policy | #116 |
+| Robust predicates | #145 |
+| Clipping and half-spaces | #162 |
+| Bounds propagation and merge | #119, #151 |
 
-Baseline surface:
+### Collision and Contact
 
-- Ray/sphere, ray/AABB, ray/triangle, point/triangle,
-  segment/segment, and AABB/sphere query families exist.
-- Sweep-and-prune and BVH broadphase primitives exist.
+Collision work should provide deterministic query primitives and contact
+records, not a physics engine. Bunny can own primitive-pair truth, support
+mapping, manifolds, and swept queries while leaving stepping, forces, sleeping,
+and gameplay policy to downstream systems.
 
-Missing surface:
+Current surface:
 
-- Narrowphase overlap tests for the full supported shape set. See #117.
-- Separating Axis Theorem helpers for convex shapes. See #147.
-- Support mapping plus GJK/EPA for convex distance and penetration. See #139.
-- Contact manifolds with stable point ordering. See #118.
-- Swept queries and time-of-impact calculations. See #148.
-- A deterministic collision-detection architecture that composes broadphase,
-  narrowphase, filtering, and contact output without owning simulation policy.
-  See #157.
+- ray/sphere, ray/AABB, and ray/triangle queries
+- point/triangle, segment/segment, and AABB/sphere closest queries
+- sweep-and-prune broadphase pairs
+- BVH build and traversal primitives
 
-### Broadphase and Spatial Acceleration
+Open work:
 
-Baseline surface:
+| Capability | Issues |
+| --- | --- |
+| Narrowphase shape coverage | #117 |
+| SAT helpers | #147 |
+| Support mapping and GJK/EPA | #139 |
+| Contact manifolds | #118 |
+| Swept queries | #148 |
+| Collision architecture | #157 |
 
-- `bunny-broadphase` provides BVH construction/traversal and sweep-and-prune
-  overlap generation.
-- Traversal and active-pair output have deterministic ordering contracts.
+### Acceleration
 
-Missing surface:
+Acceleration structures make existing query semantics scale. They must preserve
+stable output order and deterministic failure behavior, because consumers will
+often treat broadphase and visibility outputs as canonical records.
 
-- Dynamic, refit, and incremental broadphase update paths. See #120.
-- Spatial hash and uniform grid alternatives for dense local worlds. See #121.
-- Mesh BVH construction and triangle-level query adapters. See #123.
-- Occlusion and visibility query structures. See #158.
+Current surface:
 
-### Mesh and Topology
+- static BVH construction
+- BVH traversal
+- sweep-and-prune active pairs
+- stable traversal and pair-order tests
+- zero-allocation witnesses for claimed paths
 
-Baseline surface:
+Open work:
 
-- `bunny-mesh` provides quantized vertex buffers, triangle index buffers, and
-  content hashing.
-- `bunny-codec` parses PLY/OBJ and decodes the Bunny compressed mesh profile.
+| Capability | Issues |
+| --- | --- |
+| Dynamic and refit APIs | #120 |
+| Spatial hash or uniform grid | #121 |
+| Mesh BVH adapters | #123 |
+| Occlusion structures | #158 |
 
-Missing surface:
+### Mesh and Codecs
 
-- Mesh topology and adjacency helpers. See #122.
-- Deterministic mass properties for primitives and meshes. See #163.
-- Canonical encoder for the Bunny compressed mesh profile. See #124.
-- Stronger compressed-profile checksums and corruption detection. See #125.
-- glTF and STL adapters with explicitly bounded semantics. See #126, #127.
-- Fuzzing harnesses for codecs and malformed mesh inputs. See #128.
+Mesh work owns deterministic asset data structures and bounded interchange
+profiles. Bunny should support compact mesh buffers, topology helpers,
+canonical encoders/decoders, corruption detection, and replayable malformed
+input tests without becoming a full asset pipeline.
 
-### Visibility, Ray Tracing, and Optics
+Current surface:
 
-Baseline surface:
+- quantized vertex buffers
+- stable triangle index buffers
+- mesh content hashing
+- zero-copy PLY and OBJ parsers
+- Bunny compressed mesh decoder
+- codec fixtures and allocation witnesses
 
-- Bunny currently owns the low-level ray and BVH pieces needed to build more
-  complete visibility queries.
+Open work:
 
-Missing surface:
+| Capability | Issues |
+| --- | --- |
+| Topology and adjacency helpers | #122 |
+| Mass properties | #163 |
+| Compressed mesh encoder | #124 |
+| Checksums and corruption detection | #125 |
+| glTF and STL adapters | #126, #127 |
+| Codec fuzzing | #128 |
 
-- Occlusion tests, visibility masks, and deterministic visibility query
-  batching. See #158.
-- Ray tracing primitive hit records, hit ordering, and intersection suites.
-  See #159.
-- Camera and ray-generation math. See #138.
-- Lighting vectors, reflection/refraction helpers, attenuation, and BRDF math.
-  See #160.
+### Visibility and Optics
 
-These are math primitives, not a renderer. The output should be deterministic
-numbers and records that a renderer or simulator can consume.
+Visibility and optics should expose deterministic math records that renderers,
+editors, and simulators can consume. Bunny should not become a renderer, but it
+can own the camera, ray generation, visibility, hit ordering, and lighting math
+that those systems need to agree on.
+
+Current surface:
+
+- ray primitives
+- ray intersection queries
+- BVH traversal ingredients
+- coordinate law reservations for future projection work
+
+Open work:
+
+| Capability | Issues |
+| --- | --- |
+| Occlusion and visibility queries | #158 |
+| Ray tracing hit suites | #159 |
+| Camera and ray generation | #138 |
+| Lighting and BRDF inputs | #160 |
 
 ### SIMD and Performance
 
-Baseline surface:
+Performance work is welcome only after the scalar path is stable enough to act
+as a reference. SIMD and target-specific implementations must be optional,
+feature-gated or target-detected, and mechanically compared against the same
+scalar fixtures.
 
-- Scalar fixed-point code is the canonical implementation.
-- Code Dojo, native tests, WASM tests, and cargo-deny are the current quality
-  gates.
+Current surface:
 
-Missing surface:
+- scalar fixed-point reference implementation
+- Code Dojo quality gates
+- native and WASM test gates
+- cargo-deny dependency policy
 
-- Optional SIMD backends with scalar parity gates. See #161.
-- Criterion or equivalent benchmark suites for numeric, query, broadphase,
-  mesh, and codec hot paths. See #130.
-- `no_std` feasibility and allocation-boundary review. See #156.
+Open work:
 
-SIMD policy:
+| Capability | Issues |
+| --- | --- |
+| Deterministic SIMD backends | #161 |
+| Benchmark suites | #130 |
+| `no_std` and allocation review | #156 |
 
-- Keep scalar code as the default and reference path.
+SIMD rules:
+
+- Keep scalar as the default and reference path.
 - Prefer integer SIMD over floating-point SIMD for canonical math.
 - Never allow target `fast-math` behavior to define Bunny truth.
-- Use feature flags or target detection with deterministic scalar fallback.
-- Test SIMD and scalar results against the same golden corpora.
-- Avoid algorithms whose lane reduction order changes externally visible
-  results.
+- Use deterministic scalar fallback.
+- Compare SIMD and scalar results against the same golden corpora.
+- Avoid lane reductions whose order changes externally visible results.
 
-### Validation and Consumer Confidence
+### Consumer Confidence
 
-Baseline surface:
+Consumer confidence work makes the library easier to adopt and harder to
+misuse. It includes examples, fixture crates, generated-contract parity,
+rustdoc, docs.rs readiness, and validation material that downstream projects can
+reuse.
 
-- Code Dojo enforces source-shape policy, deterministic receipt checks,
-  formatting, Clippy, tests, cargo-deny, and WASM checks.
-- Crate READMEs and goalpost documents describe completed feature contracts.
+Current surface:
 
-Missing surface:
+- crate READMEs
+- goalpost evidence documents
+- generated contract witnesses
+- Code Dojo gates
+- release and testing docs
 
-- Examples that show correct public API usage without shortcuts. See #131.
-- TypeScript/generated-contract parity tests. See #132.
-- Stable fixture crate for downstream consumers. See #137.
-- Docs.rs and rustdoc polish for public crates. See #155.
+Open work:
 
-## Recommended Build Order
+| Capability | Issues |
+| --- | --- |
+| Public examples | #131 |
+| TypeScript parity tests | #132 |
+| Stable fixture crate | #137 |
+| Rustdoc and docs.rs polish | #155 |
 
-The missing stack should land bottom-up. Do not build collision or optics on
-ambiguous coordinate or transform semantics.
+## Build Order
 
-1. Lock coordinate law: spaces, handedness, units, angle policy, and transform
-   composition. See #164, #107, #108, #109, #110.
-2. Harden geometry law: degeneracy, predicates, richer shape types, clipping,
-   bounds, and 2D coverage. See #116, #145, #115, #162, #151, #149.
-3. Expand query coverage: OBB/capsule/plane tests, SAT, GJK/EPA, manifolds,
+The missing stack should land bottom-up. Coordinate law and numeric
+preconditions come first because every later transform, geometry query, camera,
+collision, visibility, and optics API depends on those choices. Collision and
+visibility should not be built on ambiguous shape, transform, or degeneracy
+semantics.
+
+1. **Coordinate law and math foundations**: lock spaces, units, angles,
+   orientation, matrices, transforms, and projection basics. See #164, #107,
+   #108, #109, #110.
+2. **Geometry law and primitive coverage**: define degeneracy, robust
+   predicates, richer shapes, clipping, bounds, and 2D coverage. See #116,
+   #145, #115, #162, #151, #149.
+3. **Query and collision coverage**: add narrowphase, SAT, GJK/EPA, manifolds,
    swept queries, and collision architecture. See #117, #147, #139, #118,
    #148, #157.
-4. Scale query execution: dynamic broadphase, grids, mesh BVHs, occlusion, and
-   ray-tracing hit suites. See #120, #121, #123, #158, #159.
-5. Add higher math consumers: camera/ray generation, optics and lighting math,
-   deterministic SIMD, benchmarks, and codec encoders. See #138, #160, #161,
-   #130, #124, #125.
-6. Strengthen consumer confidence: examples, fixtures, TypeScript parity,
-   fuzzing, rustdoc, and docs.rs polish. See #131, #137, #132, #128, #155.
+4. **Acceleration and visibility scaling**: add dynamic broadphase, grids, mesh
+   BVHs, occlusion, and ray tracing hit suites. See #120, #121, #123, #158,
+   #159.
+5. **Higher math consumers and performance**: add camera rays, optics, SIMD,
+   benchmarks, and codec encoders. See #138, #160, #161, #130, #124, #125.
+6. **Consumer confidence**: add examples, fixtures, parity tests, fuzzing,
+   rustdoc, and docs.rs polish. See #131, #137, #132, #128, #155.
 
 ## Documentation Rule
 
-Update this file when Bunny changes what it owns, refuses to own, or sequences
-as foundational math work. Do not use it for branch status, pull request state,
-CI snapshots, or per-slice evidence. Those belong in issues, goalpost docs,
+Update this file when Bunny changes what it owns, what it refuses to own, what
+order foundational math and geometry work should follow, or which current-truth
+document owns a capability.
+
+Do not use this file for branch status, pull request state, CI snapshots, or
+per-slice evidence. Those belong in GitHub Issues, goalpost docs,
 `CHANGELOG.md`, and repository receipts.

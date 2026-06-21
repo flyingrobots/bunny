@@ -51,6 +51,58 @@ For each meaningful issue or slice:
 Documentation-only slices still need verification: Markdown lint, diff checks,
 and source anchors where claims are factual.
 
+## Documentation Source Of Truth
+
+Current feature behavior belongs in a living reference document that is updated
+in place as the code changes. Historical design documents, goalpost notes,
+issues, and pull requests explain why decisions happened; they must not become
+competing current references. A living topic chapter describes behavior that
+exists in `HEAD`; it must not describe intended behavior before implementation
+and evidence exist.
+
+When a feature changes:
+
+1. Write or update a proposal, RFC, or rationale note when genuine design
+   discussion is needed.
+2. Update the topic test plan before implementation with planned cases,
+   explicit oracles, evidence type, status, and stable IDs.
+3. Write failing executable evidence for the planned cases.
+4. Implement the behavior.
+5. Update the living topic chapter so it describes the now-landed behavior.
+6. Mark planned cases as implemented evidence and record the actual test names,
+   fixtures, or artifact anchors.
+7. Leave historical design documents intact unless they are factually wrong.
+8. Add a short superseded note to historical documents when readers could
+   otherwise mistake them for current truth.
+9. Keep release chronology in `CHANGELOG.md`.
+
+Examples of living references include `docs/NUMERIC_CONSTITUTION.md`,
+`docs/topics/coordinate-law/`, and `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`.
+
+Durable concepts that will be changed by more than one pull request should use
+the topic-folder shape documented in `docs/README.md`:
+
+```text
+docs/topics/<topic>/
+  README.md
+  test-plan.md
+  architecture.md  # optional
+  rationale.md     # optional
+```
+
+`README.md` is current behavior. `test-plan.md` is current verification design.
+Historical proposals belong in `docs/design/`, and delivery evidence belongs in
+`docs/goalposts/`.
+
+Topic test plans use fenced `toml` metadata blocks as the machine-readable
+contract graph. Visual Markdown tables are for readers only. The local contract
+checker validates stable requirement IDs, case IDs, oracles, evidence types,
+planned versus implemented status, and implemented Rust test names:
+
+```bash
+cargo run --locked -p xtask -- topic-docs
+```
+
 ## Code Dojo
 
 The repository uses Code Dojo as its local and CI enforcement layer. Install the
@@ -67,8 +119,10 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 Local hooks check staged Rust policy, commit subject shape, deterministic
-receipt trailers for AI-assisted commits, and the full pre-push quality gate.
-The hooks are guardrails; CI remains the final merge gate.
+receipt trailers for AI-assisted commits, topic documentation contract
+metadata, and the full pre-push quality gate. The full gate runs workspace
+tests, doctests, and the topic-docs checker. The hooks are guardrails; CI
+remains the final merge gate.
 
 ## Review Discipline
 

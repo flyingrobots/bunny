@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Added the `docs/topics/coordinate-law/` living topic chapter and test plan for
+  Bunny's right-handed coordinate frame, unit policy, transform naming
+  convention, NDC reservations, and documentation source-of-truth rules.
+* Added `docs/README.md` as the documentation spine for living topic chapters,
+  test plans, historical design records, and PR documentation gates.
+* Added `cargo run --locked -p xtask -- topic-docs` and wired it into Code
+  Dojo so topic test plans validate stable requirement IDs, case IDs, explicit
+  oracles, evidence status, and implemented Rust test names.
+* Added checked Q32.32 addition, subtraction, negation, and multiplication APIs
+  so geometry code can reject overflow instead of consuming saturated
+  intermediates.
+* Added deterministic seeded property-test corpora for Q32.32 raw/order
+  invariants, vector algebra identities, query symmetry and bounds, and mesh
+  quantization round trips.
+* Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
+  reference with compact tables for navigation and issue anchors.
+* Ray intersection queries now return `None` when checked intermediate
+  arithmetic overflows, rather than accepting saturated Q32.32 values as valid
+  geometric hits.
 * `scripts/publish-crates.sh publish` now refuses dirty worktrees
   unconditionally; `ALLOW_DIRTY=1` is limited to local `verify` and `dry-run`
   diagnostics.

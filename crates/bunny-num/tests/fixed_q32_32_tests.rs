@@ -120,6 +120,24 @@ fn fixed_q32_32_saturating_limits() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn fixed_q32_32_checked_arithmetic_reports_overflow() {
+    let max_val = FixedQ32_32::from_raw(i64::MAX);
+    let min_val = FixedQ32_32::from_raw(i64::MIN);
+    let one = FixedQ32_32::ONE;
+    let two = FixedQ32_32::from_raw(2 * ONE_RAW);
+
+    assert_eq!(one.checked_add(one), Some(two));
+    assert_eq!(two.checked_sub(one), Some(one));
+    assert_eq!(two.checked_mul(two), Some(FixedQ32_32::from_raw(4 * ONE_RAW)));
+    assert_eq!(one.checked_neg(), Some(FixedQ32_32::from_raw(-ONE_RAW)));
+
+    assert_eq!(max_val.checked_add(one), None);
+    assert_eq!(min_val.checked_sub(one), None);
+    assert_eq!(min_val.checked_neg(), None);
+    assert_eq!(max_val.checked_mul(two), None);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn fixed_q32_32_sqrt() {
     let a = FixedQ32_32::from_f32(4.0);
     let sqrt_a = a.sqrt().expect("4.0 has a real square root");

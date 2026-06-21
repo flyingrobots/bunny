@@ -12,6 +12,9 @@ targets.
 * Ray intersections for spheres, AABBs, and triangles.
 * Closest-point queries for AABBs, triangles, and segment pairs.
 * AABB-sphere overlap with deterministic contact point output.
+* Checked ray-intersection arithmetic: ray queries return `None` when an
+  intermediate Q32.32 operation overflows instead of accepting saturated
+  geometry as a hit.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License
