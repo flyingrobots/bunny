@@ -8,6 +8,8 @@ use std::process::Command;
 use syn::visit::{self, Visit};
 use syn::{Attribute, File, ItemFn, ItemMod, Meta};
 
+use crate::git_helpers::git_command;
+
 type DynError = Box<dyn Error>;
 
 const REQUIREMENT_HEADER: &str = "[[requirement]]";
@@ -798,7 +800,7 @@ fn discover_test_evidence(
 }
 
 fn tracked_files(root: &Path) -> Result<Vec<PathBuf>, DynError> {
-    let output = Command::new("git").args(["ls-files", "--cached"]).current_dir(root).output()?;
+    let output = git_command(root).args(["ls-files", "--cached"]).output()?;
     if !output.status.success() {
         return Err(command_error("git file listing", &output.stderr).into());
     }
@@ -816,7 +818,7 @@ fn read_source(root: &Path, mode: SourceMode, path: &Path) -> Result<String, Dyn
 
 fn read_staged_source(root: &Path, path: &Path) -> Result<String, DynError> {
     let object = staged_object_name(path);
-    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    let output = git_command(root).args(["show", &object]).output()?;
     if output.status.success() {
         return Ok(String::from_utf8(output.stdout)?);
     }
@@ -919,8 +921,7 @@ mod tests {
     }
 
     fn run_git(root: &Path, args: &[&str]) {
-        let output =
-            Command::new("git").args(args).current_dir(root).output().expect("git should run");
+        let output = git_command(root).args(args).output().expect("git should run");
         assert!(
             output.status.success(),
             "git {:?} failed: {}",

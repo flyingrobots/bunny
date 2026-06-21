@@ -8,11 +8,24 @@
 
 use bunny_num::{FixedQ32_32, Scalar};
 
+mod fixed_affine2;
+mod fixed_affine3;
+mod fixed_mat2;
+mod fixed_mat3;
+mod fixed_mat4;
+mod fixed_mat4_inverse;
 mod fixed_vec2;
 mod fixed_vec3;
+pub(crate) mod matrix_common;
 
+pub use fixed_affine2::FixedAffine2;
+pub use fixed_affine3::FixedAffine3;
+pub use fixed_mat2::FixedMat2;
+pub use fixed_mat3::FixedMat3;
+pub use fixed_mat4::FixedMat4;
 pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
+pub use matrix_common::FixedMat4Row;
 
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
 const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);

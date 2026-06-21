@@ -118,11 +118,20 @@ Before handoff, run:
 cargo run --locked -p xtask -- code-dojo --all
 ```
 
-Local hooks check staged Rust policy, commit subject shape, deterministic
-receipt trailers for AI-assisted commits, topic documentation contract
-metadata, and the full pre-push quality gate. The full gate runs workspace
-tests, doctests, and the topic-docs checker. The hooks are guardrails; CI
-remains the final merge gate.
+Every pull request must add or update a repo-respect receipt under
+`.repo-respect/receipts/`, and every non-merge commit must reference that
+receipt with a `Repo-Respect-Receipt:` trailer. Create the receipt template
+with:
+
+```bash
+cargo run --locked -p xtask -- repo-respect receipt <short-topic>
+```
+
+Local hooks check staged Rust policy, commit subject shape, universal
+repo-respect receipt trailers, branch receipt coverage, topic documentation
+contract metadata, and the full pre-push quality gate. The full gate runs
+workspace tests, doctests, topic-docs, and repo-respect checks. The hooks are
+guardrails; CI remains the final merge gate.
 
 ## Review Discipline
 

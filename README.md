@@ -43,7 +43,7 @@ produce the same observable output on every supported target.
 | Crate | What it does |
 | --- | --- |
 | `bunny-num` | Deterministic scalar profile and `FixedQ32_32` helpers. |
-| `bunny-linalg` | Fixed-point 2D/3D vectors and unit-vector invariants. |
+| `bunny-linalg` | Fixed-point 2D/3D vectors, unit-vector invariants, checked matrices, and affine transforms. |
 | `bunny-geom` | Validated rays, AABBs, spheres, and fixed/float conversion boundaries. |
 | `bunny-query` | Deterministic ray intersections and closest-point solvers. |
 | `bunny-broadphase` | BVH construction, BVH traversal helpers, and sweep-and-prune broadphase pairs. |

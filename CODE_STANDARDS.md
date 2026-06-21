@@ -347,12 +347,23 @@ bunny-geom: make ray-box boundary contact inclusive
 bunny-mesh: add golden vectors for duplicate vertex collapse
 ```
 
-AI-assisted commits must include a receipt trailer:
+Every non-merge commit must include a receipt trailer:
 
 ```text
-Repo-Respect-Receipt: <receipt-id-or-path>
+Repo-Respect-Receipt: .repo-respect/receipts/<id>.md
 ```
 
-The receipt must identify the bounded context used, files edited, checks run, and known risks.
+Every pull request must add or update a receipt under `.repo-respect/receipts/`.
+Receipts are required for all contributors and all contribution methods. The
+receipt must identify the bounded context used, files read, files edited, topic
+documentation impact, generated artifact impact, checks run, known risks, and
+human reviewer.
+Bare receipt IDs are invalid; the trailer must use the full receipt path.
+
+Create a receipt template with:
+
+```bash
+cargo run --locked -p xtask -- repo-respect receipt <short-topic>
+```
 
 **Sensei's Wisdom™**: `--no-verify` is a confession, not a strategy.
