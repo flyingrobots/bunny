@@ -147,6 +147,7 @@ and regeneration policy.
 | MT-TP-008 | Affine composition | MT-REQ-009 | Combined transform applies the inner transform before the outer transform. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_008_fixed_affine2_composition_is_right_to_left` |
 | MT-TP-009 | Affine inverse | MT-REQ-010 | Exact inverse round trip restores transformed points and vectors. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_009_fixed_affine_inverse_round_trips_points_and_vectors` |
 | MT-TP-010 | Affine overflow and singular inverse | MT-REQ-008, MT-REQ-010 | Overflowing point transforms and singular inverse attempts return `None`. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_010_affine_transform_overflow_and_singular_inverse_return_none` |
+| MT-TP-011 | Affine inverse boundary regression | MT-REQ-010 | Minimum raw translation is scaled before negation when the inverse translation is representable. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_011_affine_inverse_scales_min_translation_before_negating` |
 
 ```toml
 [[case]]
@@ -238,6 +239,15 @@ test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_010_affine_tr
 oracle = "Overflowing point transforms and singular inverse attempts return None."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "MT-TP-011"
+requirements = ["MT-REQ-010"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_011_affine_inverse_scales_min_translation_before_negating"
+oracle = "Minimum raw translation is scaled before negation when the inverse translation is representable."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -271,6 +281,7 @@ Current tests cover:
 - singular 2x2, 3x3, and 4x4 matrices;
 - checked multiplication overflow;
 - checked affine point-translation overflow;
+- minimum raw affine translation that becomes representable after inverse scale;
 - fractional inverse entries that must compare by raw Q32.32 value;
 - identity composition for 4x4 matrices.
 

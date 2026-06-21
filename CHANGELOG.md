@@ -54,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Affine inverse computation now applies the inverse linear transform before
+  negating translation, so minimum raw translations can still invert when the
+  scaled inverse translation is representable.
 * Historical goalpost evidence now distinguishes retired `ci.yml` anchors from
   the current Code Dojo workflow.
 

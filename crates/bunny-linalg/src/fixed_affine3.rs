@@ -66,11 +66,8 @@ impl FixedAffine3 {
     #[must_use]
     pub fn try_inverse(self) -> Option<Self> {
         let inverse_linear = self.linear.try_inverse()?;
-        let negative_translation = checked_neg_vec3(self.translation)?;
-        Some(Self::from_parts(
-            inverse_linear,
-            inverse_linear.checked_mul_vec3(negative_translation)?,
-        ))
+        let scaled_translation = inverse_linear.checked_mul_vec3(self.translation)?;
+        Some(Self::from_parts(inverse_linear, checked_neg_vec3(scaled_translation)?))
     }
 }
 

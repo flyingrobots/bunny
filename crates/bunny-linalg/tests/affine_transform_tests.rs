@@ -77,3 +77,24 @@ fn mt_tp_010_affine_transform_overflow_and_singular_inverse_return_none() {
     assert_eq!(overflowing.checked_transform_point(vec2(1, 0)), None);
     assert_eq!(singular.try_inverse(), None);
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn mt_tp_011_affine_inverse_scales_min_translation_before_negating() {
+    let min_translation = FixedQ32_32::from_raw(i64::MIN);
+    let expected = FixedQ32_32::from_raw(1_i64 << 62);
+    let affine2 =
+        FixedAffine2::from_parts(scale2(2, 1), FixedVec2::new(min_translation, FixedQ32_32::ZERO));
+    let affine3 = FixedAffine3::from_parts(
+        scale3(2, 1, 1),
+        FixedVec3::new(min_translation, FixedQ32_32::ZERO, FixedQ32_32::ZERO),
+    );
+
+    let inverse2 = affine2.try_inverse().expect("inverse affine2 translation fits");
+    let inverse3 = affine3.try_inverse().expect("inverse affine3 translation fits");
+
+    assert_eq!(inverse2.translation, FixedVec2::new(expected, FixedQ32_32::ZERO));
+    assert_eq!(
+        inverse3.translation,
+        FixedVec3::new(expected, FixedQ32_32::ZERO, FixedQ32_32::ZERO)
+    );
+}
