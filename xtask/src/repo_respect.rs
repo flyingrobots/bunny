@@ -178,9 +178,17 @@ fn create_receipt(topic: &str) -> Result<(), DynError> {
 
 fn check(mode: CheckMode) -> Result<(), DynError> {
     let root = git_root()?;
+    check_root(&root, mode)?;
+    if matches!(mode, CheckMode::Branch) {
+        check_branch_commit_messages(&root)?;
+    }
+    Ok(())
+}
+
+fn check_root(root: &Path, mode: CheckMode) -> Result<(), DynError> {
     let changed = match mode {
-        CheckMode::Branch => branch_paths(&root)?,
-        CheckMode::Staged => branch_and_staged_paths(&root)?,
+        CheckMode::Branch => branch_paths(root)?,
+        CheckMode::Staged => branch_and_staged_paths(root)?,
     };
 
     let non_receipt_changes =
@@ -200,7 +208,7 @@ fn check(mode: CheckMode) -> Result<(), DynError> {
 
     let mut failures = Vec::new();
     for path in receipt_paths {
-        let text = std::fs::read_to_string(root.join(&path))?;
+        let text = read_receipt_for_mode(root, mode, &path)?;
         failures.extend(validate_receipt_text(&display_path(&path), &text));
     }
 
@@ -214,6 +222,20 @@ fn check(mode: CheckMode) -> Result<(), DynError> {
         }
         Err(RepoRespectError::new("repo-respect receipt violations found").into())
     }
+}
+
+fn check_branch_commit_messages(root: &Path) -> Result<(), DynError> {
+    let failures = branch_commit_message_failures(root)?;
+    if failures.is_empty() {
+        println!("Repo Respect: branch commit trailers clean");
+        return Ok(());
+    }
+
+    eprintln!("Repo Respect: commit trailer violations found");
+    for failure in failures {
+        eprintln!("  - {failure}");
+    }
+    Err(RepoRespectError::new("repo-respect commit trailer violations found").into())
 }
 
 fn print_missing_receipt(mode: CheckMode, changed: &BTreeSet<PathBuf>) {
@@ -260,8 +282,20 @@ fn receipt_field_has_content(text: &str, field: &str) -> bool {
         .unwrap_or(after.len());
     after[..end].lines().any(|line| {
         let trimmed = line.trim();
-        !trimmed.is_empty() && !trimmed.starts_with("<!--")
+        receipt_line_has_content(trimmed)
     })
+}
+
+fn receipt_line_has_content(trimmed: &str) -> bool {
+    if trimmed.is_empty() || trimmed.starts_with("<!--") {
+        return false;
+    }
+
+    let value = trimmed.strip_prefix('-').map_or(trimmed, str::trim);
+    let normalized = value.trim_end_matches('.').trim().to_ascii_lowercase();
+    !matches!(normalized.as_str(), "tbd" | "todo")
+        && !normalized.starts_with("tbd,")
+        && !normalized.starts_with("todo,")
 }
 
 fn receipt_trailers(non_comment: &[&str]) -> Vec<String> {
@@ -289,24 +323,78 @@ fn read_receipt_from_git_index(root: &Path, path: &str) -> Result<String, DynErr
     Err(command_error("git show receipt", &output.stderr).into())
 }
 
+fn read_receipt_for_mode(root: &Path, mode: CheckMode, path: &Path) -> Result<String, DynError> {
+    match mode {
+        CheckMode::Branch => Ok(std::fs::read_to_string(root.join(path))?),
+        CheckMode::Staged => read_receipt_from_staged_index(root, &display_path(path)),
+    }
+}
+
+fn read_receipt_from_staged_index(root: &Path, path: &str) -> Result<String, DynError> {
+    let object = format!(":{path}");
+    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    if output.status.success() {
+        return Ok(String::from_utf8(output.stdout)?);
+    }
+
+    Err(command_error("git show staged receipt", &output.stderr).into())
+}
+
+fn branch_commit_message_failures(root: &Path) -> Result<Vec<String>, DynError> {
+    let base = base_ref();
+    ensure_ref_exists(root, &base)?;
+    let range = format!("{base}...HEAD");
+    let commits = git_lines(root, &["rev-list", "--no-merges", "--reverse", &range])?;
+    let mut failures = Vec::new();
+
+    for commit in commits {
+        let message = git_commit_message(root, &commit)?;
+        let non_comment = message
+            .lines()
+            .map(str::trim_end)
+            .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+            .collect::<Vec<_>>();
+        let short = commit.chars().take(7).collect::<String>();
+        failures.extend(
+            commit_message_failures(&non_comment)?
+                .into_iter()
+                .map(|failure| format!("{short}: {failure}")),
+        );
+    }
+
+    Ok(failures)
+}
+
+fn git_commit_message(root: &Path, commit: &str) -> Result<String, DynError> {
+    let output = Command::new("git")
+        .args(["log", "-1", "--format=%B", commit])
+        .current_dir(root)
+        .output()?;
+    if output.status.success() {
+        return Ok(String::from_utf8(output.stdout)?);
+    }
+
+    Err(command_error("git log commit message", &output.stderr).into())
+}
+
 fn branch_and_worktree_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
     let mut paths = branch_paths(root)?;
-    paths.extend(git_paths(root, &["diff", "--cached", "--name-only", "--diff-filter=ACMR"])?);
-    paths.extend(git_paths(root, &["diff", "--name-only", "--diff-filter=ACMR"])?);
+    paths.extend(git_paths(root, &["diff", "--cached", "--name-only"])?);
+    paths.extend(git_paths(root, &["diff", "--name-only"])?);
     paths.extend(git_paths(root, &["ls-files", "--others", "--exclude-standard"])?);
     Ok(paths)
 }
 
 fn branch_and_staged_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
     let mut paths = branch_paths(root)?;
-    paths.extend(git_paths(root, &["diff", "--cached", "--name-only", "--diff-filter=ACMR"])?);
+    paths.extend(git_paths(root, &["diff", "--cached", "--name-only"])?);
     Ok(paths)
 }
 
 fn branch_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
     let base = base_ref();
     ensure_ref_exists(root, &base)?;
-    git_paths(root, &["diff", "--name-only", "--diff-filter=ACMR", &format!("{base}...HEAD")])
+    git_paths(root, &["diff", "--name-only", &format!("{base}...HEAD")])
 }
 
 fn base_ref() -> String {
@@ -339,13 +427,17 @@ fn ensure_ref_exists(root: &Path, reference: &str) -> Result<(), DynError> {
 }
 
 fn git_paths(root: &Path, args: &[&str]) -> Result<BTreeSet<PathBuf>, DynError> {
+    Ok(git_lines(root, args)?.into_iter().map(PathBuf::from).collect())
+}
+
+fn git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>, DynError> {
     let output = Command::new("git").args(args).current_dir(root).output()?;
     if !output.status.success() {
         return Err(command_error(&format!("git {}", args.join(" ")), &output.stderr).into());
     }
 
     let stdout = String::from_utf8(output.stdout)?;
-    Ok(stdout.lines().map(str::trim).filter(|line| !line.is_empty()).map(PathBuf::from).collect())
+    Ok(stdout.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_owned).collect())
 }
 
 fn git_root() -> Result<PathBuf, DynError> {
@@ -408,13 +500,17 @@ fn unique_receipt_path(root: &Path, date: &str, slug: &str) -> PathBuf {
 fn receipt_template(topic: &str, changed_files: &BTreeSet<PathBuf>) -> String {
     let title = title_case(topic);
     let files_edited = if changed_files.is_empty() {
-        "- TBD\n".to_string()
+        "<!-- TODO: list edited non-receipt paths. -->\n".to_string()
     } else {
         let mut edited = String::new();
         for path in changed_files.iter().filter(|path| !is_receipt_path(path)) {
             let _ = writeln!(&mut edited, "- `{}`", display_path(path));
         }
-        edited
+        if edited.is_empty() {
+            "<!-- TODO: list edited non-receipt paths. -->\n".to_string()
+        } else {
+            edited
+        }
     };
 
     format!(
@@ -422,27 +518,27 @@ fn receipt_template(topic: &str, changed_files: &BTreeSet<PathBuf>) -> String {
 # Receipt: {title}
 
 Task:
-TBD.
+<!-- TODO: summarize the task. -->
 
 Files read:
-- TBD
+<!-- TODO: list files read while making the change. -->
 
 Files edited:
 {files_edited}
 Topic docs:
-- TBD, or `None - <reason>`.
+<!-- TODO: list topic docs updated, or `None - <reason>`. -->
 
 Generated artifacts:
-- TBD, or `None`.
+<!-- TODO: list generated artifacts, or `None`. -->
 
 Checks run:
-- TBD
+<!-- TODO: list exact commands run. -->
 
 Known risks:
-- TBD
+<!-- TODO: list known risks, or `None`. -->
 
 Human reviewer:
-TBD
+<!-- TODO: name the human reviewer or approval source. -->
 "
     )
 }
@@ -498,7 +594,95 @@ fn display_path(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use super::*;
+
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let count = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("bunny-repo-respect-{name}-{}-{count}", std::process::id()));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("temporary directory should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn run_git(root: &Path, args: &[&str]) {
+        let output =
+            Command::new("git").args(args).current_dir(root).output().expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn write_file(root: &Path, relative: &str, text: &str) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().expect("fixture path should have a parent"))
+            .expect("fixture directory should be created");
+        fs::write(path, text).expect("fixture file should be written");
+    }
+
+    fn init_repo_with_origin_main(root: &Path) {
+        run_git(root, &["init"]);
+        run_git(root, &["config", "user.email", "bunny@example.invalid"]);
+        run_git(root, &["config", "user.name", "Bunny Test"]);
+        write_file(root, "src/lib.rs", "pub fn baseline() {}\n");
+        run_git(root, &["add", "src/lib.rs"]);
+        run_git(root, &["commit", "-m", "seed: create baseline"]);
+        run_git(root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    }
+
+    fn valid_receipt_text() -> &'static str {
+        "\
+# Receipt: Fixture
+
+Task:
+Validate fixture behavior.
+
+Files read:
+- `src/lib.rs`
+
+Files edited:
+- `src/lib.rs`
+
+Topic docs:
+None - test fixture.
+
+Generated artifacts:
+None.
+
+Checks run:
+- `cargo test -p xtask`
+
+Known risks:
+None.
+
+Human reviewer:
+Fixture reviewer.
+"
+    }
 
     #[test]
     fn slug_normalization_is_stable() {
@@ -506,11 +690,11 @@ mod tests {
     }
 
     #[test]
-    fn receipt_template_contains_required_fields() {
+    fn receipt_template_contains_required_field_headings() {
         let template = receipt_template("matrix types", &BTreeSet::new());
 
         for field in REQUIRED_RECEIPT_FIELDS {
-            assert!(receipt_field_has_content(&template, field), "{field} should have content");
+            assert!(template.contains(field), "{field} should be present");
         }
     }
 
@@ -522,9 +706,73 @@ mod tests {
     }
 
     #[test]
+    fn receipt_validation_rejects_placeholder_sections() {
+        let failures =
+            validate_receipt_text("receipt.md", &receipt_template("placeholder", &BTreeSet::new()));
+
+        assert!(failures.iter().any(|failure| failure.contains("Task:")));
+        assert!(failures.iter().any(|failure| failure.contains("Files read:")));
+        assert!(failures.iter().any(|failure| failure.contains("Human reviewer:")));
+    }
+
+    #[test]
     fn non_merge_commit_messages_require_receipt_trailers() {
         let failures =
             commit_message_failures(&["docs: update contributor guide"]).expect("check should run");
+
+        assert!(failures.iter().any(|failure| failure.contains("Repo-Respect-Receipt:")));
+    }
+
+    #[test]
+    fn changed_path_lists_include_deleted_files() {
+        let temp = TempDir::new("deleted-paths");
+        init_repo_with_origin_main(temp.path());
+
+        fs::remove_file(temp.path().join("src/lib.rs")).expect("fixture file should be deleted");
+        run_git(temp.path(), &["add", "src/lib.rs"]);
+        run_git(
+            temp.path(),
+            &[
+                "commit",
+                "-m",
+                "test: delete fixture file",
+                "-m",
+                "Repo-Respect-Receipt: .repo-respect/receipts/deletion.md",
+            ],
+        );
+
+        let branch = branch_paths(temp.path()).expect("branch paths should load");
+        let staged = branch_and_staged_paths(temp.path()).expect("staged paths should load");
+
+        assert!(branch.contains(Path::new("src/lib.rs")));
+        assert!(staged.contains(Path::new("src/lib.rs")));
+    }
+
+    #[test]
+    fn staged_check_validates_receipt_content_from_index() {
+        let temp = TempDir::new("staged-receipt");
+        init_repo_with_origin_main(temp.path());
+        write_file(temp.path(), "src/feature.rs", "pub fn feature() {}\n");
+        write_file(temp.path(), ".repo-respect/receipts/staged.md", "Task:\nStaged only.\n");
+        run_git(temp.path(), &["add", "src/feature.rs", ".repo-respect/receipts/staged.md"]);
+        write_file(temp.path(), ".repo-respect/receipts/staged.md", valid_receipt_text());
+
+        let result = check_root(temp.path(), CheckMode::Staged);
+
+        assert!(result.is_err(), "staged receipt contents should be validated, not worktree edits");
+    }
+
+    #[test]
+    fn branch_commit_message_failures_report_missing_trailers() {
+        let temp = TempDir::new("branch-commit-trailers");
+        init_repo_with_origin_main(temp.path());
+        write_file(temp.path(), "src/feature.rs", "pub fn feature() {}\n");
+        write_file(temp.path(), ".repo-respect/receipts/feature.md", valid_receipt_text());
+        run_git(temp.path(), &["add", "src/feature.rs", ".repo-respect/receipts/feature.md"]);
+        run_git(temp.path(), &["commit", "-m", "test: add feature without trailer"]);
+
+        let failures =
+            branch_commit_message_failures(temp.path()).expect("branch messages should be checked");
 
         assert!(failures.iter().any(|failure| failure.contains("Repo-Respect-Receipt:")));
     }

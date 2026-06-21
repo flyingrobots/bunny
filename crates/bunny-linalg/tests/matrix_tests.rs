@@ -143,3 +143,15 @@ fn fixed_mat2_fractional_inverse_uses_q32_32_raw_outputs() {
     assert_eq!(inverse.row0(), FixedVec2::new(q32_raw(HALF_RAW), FixedQ32_32::ZERO));
     assert_eq!(inverse.row1(), FixedVec2::new(FixedQ32_32::ZERO, q32_raw(HALF_RAW)));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn mt_tp_012_fixed_mat2_inverse_divides_min_off_diagonal_before_negating() {
+    let matrix = FixedMat2::new(q32(2), FixedQ32_32::from_raw(i64::MIN), q32(0), q32(2));
+
+    let inverse = matrix.try_inverse().expect("inverse is representable after division");
+
+    assert_eq!(inverse.m00, q32_raw(HALF_RAW));
+    assert_eq!(inverse.m01, q32_raw(-(i64::MIN / 4)));
+    assert_eq!(inverse.m10, q32(0));
+    assert_eq!(inverse.m11, q32_raw(HALF_RAW));
+}

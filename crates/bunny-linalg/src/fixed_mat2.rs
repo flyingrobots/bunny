@@ -22,10 +22,6 @@ pub struct FixedMat2 {
     pub m11: FixedQ32_32,
 }
 
-const fn checked_neg(value: FixedQ32_32) -> Option<FixedQ32_32> {
-    value.checked_neg()
-}
-
 fn checked_dot2(lhs: FixedVec2, rhs: FixedVec2) -> Option<FixedQ32_32> {
     lhs.x.checked_mul(rhs.x)?.checked_add(lhs.y.checked_mul(rhs.y)?)
 }
@@ -37,6 +33,10 @@ fn checked_det2(
     m11: FixedQ32_32,
 ) -> Option<FixedQ32_32> {
     m00.checked_mul(m11)?.checked_sub(m01.checked_mul(m10)?)
+}
+
+fn checked_div_then_neg(value: FixedQ32_32, divisor: FixedQ32_32) -> Option<FixedQ32_32> {
+    value.checked_div(divisor)?.checked_neg()
 }
 
 impl FixedMat2 {
@@ -134,8 +134,8 @@ impl FixedMat2 {
 
         Some(Self::new(
             self.m11.checked_div(determinant)?,
-            checked_neg(self.m01)?.checked_div(determinant)?,
-            checked_neg(self.m10)?.checked_div(determinant)?,
+            checked_div_then_neg(self.m01, determinant)?,
+            checked_div_then_neg(self.m10, determinant)?,
             self.m00.checked_div(determinant)?,
         ))
     }
