@@ -27,7 +27,8 @@ Topic docs:
 - `docs/topics/matrix-types/test-plan.md`
 
 Generated artifacts:
-None.
+
+- None.
 
 Checks run:
 
@@ -48,4 +49,4 @@ Known risks:
 GitHub CI and PR thread closure still need to run after this commit is pushed.
 
 Human reviewer:
-Self-audit finding posted to PR #191 with `@codex` for second opinion.
+Pending human PR review.

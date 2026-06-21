@@ -11,7 +11,7 @@ Files read:
 - `crates/bunny-linalg/tests/affine_transform_tests.rs`
 - `CHANGELOG.md`
 - `docs/topics/matrix-types/test-plan.md`
-- PR #192 review thread `PRRT_kwDOS2Gurc6LE17_`
+- PR #192 review feedback about affine inverse minimum translation handling.
 
 Files edited:
 
@@ -54,4 +54,4 @@ Known risks:
 - This branch remains stacked on PR #191.
 
 Human reviewer:
-ChatGPT Code Reviewer on PR #192.
+Pending human PR review.

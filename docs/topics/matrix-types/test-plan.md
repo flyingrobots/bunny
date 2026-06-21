@@ -53,13 +53,13 @@ formatting.
 | MT-REQ-001 | Matrix entries are row-major and public row/column accessors preserve that layout. | `README.md#layout` |
 | MT-REQ-002 | Matrix-vector multiplication uses column-vector semantics. | `README.md#multiplication` |
 | MT-REQ-003 | Matrix-matrix multiplication composes right-to-left for column vectors. | `README.md#multiplication` |
-| MT-REQ-004 | Multiplication APIs return `None` when checked Q32.32 arithmetic overflows. | `README.md#multiplication` |
+| MT-REQ-004 | Multiplication APIs return None when checked Q32.32 arithmetic overflows. | `README.md#multiplication` |
 | MT-REQ-005 | Identity and transpose are stable for 2x2, 3x3, and 4x4 matrices. | `README.md#identity-and-transpose` |
-| MT-REQ-006 | Determinant and inverse APIs return exact values when representable and `None` for singular or overflowing cases. | `README.md#determinant-and-inverse` |
-| MT-REQ-007 | `FixedMat4` does not yet claim affine transform, projection, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
+| MT-REQ-006 | Determinant and inverse APIs return exact values when representable and None for singular or overflowing cases. | `README.md#determinant-and-inverse` |
+| MT-REQ-007 | FixedMat4 does not yet claim affine transform, projection, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
 | MT-REQ-008 | Affine point transforms apply translation while affine vector transforms do not. | `README.md#affine-transforms` |
 | MT-REQ-009 | Affine composition is right-to-left for column-vector semantics. | `README.md#affine-transforms` |
-| MT-REQ-010 | Affine inverse APIs return exact values when representable and `None` for singular or overflowing cases. | `README.md#affine-transforms` |
+| MT-REQ-010 | Affine inverse APIs return exact values when representable and None for singular or overflowing cases. | `README.md#affine-transforms` |
 
 ```toml
 [[requirement]]

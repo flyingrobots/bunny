@@ -24,8 +24,8 @@ math for graphics pipelines.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
-  multiplication, transpose, determinant, and inverse APIs return `None` for
-  singular or overflowing cases.
+  multiplication, determinant, and inverse APIs return `None` for singular or
+  overflowing cases; transpose is infallible and returns a matrix directly.
 * **Arithmetic Operator Overloads**: Complete suite of standard vector
   operations (`Add`, `Sub`, `Neg`, scalar `Mul` / `Div`, and assign variants).
 * **Boundary Conversions**: `try_from_float` validates float DTO coordinates

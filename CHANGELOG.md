@@ -28,11 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so geometry code can reject overflow instead of consuming saturated
   intermediates.
 * Added deterministic `FixedMat2`, `FixedMat3`, and `FixedMat4` matrix
-  primitives with row-major layout, checked multiplication, determinant, and
-  inverse behavior.
+  primitives with row-major layout, checked multiplication, `determinant()`, and
+  `try_inverse()` APIs.
 * Added deterministic `FixedAffine2` and `FixedAffine3` affine transform
-  primitives with checked point transforms, vector transforms, composition, and
-  inverse behavior.
+  primitives with `checked_transform_point()`, `checked_transform_vector()`,
+  `checked_mul_affine()`, and `try_inverse()` APIs.
 * Added deterministic seeded property-test corpora for Q32.32 raw/order
   invariants, vector algebra identities, query symmetry and bounds, and mesh
   quantization round trips.
@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validates staged receipt contents from the Git index, rejects placeholder-only
   receipt sections, and enforces receipt trailers across non-merge branch
   commits in the full gate.
+* Repo-respect branch commit validation now checks only commits on the PR side
+  of the merge base, uses shared sanitized Git subprocess helpers, and rejects
+  receipt sections whose only apparent content is prose field names or HTML
+  comments.
 * `FixedMat2::try_inverse` now divides off-diagonal entries before negating
   them, so minimum raw values can still invert when the divided inverse entry is
   representable.

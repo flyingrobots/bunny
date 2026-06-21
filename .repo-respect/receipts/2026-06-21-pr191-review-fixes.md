@@ -28,7 +28,8 @@ Topic docs:
 - `docs/topics/matrix-types/test-plan.md`
 
 Generated artifacts:
-None.
+
+- None.
 
 Checks run:
 
@@ -52,4 +53,4 @@ Known risks:
 GitHub CI still needs to run after pushing the branch update.
 
 Human reviewer:
-ChatGPT Code Reviewer PR #191 P2 threads plus local Code Lawyer verification.
+Pending human PR review.

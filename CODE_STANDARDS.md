@@ -350,7 +350,7 @@ bunny-mesh: add golden vectors for duplicate vertex collapse
 Every non-merge commit must include a receipt trailer:
 
 ```text
-Repo-Respect-Receipt: <receipt-id-or-path>
+Repo-Respect-Receipt: .repo-respect/receipts/<id>.md
 ```
 
 Every pull request must add or update a receipt under `.repo-respect/receipts/`.
@@ -358,6 +358,7 @@ Receipts are required for all contributors and all contribution methods. The
 receipt must identify the bounded context used, files read, files edited, topic
 documentation impact, generated artifact impact, checks run, known risks, and
 human reviewer.
+Bare receipt IDs are invalid; the trailer must use the full receipt path.
 
 Create a receipt template with:
 
