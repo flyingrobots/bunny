@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference with compact tables for navigation and issue anchors.
 * Added explicit release cut policy and cut gates to `ROADMAP.md`, including
   must-ship, may-slip, and not-included boundaries for the planned release
-  train.
+  train, and refreshed `docs/BEARING.md` to point at the active `v0.6.0`
+  release sequence.
 * Ray intersection queries now return `None` when checked intermediate
   arithmetic overflows, rather than accepting saturated Q32.32 values as valid
   geometric hits.
