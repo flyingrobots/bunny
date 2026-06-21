@@ -1,6 +1,7 @@
 //! Bunny workspace automation tasks.
 
 mod code_dojo;
+mod git_helpers;
 mod repo_respect;
 mod topic_docs;
 

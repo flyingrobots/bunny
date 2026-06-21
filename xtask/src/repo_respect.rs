@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::git_helpers::git_command;
+
 type DynError = Box<dyn Error>;
 
 const RECEIPT_DIR: &str = ".repo-respect/receipts";
@@ -93,12 +95,16 @@ pub(super) fn check_staged() -> Result<(), DynError> {
 }
 
 pub(super) fn commit_message_failures(non_comment: &[&str]) -> Result<Vec<String>, DynError> {
+    let root = git_root()?;
+    Ok(commit_message_failures_for_root(&root, non_comment))
+}
+
+fn commit_message_failures_for_root(root: &Path, non_comment: &[&str]) -> Vec<String> {
     let trailers = receipt_trailers(non_comment);
     if trailers.is_empty() {
-        return Ok(vec![format!("non-merge commits require '{RECEIPT_TRAILER} <path>' trailer")]);
+        return vec![format!("non-merge commits require '{RECEIPT_TRAILER} <path>' trailer")];
     }
 
-    let root = git_root()?;
     let mut failures = Vec::new();
     for trailer in trailers {
         if !is_receipt_path(Path::new(&trailer)) {
@@ -108,13 +114,13 @@ pub(super) fn commit_message_failures(non_comment: &[&str]) -> Result<Vec<String
             continue;
         }
 
-        match read_receipt_from_git_index(&root, &trailer) {
+        match read_receipt_from_git_index(root, &trailer) {
             Ok(text) => failures.extend(validate_receipt_text(&trailer, &text)),
             Err(error) => failures.push(format!("{trailer}: {error}")),
         }
     }
 
-    Ok(failures)
+    failures
 }
 
 fn print_help() {
@@ -270,24 +276,49 @@ fn validate_receipt_text(path: &str, text: &str) -> Vec<String> {
 }
 
 fn receipt_field_has_content(text: &str, field: &str) -> bool {
-    let Some(start) = text.find(field) else {
-        return false;
-    };
-    let after = &text[start + field.len()..];
-    let end = REQUIRED_RECEIPT_FIELDS
-        .iter()
-        .filter(|candidate| **candidate != field)
-        .filter_map(|candidate| after.find(candidate))
-        .min()
-        .unwrap_or(after.len());
-    after[..end].lines().any(|line| {
+    let mut in_target_section = false;
+    let mut in_html_comment = false;
+
+    for line in text.lines() {
         let trimmed = line.trim();
-        receipt_line_has_content(trimmed)
-    })
+        if let Some(candidate) = receipt_heading(trimmed) {
+            if in_target_section && candidate != field {
+                return false;
+            }
+            in_target_section = candidate == field;
+            in_html_comment = false;
+            continue;
+        }
+
+        if in_target_section && receipt_line_has_content(trimmed, &mut in_html_comment) {
+            return true;
+        }
+    }
+
+    false
 }
 
-fn receipt_line_has_content(trimmed: &str) -> bool {
-    if trimmed.is_empty() || trimmed.starts_with("<!--") {
+fn receipt_heading(trimmed: &str) -> Option<&'static str> {
+    REQUIRED_RECEIPT_FIELDS.iter().copied().find(|field| trimmed == *field)
+}
+
+fn receipt_line_has_content(trimmed: &str, in_html_comment: &mut bool) -> bool {
+    if trimmed.is_empty() {
+        return false;
+    }
+    if *in_html_comment {
+        if trimmed.contains("-->") {
+            *in_html_comment = false;
+        }
+        return false;
+    }
+    if trimmed.starts_with("<!--") {
+        if !trimmed.contains("-->") {
+            *in_html_comment = true;
+        }
+        return false;
+    }
+    if trimmed.contains("-->") {
         return false;
     }
 
@@ -310,7 +341,7 @@ fn receipt_trailers(non_comment: &[&str]) -> Vec<String> {
 
 fn read_receipt_from_git_index(root: &Path, path: &str) -> Result<String, DynError> {
     let object = format!(":{path}");
-    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    let output = git_command(root).args(["show", &object]).output()?;
     if output.status.success() {
         return Ok(String::from_utf8(output.stdout)?);
     }
@@ -332,7 +363,7 @@ fn read_receipt_for_mode(root: &Path, mode: CheckMode, path: &Path) -> Result<St
 
 fn read_receipt_from_staged_index(root: &Path, path: &str) -> Result<String, DynError> {
     let object = format!(":{path}");
-    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    let output = git_command(root).args(["show", &object]).output()?;
     if output.status.success() {
         return Ok(String::from_utf8(output.stdout)?);
     }
@@ -343,7 +374,8 @@ fn read_receipt_from_staged_index(root: &Path, path: &str) -> Result<String, Dyn
 fn branch_commit_message_failures(root: &Path) -> Result<Vec<String>, DynError> {
     let base = base_ref();
     ensure_ref_exists(root, &base)?;
-    let range = format!("{base}...HEAD");
+    let merge_base = git_merge_base(root, &base)?;
+    let range = format!("{merge_base}..HEAD");
     let commits = git_lines(root, &["rev-list", "--no-merges", "--reverse", &range])?;
     let mut failures = Vec::new();
 
@@ -356,7 +388,7 @@ fn branch_commit_message_failures(root: &Path) -> Result<Vec<String>, DynError> 
             .collect::<Vec<_>>();
         let short = commit.chars().take(7).collect::<String>();
         failures.extend(
-            commit_message_failures(&non_comment)?
+            commit_message_failures_for_root(root, &non_comment)
                 .into_iter()
                 .map(|failure| format!("{short}: {failure}")),
         );
@@ -366,15 +398,19 @@ fn branch_commit_message_failures(root: &Path) -> Result<Vec<String>, DynError> 
 }
 
 fn git_commit_message(root: &Path, commit: &str) -> Result<String, DynError> {
-    let output = Command::new("git")
-        .args(["log", "-1", "--format=%B", commit])
-        .current_dir(root)
-        .output()?;
+    let output = git_command(root).args(["log", "-1", "--format=%B", commit]).output()?;
     if output.status.success() {
         return Ok(String::from_utf8(output.stdout)?);
     }
 
     Err(command_error("git log commit message", &output.stderr).into())
+}
+
+fn git_merge_base(root: &Path, reference: &str) -> Result<String, DynError> {
+    let mut lines = git_lines(root, &["merge-base", reference, "HEAD"])?;
+    lines.pop().ok_or_else(|| {
+        RepoRespectError::new(format!("cannot find merge-base with {reference}")).into()
+    })
 }
 
 fn branch_and_worktree_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
@@ -412,10 +448,7 @@ fn base_ref() -> String {
 }
 
 fn ensure_ref_exists(root: &Path, reference: &str) -> Result<(), DynError> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--verify", reference])
-        .current_dir(root)
-        .output()?;
+    let output = git_command(root).args(["rev-parse", "--verify", reference]).output()?;
     if output.status.success() {
         Ok(())
     } else {
@@ -431,7 +464,7 @@ fn git_paths(root: &Path, args: &[&str]) -> Result<BTreeSet<PathBuf>, DynError> 
 }
 
 fn git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>, DynError> {
-    let output = Command::new("git").args(args).current_dir(root).output()?;
+    let output = git_command(root).args(args).output()?;
     if !output.status.success() {
         return Err(command_error(&format!("git {}", args.join(" ")), &output.stderr).into());
     }
@@ -627,8 +660,7 @@ mod tests {
     }
 
     fn run_git(root: &Path, args: &[&str]) {
-        let output =
-            Command::new("git").args(args).current_dir(root).output().expect("git should run");
+        let output = git_command(root).args(args).output().expect("git should run");
         assert!(
             output.status.success(),
             "git {:?} failed: {}",
@@ -716,6 +748,74 @@ Fixture reviewer.
     }
 
     #[test]
+    fn receipt_validation_requires_exact_field_headings() {
+        let text = "\
+# Receipt: Fixture
+
+Task:
+Files read: mentioned in task prose only.
+
+Files edited:
+- `src/lib.rs`
+
+Topic docs:
+None - test fixture.
+
+Generated artifacts:
+None.
+
+Checks run:
+- `cargo test -p xtask`
+
+Known risks:
+None.
+
+Human reviewer:
+Fixture reviewer.
+";
+
+        let failures = validate_receipt_text("receipt.md", text);
+
+        assert!(failures.iter().any(|failure| failure.contains("Files read:")));
+    }
+
+    #[test]
+    fn receipt_validation_ignores_multiline_html_comments() {
+        let text = "\
+# Receipt: Fixture
+
+Task:
+<!-- This is only
+comment content -->
+
+Files read:
+- `src/lib.rs`
+
+Files edited:
+- `src/lib.rs`
+
+Topic docs:
+None - test fixture.
+
+Generated artifacts:
+None.
+
+Checks run:
+- `cargo test -p xtask`
+
+Known risks:
+None.
+
+Human reviewer:
+Fixture reviewer.
+";
+
+        let failures = validate_receipt_text("receipt.md", text);
+
+        assert!(failures.iter().any(|failure| failure.contains("Task:")));
+    }
+
+    #[test]
     fn non_merge_commit_messages_require_receipt_trailers() {
         let failures =
             commit_message_failures(&["docs: update contributor guide"]).expect("check should run");
@@ -775,6 +875,40 @@ Fixture reviewer.
             branch_commit_message_failures(temp.path()).expect("branch messages should be checked");
 
         assert!(failures.iter().any(|failure| failure.contains("Repo-Respect-Receipt:")));
+    }
+
+    #[test]
+    fn branch_commit_message_failures_ignore_new_base_commits() {
+        let temp = TempDir::new("branch-commit-range");
+        init_repo_with_origin_main(temp.path());
+        write_file(temp.path(), ".repo-respect/receipts/feature.md", valid_receipt_text());
+        run_git(temp.path(), &["add", ".repo-respect/receipts/feature.md"]);
+        run_git(temp.path(), &["commit", "-m", "seed: add shared receipt"]);
+        run_git(temp.path(), &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        run_git(temp.path(), &["checkout", "-b", "feature"]);
+        write_file(temp.path(), "src/feature.rs", "pub fn feature() {}\n");
+        run_git(temp.path(), &["add", "src/feature.rs"]);
+        run_git(
+            temp.path(),
+            &[
+                "commit",
+                "-m",
+                "test: add feature",
+                "-m",
+                "Repo-Respect-Receipt: .repo-respect/receipts/feature.md",
+            ],
+        );
+        run_git(temp.path(), &["checkout", "-b", "upstream", "origin/main"]);
+        write_file(temp.path(), "src/upstream.rs", "pub fn upstream() {}\n");
+        run_git(temp.path(), &["add", "src/upstream.rs"]);
+        run_git(temp.path(), &["commit", "-m", "test: advance upstream without trailer"]);
+        run_git(temp.path(), &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        run_git(temp.path(), &["checkout", "feature"]);
+
+        let failures =
+            branch_commit_message_failures(temp.path()).expect("branch messages should be checked");
+
+        assert!(failures.is_empty(), "base-only commits should not be checked: {failures:?}");
     }
 
     #[test]

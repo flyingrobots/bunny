@@ -8,6 +8,8 @@ use std::process::Command;
 use syn::visit::{self, Visit};
 use syn::{Attribute, File, ItemFn, ItemMod, Meta};
 
+use crate::git_helpers::git_command;
+
 type DynError = Box<dyn Error>;
 
 const REQUIREMENT_HEADER: &str = "[[requirement]]";
@@ -882,24 +884,6 @@ fn git_root() -> Result<PathBuf, DynError> {
 fn command_error(command: &str, stderr: &[u8]) -> TopicDocsError {
     let detail = String::from_utf8_lossy(stderr);
     TopicDocsError::new(format!("{command} failed: {}", detail.trim()))
-}
-
-fn git_command(root: &Path) -> Command {
-    let mut command = Command::new("git");
-    command.current_dir(root);
-    sanitize_inherited_git_index(root, &mut command);
-    command
-}
-
-fn sanitize_inherited_git_index(root: &Path, command: &mut Command) {
-    let Ok(index) = std::env::var("GIT_INDEX_FILE") else {
-        return;
-    };
-    let index_path = PathBuf::from(index);
-    let absolute_index = if index_path.is_absolute() { index_path } else { root.join(index_path) };
-    if !absolute_index.starts_with(root.join(".git")) {
-        command.env_remove("GIT_INDEX_FILE");
-    }
 }
 
 #[cfg(test)]
