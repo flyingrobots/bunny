@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use syn::visit::{self, Visit};
-use syn::{Attribute, File, ItemFn};
+use syn::{Attribute, File, ItemFn, ItemMod, Meta};
 
 type DynError = Box<dyn Error>;
 
@@ -111,12 +111,20 @@ struct Report {
 
 #[derive(Default)]
 struct TestCollector {
-    names: BTreeSet<String>,
+    evidence: BTreeMap<String, TestEvidence>,
+    cfg_gated_stack: Vec<bool>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct TestEvidence {
+    runnable: bool,
+    ignored: bool,
+    cfg_gated: bool,
 }
 
 struct PlanContext<'a> {
     path: &'a Path,
-    test_names: &'a BTreeSet<String>,
+    test_evidence: &'a BTreeMap<String, TestEvidence>,
     report: &'a mut Report,
     violations: &'a mut Vec<Violation>,
 }
@@ -145,11 +153,51 @@ impl Display for Violation {
 }
 
 impl<'ast> Visit<'ast> for TestCollector {
+    fn visit_item_mod(&mut self, node: &'ast ItemMod) {
+        let cfg_gated = attrs_contain_non_test_cfg(&node.attrs);
+        self.cfg_gated_stack.push(cfg_gated);
+        visit::visit_item_mod(self, node);
+        self.cfg_gated_stack.pop();
+    }
+
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
         if attrs_contain_test(&node.attrs) {
-            self.names.insert(node.sig.ident.to_string());
+            let cfg_gated_ancestor = self.cfg_gated_stack.iter().any(|cfg_gated| *cfg_gated);
+            let evidence = TestEvidence::from_attrs(&node.attrs, cfg_gated_ancestor);
+            self.evidence
+                .entry(node.sig.ident.to_string())
+                .and_modify(|existing| existing.merge(evidence))
+                .or_insert(evidence);
         }
         visit::visit_item_fn(self, node);
+    }
+}
+
+impl TestEvidence {
+    fn from_attrs(attrs: &[Attribute], cfg_gated_ancestor: bool) -> Self {
+        let ignored = attrs_contain_ignore(attrs);
+        let cfg_gated = cfg_gated_ancestor || attrs_contain_non_test_cfg(attrs);
+        Self { runnable: !ignored && !cfg_gated, ignored, cfg_gated }
+    }
+
+    fn merge(&mut self, other: Self) {
+        self.runnable |= other.runnable;
+        self.ignored |= other.ignored;
+        self.cfg_gated |= other.cfg_gated;
+    }
+
+    fn blocking_reasons(self) -> String {
+        let mut reasons = Vec::new();
+        if self.ignored {
+            reasons.push("ignored");
+        }
+        if self.cfg_gated {
+            reasons.push("cfg-gated");
+        }
+        if reasons.is_empty() {
+            reasons.push("not runnable");
+        }
+        reasons.join(", ")
     }
 }
 
@@ -220,7 +268,7 @@ pub(super) fn handle() -> Result<(), DynError> {
 
 pub(super) fn check() -> Result<(), DynError> {
     let root = git_root()?;
-    let test_names = discover_test_names(&root)?;
+    let test_evidence = discover_test_evidence(&root)?;
     let plans = topic_test_plans(&root)?;
     let mut report = Report::default();
     let mut violations = Vec::new();
@@ -229,7 +277,7 @@ pub(super) fn check() -> Result<(), DynError> {
         let text = std::fs::read_to_string(root.join(plan))?;
         let mut context = PlanContext {
             path: plan,
-            test_names: &test_names,
+            test_evidence: &test_evidence,
             report: &mut report,
             violations: &mut violations,
         };
@@ -416,12 +464,27 @@ fn validate_executable_case(context: &mut PlanContext<'_>, case: &Case) {
         return;
     };
 
-    if !context.test_names.contains(test_name) {
-        context.violation(
-            case.line,
-            format!("implemented case `{}` names missing Rust test `{test_name}`", case.id),
-        );
-        context.report.missing_executable_cases += 1;
+    match context.test_evidence.get(test_name) {
+        Some(evidence) if evidence.runnable => {}
+        Some(evidence) => {
+            context.violation(
+                case.line,
+                format!(
+                    "implemented case `{}` names Rust test `{test_name}` but the discovered \
+                     function is not runnable evidence ({})",
+                    case.id,
+                    evidence.blocking_reasons()
+                ),
+            );
+            context.report.missing_executable_cases += 1;
+        }
+        None => {
+            context.violation(
+                case.line,
+                format!("implemented case `{}` names missing Rust test `{test_name}`", case.id),
+            );
+            context.report.missing_executable_cases += 1;
+        }
     }
 }
 
@@ -589,7 +652,7 @@ fn collect_test_plans(root: &Path, dir: &Path, plans: &mut Vec<PathBuf>) -> Resu
     Ok(())
 }
 
-fn discover_test_names(root: &Path) -> Result<BTreeSet<String>, DynError> {
+fn discover_test_evidence(root: &Path) -> Result<BTreeMap<String, TestEvidence>, DynError> {
     let mut collector = TestCollector::default();
     for path in git_files(root)? {
         if path.extension() != Some(OsStr::new("rs")) {
@@ -603,14 +666,11 @@ fn discover_test_names(root: &Path) -> Result<BTreeSet<String>, DynError> {
         let file: File = syn::parse_file(&source)?;
         collector.visit_file(&file);
     }
-    Ok(collector.names)
+    Ok(collector.evidence)
 }
 
 fn git_files(root: &Path) -> Result<Vec<PathBuf>, DynError> {
-    let output = Command::new("git")
-        .args(["ls-files", "--cached", "--others", "--exclude-standard"])
-        .current_dir(root)
-        .output()?;
+    let output = Command::new("git").args(["ls-files", "--cached"]).current_dir(root).output()?;
     if !output.status.success() {
         return Err(command_error("git file listing", &output.stderr).into());
     }
@@ -623,10 +683,41 @@ fn attrs_contain_test(attrs: &[Attribute]) -> bool {
     attrs.iter().any(is_test_attr)
 }
 
+fn attrs_contain_ignore(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr_path_is(attr, "ignore") || cfg_attr_can_ignore(attr))
+}
+
+fn attrs_contain_non_test_cfg(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr_path_is(attr, "cfg") && !cfg_is_plain_test(attr))
+}
+
 fn is_test_attr(attr: &Attribute) -> bool {
-    attr.path().segments.last().is_some_and(|segment| {
-        matches!(segment.ident.to_string().as_str(), "test" | "wasm_bindgen_test")
-    })
+    attr_path_is(attr, "test") || attr_path_is(attr, "wasm_bindgen_test")
+}
+
+fn attr_path_is(attr: &Attribute, expected: &str) -> bool {
+    attr.path().segments.last().is_some_and(|segment| segment.ident == expected)
+}
+
+fn cfg_attr_can_ignore(attr: &Attribute) -> bool {
+    attr_path_is(attr, "cfg_attr") && meta_tokens(&attr.meta).contains("ignore")
+}
+
+fn cfg_is_plain_test(attr: &Attribute) -> bool {
+    attr_path_is(attr, "cfg") && meta_tokens(&attr.meta) == "test"
+}
+
+fn meta_tokens(meta: &Meta) -> String {
+    match meta {
+        Meta::List(list) => list.tokens.to_string().split_whitespace().collect(),
+        Meta::Path(path) => path
+            .segments
+            .iter()
+            .map(|segment| segment.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::"),
+        Meta::NameValue(_) => String::new(),
+    }
 }
 
 fn git_root() -> Result<PathBuf, DynError> {
@@ -648,18 +739,33 @@ fn command_error(command: &str, stderr: &[u8]) -> TopicDocsError {
 mod tests {
     use super::*;
 
-    fn test_names(names: &[&str]) -> BTreeSet<String> {
-        names.iter().map(|name| (*name).to_string()).collect()
+    fn test_evidence(names: &[&str]) -> BTreeMap<String, TestEvidence> {
+        names
+            .iter()
+            .map(|name| {
+                (
+                    (*name).to_string(),
+                    TestEvidence { runnable: true, ignored: false, cfg_gated: false },
+                )
+            })
+            .collect()
+    }
+
+    fn test_evidence_from_source(source: &str) -> BTreeMap<String, TestEvidence> {
+        let mut collector = TestCollector::default();
+        let file = syn::parse_file(source).expect("test source should parse");
+        collector.visit_file(&file);
+        collector.evidence
     }
 
     fn plan_context<'a>(
-        names: &'a BTreeSet<String>,
+        evidence: &'a BTreeMap<String, TestEvidence>,
         report: &'a mut Report,
         violations: &'a mut Vec<Violation>,
     ) -> PlanContext<'a> {
         PlanContext {
             path: Path::new("docs/topics/example/test-plan.md"),
-            test_names: names,
+            test_evidence: evidence,
             report,
             violations,
         }
@@ -690,12 +796,12 @@ oracle = "Exact equality."
 tier = "fast"
 status = "implemented"
 ```
-"#;
+        "#;
         let mut violations = Vec::new();
         let mut report = Report::default();
-        let names = test_names(&[]);
+        let evidence = test_evidence(&[]);
         let records = {
-            let mut context = plan_context(&names, &mut report, &mut violations);
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
             parse_records(text, &mut context)
         };
 
@@ -726,12 +832,12 @@ oracle = "Exact equality."
 tier = "fast"
 status = "implemented"
 ```
-"#;
+        "#;
         let mut violations = Vec::new();
         let mut report = Report::default();
-        let names = test_names(&[]);
+        let evidence = test_evidence(&[]);
         {
-            let mut context = plan_context(&names, &mut report, &mut violations);
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
             validate_plan(text, &mut context);
         }
 
@@ -756,12 +862,12 @@ oracle = "Exact equality."
 tier = "fast"
 status = "planned"
 ```
-"#;
+        "#;
         let mut violations = Vec::new();
         let mut report = Report::default();
-        let names = test_names(&[]);
+        let evidence = test_evidence(&[]);
         {
-            let mut context = plan_context(&names, &mut report, &mut violations);
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
             validate_plan(text, &mut context);
         }
 
@@ -769,5 +875,97 @@ status = "planned"
         assert_eq!(report.active_requirements, 1);
         assert_eq!(report.requirements_with_case_coverage, 1);
         assert_eq!(report.planned_cases, 1);
+    }
+
+    #[test]
+    fn ignored_executable_case_is_not_implemented_evidence() {
+        let text = r#"
+```toml
+[[requirement]]
+id = "CL-REQ-001"
+summary = "Right-handed frame."
+status = "active"
+
+[[case]]
+id = "CL-TP-001"
+requirements = ["CL-REQ-001"]
+evidence = "test"
+test = "ignored_case"
+oracle = "Exact equality."
+tier = "fast"
+status = "implemented"
+```
+"#;
+        let evidence = test_evidence_from_source(
+            r"
+#[test]
+#[ignore]
+fn ignored_case() {}
+",
+        );
+        let mut violations = Vec::new();
+        let mut report = Report::default();
+        {
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
+            validate_plan(text, &mut context);
+        }
+
+        assert!(violations.iter().any(|violation| violation.message.contains("ignored")));
+        assert_eq!(report.missing_executable_cases, 1);
+    }
+
+    #[test]
+    fn cfg_gated_executable_case_is_not_implemented_evidence() {
+        let text = r#"
+```toml
+[[requirement]]
+id = "CL-REQ-001"
+summary = "Right-handed frame."
+status = "active"
+
+[[case]]
+id = "CL-TP-001"
+requirements = ["CL-REQ-001"]
+evidence = "test"
+test = "cfg_disabled_case"
+oracle = "Exact equality."
+tier = "fast"
+status = "implemented"
+```
+"#;
+        let evidence = test_evidence_from_source(
+            r"
+#[cfg(any())]
+#[test]
+fn cfg_disabled_case() {}
+",
+        );
+        let mut violations = Vec::new();
+        let mut report = Report::default();
+        {
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
+            validate_plan(text, &mut context);
+        }
+
+        assert!(violations.iter().any(|violation| violation.message.contains("cfg-gated")));
+        assert_eq!(report.missing_executable_cases, 1);
+    }
+
+    #[test]
+    fn cfg_test_module_counts_as_runnable_evidence() {
+        let evidence = test_evidence_from_source(
+            r"
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn nested_case() {}
+}
+",
+        );
+
+        assert_eq!(
+            evidence.get("nested_case"),
+            Some(&TestEvidence { runnable: true, ignored: false, cfg_gated: false })
+        );
     }
 }

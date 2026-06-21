@@ -15,6 +15,10 @@ fn raw(value: i32) -> i64 {
     i64::from(value) * ONE_RAW
 }
 
+fn q32(value: i32) -> FixedQ32_32 {
+    FixedQ32_32::from_raw(raw(value))
+}
+
 fn assert_q32(value: FixedQ32_32, expected: i32) {
     assert_eq!(value.to_raw(), raw(expected));
 }
@@ -54,6 +58,22 @@ fn test_ray_sphere_intersection() {
     let (hit3, normal3) = ray_intersects_sphere(&ray3, &sphere).expect("should hit from inside");
     assert_q32(hit3.z, 6);
     assert_q32(normal3.z, 1);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn ray_sphere_diagonal_center_hit_clamps_negative_perpendicular_residue() {
+    let zero = FixedQ32_32::ZERO;
+    let direction = FixedUnitVec3::new(FixedVec3::new(FixedQ32_32::ONE, FixedQ32_32::ONE, zero))
+        .expect("diagonal direction should normalize");
+    let direction_vec = direction.into_inner();
+    let origin = FixedVec3::new(zero, zero, zero);
+    let ray = FixedRay3::new(origin, direction);
+    let sphere = FixedSphere3::new(direction_vec * q32(15), FixedQ32_32::ONE);
+
+    let (hit, normal) = ray_intersects_sphere(&ray, &sphere).expect("centerline ray should hit");
+
+    assert_eq!(hit, direction_vec * q32(14));
+    assert_eq!(normal, -direction_vec);
 }
 
 #[wasm_bindgen_test(unsupported = test)]

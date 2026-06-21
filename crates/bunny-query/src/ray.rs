@@ -28,14 +28,29 @@ fn sphere_hit_distance(
     direction: FixedVec3,
     radius: FixedQ32_32,
 ) -> Option<FixedQ32_32> {
-    let tca = checked_dot(center_delta, direction)?;
-    let d2 = checked_dot(center_delta, center_delta)?.checked_sub(tca.checked_mul(tca)?)?;
+    let (tca, d2) = sphere_projection(center_delta, direction)?;
     let r2 = radius.checked_mul(radius)?;
     if d2 > r2 {
         return None;
     }
     let thc = sphere_half_chord(r2, d2)?;
-    positive_sphere_hit(tca - thc, tca + thc)
+    positive_sphere_hit(tca.checked_sub(thc)?, tca.checked_add(thc)?)
+}
+
+fn sphere_projection(
+    center_delta: FixedVec3,
+    direction: FixedVec3,
+) -> Option<(FixedQ32_32, FixedQ32_32)> {
+    let tca = checked_dot(center_delta, direction)?;
+    let d2 = checked_dot(center_delta, center_delta)?.checked_sub(tca.checked_mul(tca)?)?;
+    if d2 < FixedQ32_32::ZERO {
+        let center_distance = center_delta.length()?;
+        let clamped_tca =
+            if tca < FixedQ32_32::ZERO { center_distance.checked_neg()? } else { center_distance };
+        Some((clamped_tca, FixedQ32_32::ZERO))
+    } else {
+        Some((tca, d2))
+    }
 }
 
 fn sphere_half_chord(r2: FixedQ32_32, d2: FixedQ32_32) -> Option<FixedQ32_32> {
