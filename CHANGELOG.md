@@ -57,11 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Repo-respect receipt coverage now includes deleted and typechanged paths,
   validates staged receipt contents from the Git index, rejects placeholder-only
   receipt sections, and enforces receipt trailers across non-merge branch
-  commits in the full gate.
+  commits in the full gate; the repo-respect topic records the evidence as
+  `RR-TP-003` through `RR-TP-009`.
 * Repo-respect branch commit validation now checks only commits on the PR side
   of the merge base, uses shared sanitized Git subprocess helpers, and rejects
   receipt sections whose only apparent content is prose field names or HTML
-  comments.
+  comments; the repo-respect topic records the evidence as `RR-TP-004`,
+  `RR-TP-005`, `RR-TP-010`, and `RR-TP-011`.
 * `FixedMat2::try_inverse` now divides off-diagonal entries before negating
   them, so minimum raw values can still invert when the divided inverse entry is
   representable.

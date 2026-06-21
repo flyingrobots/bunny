@@ -669,6 +669,17 @@ mod tests {
         );
     }
 
+    fn run_git_stdout(root: &Path, args: &[&str]) -> String {
+        let output = git_command(root).args(args).output().expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).expect("git output should be utf8")
+    }
+
     fn write_file(root: &Path, relative: &str, text: &str) {
         let path = root.join(relative);
         fs::create_dir_all(path.parent().expect("fixture path should have a parent"))
@@ -838,6 +849,32 @@ Fixture reviewer.
                 "test: delete fixture file",
                 "-m",
                 "Repo-Respect-Receipt: .repo-respect/receipts/deletion.md",
+            ],
+        );
+
+        let branch = branch_paths(temp.path()).expect("branch paths should load");
+        let staged = branch_and_staged_paths(temp.path()).expect("staged paths should load");
+
+        assert!(branch.contains(Path::new("src/lib.rs")));
+        assert!(staged.contains(Path::new("src/lib.rs")));
+    }
+
+    #[test]
+    fn changed_path_lists_include_typechanged_files() {
+        let temp = TempDir::new("typechanged-paths");
+        init_repo_with_origin_main(temp.path());
+        write_file(temp.path(), "target", "src/lib.rs\n");
+        let blob = run_git_stdout(temp.path(), &["hash-object", "-w", "target"]);
+        let blob = blob.trim();
+        run_git(temp.path(), &["update-index", "--cacheinfo", "120000", blob, "src/lib.rs"]);
+        run_git(
+            temp.path(),
+            &[
+                "commit",
+                "-m",
+                "test: typechange fixture path",
+                "-m",
+                "Repo-Respect-Receipt: .repo-respect/receipts/typechange.md",
             ],
         );
 
