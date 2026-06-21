@@ -10,12 +10,11 @@ impl FixedMat4 {
     /// Returns `None` when intermediate checked Q32.32 arithmetic overflows.
     #[must_use]
     pub fn determinant(self) -> Option<FixedQ32_32> {
-        let cofactors = self.cofactor_row0()?;
         self.m00()
-            .checked_mul(cofactors.0)?
-            .checked_add(self.m01().checked_mul(cofactors.1)?)?
-            .checked_add(self.m02().checked_mul(cofactors.2)?)?
-            .checked_add(self.m03().checked_mul(cofactors.3)?)
+            .checked_mul(self.minor_00()?)?
+            .checked_sub(self.m01().checked_mul(self.minor_01()?)?)?
+            .checked_add(self.m02().checked_mul(self.minor_02()?)?)?
+            .checked_sub(self.m03().checked_mul(self.minor_03()?)?)
     }
 
     /// Computes the inverse matrix.
@@ -29,57 +28,47 @@ impl FixedMat4 {
             return None;
         }
 
-        let cofactors = self.cofactor_matrix()?;
         Some(Self::from_rows(
-            checked_div_row4(cofactors.column0(), determinant)?,
-            checked_div_row4(cofactors.column1(), determinant)?,
-            checked_div_row4(cofactors.column2(), determinant)?,
-            checked_div_row4(cofactors.column3_row(), determinant)?,
+            self.inverse_row0(determinant)?,
+            self.inverse_row1(determinant)?,
+            self.inverse_row2(determinant)?,
+            self.inverse_row3(determinant)?,
         ))
     }
 
-    fn cofactor_matrix(self) -> Option<Self> {
-        Some(Self::from_rows(
-            self.cofactor_row0()?,
-            self.cofactor_row1()?,
-            self.cofactor_row2()?,
-            self.cofactor_row3()?,
-        ))
-    }
-
-    fn cofactor_row0(self) -> Option<FixedMat4Row> {
+    fn inverse_row0(self, determinant: FixedQ32_32) -> Option<FixedMat4Row> {
         Some((
-            self.minor_00()?,
-            checked_neg(self.minor_01()?)?,
-            self.minor_02()?,
-            checked_neg(self.minor_03()?)?,
+            self.minor_00()?.checked_div(determinant)?,
+            checked_div_then_neg(self.minor_10()?, determinant)?,
+            self.minor_20()?.checked_div(determinant)?,
+            checked_div_then_neg(self.minor_30()?, determinant)?,
         ))
     }
 
-    fn cofactor_row1(self) -> Option<FixedMat4Row> {
+    fn inverse_row1(self, determinant: FixedQ32_32) -> Option<FixedMat4Row> {
         Some((
-            checked_neg(self.minor_10()?)?,
-            self.minor_11()?,
-            checked_neg(self.minor_12()?)?,
-            self.minor_13()?,
+            checked_div_then_neg(self.minor_01()?, determinant)?,
+            self.minor_11()?.checked_div(determinant)?,
+            checked_div_then_neg(self.minor_21()?, determinant)?,
+            self.minor_31()?.checked_div(determinant)?,
         ))
     }
 
-    fn cofactor_row2(self) -> Option<FixedMat4Row> {
+    fn inverse_row2(self, determinant: FixedQ32_32) -> Option<FixedMat4Row> {
         Some((
-            self.minor_20()?,
-            checked_neg(self.minor_21()?)?,
-            self.minor_22()?,
-            checked_neg(self.minor_23()?)?,
+            self.minor_02()?.checked_div(determinant)?,
+            checked_div_then_neg(self.minor_12()?, determinant)?,
+            self.minor_22()?.checked_div(determinant)?,
+            checked_div_then_neg(self.minor_32()?, determinant)?,
         ))
     }
 
-    fn cofactor_row3(self) -> Option<FixedMat4Row> {
+    fn inverse_row3(self, determinant: FixedQ32_32) -> Option<FixedMat4Row> {
         Some((
-            checked_neg(self.minor_30()?)?,
-            self.minor_31()?,
-            checked_neg(self.minor_32()?)?,
-            self.minor_33()?,
+            checked_div_then_neg(self.minor_03()?, determinant)?,
+            self.minor_13()?.checked_div(determinant)?,
+            checked_div_then_neg(self.minor_23()?, determinant)?,
+            self.minor_33()?.checked_div(determinant)?,
         ))
     }
 
@@ -220,15 +209,6 @@ fn det3(row0: FixedVec3, row1: FixedVec3, row2: FixedVec3) -> Option<FixedQ32_32
     FixedMat3::from_rows(row0, row1, row2).determinant()
 }
 
-const fn checked_neg(value: FixedQ32_32) -> Option<FixedQ32_32> {
-    value.checked_neg()
-}
-
-fn checked_div_row4(row: FixedMat4Row, determinant: FixedQ32_32) -> Option<FixedMat4Row> {
-    Some((
-        row.0.checked_div(determinant)?,
-        row.1.checked_div(determinant)?,
-        row.2.checked_div(determinant)?,
-        row.3.checked_div(determinant)?,
-    ))
+fn checked_div_then_neg(value: FixedQ32_32, determinant: FixedQ32_32) -> Option<FixedQ32_32> {
+    value.checked_div(determinant)?.checked_neg()
 }

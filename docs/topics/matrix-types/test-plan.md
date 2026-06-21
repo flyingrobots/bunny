@@ -149,6 +149,8 @@ and regeneration policy.
 | MT-TP-010 | Affine overflow and singular inverse | MT-REQ-008, MT-REQ-010 | Overflowing point transforms and singular inverse attempts return `None`. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_010_affine_transform_overflow_and_singular_inverse_return_none` |
 | MT-TP-011 | Affine inverse boundary regression | MT-REQ-010 | Minimum raw translation is scaled before negation when the inverse translation is representable. | `crates/bunny-linalg/tests/affine_transform_tests.rs::mt_tp_011_affine_inverse_scales_min_translation_before_negating` |
 | MT-TP-012 | 2x2 inverse boundary regression | MT-REQ-006 | Minimum raw off-diagonal is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_012_fixed_mat2_inverse_divides_min_off_diagonal_before_negating` |
+| MT-TP-013 | 3x3 inverse boundary regression | MT-REQ-006 | Minimum raw negative cofactor is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_013_fixed_mat3_inverse_divides_min_cofactor_before_negating` |
+| MT-TP-014 | 4x4 inverse boundary regression | MT-REQ-006 | Minimum raw negative cofactor is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_014_fixed_mat4_inverse_divides_min_cofactor_before_negating` |
 
 ```toml
 [[case]]
@@ -258,6 +260,24 @@ test = "crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_012_fixed_mat2_inverse_
 oracle = "Minimum raw off-diagonal is divided before negation when the inverse entry is representable."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "MT-TP-013"
+requirements = ["MT-REQ-006"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_013_fixed_mat3_inverse_divides_min_cofactor_before_negating"
+oracle = "Minimum raw negative cofactor is divided before negation when the inverse entry is representable."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-014"
+requirements = ["MT-REQ-006"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_014_fixed_mat4_inverse_divides_min_cofactor_before_negating"
+oracle = "Minimum raw negative cofactor is divided before negation when the inverse entry is representable."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -293,6 +313,8 @@ Current tests cover:
 - checked affine point-translation overflow;
 - minimum raw 2x2 off-diagonal entry that becomes representable after inverse
   division;
+- minimum raw 3x3 and 4x4 negative cofactors that become representable after
+  inverse division;
 - minimum raw affine translation that becomes representable after inverse scale;
 - fractional inverse entries that must compare by raw Q32.32 value;
 - identity composition for 4x4 matrices.

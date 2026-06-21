@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `FixedMat2::try_inverse` now divides off-diagonal entries before negating
   them, so minimum raw values can still invert when the divided inverse entry is
   representable.
+* `FixedMat3::try_inverse` and `FixedMat4::try_inverse` now divide negative
+  cofactors before negating them, so minimum raw cofactors can still invert when
+  the divided inverse entry is representable.
 * Affine inverse computation now applies the inverse linear transform before
   negating translation, so minimum raw translations can still invert when the
   scaled inverse translation is representable.

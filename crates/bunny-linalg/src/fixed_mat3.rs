@@ -101,9 +101,9 @@ impl FixedMat3 {
     /// Returns `None` when intermediate checked Q32.32 arithmetic overflows.
     #[must_use]
     pub fn determinant(self) -> Option<FixedQ32_32> {
-        let cofactor0 = checked_det2(self.m11, self.m12, self.m21, self.m22)?;
-        let cofactor1 = checked_det2(self.m10, self.m12, self.m20, self.m22)?;
-        let cofactor2 = checked_det2(self.m10, self.m11, self.m20, self.m21)?;
+        let cofactor0 = self.minor_00()?;
+        let cofactor1 = self.minor_01()?;
+        let cofactor2 = self.minor_02()?;
 
         self.m00
             .checked_mul(cofactor0)?
@@ -146,55 +146,58 @@ impl FixedMat3 {
         if determinant == FixedQ32_32::ZERO {
             return None;
         }
-        let cofactors = self.cofactor_matrix()?;
         Some(Self::from_rows(
-            checked_div_vec3(cofactors.column0(), determinant)?,
-            checked_div_vec3(cofactors.column1(), determinant)?,
-            checked_div_vec3(cofactors.column2(), determinant)?,
+            FixedVec3::new(
+                self.minor_00()?.checked_div(determinant)?,
+                checked_div_then_neg(self.minor_10()?, determinant)?,
+                self.minor_20()?.checked_div(determinant)?,
+            ),
+            FixedVec3::new(
+                checked_div_then_neg(self.minor_01()?, determinant)?,
+                self.minor_11()?.checked_div(determinant)?,
+                checked_div_then_neg(self.minor_21()?, determinant)?,
+            ),
+            FixedVec3::new(
+                self.minor_02()?.checked_div(determinant)?,
+                checked_div_then_neg(self.minor_12()?, determinant)?,
+                self.minor_22()?.checked_div(determinant)?,
+            ),
         ))
     }
 
-    fn cofactor_matrix(self) -> Option<Self> {
-        Some(Self::from_rows(
-            FixedVec3::new(self.cofactor_00()?, self.cofactor_01()?, self.cofactor_02()?),
-            FixedVec3::new(self.cofactor_10()?, self.cofactor_11()?, self.cofactor_12()?),
-            FixedVec3::new(self.cofactor_20()?, self.cofactor_21()?, self.cofactor_22()?),
-        ))
-    }
-
-    fn cofactor_00(self) -> Option<FixedQ32_32> {
+    fn minor_00(self) -> Option<FixedQ32_32> {
         checked_det2(self.m11, self.m12, self.m21, self.m22)
     }
 
-    fn cofactor_01(self) -> Option<FixedQ32_32> {
-        checked_neg(checked_det2(self.m10, self.m12, self.m20, self.m22)?)
+    fn minor_01(self) -> Option<FixedQ32_32> {
+        checked_det2(self.m10, self.m12, self.m20, self.m22)
     }
 
-    fn cofactor_02(self) -> Option<FixedQ32_32> {
+    fn minor_02(self) -> Option<FixedQ32_32> {
         checked_det2(self.m10, self.m11, self.m20, self.m21)
     }
 
-    fn cofactor_10(self) -> Option<FixedQ32_32> {
-        checked_neg(checked_det2(self.m01, self.m02, self.m21, self.m22)?)
+    fn minor_10(self) -> Option<FixedQ32_32> {
+        checked_det2(self.m01, self.m02, self.m21, self.m22)
     }
 
-    fn cofactor_11(self) -> Option<FixedQ32_32> {
+    fn minor_11(self) -> Option<FixedQ32_32> {
         checked_det2(self.m00, self.m02, self.m20, self.m22)
     }
 
-    fn cofactor_12(self) -> Option<FixedQ32_32> {
-        checked_neg(checked_det2(self.m00, self.m01, self.m20, self.m21)?)
+    fn minor_12(self) -> Option<FixedQ32_32> {
+        checked_det2(self.m00, self.m01, self.m20, self.m21)
     }
 
-    fn cofactor_20(self) -> Option<FixedQ32_32> {
+    fn minor_20(self) -> Option<FixedQ32_32> {
         checked_det2(self.m01, self.m02, self.m11, self.m12)
     }
 
-    fn cofactor_21(self) -> Option<FixedQ32_32> {
-        checked_neg(checked_det2(self.m00, self.m02, self.m10, self.m12)?)
+    fn minor_21(self) -> Option<FixedQ32_32> {
+        checked_det2(self.m00, self.m02, self.m10, self.m12)
     }
 
-    fn cofactor_22(self) -> Option<FixedQ32_32> {
+    fn minor_22(self) -> Option<FixedQ32_32> {
         checked_det2(self.m00, self.m01, self.m10, self.m11)
     }
 }
@@ -205,10 +208,6 @@ fn checked_mul_row(row: FixedVec3, rhs: FixedMat3) -> Option<FixedVec3> {
         checked_dot3(row, rhs.column1())?,
         checked_dot3(row, rhs.column2())?,
     ))
-}
-
-const fn checked_neg(value: FixedQ32_32) -> Option<FixedQ32_32> {
-    value.checked_neg()
 }
 
 fn checked_dot3(lhs: FixedVec3, rhs: FixedVec3) -> Option<FixedQ32_32> {
@@ -227,10 +226,6 @@ fn checked_det2(
     m00.checked_mul(m11)?.checked_sub(m01.checked_mul(m10)?)
 }
 
-fn checked_div_vec3(value: FixedVec3, determinant: FixedQ32_32) -> Option<FixedVec3> {
-    Some(FixedVec3::new(
-        value.x.checked_div(determinant)?,
-        value.y.checked_div(determinant)?,
-        value.z.checked_div(determinant)?,
-    ))
+fn checked_div_then_neg(value: FixedQ32_32, determinant: FixedQ32_32) -> Option<FixedQ32_32> {
+    value.checked_div(determinant)?.checked_neg()
 }

@@ -155,3 +155,40 @@ fn mt_tp_012_fixed_mat2_inverse_divides_min_off_diagonal_before_negating() {
     assert_eq!(inverse.m10, q32(0));
     assert_eq!(inverse.m11, q32_raw(HALF_RAW));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn mt_tp_013_fixed_mat3_inverse_divides_min_cofactor_before_negating() {
+    let matrix = FixedMat3::from_rows(
+        vec3(2, 0, 0),
+        FixedVec3::new(FixedQ32_32::from_raw(i64::MIN), q32(1), q32(0)),
+        vec3(0, 0, 1),
+    );
+
+    let inverse = matrix.try_inverse().expect("inverse is representable after division");
+
+    assert_eq!(inverse.row0(), FixedVec3::new(q32_raw(HALF_RAW), q32(0), q32(0)));
+    assert_eq!(inverse.row1(), FixedVec3::new(q32_raw(-(i64::MIN / 2)), q32(1), q32(0)));
+    assert_eq!(inverse.row2(), vec3(0, 0, 1));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn mt_tp_014_fixed_mat4_inverse_divides_min_cofactor_before_negating() {
+    let matrix = FixedMat4::from_rows(
+        (q32(2), q32(0), q32(0), q32(0)),
+        (FixedQ32_32::from_raw(i64::MIN), q32(1), q32(0), q32(0)),
+        (q32(0), q32(0), q32(1), q32(0)),
+        (q32(0), q32(0), q32(0), q32(1)),
+    );
+
+    let inverse = matrix.try_inverse().expect("inverse is representable after division");
+
+    assert_eq!(
+        inverse,
+        FixedMat4::from_rows(
+            (q32_raw(HALF_RAW), q32(0), q32(0), q32(0)),
+            (q32_raw(-(i64::MIN / 2)), q32(1), q32(0), q32(0)),
+            (q32(0), q32(0), q32(1), q32(0)),
+            (q32(0), q32(0), q32(0), q32(1)),
+        )
+    );
+}
