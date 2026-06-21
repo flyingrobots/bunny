@@ -224,7 +224,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
 pub(super) fn handle_pre_commit() -> Result<(), DynError> {
     println!("Code Dojo: checking staged Rust changes");
     check_rust(Mode::Staged)?;
-    crate::topic_docs::check()?;
+    crate::topic_docs::check_staged()?;
     ensure_cargo_manifest("pre-commit gate")?;
     run_quality_commands(false)?;
     Ok(())

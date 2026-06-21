@@ -149,16 +149,16 @@ fixtures. Each fixture must document:
 
 | ID | Category | Requirements | Oracle | Test |
 | --- | --- | --- | --- | --- |
-| CL-TP-001 | Golden path, determinism | CL-REQ-001, CL-REQ-002, CL-REQ-003 | Exact `FixedVec3` equality for public cross-product outputs. | `coordinate_law_tests::cl_tp_001_canonical_basis_is_right_handed` |
-| CL-TP-002 | Golden path, winding | CL-REQ-004, CL-REQ-005 | Exact `FixedVec3` equality for `(b - a).cross(c - a)` and reversed winding. | `coordinate_law_tests::cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z` |
-| CL-TP-003 | Golden path, unit policy | CL-REQ-006 | Exact raw Q32.32 values for whole Bunny-unit coordinates. | `coordinate_law_tests::cl_tp_003_bunny_units_are_unitless_fixed_raw_values` |
+| CL-TP-001 | Golden path, determinism | CL-REQ-001, CL-REQ-002, CL-REQ-003 | Exact `FixedVec3` equality for public cross-product outputs. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_001_canonical_basis_is_right_handed` |
+| CL-TP-002 | Golden path, winding | CL-REQ-004, CL-REQ-005 | Exact `FixedVec3` equality for `(b - a).cross(c - a)` and reversed winding. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z` |
+| CL-TP-003 | Golden path, unit policy | CL-REQ-006 | Exact raw Q32.32 values for whole Bunny-unit coordinates. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_003_bunny_units_are_unitless_fixed_raw_values` |
 
 ```toml
 [[case]]
 id = "CL-TP-001"
 requirements = ["CL-REQ-001", "CL-REQ-002", "CL-REQ-003"]
 evidence = "test"
-test = "cl_tp_001_canonical_basis_is_right_handed"
+test = "crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_001_canonical_basis_is_right_handed"
 oracle = "Exact FixedVec3 equality for public cross-product outputs."
 tier = "fast"
 status = "implemented"
@@ -167,7 +167,7 @@ status = "implemented"
 id = "CL-TP-002"
 requirements = ["CL-REQ-004", "CL-REQ-005"]
 evidence = "test"
-test = "cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z"
+test = "crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z"
 oracle = "Exact FixedVec3 equality for public winding-derived normal outputs."
 tier = "fast"
 status = "implemented"
@@ -176,7 +176,7 @@ status = "implemented"
 id = "CL-TP-003"
 requirements = ["CL-REQ-006"]
 evidence = "test"
-test = "cl_tp_003_bunny_units_are_unitless_fixed_raw_values"
+test = "crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_003_bunny_units_are_unitless_fixed_raw_values"
 oracle = "Exact raw Q32.32 values for whole Bunny-unit coordinates."
 tier = "fast"
 status = "implemented"

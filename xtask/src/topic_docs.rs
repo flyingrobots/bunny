@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use syn::visit::{self, Visit};
@@ -88,6 +88,12 @@ struct Case {
     line: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SourceMode {
+    Worktree,
+    Staged,
+}
+
 #[derive(Debug)]
 struct Violation {
     path: PathBuf,
@@ -104,14 +110,16 @@ struct Report {
     implemented_cases: usize,
     blocked_cases: usize,
     missing_executable_cases: usize,
+    topic_folders_without_test_plan: usize,
     duplicate_ids: usize,
     dead_requirement_refs: usize,
     metadata_parse_errors: usize,
 }
 
-#[derive(Default)]
 struct TestCollector {
+    path: PathBuf,
     evidence: BTreeMap<String, TestEvidence>,
+    module_stack: Vec<String>,
     cfg_gated_stack: Vec<bool>,
 }
 
@@ -152,11 +160,24 @@ impl Display for Violation {
     }
 }
 
+impl TestCollector {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            evidence: BTreeMap::new(),
+            module_stack: Vec::new(),
+            cfg_gated_stack: Vec::new(),
+        }
+    }
+}
+
 impl<'ast> Visit<'ast> for TestCollector {
     fn visit_item_mod(&mut self, node: &'ast ItemMod) {
         let cfg_gated = attrs_contain_non_test_cfg(&node.attrs);
         self.cfg_gated_stack.push(cfg_gated);
+        self.module_stack.push(node.ident.to_string());
         visit::visit_item_mod(self, node);
+        self.module_stack.pop();
         self.cfg_gated_stack.pop();
     }
 
@@ -164,8 +185,9 @@ impl<'ast> Visit<'ast> for TestCollector {
         if attrs_contain_test(&node.attrs) {
             let cfg_gated_ancestor = self.cfg_gated_stack.iter().any(|cfg_gated| *cfg_gated);
             let evidence = TestEvidence::from_attrs(&node.attrs, cfg_gated_ancestor);
+            let anchor = test_anchor(&self.path, &self.module_stack, &node.sig.ident.to_string());
             self.evidence
-                .entry(node.sig.ident.to_string())
+                .entry(anchor)
                 .and_modify(|existing| existing.merge(evidence))
                 .or_insert(evidence);
         }
@@ -267,14 +289,21 @@ pub(super) fn handle() -> Result<(), DynError> {
 }
 
 pub(super) fn check() -> Result<(), DynError> {
-    let root = git_root()?;
-    let test_evidence = discover_test_evidence(&root)?;
-    let plans = topic_test_plans(&root)?;
+    check_root(&git_root()?, SourceMode::Worktree)
+}
+
+pub(super) fn check_staged() -> Result<(), DynError> {
+    check_root(&git_root()?, SourceMode::Staged)
+}
+
+fn check_root(root: &Path, mode: SourceMode) -> Result<(), DynError> {
+    let test_evidence = discover_test_evidence(root, mode)?;
     let mut report = Report::default();
     let mut violations = Vec::new();
+    let plans = topic_test_plans(root, mode, &mut report, &mut violations)?;
 
     for plan in &plans {
-        let text = std::fs::read_to_string(root.join(plan))?;
+        let text = read_source(root, mode, plan)?;
         let mut context = PlanContext {
             path: plan,
             test_evidence: &test_evidence,
@@ -339,6 +368,9 @@ fn validate_plan(text: &str, context: &mut PlanContext<'_>) {
     for case in &cases {
         count_case(context.report, case);
         validate_case(context, case, &requirements);
+        if case.status == "blocked" {
+            continue;
+        }
         for requirement_id in &case.requirements {
             if requirements
                 .get(requirement_id)
@@ -455,22 +487,35 @@ fn validate_case(
 }
 
 fn validate_executable_case(context: &mut PlanContext<'_>, case: &Case) {
-    let Some(test_name) = case.test.as_deref().filter(|name| !name.is_empty()) else {
+    let Some(test_anchor) = case.test.as_deref().filter(|name| !name.is_empty()) else {
         context.violation(
             case.line,
-            format!("implemented executable case `{}` must name a Rust test function", case.id),
+            format!("implemented executable case `{}` must name a Rust test anchor", case.id),
         );
         context.report.missing_executable_cases += 1;
         return;
     };
 
-    match context.test_evidence.get(test_name) {
+    if !is_path_qualified_test_anchor(test_anchor) {
+        context.violation(
+            case.line,
+            format!(
+                "implemented executable case `{}` must use a path-qualified Rust test anchor \
+                 like `path/to/test.rs::test_name`",
+                case.id
+            ),
+        );
+        context.report.missing_executable_cases += 1;
+        return;
+    }
+
+    match context.test_evidence.get(test_anchor) {
         Some(evidence) if evidence.runnable => {}
         Some(evidence) => {
             context.violation(
                 case.line,
                 format!(
-                    "implemented case `{}` names Rust test `{test_name}` but the discovered \
+                    "implemented case `{}` names Rust test `{test_anchor}` but the discovered \
                      function is not runnable evidence ({})",
                     case.id,
                     evidence.blocking_reasons()
@@ -481,7 +526,7 @@ fn validate_executable_case(context: &mut PlanContext<'_>, case: &Case) {
         None => {
             context.violation(
                 case.line,
-                format!("implemented case `{}` names missing Rust test `{test_name}`", case.id),
+                format!("implemented case `{}` names missing Rust test `{test_anchor}`", case.id),
             );
             context.report.missing_executable_cases += 1;
         }
@@ -614,6 +659,25 @@ fn parse_quoted(raw: &str) -> Option<String> {
     Some(inner.to_string())
 }
 
+fn is_path_qualified_test_anchor(anchor: &str) -> bool {
+    anchor.contains(".rs::") && !anchor.starts_with("::") && !anchor.ends_with("::")
+}
+
+fn test_anchor(path: &Path, module_stack: &[String], name: &str) -> String {
+    let mut anchor = normalized_path(path);
+    anchor.push_str("::");
+    if !module_stack.is_empty() {
+        anchor.push_str(&module_stack.join("::"));
+        anchor.push_str("::");
+    }
+    anchor.push_str(name);
+    anchor
+}
+
+fn normalized_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn print_report(report: &Report) {
     println!("Topic docs: contract graph report");
     println!("  Active requirements:             {}", report.active_requirements);
@@ -623,53 +687,117 @@ fn print_report(report: &Report) {
     println!("  Implemented cases:               {}", report.implemented_cases);
     println!("  Blocked cases:                   {}", report.blocked_cases);
     println!("  Missing executable cases:        {}", report.missing_executable_cases);
+    println!("  Topic folders missing test-plan: {}", report.topic_folders_without_test_plan);
     println!("  Duplicate IDs:                   {}", report.duplicate_ids);
     println!("  Dead requirement references:     {}", report.dead_requirement_refs);
     println!("  Metadata parse errors:           {}", report.metadata_parse_errors);
 }
 
-fn topic_test_plans(root: &Path) -> Result<Vec<PathBuf>, DynError> {
-    let topics = root.join("docs").join("topics");
-    if !topics.exists() {
-        return Ok(Vec::new());
+fn topic_test_plans(
+    root: &Path,
+    mode: SourceMode,
+    report: &mut Report,
+    violations: &mut Vec<Violation>,
+) -> Result<Vec<PathBuf>, DynError> {
+    let files = if matches!(mode, SourceMode::Staged) { tracked_files(root)? } else { Vec::new() };
+    let tracked = files.iter().cloned().collect::<BTreeSet<_>>();
+    let topics = match mode {
+        SourceMode::Worktree => worktree_topic_dirs(root)?,
+        SourceMode::Staged => topic_dirs_from_paths(&files),
+    };
+    let mut plans = Vec::new();
+
+    for topic in topics {
+        let plan = topic.join("test-plan.md");
+        let has_plan = match mode {
+            SourceMode::Worktree => root.join(&plan).is_file(),
+            SourceMode::Staged => tracked.contains(&plan),
+        };
+        if has_plan {
+            plans.push(plan);
+        } else {
+            violations.push(Violation::new(&topic, 0, "topic folder must include `test-plan.md`"));
+            report.topic_folders_without_test_plan += 1;
+        }
     }
 
-    let mut plans = Vec::new();
-    collect_test_plans(root, &topics, &mut plans)?;
     plans.sort();
     Ok(plans)
 }
 
-fn collect_test_plans(root: &Path, dir: &Path, plans: &mut Vec<PathBuf>) -> Result<(), DynError> {
-    for entry in std::fs::read_dir(dir)? {
+fn worktree_topic_dirs(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
+    let topics_root = root.join("docs").join("topics");
+    if !topics_root.exists() {
+        return Ok(BTreeSet::new());
+    }
+
+    let mut topics = BTreeSet::new();
+    for entry in std::fs::read_dir(&topics_root)? {
         let path = entry?.path();
         if path.is_dir() {
-            collect_test_plans(root, &path, plans)?;
-        } else if path.file_name() == Some(OsStr::new("test-plan.md")) {
-            plans.push(path.strip_prefix(root)?.to_path_buf());
+            topics.insert(path.strip_prefix(root)?.to_path_buf());
         }
     }
-    Ok(())
+    Ok(topics)
 }
 
-fn discover_test_evidence(root: &Path) -> Result<BTreeMap<String, TestEvidence>, DynError> {
-    let mut collector = TestCollector::default();
-    for path in git_files(root)? {
+fn topic_dirs_from_paths(paths: &[PathBuf]) -> BTreeSet<PathBuf> {
+    let mut topics = BTreeSet::new();
+    for path in paths {
+        if let Some(topic) = topic_dir_from_path(path) {
+            topics.insert(topic);
+        }
+    }
+    topics
+}
+
+fn topic_dir_from_path(path: &Path) -> Option<PathBuf> {
+    let mut components = path.components();
+    let docs = components.next()?;
+    let topics = components.next()?;
+    let topic = components.next()?;
+
+    if normal_component(docs) != Some(OsStr::new("docs"))
+        || normal_component(topics) != Some(OsStr::new("topics"))
+    {
+        return None;
+    }
+
+    let mut dir = PathBuf::from("docs").join("topics");
+    dir.push(normal_component(topic)?);
+    Some(dir)
+}
+
+fn normal_component(component: Component<'_>) -> Option<&OsStr> {
+    match component {
+        Component::Normal(value) => Some(value),
+        _ => None,
+    }
+}
+
+fn discover_test_evidence(
+    root: &Path,
+    mode: SourceMode,
+) -> Result<BTreeMap<String, TestEvidence>, DynError> {
+    let mut evidence = BTreeMap::new();
+    for path in tracked_files(root)? {
         if path.extension() != Some(OsStr::new("rs")) {
             continue;
         }
         let absolute = root.join(&path);
-        if !absolute.is_file() {
+        if matches!(mode, SourceMode::Worktree) && !absolute.is_file() {
             continue;
         }
-        let source = std::fs::read_to_string(&absolute)?;
+        let source = read_source(root, mode, &path)?;
         let file: File = syn::parse_file(&source)?;
+        let mut collector = TestCollector::new(path);
         collector.visit_file(&file);
+        evidence.extend(collector.evidence);
     }
-    Ok(collector.evidence)
+    Ok(evidence)
 }
 
-fn git_files(root: &Path) -> Result<Vec<PathBuf>, DynError> {
+fn tracked_files(root: &Path) -> Result<Vec<PathBuf>, DynError> {
     let output = Command::new("git").args(["ls-files", "--cached"]).current_dir(root).output()?;
     if !output.status.success() {
         return Err(command_error("git file listing", &output.stderr).into());
@@ -677,6 +805,23 @@ fn git_files(root: &Path) -> Result<Vec<PathBuf>, DynError> {
 
     let stdout = String::from_utf8(output.stdout)?;
     Ok(stdout.lines().filter(|line| !line.is_empty()).map(PathBuf::from).collect())
+}
+
+fn read_source(root: &Path, mode: SourceMode, path: &Path) -> Result<String, DynError> {
+    match mode {
+        SourceMode::Worktree => Ok(std::fs::read_to_string(root.join(path))?),
+        SourceMode::Staged => read_staged_source(root, path),
+    }
+}
+
+fn read_staged_source(root: &Path, path: &Path) -> Result<String, DynError> {
+    let object = format!(":{}", path.to_string_lossy());
+    let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
+    if output.status.success() {
+        return Ok(String::from_utf8(output.stdout)?);
+    }
+
+    Err(command_error("git show staged source", &output.stderr).into())
 }
 
 fn attrs_contain_test(attrs: &[Attribute]) -> bool {
@@ -737,22 +882,63 @@ fn command_error(command: &str, stderr: &[u8]) -> TopicDocsError {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use super::*;
 
-    fn test_evidence(names: &[&str]) -> BTreeMap<String, TestEvidence> {
-        names
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let count = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("bunny-topic-docs-{name}-{}-{count}", std::process::id()));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("temporary directory should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn run_git(root: &Path, args: &[&str]) {
+        let output =
+            Command::new("git").args(args).current_dir(root).output().expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn runnable_test_evidence(anchors: &[&str]) -> BTreeMap<String, TestEvidence> {
+        anchors
             .iter()
-            .map(|name| {
+            .map(|anchor| {
                 (
-                    (*name).to_string(),
+                    (*anchor).to_string(),
                     TestEvidence { runnable: true, ignored: false, cfg_gated: false },
                 )
             })
             .collect()
     }
 
-    fn test_evidence_from_source(source: &str) -> BTreeMap<String, TestEvidence> {
-        let mut collector = TestCollector::default();
+    fn test_evidence_from_source(path: &str, source: &str) -> BTreeMap<String, TestEvidence> {
+        let mut collector = TestCollector::new(PathBuf::from(path));
         let file = syn::parse_file(source).expect("test source should parse");
         collector.visit_file(&file);
         collector.evidence
@@ -778,6 +964,78 @@ mod tests {
         })
     }
 
+    fn write_file(root: &Path, relative: &str, text: &str) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().expect("fixture path should have a parent"))
+            .expect("fixture directory should be created");
+        fs::write(path, text).expect("fixture file should be written");
+    }
+
+    fn valid_test_plan(anchor: &str) -> String {
+        format!(
+            r#"
+# Example Test Plan
+
+```toml
+[[requirement]]
+id = "EX-REQ-001"
+summary = "Example requirement."
+status = "active"
+
+[[case]]
+id = "EX-TP-001"
+requirements = ["EX-REQ-001"]
+evidence = "test"
+test = "{anchor}"
+oracle = "Exact equality."
+tier = "fast"
+status = "implemented"
+```
+"#
+        )
+    }
+
+    #[test]
+    fn topic_folder_without_test_plan_is_reported() {
+        let temp = TempDir::new("missing-test-plan");
+        write_file(temp.path(), "docs/topics/example/README.md", "# Example\n");
+        let mut report = Report::default();
+        let mut violations = Vec::new();
+
+        let plans =
+            topic_test_plans(temp.path(), SourceMode::Worktree, &mut report, &mut violations)
+                .expect("topic plans should be scanned");
+
+        assert!(plans.is_empty());
+        assert_eq!(report.topic_folders_without_test_plan, 1);
+        assert!(violations
+            .iter()
+            .any(|violation| violation.message.contains("must include `test-plan.md`")));
+    }
+
+    #[test]
+    fn staged_check_reads_topic_plans_and_tests_from_index() {
+        let temp = TempDir::new("staged-topic-docs");
+        run_git(temp.path(), &["init"]);
+        write_file(temp.path(), "docs/topics/example/README.md", "# Example\n");
+        write_file(
+            temp.path(),
+            "docs/topics/example/test-plan.md",
+            &valid_test_plan("tests/topic_tests.rs::staged_case"),
+        );
+        write_file(temp.path(), "tests/topic_tests.rs", "#[test]\nfn staged_case() {}\n");
+        run_git(temp.path(), &["add", "docs", "tests"]);
+
+        write_file(
+            temp.path(),
+            "docs/topics/example/test-plan.md",
+            &valid_test_plan("tests/topic_tests.rs::worktree_only_case"),
+        );
+
+        assert!(check_root(temp.path(), SourceMode::Staged).is_ok());
+        assert!(check_root(temp.path(), SourceMode::Worktree).is_err());
+    }
+
     #[test]
     fn parses_requirement_and_case_metadata() {
         let text = r#"
@@ -791,7 +1049,7 @@ status = "active"
 id = "CL-TP-001"
 requirements = ["CL-REQ-001"]
 evidence = "test"
-test = "cl_tp_001"
+test = "tests/example.rs::cl_tp_001"
 oracle = "Exact equality."
 tier = "fast"
 status = "implemented"
@@ -799,7 +1057,7 @@ status = "implemented"
         "#;
         let mut violations = Vec::new();
         let mut report = Report::default();
-        let evidence = test_evidence(&[]);
+        let evidence = runnable_test_evidence(&[]);
         let records = {
             let mut context = plan_context(&evidence, &mut report, &mut violations);
             parse_records(text, &mut context)
@@ -827,7 +1085,7 @@ status = "active"
 id = "CL-TP-001"
 requirements = ["CL-REQ-001"]
 evidence = "test"
-test = "missing_test"
+test = "tests/example.rs::missing_test"
 oracle = "Exact equality."
 tier = "fast"
 status = "implemented"
@@ -835,7 +1093,7 @@ status = "implemented"
         "#;
         let mut violations = Vec::new();
         let mut report = Report::default();
-        let evidence = test_evidence(&[]);
+        let evidence = runnable_test_evidence(&[]);
         {
             let mut context = plan_context(&evidence, &mut report, &mut violations);
             validate_plan(text, &mut context);
@@ -865,7 +1123,7 @@ status = "planned"
         "#;
         let mut violations = Vec::new();
         let mut report = Report::default();
-        let evidence = test_evidence(&[]);
+        let evidence = runnable_test_evidence(&[]);
         {
             let mut context = plan_context(&evidence, &mut report, &mut violations);
             validate_plan(text, &mut context);
@@ -890,13 +1148,14 @@ status = "active"
 id = "CL-TP-001"
 requirements = ["CL-REQ-001"]
 evidence = "test"
-test = "ignored_case"
+test = "tests/ignored.rs::ignored_case"
 oracle = "Exact equality."
 tier = "fast"
 status = "implemented"
 ```
 "#;
         let evidence = test_evidence_from_source(
+            "tests/ignored.rs",
             r"
 #[test]
 #[ignore]
@@ -927,13 +1186,14 @@ status = "active"
 id = "CL-TP-001"
 requirements = ["CL-REQ-001"]
 evidence = "test"
-test = "cfg_disabled_case"
+test = "tests/cfg.rs::cfg_disabled_case"
 oracle = "Exact equality."
 tier = "fast"
 status = "implemented"
 ```
 "#;
         let evidence = test_evidence_from_source(
+            "tests/cfg.rs",
             r"
 #[cfg(any())]
 #[test]
@@ -954,6 +1214,7 @@ fn cfg_disabled_case() {}
     #[test]
     fn cfg_test_module_counts_as_runnable_evidence() {
         let evidence = test_evidence_from_source(
+            "tests/nested.rs",
             r"
 #[cfg(test)]
 mod tests {
@@ -964,8 +1225,110 @@ mod tests {
         );
 
         assert_eq!(
-            evidence.get("nested_case"),
+            evidence.get("tests/nested.rs::tests::nested_case"),
             Some(&TestEvidence { runnable: true, ignored: false, cfg_gated: false })
         );
+    }
+
+    #[test]
+    fn blocked_case_does_not_cover_active_requirement() {
+        let text = r#"
+```toml
+[[requirement]]
+id = "CL-REQ-001"
+summary = "Right-handed frame."
+status = "active"
+
+[[case]]
+id = "CL-TP-001"
+requirements = ["CL-REQ-001"]
+evidence = "manual-audit"
+artifact = "docs/topics/example/README.md#blocked"
+oracle = "Manual review."
+tier = "manual"
+status = "blocked"
+```
+"#;
+        let evidence = runnable_test_evidence(&[]);
+        let mut violations = Vec::new();
+        let mut report = Report::default();
+        {
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
+            validate_plan(text, &mut context);
+        }
+
+        assert!(violations
+            .iter()
+            .any(|violation| violation.message.contains("no planned or implemented case")));
+        assert_eq!(report.active_requirements, 1);
+        assert_eq!(report.requirements_with_case_coverage, 0);
+        assert_eq!(report.uncovered_requirements, 1);
+        assert_eq!(report.blocked_cases, 1);
+    }
+
+    #[test]
+    fn implemented_case_requires_path_qualified_anchor() {
+        let text = r#"
+```toml
+[[requirement]]
+id = "CL-REQ-001"
+summary = "Right-handed frame."
+status = "active"
+
+[[case]]
+id = "CL-TP-001"
+requirements = ["CL-REQ-001"]
+evidence = "test"
+test = "bare_test_name"
+oracle = "Exact equality."
+tier = "fast"
+status = "implemented"
+```
+"#;
+        let evidence = runnable_test_evidence(&["tests/example.rs::bare_test_name"]);
+        let mut violations = Vec::new();
+        let mut report = Report::default();
+        {
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
+            validate_plan(text, &mut context);
+        }
+
+        assert!(violations
+            .iter()
+            .any(|violation| violation.message.contains("path-qualified Rust test anchor")));
+        assert_eq!(report.missing_executable_cases, 1);
+    }
+
+    #[test]
+    fn same_function_name_in_wrong_file_does_not_satisfy_anchor() {
+        let text = r#"
+```toml
+[[requirement]]
+id = "CL-REQ-001"
+summary = "Right-handed frame."
+status = "active"
+
+[[case]]
+id = "CL-TP-001"
+requirements = ["CL-REQ-001"]
+evidence = "test"
+test = "tests/expected.rs::same_name"
+oracle = "Exact equality."
+tier = "fast"
+status = "implemented"
+```
+"#;
+        let evidence = runnable_test_evidence(&["tests/other.rs::same_name"]);
+        let mut violations = Vec::new();
+        let mut report = Report::default();
+        {
+            let mut context = plan_context(&evidence, &mut report, &mut violations);
+            validate_plan(text, &mut context);
+        }
+
+        assert!(violations.iter().any(|violation| violation
+            .message
+            .contains("missing Rust test `tests/expected.rs::same_name`")));
+        assert_eq!(report.missing_executable_cases, 1);
     }
 }
