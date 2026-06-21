@@ -815,13 +815,17 @@ fn read_source(root: &Path, mode: SourceMode, path: &Path) -> Result<String, Dyn
 }
 
 fn read_staged_source(root: &Path, path: &Path) -> Result<String, DynError> {
-    let object = format!(":{}", path.to_string_lossy());
+    let object = staged_object_name(path);
     let output = Command::new("git").args(["show", &object]).current_dir(root).output()?;
     if output.status.success() {
         return Ok(String::from_utf8(output.stdout)?);
     }
 
     Err(command_error("git show staged source", &output.stderr).into())
+}
+
+fn staged_object_name(path: &Path) -> String {
+    format!(":{}", normalized_path(path))
 }
 
 fn attrs_contain_test(attrs: &[Attribute]) -> bool {
@@ -1034,6 +1038,11 @@ status = "implemented"
 
         assert!(check_root(temp.path(), SourceMode::Staged).is_ok());
         assert!(check_root(temp.path(), SourceMode::Worktree).is_err());
+    }
+
+    #[test]
+    fn staged_object_name_uses_git_path_separators() {
+        assert_eq!(staged_object_name(Path::new(r"tests\topic_tests.rs")), ":tests/topic_tests.rs");
     }
 
     #[test]
