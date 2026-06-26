@@ -8,10 +8,10 @@ work state belongs in GitHub issues and pull requests.
 
 | Field | State |
 | --- | --- |
-| Release focus | `v0.6.0`: Math Foundations active; GP1 merged |
-| Previous release baseline | `v0.5.0`, tagged and published on 2026-06-19 |
+| Release focus | `v0.7.0`: Geometry Law and remaining frame math |
+| Previous release baseline | `v0.6.0`, cut from the 2026-06-26 release prep |
 | Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
-| Next release step | Complete the remaining `v0.6.0` goalposts, then open the release-prep PR |
+| Next release step | Start the `v0.7.0` goalposts and keep moved frame-math slices explicit |
 | Next feature train | `v0.7.0` Geometry Law and Primitive Coverage |
 
 ## Recent Truth
@@ -51,15 +51,23 @@ work state belongs in GitHub issues and pull requests.
 * PR #189 merged the first `v0.6.0` Math Foundations goalpost into `main`,
   covering coordinate law, numeric preconditions, and deterministic property
   corpora.
+* PR #191 merged deterministic matrix and affine transform primitives into
+  `main`.
+* PR #195 merged deterministic contract-profile witnesses for `bunny-wesley`
+  and `bunny-contract`.
+* `v0.6.0` publishes the landed frame-commons surface: coordinate law, numeric
+  preconditions, property corpora, matrices, affine transforms, and deterministic
+  contract-profile witnesses. Projection, quaternion, angle, interpolation,
+  curve, and transform-aware bounds work moved forward to the next train.
 
 ## Release Sequence
 
-1. Complete the remaining `v0.6.0` Math Foundations goalposts.
+1. Complete the `v0.7.0` remaining frame-math and geometry-law goalposts.
 2. Open a release-prep pull request that bumps the workspace version to
-   `0.6.0`, updates release notes and signposts, and passes Code Dojo plus
+   `0.7.0`, updates release notes and signposts, and passes Code Dojo plus
    release archive verification.
 3. Merge the verified release-prep pull request to `main`.
-4. Tag the verified `main` tip as `v0.6.0`.
+4. Tag the verified `main` tip as `v0.7.0`.
 5. Publish the GitHub Release so the release workflow can verify and publish the
    public crates.
 6. Confirm crates.io visibility for every published Bunny crate.
@@ -73,8 +81,9 @@ work state belongs in GitHub issues and pull requests.
 * Keep GP2 codec parser zero-copy claims intact. GP3 decoder claims are limited
   to borrowed raw payload sections plus typed checked accessors; no typed slice
   reinterpretation is claimed.
-* Matrix and quaternion profiles are still absent from `bunny-linalg`; future
-  transform work must either add them or explicitly stay out of that scope.
+* Quaternion, projection, viewport, interpolation, curve, and transform-aware
+  bounds APIs are still absent; future frame-math work must either add them or
+  explicitly stay out of that scope.
 
 ## Last Known Local Verification
 
@@ -86,6 +95,6 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The standards-alignment goalpost is complete. Evidence is recorded in
-`docs/goalposts/post-v0.4.0-standards-alignment.md`; the merged `v0.5.0` release
-prep also passed `RELEASE_TAG=v0.5.0 scripts/publish-crates.sh verify`, full
-Code Dojo, GitHub Actions, and CodeRabbit review.
+`docs/goalposts/post-v0.4.0-standards-alignment.md`; the `v0.6.0` release prep
+must pass `RELEASE_TAG=v0.6.0 scripts/publish-crates.sh verify`, full Code Dojo,
+GitHub Actions, and CodeRabbit review before tagging.

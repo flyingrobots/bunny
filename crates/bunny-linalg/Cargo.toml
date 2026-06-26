@@ -12,7 +12,7 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-num = { path = "../bunny-num", version = "0.5.0" }
+bunny-num = { path = "../bunny-num", version = "0.6.0" }
 
 [lib]
 path = "src/lib.rs"
