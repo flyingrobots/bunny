@@ -28,6 +28,7 @@ Files read:
 - `.repo-respect/README.md`
 - `xtask/src/topic_docs.rs`
 - `xtask/src/main.rs`
+- `xtask/src/repo_respect.rs`
 - `schemas/bunny/v0/graphics.graphql`
 
 Files edited:
@@ -44,6 +45,7 @@ Files edited:
 - `docs/topics/contract-generation/test-plan.md`
 - `docs/topics/deterministic-contract-profile/README.md`
 - `docs/topics/deterministic-contract-profile/test-plan.md`
+- `xtask/src/repo_respect.rs`
 
 Topic docs:
 - Added `docs/topics/contract-generation/README.md`.
@@ -62,6 +64,10 @@ Accuracy pass:
   are not emitted as DTOs.
 - Added a reserved-name regression proving schemas cannot collide with generated
   helper type names.
+- Added a field-level directive regression proving reserved field placements
+  fail closed instead of being silently omitted from witnesses.
+- Disabled commit signing in repo-respect fixture repositories after the local
+  hook exposed inherited GPG signing as test nondeterminism.
 
 Generated artifacts:
 - `crates/bunny-contract/src/generated/graphics.rs`

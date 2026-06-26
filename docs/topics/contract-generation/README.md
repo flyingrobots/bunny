@@ -102,7 +102,7 @@ Generation fails closed when a custom scalar lacks a supported
 `@bunnyScalarProfile` directive. The directive is currently consumed on scalar
 definitions. Although the schema declares `FIELD_DEFINITION` as an allowed
 directive location, field-level scalar-profile overrides are reserved behavior
-and are not consumed by the generator today.
+and fail generation until that semantics exists.
 
 ## Open Gaps
 

@@ -691,6 +691,7 @@ mod tests {
         run_git(root, &["init"]);
         run_git(root, &["config", "user.email", "bunny@example.invalid"]);
         run_git(root, &["config", "user.name", "Bunny Test"]);
+        run_git(root, &["config", "commit.gpgsign", "false"]);
         write_file(root, "src/lib.rs", "pub fn baseline() {}\n");
         run_git(root, &["add", "src/lib.rs"]);
         run_git(root, &["commit", "-m", "seed: create baseline"]);

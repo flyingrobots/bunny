@@ -50,6 +50,7 @@ formatting.
 | CG-REQ-007 | Checked-in generated artifacts expose scalar-profile witnesses. | `README.md#scalar-profiles` |
 | CG-REQ-008 | Unsupported or missing custom scalar profiles fail generation. | `README.md#scalar-profiles` |
 | CG-REQ-009 | Schema type names that collide with generated helper type names fail generation. | `README.md#dto-shape` |
+| CG-REQ-010 | Field-level scalar-profile directives fail generation until field override semantics exist. | `README.md#scalar-profiles` |
 
 ```toml
 [[requirement]]
@@ -96,6 +97,11 @@ status = "active"
 id = "CG-REQ-009"
 summary = "Schema type names that collide with generated helper type names fail generation."
 status = "active"
+
+[[requirement]]
+id = "CG-REQ-010"
+summary = "Field-level scalar-profile directives fail generation until field override semantics exist."
+status = "active"
 ```
 
 ## Fixtures
@@ -126,9 +132,10 @@ cargo run --locked -p xtask -- generate
 | CG-TP-007 | Reserved generated names | CG-REQ-009 | Rendering rejects a schema type named `BunnyScalarProfile`. | `crates/bunny-wesley/src/render.rs::tests::render_rejects_schema_type_names_reserved_for_generated_helpers` |
 | CG-TP-008 | Missing profile fail-closed path | CG-REQ-008 | Rendering rejects a custom scalar without `@bunnyScalarProfile`. | `crates/bunny-wesley/src/render.rs::tests::render_rejects_custom_scalars_without_profiles` |
 | CG-TP-009 | Unsupported profile fail-closed path | CG-REQ-008 | Unsupported profile names return scalar type resolution errors. | `crates/bunny-wesley/src/render.rs::tests::test_invalid_directive_profile_errors` |
-| CG-TP-010 | Profile witness rendering | CG-REQ-004, CG-REQ-007 | Exact rendered Rust, TypeScript, and manifest witness substrings for an envelope-shaped schema. | `crates/bunny-wesley/src/profile.rs::tests::deterministic_contract_profiles_render_for_wire_envelopes` |
-| CG-TP-011 | Generated version witnesses | CG-REQ-001, CG-REQ-006 | Checked-in Rust, TypeScript, and manifest artifacts name the released generator version. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_witnesses_match_the_released_generator_version` |
-| CG-TP-012 | Generated scalar-profile witnesses | CG-REQ-004, CG-REQ-007 | Checked-in Rust, TypeScript, and manifest artifacts expose matching scalar-profile witnesses. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_scalar_profile_witnesses_cover_checked_in_artifacts` |
+| CG-TP-010 | Field-level profile fail-closed path | CG-REQ-010 | Rust, TypeScript, and manifest rendering reject field-level `@bunnyScalarProfile`. | `crates/bunny-wesley/src/profile.rs::tests::field_level_scalar_profiles_fail_closed_until_supported` |
+| CG-TP-011 | Profile witness rendering | CG-REQ-004, CG-REQ-007 | Exact rendered Rust, TypeScript, and manifest witness substrings for an envelope-shaped schema. | `crates/bunny-wesley/src/profile.rs::tests::deterministic_contract_profiles_render_for_wire_envelopes` |
+| CG-TP-012 | Generated version witnesses | CG-REQ-001, CG-REQ-006 | Checked-in Rust, TypeScript, and manifest artifacts name the released generator version. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_witnesses_match_the_released_generator_version` |
+| CG-TP-013 | Generated scalar-profile witnesses | CG-REQ-004, CG-REQ-007 | Checked-in Rust, TypeScript, and manifest artifacts expose matching scalar-profile witnesses. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_scalar_profile_witnesses_cover_checked_in_artifacts` |
 
 ```toml
 [[case]]
@@ -214,6 +221,15 @@ status = "implemented"
 
 [[case]]
 id = "CG-TP-010"
+requirements = ["CG-REQ-010"]
+evidence = "test"
+test = "crates/bunny-wesley/src/profile.rs::tests::field_level_scalar_profiles_fail_closed_until_supported"
+oracle = "Rust, TypeScript, and manifest rendering reject field-level @bunnyScalarProfile."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-011"
 requirements = ["CG-REQ-004", "CG-REQ-007"]
 evidence = "test"
 test = "crates/bunny-wesley/src/profile.rs::tests::deterministic_contract_profiles_render_for_wire_envelopes"
@@ -222,7 +238,7 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "CG-TP-011"
+id = "CG-TP-012"
 requirements = ["CG-REQ-001", "CG-REQ-006"]
 evidence = "test"
 test = "crates/bunny-contract/tests/generated_version_tests.rs::generated_witnesses_match_the_released_generator_version"
@@ -231,7 +247,7 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "CG-TP-012"
+id = "CG-TP-013"
 requirements = ["CG-REQ-004", "CG-REQ-007"]
 evidence = "test"
 test = "crates/bunny-contract/tests/generated_version_tests.rs::generated_scalar_profile_witnesses_cover_checked_in_artifacts"
@@ -263,6 +279,7 @@ Current tests cover:
 - missing custom scalar profiles;
 - unsupported custom scalar profile names;
 - reserved generated helper type name collisions;
+- field-level scalar-profile directives;
 - Bunny-prefixed and non-Bunny object names;
 - checked-in generated artifact witness metadata.
 

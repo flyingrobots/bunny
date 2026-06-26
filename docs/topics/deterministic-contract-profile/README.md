@@ -48,7 +48,8 @@ becoming a string or generic JSON value.
 
 Although the schema declares `FIELD_DEFINITION` as an allowed directive
 location, the current generator does not consume field-level scalar-profile
-overrides. That location is reserved for a future semantics pass.
+overrides. Field-level usage fails generation until that future semantics pass
+exists.
 
 ## Current Profile Vocabulary
 

@@ -203,6 +203,7 @@ fn scalar_profile_by_name(name: &str) -> Option<&'static ScalarProfile> {
 }
 
 fn schema_scalar_profiles(schema: &WesleyIR) -> Result<Vec<ResolvedScalarProfile<'_>>, String> {
+    reject_field_level_scalar_profiles(schema)?;
     let mut profiles = Vec::new();
     for scalar in schema
         .types
@@ -216,6 +217,23 @@ fn schema_scalar_profiles(schema: &WesleyIR) -> Result<Vec<ResolvedScalarProfile
     }
     profiles.sort_by(|left, right| left.scalar.cmp(right.scalar));
     Ok(profiles)
+}
+
+fn reject_field_level_scalar_profiles(schema: &WesleyIR) -> Result<(), String> {
+    for type_definition in &schema.types {
+        for field in &type_definition.fields {
+            if field.directives.contains_key(SCALAR_PROFILE_DIRECTIVE) {
+                return Err(format!(
+                    concat!(
+                        "Field-level `@bunnyScalarProfile` directives are reserved until ",
+                        "field profile semantics exist: {}.{}"
+                    ),
+                    type_definition.name, field.name
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn render_manifest_scalar_profiles(
@@ -382,5 +400,33 @@ mod tests {
         assert!(manifest.contains("\"profile\": \"bytes.fixed.20\""));
         assert!(manifest.contains("\"byteWidth\": 20"));
         assert!(manifest.contains("\"wireType\": \"u32-len-utf8\""));
+    }
+
+    #[test]
+    fn field_level_scalar_profiles_fail_closed_until_supported() {
+        let schema = r#"
+            directive @bunnyScalarProfile(name: String!) on SCALAR | FIELD_DEFINITION
+
+            type BunnyThing {
+              label: String! @bunnyScalarProfile(name: "utf8.bounded.u32")
+            }
+        "#;
+        let ir = wesley_core::lower_schema_sdl(schema).unwrap();
+
+        let rust_error = render_rust(&ir, "hash", Path::new("schema.graphql")).unwrap_err();
+        assert!(rust_error
+            .to_string()
+            .contains("Field-level `@bunnyScalarProfile` directives are reserved"));
+
+        let typescript_error =
+            render_typescript(&ir, "hash", Path::new("schema.graphql")).unwrap_err();
+        assert!(typescript_error
+            .to_string()
+            .contains("Field-level `@bunnyScalarProfile` directives are reserved"));
+
+        let manifest_error = render_manifest_scalar_profiles(&ir).unwrap_err();
+        assert!(manifest_error
+            .to_string()
+            .contains("Field-level `@bunnyScalarProfile` directives are reserved"));
     }
 }

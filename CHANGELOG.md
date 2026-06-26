@@ -63,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `bunny-wesley` now rejects schema type names reserved for generated helper
   types instead of emitting Rust duplicate type items or TypeScript interface
   merges.
+* `bunny-wesley` now rejects field-level `@bunnyScalarProfile` directives until
+  field override semantics are implemented, instead of silently omitting them
+  from generated witnesses.
+* Repo-respect fixture repositories now disable commit signing during tests so
+  the gate does not depend on the contributor's local GPG configuration.
 * Repo-respect receipt coverage now includes deleted and typechanged paths,
   validates staged receipt contents from the Git index, rejects placeholder-only
   receipt sections, and enforces receipt trailers across non-merge branch

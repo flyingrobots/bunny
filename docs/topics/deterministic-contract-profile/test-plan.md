@@ -23,8 +23,8 @@ surface. They must add golden byte-vector evidence when implemented.
 - Prove envelope-shaped schemas can model version, kind, object-id, payload,
   counter, and label fields without git-warp owning Bunny's registry.
 - Prove unsupported custom scalars fail generation.
-- Record field-level scalar-profile overrides as reserved behavior, not current
-  executable semantics.
+- Prove field-level scalar-profile overrides fail generation until field
+  semantics exist.
 
 ## Non-Goals
 
@@ -47,6 +47,7 @@ formatting.
 | DCP-REQ-004 | Generated TypeScript artifacts expose scalar-profile witnesses. | `README.md#generated-witnesses` |
 | DCP-REQ-005 | Generated manifests expose scalar-profile witnesses. | `README.md#generated-witnesses` |
 | DCP-REQ-006 | Unsupported custom scalars fail generation. | `README.md#authoring-model` |
+| DCP-REQ-007 | Field-level scalar-profile directives fail generation until field semantics exist. | `README.md#authoring-model` |
 
 ```toml
 [[requirement]]
@@ -78,6 +79,11 @@ status = "active"
 id = "DCP-REQ-006"
 summary = "Unsupported custom scalars fail generation."
 status = "active"
+
+[[requirement]]
+id = "DCP-REQ-007"
+summary = "Field-level scalar-profile directives fail generation until field semantics exist."
+status = "active"
 ```
 
 ## Fixtures
@@ -100,6 +106,7 @@ Checked-in generated artifacts are also evidence:
 | DCP-TP-002 | Generation | DCP-REQ-002, DCP-REQ-003, DCP-REQ-004, DCP-REQ-005 | Exact rendered Rust, TypeScript, and manifest witness substrings for an envelope-shaped schema. | `crates/bunny-wesley/src/profile.rs::tests::deterministic_contract_profiles_render_for_wire_envelopes` |
 | DCP-TP-003 | Generated artifacts | DCP-REQ-003, DCP-REQ-004, DCP-REQ-005 | Checked-in Rust, TypeScript, and manifest artifacts expose matching profile witnesses. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_scalar_profile_witnesses_cover_checked_in_artifacts` |
 | DCP-TP-004 | Fail closed | DCP-REQ-006 | Rendering rejects a custom scalar without `@bunnyScalarProfile`. | `crates/bunny-wesley/src/render.rs::tests::render_rejects_custom_scalars_without_profiles` |
+| DCP-TP-005 | Reserved field placement | DCP-REQ-007 | Rust, TypeScript, and manifest rendering reject field-level `@bunnyScalarProfile`. | `crates/bunny-wesley/src/profile.rs::tests::field_level_scalar_profiles_fail_closed_until_supported` |
 
 ```toml
 [[case]]
@@ -137,6 +144,15 @@ test = "crates/bunny-wesley/src/render.rs::tests::render_rejects_custom_scalars_
 oracle = "Rendering rejects a custom scalar without @bunnyScalarProfile."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "DCP-TP-005"
+requirements = ["DCP-REQ-007"]
+evidence = "test"
+test = "crates/bunny-wesley/src/profile.rs::tests::field_level_scalar_profiles_fail_closed_until_supported"
+oracle = "Rust, TypeScript, and manifest rendering reject field-level @bunnyScalarProfile."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -161,6 +177,7 @@ Current tests cover:
 - custom scalars with supported profile directives
 - custom scalars without profile directives
 - unsupported profile names
+- field-level scalar-profile directives
 - fixed-width integer profiles
 - fixed-length bytes
 - variable bytes
