@@ -382,7 +382,7 @@ The generated manifest records the exact generator identity and schema hash:
 
 ```json
 {
-  "generator": "bunny-wesley/0.5.0",
+  "generator": "bunny-wesley/0.6.0",
   "wesleyCore": "0.0.5",
   "schema": "schemas/bunny/v0/graphics.graphql",
   "schemaSha256": "71757e5b3bbd32a99936db03080f4a896265fdd03af201b3488ba80743941c92",
@@ -1262,7 +1262,7 @@ types and functions. Tooling and release scripts do have knobs.
 | Variable | Owner | Effect |
 | --- | --- | --- |
 | `RUST_TOOLCHAIN` | `scripts/publish-crates.sh` | Selects the Rust toolchain for packaging. Defaults to `1.96.0`. |
-| `RELEASE_TAG` | Release script | Guards that the tag matches crate version, for example `v0.5.0`. |
+| `RELEASE_TAG` | Release script | Guards that the tag matches crate version, for example `v0.6.0`. |
 | `ALLOW_DIRTY=1` | Release script | Local-only `verify`/`dry-run` diagnostic mode that passes `--allow-dirty`; `publish` mode refuses dirty worktrees. |
 | `CARGO_REGISTRY_TOKEN` | Release script | Required for crates.io publish mode. |
 | `CRATES_IO_RETRY_LIMIT` | Release script | Controls registry publish retry attempts. |

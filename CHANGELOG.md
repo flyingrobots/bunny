@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.6.0] - 2026-06-26
+
+### Added
 
 * Added the `docs/topics/coordinate-law/` living topic chapter and test plan for
   Bunny's right-handed coordinate frame, unit policy, transform naming
@@ -42,12 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added deterministic seeded property-test corpora for Q32.32 raw/order
   invariants, vector algebra identities, query symmetry and bounds, and mesh
   quantization round trips.
+
+### Changed
+
+* Bumped the publishable Bunny workspace crates to `0.6.0`; regenerated contract
+  witnesses now identify the released generator as `bunny-wesley/0.6.0`.
 * Reworked `docs/MATH_GEOMETRY_CAPABILITY_MAP.md` into a prose-led planning
   reference with compact tables for navigation and issue anchors.
 * Added explicit release cut policy and cut gates to `ROADMAP.md`, including
   must-ship, may-slip, and not-included boundaries for the planned release
-  train, and refreshed `docs/BEARING.md` to point at the active `v0.6.0`
-  release sequence.
+  train, and refreshed `docs/BEARING.md` through the `v0.6.0` release cut and
+  next `v0.7.0` sequence.
 * Ray intersection queries now return `None` when checked intermediate
   arithmetic overflows, rather than accepting saturated Q32.32 values as valid
   geometric hits.

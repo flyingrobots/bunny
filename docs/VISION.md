@@ -66,11 +66,12 @@ The repo is organized around narrow crates:
 
 ## Near Horizon
 
-Release `v0.5.0` is the standards, numeric-law, and release-hygiene line. It
-locks Code Dojo as the active quality gate, validates fixed-point ingress, and
-turns generated witness provenance into a release check.
+Release `v0.6.0` is the first frame-commons line. It publishes coordinate law,
+checked numeric preconditions, deterministic property corpora, matrix and affine
+transform primitives, and generated deterministic contract-profile witnesses.
 
-The next feature train starts with `v0.6.0` Math Foundations. That work should
-close the frame-commons gaps before broader collision and rendering math depend
-on them: coordinate-space policy, matrix types, transforms, projection,
-quaternions, angle/trigonometry policy, interpolation, and curve primitives.
+The next feature train is `v0.7.0` Geometry Law and Primitive Coverage. It
+should close the remaining frame-commons gaps before broader collision and
+rendering math depend on them: transform-aware bounds, projection and viewport
+mapping, quaternions, angle/trigonometry policy, interpolation, curves,
+degeneracy law, robust predicates, and expanded shape coverage.

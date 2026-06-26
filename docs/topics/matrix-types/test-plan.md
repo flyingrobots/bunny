@@ -348,4 +348,4 @@ case with a stable test name.
 | --- | --- |
 | Transform-aware bounds propagation. | Slice 2.3 bounds propagation APIs. |
 | Projection, unprojection, and viewport mapping. | Slice 2.4 projection APIs. |
-| Quaternion-to-matrix conversion. | v0.6.0-GP3 orientation APIs. |
+| Quaternion-to-matrix conversion. | Follow-on orientation APIs. |

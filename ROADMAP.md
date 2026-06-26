@@ -320,8 +320,8 @@ cut.
 
 | Release | Cut Trigger | Scope |
 | --- | --- | --- |
-| `v0.6.0` | `v0.6.0 Math Foundations` milestone complete. | Coordinate law, numeric preconditions, matrices, transforms, projections, orientation, interpolation, and curves. |
-| `v0.7.0` | `v0.7.0 Geometry Law and Primitive Coverage` milestone complete. | Degeneracy law, robust predicates, shape expansion, 2D coverage, clipping, bounds, topology, and mass properties. |
+| `v0.6.0` | Frame-commons and contract-profile release cut. | Coordinate law, numeric preconditions, deterministic property corpora, matrices, affine transforms, and deterministic contract-profile witnesses. |
+| `v0.7.0` | `v0.7.0 Geometry Law and Primitive Coverage` milestone complete. | Remaining frame math, projection and viewport mapping, quaternion orientation, angle policy, interpolation, curves, degeneracy law, robust predicates, shape expansion, clipping, bounds, topology, and mass properties. |
 | `v0.8.0` | `v0.8.0 Collision and Contact` milestone complete. | Narrowphase, support mapping, GJK/EPA, collision architecture, manifolds, and swept queries. |
 | `v0.9.0` | `v0.9.0 Acceleration, Visibility, and Ray Tracing` milestone complete. | Dynamic broadphase, spatial hashing, mesh BVHs, visibility, occlusion, and ray-tracing hit suites. |
 | `v0.10.0` | `v0.10.0 Optics, SIMD, and Codec Completion` milestone complete. | Optics, deterministic SIMD exploration, benchmarks, no-std audit, codec encoder, external mesh profiles, and fuzzing. |
@@ -331,20 +331,24 @@ cut.
 
 ## Release v0.6.0: Math Foundations (The Frame Commons)
 
-* **Status**: Active; Goalpost 1 has merged to `main`.
+* **Status**: Release cut.
 * **GitHub Milestone**: `v0.6.0 Math Foundations`
-* **Description**: Locks coordinate law, numeric preconditions, matrices,
-  transforms, projection, orientation, angle, interpolation, and curve math.
-* **Release Cut**: Cut `v0.6.0` when Goalposts 1-3 are merged, the release-prep
-  PR bumps the workspace version to `0.6.0`, Code Dojo is green, release archive
-  verification passes, and the changelog records the math-foundation surface.
-* **Must Ship**: Coordinate law, numeric preconditions, deterministic matrices,
-  affine transforms, projection and viewport mapping, quaternion orientation,
-  angle policy, interpolation helpers, and curve primitives.
-* **May Slip**: Nonessential convenience overloads and extended examples that do
-  not change the core math contract.
+* **Description**: Publishes the frame-commons slice that is already merged:
+  coordinate law, numeric preconditions, deterministic property corpora,
+  deterministic matrices, affine transforms, and generated deterministic
+  contract-profile witnesses.
+* **Release Cut**: Cut `v0.6.0` when the release-prep PR bumps the workspace
+  version to `0.6.0`, Code Dojo is green, release archive verification passes,
+  and the changelog records the shipped frame-commons surface.
+* **Must Ship**: Coordinate law, numeric preconditions, deterministic property
+  corpora, deterministic matrices, affine transforms, and deterministic
+  contract-profile witnesses.
+* **May Slip**: Projection and viewport mapping, quaternion orientation, angle
+  policy, interpolation helpers, curve primitives, transform-aware bounds, and
+  extended examples.
 * **Not Included**: New collision solvers, new visibility acceleration
-  structures, optics, SIMD backends, and codec feature expansion.
+  structures, optics, SIMD backends, codec feature expansion, or unmerged
+  geometry-law primitives.
 
 ### Goalpost 1: Coordinate Law and Numeric Preconditions
 
@@ -367,15 +371,17 @@ cut.
 * **Description**: Add deterministic matrix, affine transform, projection, and
   bounds-propagation primitives.
 * **Slice Budget**: 4 Slices
+* **Status**: Partially shipped in `v0.6.0`; remaining slices move to the next
+  frame/geometry train.
 * **Slices**:
   * **Slice 2.1**: Implement deterministic fixed matrix types.
     [Done: #107, PR #191]
   * **Slice 2.2**: Implement deterministic affine transform types.
-    [Done: #108]
+    [Done: #108, PR #191]
   * **Slice 2.3**: Add transform-aware bounds propagation.
-    [Planned: #119]
+    [Moved forward: #119]
   * **Slice 2.4**: Add deterministic projection, unprojection, and viewport
-    mapping. [Planned: #150]
+    mapping. [Moved forward: #150]
 
 ### Goalpost 3: Orientation, Angles, Interpolation, and Curves
 
@@ -383,15 +389,16 @@ cut.
 * **Description**: Provide orientation and parametric math that collision,
   visibility, and optics work can reuse.
 * **Slice Budget**: 4 Slices
+* **Status**: Moved forward; not included in the `v0.6.0` release cut.
 * **Slices**:
   * **Slice 3.1**: Implement deterministic quaternion rotations.
-    [Planned: #109]
+    [Moved forward: #109]
   * **Slice 3.2**: Define canonical angle and trigonometry policy.
-    [Planned: #110]
+    [Moved forward: #110]
   * **Slice 3.3**: Add fixed interpolation, clamp, min-max, and remap
-    primitives. [Planned: #111]
+    primitives. [Moved forward: #111]
   * **Slice 3.4**: Add deterministic curve primitives for Bezier and splines.
-    [Planned: #152]
+    [Moved forward: #152]
 
 ---
 
@@ -399,14 +406,17 @@ cut.
 
 * **Status**: Planned.
 * **GitHub Milestone**: `v0.7.0 Geometry Law and Primitive Coverage`
-* **Description**: Defines degeneracy behavior, robust predicates, richer shape
+* **Description**: Completes the remaining frame math moved forward from
+  `v0.6.0`, then defines degeneracy behavior, robust predicates, richer shape
   families, 2D coverage, clipping, bounds, topology, and mass properties.
 * **Release Cut**: Cut `v0.7.0` when Goalposts 1-3 are merged, the release-prep
   PR bumps the workspace version to `0.7.0`, Code Dojo is green, release archive
   verification passes, and the changelog records the geometry-law surface.
-* **Must Ship**: Degeneracy policy, robust predicates, expanded fixed shapes,
-  frustum and culling primitives, 2D query coverage, clipping, bounds merging,
-  topology validation, and deterministic mass properties.
+* **Must Ship**: Projection and viewport mapping, quaternion orientation, angle
+  policy, interpolation and curve primitives, transform-aware bounds,
+  degeneracy policy, robust predicates, expanded fixed shapes, frustum and
+  culling primitives, 2D query coverage, clipping, bounds merging, topology
+  validation, and deterministic mass properties.
 * **May Slip**: Extra shape families whose semantics are not needed by the
   collision train.
 * **Not Included**: Contact manifold generation, GJK/EPA, dynamic broadphase,
