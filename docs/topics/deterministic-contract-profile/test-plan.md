@@ -23,6 +23,8 @@ surface. They must add golden byte-vector evidence when implemented.
 - Prove envelope-shaped schemas can model version, kind, object-id, payload,
   counter, and label fields without git-warp owning Bunny's registry.
 - Prove unsupported custom scalars fail generation.
+- Record field-level scalar-profile overrides as reserved behavior, not current
+  executable semantics.
 
 ## Non-Goals
 
@@ -172,6 +174,7 @@ Future tests must cover:
 - maximum-length byte and string payloads
 - canonical map or sorted-entry profiles
 - byte reader and writer golden vectors
+- field-level scalar-profile override semantics
 
 ## Stress And Fuzz
 
@@ -185,6 +188,7 @@ appropriate, a golden byte vector.
 | Gap | Blocking API |
 | --- | --- |
 | LE-binary byte reader and writer evidence. | Codec emitters. |
+| Field-level scalar-profile override evidence. | Field-level profile semantics. |
 | Explicit maximum bounds for variable bytes and strings. | Profile arguments or named bounded profiles. |
 | Canonical map or sorted-entry support. | Collection profile design. |
 | Cross-language golden byte vectors. | Codec emitters in at least two target languages. |

@@ -290,9 +290,9 @@ mod tests {
     #[test]
     fn test_lower_schema_sdl_preserves_type_order() {
         let schema = r"
-type First {
-  value: String!
-}
+	type First {
+	  value: String!
+	}
 
 type Second {
   value: Int
@@ -304,6 +304,33 @@ type Second {
         assert_eq!(objects[0].name, "First");
         assert_eq!(objects[1].name, "Second");
         assert_eq!(rust_type(&objects[1].fields[0].r#type), "Option<i32>");
+    }
+
+    #[test]
+    fn rendered_artifacts_include_schema_and_generator_witnesses() {
+        let schema = r"
+            type BunnyThing {
+              value: String!
+            }
+        ";
+        let ir = wesley_core::lower_schema_sdl(schema).unwrap();
+
+        let rust = render_rust(&ir, "schema-hash", Path::new("schemas/bunny/v0/graphics.graphql"))
+            .unwrap();
+        assert!(rust.contains("// source: schemas/bunny/v0/graphics.graphql"));
+        assert!(rust.contains("pub const BUNNY_GRAPHICS_SCHEMA_SHA256"));
+        assert!(rust.contains("\"schema-hash\""));
+        assert!(rust.contains("pub const BUNNY_WESLEY_GENERATOR"));
+        assert!(rust.contains("pub const BUNNY_WESLEY_CORE_VERSION"));
+
+        let typescript =
+            render_typescript(&ir, "schema-hash", Path::new("schemas/bunny/v0/graphics.graphql"))
+                .unwrap();
+        assert!(typescript.contains("// source: schemas/bunny/v0/graphics.graphql"));
+        assert!(typescript.contains("export const BUNNY_GRAPHICS_SCHEMA_SHA256"));
+        assert!(typescript.contains("\"schema-hash\""));
+        assert!(typescript.contains("export const BUNNY_WESLEY_GENERATOR"));
+        assert!(typescript.contains("export const BUNNY_WESLEY_CORE_VERSION"));
     }
 
     #[test]
@@ -328,6 +355,39 @@ type Second {
 
         assert_eq!(profile::rust_scalar_type(custom_scalar).unwrap(), "i64");
         assert_eq!(profile::ts_scalar_type(custom_scalar).unwrap(), "bigint");
+    }
+
+    #[test]
+    fn render_only_emits_bunny_prefixed_object_dtos_in_name_order() {
+        let schema = r#"
+            directive @bunnyScalarProfile(name: String!) on SCALAR
+            scalar BunnyScalar @bunnyScalarProfile(name: "f32")
+
+            type BunnyZed {
+              value: BunnyScalar!
+            }
+
+            type ExternalThing {
+              value: BunnyScalar!
+            }
+
+            type BunnyAlpha {
+              value: BunnyScalar!
+            }
+        "#;
+        let ir = wesley_core::lower_schema_sdl(schema).unwrap();
+
+        let rust = render_rust(&ir, "hash", Path::new("schema.graphql")).unwrap();
+        let rust_alpha = rust.find("pub struct BunnyAlpha").unwrap();
+        let rust_zed = rust.find("pub struct BunnyZed").unwrap();
+        assert!(rust_alpha < rust_zed);
+        assert!(!rust.contains("pub struct ExternalThing"));
+
+        let typescript = render_typescript(&ir, "hash", Path::new("schema.graphql")).unwrap();
+        let typescript_alpha = typescript.find("export interface BunnyAlpha").unwrap();
+        let typescript_zed = typescript.find("export interface BunnyZed").unwrap();
+        assert!(typescript_alpha < typescript_zed);
+        assert!(!typescript.contains("export interface ExternalThing"));
     }
 
     #[test]

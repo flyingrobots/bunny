@@ -24,7 +24,7 @@ Bunny owns deterministic representation mechanics:
 - wire-profile names
 - fixed byte widths where the profile has one
 - generated witness metadata
-- golden or regression tests that lock the mapping
+- regression tests that lock the profile mapping
 
 Bunny does not own Continuum nouns such as receipts, witnessed suffix shells,
 reading envelopes, or settlement plans. Continuum owns those shared family
@@ -33,7 +33,7 @@ objects and must feed decoded boundary values into their own constructors.
 
 ## Authoring Model
 
-Schemas opt into the profile with `@bunnyScalarProfile`:
+Schemas opt into the profile with `@bunnyScalarProfile` on scalar definitions:
 
 ```graphql
 directive @bunnyScalarProfile(name: String!) on SCALAR | FIELD_DEFINITION
@@ -45,6 +45,10 @@ scalar BunnyCounter @bunnyScalarProfile(name: "u64")
 `bunny-wesley` resolves custom scalars through a closed registry. A custom
 scalar without a supported profile fails generation instead of silently
 becoming a string or generic JSON value.
+
+Although the schema declares `FIELD_DEFINITION` as an allowed directive
+location, the current generator does not consume field-level scalar-profile
+overrides. That location is reserved for a future semantics pass.
 
 ## Current Profile Vocabulary
 
@@ -100,6 +104,7 @@ surface generation. The remaining gaps are:
 - explicit maximum-bound parameters for bounded bytes and strings
 - canonical map or sorted-entry profile support
 - cross-language golden byte vectors for emitted codecs
+- field-level scalar-profile override semantics
 - Continuum family adoption of these profiles
 - runtime consumers proving decoded values enter validated domain constructors
 
