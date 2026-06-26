@@ -1,5 +1,6 @@
 //! Bunny Wesley schema extension and DTO generator.
 
+mod profile;
 mod render;
 
 use sha2::{Digest, Sha256};
@@ -37,7 +38,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         &config.typescript,
         &render::render_typescript(&schema_ir, &schema_hash, &config.schema)?,
     )?;
-    write_file(&config.manifest, &render_manifest(&config, &schema_hash))?;
+    write_file(&config.manifest, &render_manifest(&config, &schema_hash, &schema_ir)?)?;
 
     Ok(())
 }
@@ -112,8 +113,13 @@ fn usage() -> String {
         .to_string()
 }
 
-fn render_manifest(config: &Config, schema_sha256: &str) -> String {
-    format!(
+fn render_manifest(
+    config: &Config,
+    schema_sha256: &str,
+    schema_ir: &wesley_core::WesleyIR,
+) -> Result<String, Box<dyn Error>> {
+    let scalar_profiles = profile::render_manifest_scalar_profiles(schema_ir)?;
+    Ok(format!(
         concat!(
             "{{\n",
             "  \"generator\": \"{}\",\n",
@@ -123,7 +129,8 @@ fn render_manifest(config: &Config, schema_sha256: &str) -> String {
             "  \"outputs\": [\n",
             "    \"{}\",\n",
             "    \"{}\"\n",
-            "  ]\n",
+            "  ],\n",
+            "  \"scalarProfiles\": {}\n",
             "}}\n"
         ),
         render::GENERATOR_ID,
@@ -131,8 +138,9 @@ fn render_manifest(config: &Config, schema_sha256: &str) -> String {
         json_escape(&config.schema.display().to_string()),
         schema_sha256,
         json_escape(&config.rust.display().to_string()),
-        json_escape(&config.typescript.display().to_string())
-    )
+        json_escape(&config.typescript.display().to_string()),
+        scalar_profiles
+    ))
 }
 
 fn write_file(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {

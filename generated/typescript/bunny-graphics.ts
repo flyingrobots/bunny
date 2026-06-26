@@ -9,6 +9,34 @@ export const BUNNY_WESLEY_CORE_VERSION = "0.0.5" as const;
 export type BunnyFixedQ32_32Raw = bigint;
 export type BunnyScalar = number;
 
+export interface BunnyScalarProfile {
+  readonly scalar: string;
+  readonly profile: string;
+  readonly rustType: string;
+  readonly typescriptType: string;
+  readonly wireType: string;
+  readonly byteWidth: number | null;
+}
+
+export const BUNNY_GRAPHICS_SCALAR_PROFILES = [
+  {
+    scalar: "BunnyFixedQ32_32Raw",
+    profile: "q32.32",
+    rustType: "i64",
+    typescriptType: "bigint",
+    wireType: "i64-le-q32.32",
+    byteWidth: 8,
+  },
+  {
+    scalar: "BunnyScalar",
+    profile: "f32",
+    rustType: "f32",
+    typescriptType: "number",
+    wireType: "f32-le",
+    byteWidth: 4,
+  },
+] as const satisfies readonly BunnyScalarProfile[];
+
 export interface BunnyAabb3 {
   readonly min: BunnyVec3;
   readonly max: BunnyVec3;

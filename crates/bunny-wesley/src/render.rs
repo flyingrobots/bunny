@@ -3,24 +3,12 @@ use std::path::Path;
 
 use wesley_core::{TypeDefinition, TypeKind, TypeReference, WesleyIR};
 
+use crate::profile;
+
 pub(super) const GENERATOR_ID: &str = concat!("bunny-wesley/", env!("CARGO_PKG_VERSION"));
 pub(super) const WESLEY_CORE_VERSION: &str = env!("WESLEY_CORE_VERSION");
 
 const BUNNY_TYPE_PREFIX: &str = "Bunny";
-const SCALAR_PROFILE_DIRECTIVE: &str = "bunnyScalarProfile";
-const SCALAR_PROFILE_NAME_ARGUMENT: &str = "name";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct ScalarProfile {
-    name: &'static str,
-    rust_type: &'static str,
-    typescript_type: &'static str,
-}
-
-const SCALAR_PROFILES: &[ScalarProfile] = &[
-    ScalarProfile { name: "f32", rust_type: "f32", typescript_type: "number" },
-    ScalarProfile { name: "q32.32", rust_type: "i64", typescript_type: "bigint" },
-];
 
 fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
@@ -38,6 +26,7 @@ pub(super) fn render_rust(
     let mut output = String::new();
     push_rust_header(&mut output, schema_hash, schema_path);
     push_rust_scalars(&mut output, schema)?;
+    profile::push_rust_scalar_profiles(&mut output, schema)?;
     push_rust_objects(&mut output, schema);
     Ok(output)
 }
@@ -89,7 +78,10 @@ fn push_rust_scalar(
     if scalar.name.contains('_') {
         output.push_str("#[allow(non_camel_case_types)]\n");
     }
-    push_fmt(output, format_args!("pub type {} = {};\n", scalar.name, rust_scalar_type(scalar)?));
+    push_fmt(
+        output,
+        format_args!("pub type {} = {};\n", scalar.name, profile::rust_scalar_type(scalar)?),
+    );
     Ok(())
 }
 
@@ -146,6 +138,7 @@ pub(super) fn render_typescript(
     );
 
     push_typescript_scalars(&mut output, schema)?;
+    profile::push_typescript_scalar_profiles(&mut output, schema)?;
     push_typescript_objects(&mut output, schema);
     Ok(output)
 }
@@ -163,7 +156,7 @@ fn push_typescript_scalars(
     for scalar in &scalars {
         push_fmt(
             output,
-            format_args!("export type {} = {};\n", scalar.name, ts_scalar_type(scalar)?),
+            format_args!("export type {} = {};\n", scalar.name, profile::ts_scalar_type(scalar)?),
         );
     }
     if !scalars.is_empty() {
@@ -244,45 +237,6 @@ fn rust_scalar_or_named_type(name: &str) -> String {
     }
 }
 
-fn scalar_profile_by_name(name: &str) -> Option<&'static ScalarProfile> {
-    SCALAR_PROFILES.iter().find(|profile| profile.name == name)
-}
-
-fn resolve_profile(scalar_def: &TypeDefinition) -> Result<&'static ScalarProfile, String> {
-    let profile_value = scalar_def.directives.get(SCALAR_PROFILE_DIRECTIVE).ok_or_else(|| {
-        format!("Missing `@bunnyScalarProfile` directive on scalar '{}'", scalar_def.name)
-    })?;
-    let profile_args = profile_value.as_object().ok_or_else(|| {
-        format!(
-            "`@bunnyScalarProfile` directive on scalar '{}' must be an object with arguments",
-            scalar_def.name
-        )
-    })?;
-    let profile_name = profile_args
-        .get(SCALAR_PROFILE_NAME_ARGUMENT)
-        .ok_or_else(|| {
-            format!(
-                "Missing 'name' argument in `@bunnyScalarProfile` on scalar '{}'",
-                scalar_def.name
-            )
-        })?
-        .as_str()
-        .ok_or_else(|| {
-            format!(
-                "'name' argument in `@bunnyScalarProfile` on scalar '{}' must be a string",
-                scalar_def.name
-            )
-        })?;
-
-    scalar_profile_by_name(profile_name).ok_or_else(|| {
-        format!("Unsupported scalar profile '{}' on scalar '{}'", profile_name, scalar_def.name)
-    })
-}
-
-fn rust_scalar_type(scalar_def: &TypeDefinition) -> Result<&'static str, String> {
-    Ok(resolve_profile(scalar_def)?.rust_type)
-}
-
 fn ts_scalar_or_named_type(name: &str) -> String {
     match name {
         "String" | "ID" => "string".to_string(),
@@ -290,10 +244,6 @@ fn ts_scalar_or_named_type(name: &str) -> String {
         "Boolean" => "boolean".to_string(),
         other => other.to_string(),
     }
-}
-
-fn ts_scalar_type(scalar_def: &TypeDefinition) -> Result<&'static str, String> {
-    Ok(resolve_profile(scalar_def)?.typescript_type)
 }
 
 fn is_bunny_type(name: &str) -> bool {
@@ -370,14 +320,14 @@ type Second {
         let fixed_scalar = ir.types.iter().find(|t| t.name == "TestScalar2").unwrap();
         let custom_scalar = ir.types.iter().find(|t| t.name == "CustomScalar").unwrap();
 
-        assert_eq!(rust_scalar_type(float_scalar).unwrap(), "f32");
-        assert_eq!(ts_scalar_type(float_scalar).unwrap(), "number");
+        assert_eq!(profile::rust_scalar_type(float_scalar).unwrap(), "f32");
+        assert_eq!(profile::ts_scalar_type(float_scalar).unwrap(), "number");
 
-        assert_eq!(rust_scalar_type(fixed_scalar).unwrap(), "i64");
-        assert_eq!(ts_scalar_type(fixed_scalar).unwrap(), "bigint");
+        assert_eq!(profile::rust_scalar_type(fixed_scalar).unwrap(), "i64");
+        assert_eq!(profile::ts_scalar_type(fixed_scalar).unwrap(), "bigint");
 
-        assert_eq!(rust_scalar_type(custom_scalar).unwrap(), "i64");
-        assert_eq!(ts_scalar_type(custom_scalar).unwrap(), "bigint");
+        assert_eq!(profile::rust_scalar_type(custom_scalar).unwrap(), "i64");
+        assert_eq!(profile::ts_scalar_type(custom_scalar).unwrap(), "bigint");
     }
 
     #[test]
@@ -403,21 +353,6 @@ type Second {
     }
 
     #[test]
-    fn scalar_profiles_are_registry_driven() {
-        assert_eq!(scalar_profile_by_name("f32").unwrap().rust_type, "f32");
-        assert_eq!(scalar_profile_by_name("q32.32").unwrap().typescript_type, "bigint");
-
-        let source = include_str!("render.rs");
-        let legacy_float_name = ["Bunny", "Scalar"].concat();
-        let legacy_fixed_name = ["Bunny", "FixedQ32_32Raw"].concat();
-        let branch_pattern = ["match", " name", "_val"].concat();
-
-        assert!(!source.contains(&legacy_float_name));
-        assert!(!source.contains(&legacy_fixed_name));
-        assert!(!source.contains(&branch_pattern));
-    }
-
-    #[test]
     fn test_invalid_directive_profile_errors() {
         let schema = r#"
             directive @bunnyScalarProfile(name: String!) on SCALAR
@@ -426,7 +361,7 @@ type Second {
         let ir = wesley_core::lower_schema_sdl(schema).unwrap();
         let scalar_invalid = ir.types.iter().find(|t| t.name == "TestInvalid").unwrap();
 
-        assert!(rust_scalar_type(scalar_invalid).is_err());
-        assert!(ts_scalar_type(scalar_invalid).is_err());
+        assert!(profile::rust_scalar_type(scalar_invalid).is_err());
+        assert!(profile::ts_scalar_type(scalar_invalid).is_err());
     }
 }

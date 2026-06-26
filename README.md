@@ -145,7 +145,9 @@ The generator emits:
 - Rust DTOs at `crates/bunny-contract/src/generated/graphics.rs`;
 - TypeScript DTOs at `generated/typescript/bunny-graphics.ts`;
 - a manifest at `generated/bunny-graphics.manifest.json`;
-- generated version witnesses that record Bunny and `wesley-core` versions.
+- generated version witnesses that record Bunny and `wesley-core` versions;
+- deterministic scalar-profile witnesses for generated Rust, TypeScript, and
+  manifest consumers.
 
 ## Development Standards
 

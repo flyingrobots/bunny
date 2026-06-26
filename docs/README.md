@@ -16,6 +16,7 @@ evidence exist.
 | Chapter | Owns |
 | --- | --- |
 | [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection reservations. |
+| [`topics/deterministic-contract-profile/`](topics/deterministic-contract-profile/) | Bunny-owned scalar profile vocabulary, generated witnesses, and wire-profile boundaries for future codecs. |
 | [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, affine point/vector transforms, determinants, inverses, and transform-boundary reservations. |
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |
 | [`NUMERIC_CONSTITUTION.md`](NUMERIC_CONSTITUTION.md) | Q32.32 arithmetic law, construction policy, rounding, overflow, and numeric golden-vector expectations. |
