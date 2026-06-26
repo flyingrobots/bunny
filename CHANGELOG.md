@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-wesley` now rejects schema type names reserved for generated helper
+  types instead of emitting Rust duplicate type items or TypeScript interface
+  merges.
 * Repo-respect receipt coverage now includes deleted and typechanged paths,
   validates staged receipt contents from the Git index, rejects placeholder-only
   receipt sections, and enforces receipt trailers across non-merge branch

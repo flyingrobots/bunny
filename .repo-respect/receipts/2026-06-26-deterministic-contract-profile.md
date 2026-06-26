@@ -60,6 +60,8 @@ Accuracy pass:
   behavior.
 - Added an executable generator regression proving that non-Bunny object types
   are not emitted as DTOs.
+- Added a reserved-name regression proving schemas cannot collide with generated
+  helper type names.
 
 Generated artifacts:
 - `crates/bunny-contract/src/generated/graphics.rs`

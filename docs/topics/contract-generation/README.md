@@ -75,6 +75,10 @@ Only object types whose names start with `Bunny` are emitted as DTOs. This keeps
 the generated contract surface Bunny-owned even when a schema contains auxiliary
 or external object definitions.
 
+Schema type names must not collide with generated helper type names. The current
+reserved helper type name is `BunnyScalarProfile`, which backs generated
+scalar-profile witness arrays in Rust and TypeScript.
+
 ## Determinism
 
 The generator stabilizes artifact identity through:
