@@ -16,6 +16,43 @@ pub type BunnyFixedQ32_32Raw = i64;
 /// Rust representation for the `BunnyScalar` scalar.
 pub type BunnyScalar = f32;
 
+/// Deterministic wire profile metadata for generated Bunny scalars.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BunnyScalarProfile {
+    /// GraphQL scalar name that selected this profile.
+    pub scalar: &'static str,
+    /// Bunny scalar profile selected by `@bunnyScalarProfile`.
+    pub profile: &'static str,
+    /// Rust boundary representation emitted for this scalar.
+    pub rust_type: &'static str,
+    /// TypeScript boundary representation emitted for this scalar.
+    pub typescript_type: &'static str,
+    /// Deterministic wire representation profile for future codecs.
+    pub wire_type: &'static str,
+    /// Fixed byte width for fixed-size profiles, if one exists.
+    pub byte_width: Option<usize>,
+}
+
+/// Scalar profiles used by the generated graphics contract.
+pub const BUNNY_GRAPHICS_SCALAR_PROFILES: &[BunnyScalarProfile] = &[
+    BunnyScalarProfile {
+        scalar: "BunnyFixedQ32_32Raw",
+        profile: "q32.32",
+        rust_type: "i64",
+        typescript_type: "bigint",
+        wire_type: "i64-le-q32.32",
+        byte_width: Some(8),
+    },
+    BunnyScalarProfile {
+        scalar: "BunnyScalar",
+        profile: "f32",
+        rust_type: "f32",
+        typescript_type: "number",
+        wire_type: "f32-le",
+        byte_width: Some(4),
+    },
+];
+
 /// Generated DTO for the `BunnyAabb3` schema object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BunnyAabb3 {

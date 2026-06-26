@@ -9,11 +9,15 @@ integration manifests.
 ## Core Features
 
 * **Wesley lowering**: Uses `wesley-core` to lower Bunny's SDL into Wesley IR.
-* **Rust Emitter**: Emits type-safe data transfer objects (DTOs) with type alias mappings for custom scalars (`BunnyScalar` -> `f32`, `BunnyFixedQ32_32Raw` -> `i64`).
-* **TypeScript Emitter**: Emits read-only interfaces and type bindings mapping custom scalars (`BunnyScalar` -> `number`, `BunnyFixedQ32_32Raw` -> `bigint`).
+* **Rust Emitter**: Emits type-safe data transfer objects (DTOs) with type
+  alias mappings and scalar-profile witnesses for custom scalars
+  (`BunnyScalar` -> `f32`, `BunnyFixedQ32_32Raw` -> `i64`).
+* **TypeScript Emitter**: Emits read-only interfaces, type bindings, and
+  scalar-profile witnesses mapping custom scalars (`BunnyScalar` -> `number`,
+  `BunnyFixedQ32_32Raw` -> `bigint`).
 * **Manifest Emitter**: Generates an integrity JSON manifest containing
-  compilation paths, generator versions, `wesley-core` version, and the
-  schema's SHA-256 hash.
+  compilation paths, generator versions, `wesley-core` version, the schema's
+  SHA-256 hash, and deterministic scalar-profile metadata.
 
 ## Usage
 

@@ -1,5 +1,6 @@
 //! Bunny Wesley schema extension and DTO generator.
 
+mod profile;
 mod render;
 
 use sha2::{Digest, Sha256};
@@ -37,7 +38,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         &config.typescript,
         &render::render_typescript(&schema_ir, &schema_hash, &config.schema)?,
     )?;
-    write_file(&config.manifest, &render_manifest(&config, &schema_hash))?;
+    write_file(&config.manifest, &render_manifest(&config, &schema_hash, &schema_ir)?)?;
 
     Ok(())
 }
@@ -112,8 +113,13 @@ fn usage() -> String {
         .to_string()
 }
 
-fn render_manifest(config: &Config, schema_sha256: &str) -> String {
-    format!(
+fn render_manifest(
+    config: &Config,
+    schema_sha256: &str,
+    schema_ir: &wesley_core::WesleyIR,
+) -> Result<String, Box<dyn Error>> {
+    let scalar_profiles = profile::render_manifest_scalar_profiles(schema_ir)?;
+    Ok(format!(
         concat!(
             "{{\n",
             "  \"generator\": \"{}\",\n",
@@ -123,7 +129,8 @@ fn render_manifest(config: &Config, schema_sha256: &str) -> String {
             "  \"outputs\": [\n",
             "    \"{}\",\n",
             "    \"{}\"\n",
-            "  ]\n",
+            "  ],\n",
+            "  \"scalarProfiles\": {}\n",
             "}}\n"
         ),
         render::GENERATOR_ID,
@@ -131,8 +138,9 @@ fn render_manifest(config: &Config, schema_sha256: &str) -> String {
         json_escape(&config.schema.display().to_string()),
         schema_sha256,
         json_escape(&config.rust.display().to_string()),
-        json_escape(&config.typescript.display().to_string())
-    )
+        json_escape(&config.typescript.display().to_string()),
+        scalar_profiles
+    ))
 }
 
 fn write_file(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
@@ -145,4 +153,41 @@ fn write_file(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
 
 fn json_escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_records_generation_witnesses_and_scalar_profiles() {
+        let schema = r#"
+            directive @bunnyScalarProfile(name: String!) on SCALAR
+            scalar BunnyScalar @bunnyScalarProfile(name: "f32")
+
+            type BunnyThing {
+              value: BunnyScalar!
+            }
+        "#;
+        let schema_ir = wesley_core::lower_schema_sdl(schema).unwrap();
+        let config = Config {
+            schema: PathBuf::from("schemas/bunny/v0/graphics.graphql"),
+            rust: PathBuf::from("crates/bunny-contract/src/generated/graphics.rs"),
+            typescript: PathBuf::from("generated/typescript/bunny-graphics.ts"),
+            manifest: PathBuf::from("generated/bunny-graphics.manifest.json"),
+        };
+
+        let manifest = render_manifest(&config, "schema-hash", &schema_ir).unwrap();
+
+        assert!(manifest.contains("\"generator\": \"bunny-wesley/"));
+        assert!(manifest.contains("\"wesleyCore\": \""));
+        assert!(manifest.contains("\"schema\": \"schemas/bunny/v0/graphics.graphql\""));
+        assert!(manifest.contains("\"schemaSha256\": \"schema-hash\""));
+        assert!(manifest.contains("\"crates/bunny-contract/src/generated/graphics.rs\""));
+        assert!(manifest.contains("\"generated/typescript/bunny-graphics.ts\""));
+        assert!(manifest.contains("\"scalarProfiles\""));
+        assert!(manifest.contains("\"scalar\": \"BunnyScalar\""));
+        assert!(manifest.contains("\"profile\": \"f32\""));
+        assert!(manifest.contains("\"wireType\": \"f32-le\""));
+    }
 }

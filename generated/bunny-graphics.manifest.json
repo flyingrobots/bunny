@@ -6,5 +6,23 @@
   "outputs": [
     "crates/bunny-contract/src/generated/graphics.rs",
     "generated/typescript/bunny-graphics.ts"
+  ],
+  "scalarProfiles": [
+    {
+      "scalar": "BunnyFixedQ32_32Raw",
+      "profile": "q32.32",
+      "rustType": "i64",
+      "typescriptType": "bigint",
+      "wireType": "i64-le-q32.32",
+      "byteWidth": 8
+    },
+    {
+      "scalar": "BunnyScalar",
+      "profile": "f32",
+      "rustType": "f32",
+      "typescriptType": "number",
+      "wireType": "f32-le",
+      "byteWidth": 4
+    }
   ]
 }

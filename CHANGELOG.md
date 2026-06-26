@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added universal repo-respect receipt enforcement to Code Dojo and local Git
   hooks, plus `cargo run --locked -p xtask -- repo-respect receipt
   <short-topic>` for creating receipt templates before commit or PR handoff.
+* Added the `docs/topics/deterministic-contract-profile/` living topic chapter
+  and test plan for Bunny-owned deterministic scalar profiles, generated
+  witnesses, and future codec boundaries.
+* Extended `bunny-wesley` scalar profiles with deterministic wire metadata for
+  integer, fixed-byte, bounded-byte, UTF-8, fixed-point, and boundary-float
+  profiles, plus generated Rust, TypeScript, and manifest witnesses.
 * Added checked Q32.32 addition, subtraction, negation, and multiplication APIs
   so geometry code can reject overflow instead of consuming saturated
   intermediates.
@@ -54,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-wesley` now rejects schema type names reserved for generated helper
+  types instead of emitting Rust duplicate type items or TypeScript interface
+  merges.
+* `bunny-wesley` now rejects field-level `@bunnyScalarProfile` directives until
+  field override semantics are implemented, instead of silently omitting them
+  from generated witnesses.
+* Repo-respect fixture repositories now disable commit signing during tests so
+  the gate does not depend on the contributor's local GPG configuration.
 * Repo-respect receipt coverage now includes deleted and typechanged paths,
   validates staged receipt contents from the Git index, rejects placeholder-only
   receipt sections, and enforces receipt trailers across non-merge branch
