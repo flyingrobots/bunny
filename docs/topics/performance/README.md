@@ -261,3 +261,65 @@ change on top of entry 1):
 1.26×. `linalg/normalize`, `query/ray_build` and `query/ray_sphere_hit` are slower by
 1.4–6.4 % at best p50, as discussed above; the `query/ray_aabb` control, whose code did not
 change, moved 7.0 % in the same run.
+
+### 4. Prepared divisors and prepared rays (new exact APIs)
+
+**Where:** new `bunny_num::FixedDivisor`, `bunny_query::PreparedRay3` and
+`bunny_query::ray_intersects_aabb_prepared`. Existing functions are unchanged.
+
+**Technique.** Division by an invariant integer (Möller and Granlund, "Improved Division
+by Invariant Integers", IEEE Transactions on Computers 60(2), 2011, Algorithm 4).
+`FixedDivisor::new` normalizes the divisor's magnitude so its top bit is set and computes
+one 64-bit reciprocal with a single 128-bit division. Each later division of a Q32.32
+dividend becomes one or two two-word steps, each one 64×64→128 multiplication, a few
+additions and at most two corrections; quotients small enough for one word (as in a
+normalized vector) take one step. The remainder comes out exact, so ties-to-even rounding
+and the overflow decision are the same as `FixedQ32_32::checked_div`.
+
+`PreparedRay3` holds one `FixedDivisor` per nonzero direction component, so the slab test
+in `ray_intersects_aabb_prepared` multiplies where `ray_intersects_aabb` divides six times.
+
+**Fidelity: exact, as new APIs.** `divisor.checked_div(a)` returns exactly
+`a.checked_div(divisor)`, `None` included, and `ray_intersects_aabb_prepared` returns exactly
+`ray_intersects_aabb` for the same ray. Evidence: boundary values (zero, ±1, halves, `ONE`,
+`i64::MIN`, `i64::MAX`), every power-of-two divisor with both signs, 100 000 seeded pairs
+across all magnitudes, 10 000 constructed exact ties, and 160 000 seeded ray–box pairs
+including axis-parallel rays (the PERF-TP cases in the test plan).
+
+**Trade-offs.**
+
+- *Preparation costs a division.* `PreparedRay3::new` takes about 25 ns, so a prepared ray
+  pays off from its second box test. A single division should still use `checked_div`.
+- *More state per ray.* `PreparedRay3` carries three divisors (25 bytes each, with padding)
+  next to the ray.
+- *Subtle arithmetic.* Algorithm 4's correction steps are easy to get wrong; the
+  equivalence tests against `checked_div` are the guard, and they include constructed ties
+  and overflow boundaries.
+- *Not used inside `normalize` yet.* Preparing a divisor costs about as much as the three
+  divisions it would replace there, so `normalize` is unchanged (see planned work).
+
+**Measured.** `cargo run --locked -p xtask -- perf --base origin/perf/bunny-isqrt --rounds
+11 --align-code` on an Apple M5 Pro:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 12.21 | 12.45 | +2.0% | 12.00 | 11.96 | -0.3% | 1.00× | 13.02 | 12.70 |
+| `linalg/normalize` | 42.56 | 44.27 | +4.0% | 41.83 | 41.22 | -1.5% | 1.01× | 46.14 | 47.69 |
+| `num/div` | 6.47 | 6.55 | +1.2% | 6.27 | 6.27 | +0.0% | 1.00× | 6.59 | 6.71 |
+| `num/mul` | 1.38 | 1.38 | +0.0% | 1.34 | 1.34 | +0.0% | 1.00× | 1.42 | 1.46 |
+| `num/sqrt` | 9.97 | 10.13 | +1.6% | 9.89 | 9.89 | +0.0% | 1.00× | 10.17 | 10.62 |
+| `prepared/div` | — | 7.04 | new | — | 3.54 | new | — | — | 7.16 |
+| `prepared/ray_aabb` | — | 24.21 | new | — | 22.46 | new | — | — | 26.16 |
+| `prepared/ray_prepare` | — | 26.08 | new | — | 24.78 | new | — | — | 26.69 |
+| `query/ray_aabb` | 47.89 | 50.58 | +5.6% | 39.84 | 39.84 | +0.0% | 1.00× | 54.77 | 55.66 |
+| `query/ray_build` | 53.26 | 56.56 | +6.2% | 52.98 | 52.98 | +0.0% | 1.00× | 56.27 | 58.19 |
+| `query/ray_sphere_hit` | 70.27 | 70.68 | +0.6% | 65.51 | 65.96 | +0.7% | 0.99× | 73.45 | 74.62 |
+| `query/ray_sphere_miss` | 20.22 | 20.14 | -0.4% | 19.65 | 19.61 | -0.2% | 1.00× | 21.16 | 21.36 |
+| `query/ray_triangle` | 49.56 | 49.56 | +0.0% | 48.26 | 48.46 | +0.4% | 1.00× | 52.73 | 52.25 |
+
+The new cases report as new because the base has no such API. Compared with the unchanged
+cases on the same inputs, best p50: a prepared division takes 3.54 ns against 6.27 ns
+(`num/div`), and a prepared ray–box test 22.46 ns against 39.84 ns (`query/ray_aabb`),
+1.77× faster per box after a 24.78 ns preparation. `prepared/div`'s median (7.04 ns) is far
+from its best, the same placement sensitivity described under
+[bimodal cases](#bimodal-cases). Every existing case stayed within 1.5 % at best p50.

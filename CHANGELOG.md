@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `FixedDivisor`, a Q32.32 divisor prepared for repeated exact division
+  (Möller–Granlund division by an invariant integer): `divisor.checked_div(a)`
+  returns exactly `a.checked_div(divisor)`, at 3.5 ns instead of 6.3 ns after
+  preparation.
+* Added `PreparedRay3` and `ray_intersects_aabb_prepared`: the same results as
+  `ray_intersects_aabb`, 1.77 times faster per box test after a one-time
+  preparation of about 25 ns per ray.
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same

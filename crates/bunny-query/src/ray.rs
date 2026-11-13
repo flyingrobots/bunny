@@ -6,6 +6,9 @@ use bunny_geom::{FixedAabb3, FixedRay3, FixedSphere3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
+mod prepared;
+pub use prepared::{ray_intersects_aabb_prepared, PreparedRay3};
+
 /// Computes the intersection of a ray and a sphere.
 ///
 /// Returns the intersection point and the surface normal at the intersection,
@@ -128,9 +131,13 @@ impl RayInterval {
 
         let t0 = axis.min_bound.checked_sub(axis.origin)?.checked_div(axis.direction)?;
         let t1 = axis.max_bound.checked_sub(axis.origin)?.checked_div(axis.direction)?;
+        self.include(t0, t1);
+        Some(())
+    }
+
+    fn include(&mut self, t0: FixedQ32_32, t1: FixedQ32_32) {
         self.enter = max(self.enter, min(t0, t1));
         self.exit = min(self.exit, max(t0, t1));
-        Some(())
     }
 
     fn is_miss(&self) -> bool {

@@ -88,6 +88,12 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-010 | Exact replacement | PERF-REQ-001 | `FixedQ32_32::sqrt` equals the reference for every raw value 0..=65 536. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value` |
 | PERF-TP-012 | Exact replacement | PERF-REQ-001 | The square root equals core's `u128::isqrt` on 200 000 seeded inputs. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_on_many_seeded_inputs` |
 | PERF-TP-013 | Exact replacement | PERF-REQ-001 | The square root equals core's `u128::isqrt` at the 64-bit split and around quotient corrections. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_around_the_split_and_correction_points` |
+| PERF-TP-014 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on boundary values, signs and overflow. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_boundaries` |
+| PERF-TP-015 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div for every power-of-two divisor and both signs. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_for_every_power_of_two_divisor` |
+| PERF-TP-016 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 100 000 seeded pairs. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_seeded_pairs` |
+| PERF-TP-017 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 10 000 constructed exact ties. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties` |
+| PERF-TP-018 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes` |
+| PERF-TP-019 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -195,6 +201,60 @@ requirements = ["PERF-REQ-001"]
 evidence = "test"
 test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_around_the_split_and_correction_points"
 oracle = "The square root equals core's u128::isqrt at the 64-bit split and around quotient corrections."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-014"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_boundaries"
+oracle = "FixedDivisor equals checked_div on boundary values, signs and overflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-015"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_for_every_power_of_two_divisor"
+oracle = "FixedDivisor equals checked_div for every power-of-two divisor and both signs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-016"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_seeded_pairs"
+oracle = "FixedDivisor equals checked_div on 100 000 seeded pairs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-017"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties"
+oracle = "FixedDivisor equals checked_div on 10 000 constructed exact ties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-018"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes"
+oracle = "Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-019"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes"
+oracle = "Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays."
 tier = "fast"
 status = "implemented"
 ```
