@@ -323,3 +323,36 @@ cases on the same inputs, best p50: a prepared division takes 3.54 ns against 6.
 1.77× faster per box after a 24.78 ns preparation. `prepared/div`'s median (7.04 ns) is far
 from its best, the same placement sensitivity described under
 [bimodal cases](#bimodal-cases). Every existing case stayed within 1.5 % at best p50.
+
+## Tried And Rejected
+
+Experiments that kept exact results but did not pay off. They are recorded so the same idea
+is not retried without new evidence (a different target, or a changed design).
+
+### Division-free `normalize`
+
+**Idea.** Replace `normalize`'s three divisions by the length with multiplications: a
+reciprocal of the length from a 256-entry seed table and three Newton steps
+(`y <- y(2 - xy)`, within 0–2 units of `2^127 / x` on 1 000 000 samples), a multiplied
+quotient estimate, and an exact remainder correction. No component is longer than the
+length, so the quotient is at most `2^32` and one correction step suffices.
+
+**Fidelity.** Exact: equivalence tests against `checked_div` and against the previous
+`normalize` (100 000 `FixedVec3` and `FixedVec2` cases each) passed.
+
+**Result on an Apple M5 Pro** (`--base origin/perf/fixed-divisor --rounds 11
+--align-code --filter linalg/`):
+
+| Variant | Best p50 before → after | Median before → after |
+| --- | --- | --- |
+| Branching correction | 42.72 → 41.46 ns (−2.9 %) | 45.49 → 55.66 ns (+22.4 %) |
+| Branch-free correction (masks) | 42.60 → 58.39 ns (+37.1 %) | 44.47 → 61.85 ns (+39.1 %) |
+
+**Why it lost.** The M5's 64-bit divide instruction is fast, so compiler-rt's 128-bit
+division takes few cycles for these operand sizes. The replacement's dependent chain
+(widening multiply, variable 128-bit shift, second multiply, subtract, correct, round) is
+about as long, and the branch-free form only lengthens it. Targets without a fast 64-bit
+divide (wasm32 in particular) were not measured and may behave differently.
+
+**Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
+not proposed for merging.
