@@ -54,6 +54,9 @@ Follow-up: recorded the rejected division-free normalize experiment (branch
 experiment/divide-free-normalize) under "Tried And Rejected" in
 docs/topics/performance/README.md, with its measurements.
 
+Follow-up: the rejected division-free normalize was also 9.1 % slower on WebAssembly
+(wasmtime, 9 rounds); ledger row added.
+
 Known risks:
 The correctness of Algorithm 4 rests on the paper's proof and the equivalence tests, which
 sample rather than exhaust the input space. New public API names may change in review.

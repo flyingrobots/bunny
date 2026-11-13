@@ -406,12 +406,15 @@ length, so the quotient is at most `2^32` and one correction step suffices.
 | --- | --- | --- |
 | Branching correction | 42.72 → 41.46 ns (−2.9 %) | 45.49 → 55.66 ns (+22.4 %) |
 | Branch-free correction (masks) | 42.60 → 58.39 ns (+37.1 %) | 44.47 → 61.85 ns (+39.1 %) |
+| Branching correction, WebAssembly (wasmtime) | 103.92 → 113.40 ns (+9.1 %) | 105.59 → 116.33 ns (+10.2 %) |
 
 **Why it lost.** The M5's 64-bit divide instruction is fast, so compiler-rt's 128-bit
 division takes few cycles for these operand sizes. The replacement's dependent chain
 (widening multiply, variable 128-bit shift, second multiply, subtract, correct, round) is
 about as long, and the branch-free form only lengthens it. Targets without a fast 64-bit
-divide (wasm32 in particular) were not measured and may behave differently.
+divide were expected to benefit, but WebAssembly under wasmtime (`--target wasm32-wasip1
+--runner wasmtime --rounds 9`) was 9.1 % slower too. x86-64 has not been measured; the CI
+platform matrix can do that.
 
 **Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
 not proposed for merging.
