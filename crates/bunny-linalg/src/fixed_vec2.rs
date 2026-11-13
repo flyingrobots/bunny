@@ -3,7 +3,7 @@
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::Vec2;
-use bunny_num::{FixedQ32_32, FloatConversionError};
+use bunny_num::{FixedQ32_32, FloatConversionError, UnitDivisor};
 
 /// Two-dimensional vector using deterministic Q32.32 fixed-point representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,14 +44,14 @@ impl FixedVec2 {
     }
 
     /// Normalizes the vector.
+    ///
+    /// Each component is divided by the length with [`UnitDivisor`], which needs no division
+    /// instruction and gives exactly the result of dividing by the length (no component is
+    /// longer than the length).
     #[must_use]
     pub fn normalize(self) -> Option<Self> {
-        let len = self.length()?;
-        if len == FixedQ32_32::ZERO {
-            None
-        } else {
-            Some(self / len)
-        }
+        let divisor = UnitDivisor::new(self.length()?)?;
+        Some(Self::new(divisor.checked_div(self.x)?, divisor.checked_div(self.y)?))
     }
 
     /// Validates and converts a float vector into fixed-point coordinates.

@@ -8,9 +8,11 @@
 
 pub mod fixed_divisor;
 pub mod fixed_q32_32;
+pub mod unit_divisor;
 
 pub use fixed_divisor::FixedDivisor;
 pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
+pub use unit_divisor::UnitDivisor;
 
 /// Bunny's first scalar representation.
 ///
