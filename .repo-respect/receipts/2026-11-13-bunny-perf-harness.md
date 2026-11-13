@@ -89,6 +89,13 @@ cargo test -p xtask: 43 passed. The Dojo job's cargo-deny failure (RUSTSEC-2026-
 tokio 1.48.0 via ninelives 0.2.0 -> wesley-core) is not caused by this branch and is not
 fixed here.
 
+Follow-up (RUSTSEC-2026-0386, PR #209 Dojo job):
+cargo deny failed on tokio 1.48.0 (RUSTSEC-2026-0386), reached through wesley-core ->
+ninelives 0.2.0, whose "~1.48.0" requirement blocked any patched tokio. Fixed upstream in
+flyingrobots/ninelives#8, released as ninelives 0.2.1 (tokio ^1.54.1). Cargo.lock now has
+ninelives 0.2.1 and tokio 1.54.1, produced by `cargo update -p ninelives -p tokio` inside
+flyingrobots/rust-dev:1.96.0 through devcontainers' devrun, exported as a patch and applied.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on
