@@ -1,0 +1,89 @@
+name: Perf
+
+# Before/after timing of Bunny's math and query kernels. The base revision and the
+# candidate are built the same way and run interleaved on one runner, so the job compares
+# medians from the same machine; see docs/topics/performance/README.md.
+
+on:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "xtask/src/perf*.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/perf.yml"
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Revision to compare against"
+        default: "origin/main"
+        required: false
+      max-regression:
+        description: "Fail when any case's p50 slows by more than this percent"
+        default: "20"
+        required: false
+  workflow_call:
+    inputs:
+      base:
+        description: "Revision to compare against"
+        type: string
+        default: "origin/main"
+      max-regression:
+        description: "Fail when any case's p50 slows by more than this percent"
+        type: string
+        default: "20"
+      rounds:
+        description: "Interleaved rounds per side"
+        type: string
+        default: "7"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  perf:
+    name: Perf / before and after
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-perf-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-perf-
+
+      - name: Show runner facts
+        run: |
+          rustc -Vv
+          nproc
+          grep -m1 "model name" /proc/cpuinfo || true
+
+      - name: Compare base and candidate
+        env:
+          BASE: ${{ inputs.base || (github.base_ref && format('origin/{0}', github.base_ref)) || 'origin/main' }}
+          MAX_REGRESSION: ${{ inputs.max-regression || '20' }}
+          ROUNDS: ${{ inputs.rounds || '7' }}
+        run: >-
+          cargo run --locked -p xtask -- perf
+          --base "$BASE"
+          --rounds "$ROUNDS"
+          --max-regression "$MAX_REGRESSION"
+          --summary "$GITHUB_STEP_SUMMARY"
