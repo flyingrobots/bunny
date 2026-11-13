@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* `FixedQ32_32::sqrt_u128` now finishes its Karatsuba step with two hardware
+  `u64` divisions instead of a software `u128` division: same exact bits,
+  1.33 times faster `sqrt` and 1.26 times faster `length`, but `normalize`
+  measured 5-7 % slower (see the performance ledger, entry 3).
 * `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
   and the ray queries) now uses the table-seeded integer square root from the
   core library: the same exact bits as before, 4.1 times faster for `sqrt`,

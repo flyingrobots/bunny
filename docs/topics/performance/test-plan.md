@@ -86,6 +86,8 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-008 | Exact replacement | PERF-REQ-001 | The new square root equals the retained bit-by-bit reference on boundaries and perfect squares. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_boundaries` |
 | PERF-TP-009 | Exact replacement | PERF-REQ-001 | The new square root equals the reference on 20 000 seeded inputs across all magnitudes. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_seeded_inputs` |
 | PERF-TP-010 | Exact replacement | PERF-REQ-001 | `FixedQ32_32::sqrt` equals the reference for every raw value 0..=65 536. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value` |
+| PERF-TP-012 | Exact replacement | PERF-REQ-001 | The square root equals core's `u128::isqrt` on 200 000 seeded inputs. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_on_many_seeded_inputs` |
+| PERF-TP-013 | Exact replacement | PERF-REQ-001 | The square root equals core's `u128::isqrt` at the 64-bit split and around quotient corrections. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_around_the_split_and_correction_points` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -175,6 +177,24 @@ requirements = ["PERF-REQ-001"]
 evidence = "test"
 test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value"
 oracle = "FixedQ32_32::sqrt equals the reference for every raw value 0..=65 536."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-012"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_on_many_seeded_inputs"
+oracle = "The square root equals core's u128::isqrt on 200 000 seeded inputs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-013"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_around_the_split_and_correction_points"
+oracle = "The square root equals core's u128::isqrt at the 64-bit split and around quotient corrections."
 tier = "fast"
 status = "implemented"
 ```

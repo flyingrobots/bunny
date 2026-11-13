@@ -141,12 +141,13 @@ impl FixedQ32_32 {
 
     /// Computes the integer square root of a `u128` value: the largest `r` with `r * r <= val`.
     ///
-    /// Uses the standard library's integer square root, which seeds from a lookup table and
-    /// refines with integer arithmetic only. It returns the same exact floor as the previous
-    /// bit-by-bit loop on every input, about five times faster.
+    /// Integer arithmetic only: `u64::isqrt` on the top half, then one Karatsuba step whose
+    /// division is split into two `u64` divisions. It returns the same exact floor as
+    /// `u128::isqrt` and the previous bit-by-bit loop on every input.
     #[must_use]
+    #[inline]
     pub const fn sqrt_u128(val: u128) -> u128 {
-        val.isqrt()
+        crate::isqrt_u128(val)
     }
 
     /// Divides `self` by `rhs`, returning `None` on zero divisor or overflow.

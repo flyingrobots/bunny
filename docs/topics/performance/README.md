@@ -203,3 +203,61 @@ The square-root kernels speed up 4.1× (`num/sqrt`), 3.4× (`linalg/length`), 2.
 take no square root and serve as controls. The first three stay within 1.3 % of their
 previous best. `query/ray_aabb` reads 11.8 % faster on unchanged code. It is the
 [bimodal case](#bimodal-cases) described above, so that number is not claimed as a speedup.
+
+### 3. Bunny's own square root, without 128-bit division
+
+**Where:** `FixedQ32_32::sqrt_u128`, implemented by `isqrt_u128` in `crates/bunny-num/src/lib.rs`, so the same callers
+as entry 1.
+
+**Technique.** Rust 1.96's `u128::isqrt` (`core/src/num/imp/int_sqrt.rs`) runs Karatsuba
+square-root stages from a byte lookup table up to 64 bits, then a last stage that divides
+`u128 / u128`. aarch64 and wasm32 have no 128-bit divide instruction, so that one division
+goes to compiler-rt's software routine, although its divisor is below `2^33`. Bunny now:
+
+1. hands inputs up to `u64::MAX` to `u64::isqrt`, whose stages divide in hardware;
+2. otherwise normalizes by an even shift, takes `u64::isqrt` of the top 64 bits and its
+   remainder, and does the same last Karatsuba step as core;
+3. performs that step's division as long division in two 31-bit digits, so each step is
+   one hardware `u64` divide and no intermediate reaches `2^64`;
+4. applies core's correction (`candidate^2 > n` means subtract one).
+
+**Fidelity: exact replacement.** The result is the floor of the square root, identical to
+`u128::isqrt` and to the original bit-by-bit loop. Tests compare it with the old loop
+(boundaries, perfect squares, 20 000 seeded inputs, every small raw value) and with core's
+`isqrt` on 200 000 seeded inputs plus the 64-bit split and the squares around the
+quotient-correction points.
+
+**Trade-offs.**
+
+- *Bunny owns the algorithm again* (about 40 lines). Entry 1 traded that away for
+  `u128::isqrt`; this entry takes it back for speed, and keeps both oracles in the tests.
+- *A measured regression in `normalize`.* Over 21 aligned rounds, `linalg/normalize` was
+  5.0 % slower at the median and 7.4 % at best p50, although `length` (its first step) got
+  faster. The cause is not established. One hypothesis: `normalize` then calls three
+  software 128-bit divides, whose code is shared with the routine core's square root used
+  to call, and that routine is no longer warm. Entry 4 (a planned change) removes
+  `normalize`'s three divides, so this entry should land with it rather than alone.
+- `#[inline]` is required: without it, callers in other crates stop inlining the square
+  root and slow down further.
+
+**Measured.** `cargo run --locked -p xtask -- perf --base origin/perf/fast-exact-fixed-math
+--rounds 11 --align-code` on an Apple M5 Pro (the base is entry 1's branch, so this is the
+change on top of entry 1):
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 15.83 | 12.21 | -22.9% | 15.26 | 12.13 | -20.5% | 1.26× | 16.07 | 12.78 |
+| `linalg/normalize` | 40.28 | 43.86 | +8.9% | 39.43 | 41.14 | +4.3% | 0.96× | 44.39 | 47.28 |
+| `num/div` | 6.47 | 6.47 | +0.0% | 6.31 | 6.31 | +0.0% | 1.00× | 6.59 | 6.71 |
+| `num/mul` | 1.38 | 1.38 | +0.0% | 1.34 | 1.34 | +0.0% | 1.00× | 1.38 | 1.38 |
+| `num/sqrt` | 13.51 | 9.93 | -26.5% | 13.14 | 9.89 | -24.7% | 1.33× | 13.67 | 9.97 |
+| `query/ray_aabb` | 47.93 | 47.69 | -0.5% | 37.23 | 39.84 | +7.0% | 0.93× | 52.04 | 52.17 |
+| `query/ray_build` | 51.76 | 53.02 | +2.4% | 49.28 | 52.45 | +6.4% | 0.94× | 53.51 | 53.87 |
+| `query/ray_sphere_hit` | 68.36 | 69.58 | +1.8% | 63.80 | 64.70 | +1.4% | 0.99× | 71.70 | 72.96 |
+| `query/ray_sphere_miss` | 19.61 | 19.65 | +0.2% | 19.45 | 19.57 | +0.6% | 0.99× | 19.78 | 19.78 |
+| `query/ray_triangle` | 49.24 | 50.09 | +1.7% | 48.26 | 48.38 | +0.2% | 1.00× | 52.57 | 52.94 |
+
+`num/sqrt` is 1.33× faster than entry 1 (5.3× faster than v0.6.0's loop) and `linalg/length`
+1.26×. `linalg/normalize`, `query/ray_build` and `query/ray_sphere_hit` are slower by
+1.4–6.4 % at best p50, as discussed above; the `query/ray_aabb` control, whose code did not
+change, moved 7.0 % in the same run.
