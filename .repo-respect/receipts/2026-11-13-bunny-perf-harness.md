@@ -65,6 +65,13 @@ square root and reads bit-identical inputs; with forced 64-byte code alignment o
 sides it measured 51.19 ns before and 51.15 ns after. `--align-code` makes that the
 comparison mode, and CI uses it. Re-ran cargo test -p xtask and code-dojo --all: clean.
 
+Follow-up (best of rounds):
+Even with --align-code, `query/ray_aabb` alone flipped between about 40 and 52 ns across
+eight runs of the same binary (process placement), so its median could read -21 % or +19 %
+on identical code. The report now also takes the best p50 across rounds; speedups and the
+regression gate use it, with a test for the bimodal case. Re-ran cargo test -p xtask,
+topic-docs and code-dojo --all: clean.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on

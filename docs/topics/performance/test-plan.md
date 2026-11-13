@@ -35,8 +35,8 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | ID | Requirement | Current Source |
 | --- | --- | --- |
 | PERF-REQ-001 | An optimization either preserves every output bit or ships as a new API with a stated error bound. | `README.md#the-fidelity-rule` |
-| PERF-REQ-002 | Comparisons use the median of each percentile across interleaved rounds. | `README.md#measuring` |
-| PERF-REQ-003 | The regression gate fails only when a case's median p50 slows past the threshold. | `README.md#continuous-integration` |
+| PERF-REQ-002 | Comparisons report the median of each percentile and the best p50 across interleaved rounds. | `README.md#measuring` |
+| PERF-REQ-003 | The regression gate fails only when a case's best p50 slows past the threshold. | `README.md#continuous-integration` |
 | PERF-REQ-004 | Cases the base revision cannot build are reported as new. | `README.md#measuring` |
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 
@@ -48,12 +48,12 @@ status = "reserved"
 
 [[requirement]]
 id = "PERF-REQ-002"
-summary = "Comparisons use the median of each percentile across interleaved rounds."
+summary = "Comparisons report the median of each percentile and the best p50 across interleaved rounds."
 status = "active"
 
 [[requirement]]
 id = "PERF-REQ-003"
-summary = "The regression gate fails only when a case's median p50 slows past the threshold."
+summary = "The regression gate fails only when a case's best p50 slows past the threshold."
 status = "active"
 
 [[requirement]]
@@ -83,6 +83,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-003 | Comparison | PERF-REQ-002, PERF-REQ-004 | Change, speedup and `new` rows in the rendered table. | `xtask/src/perf_report.rs::tests::comparison_reports_change_and_new_cases` |
 | PERF-TP-004 | Gate | PERF-REQ-003 | Only cases past the threshold are reported. | `xtask/src/perf_report.rs::tests::regressions_respect_the_threshold` |
 | PERF-TP-005 | Build | PERF-REQ-004 | Feature groups exclude `default` and comments. | `xtask/src/perf.rs::tests::feature_groups_skip_default_and_comments` |
+| PERF-TP-007 | Gate | PERF-REQ-003 | A bimodal case whose medians land in different modes does not fail the gate. | `xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -137,6 +138,15 @@ requirements = ["PERF-REQ-005"]
 evidence = "test"
 test = "xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates"
 oracle = "The generated manifest is standalone and points at the given crates."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-007"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes"
+oracle = "A bimodal case whose medians land in different modes does not fail the gate."
 tier = "fast"
 status = "implemented"
 ```

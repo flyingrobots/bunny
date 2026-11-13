@@ -47,8 +47,8 @@ cargo run --locked -p xtask -- perf --filter num/ --max-regression 20
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--base <rev>` | `origin/main` | The "before" revision. Fetch it first. |
-| `--rounds <n>` | `5` | Interleaved runs per side; the report takes the median of each percentile. |
-| `--max-regression <percent>` | off | Exit non-zero when any case's median p50 slows by more than this. |
+| `--rounds <n>` | `5` | Interleaved runs (fresh processes) per side; the report takes the median and the best across them. |
+| `--max-regression <percent>` | off | Exit non-zero when any case's best p50 slows by more than this. |
 | `--summary <file>` | none | Append the Markdown table (CI passes `$GITHUB_STEP_SUMMARY`). |
 | `--align-code` | off | Build both sides with every function and branch target on a 64-byte boundary (see [code-layout noise](#code-layout-noise)). |
 | `--filter <text>`, `--samples <n>` | all cases, 101 | Passed through to the harness. |
@@ -62,7 +62,9 @@ How the comparison stays fair:
   codegen from a workspace build.
 - **Same machine, interleaved.** Rounds alternate base and candidate, and alternate which
   runs first, so warm-up and thermal drift favour neither side.
-- **Medians, not one run.** Each percentile is the median across rounds.
+- **Median and best, not one run.** Each round is a fresh process. The table shows the
+  median of each percentile across rounds and the best (lowest) p50; the speedup column and
+  the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
   `linalg`, `query`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
@@ -83,8 +85,9 @@ A change in one function can move an unrelated hot loop to a different address i
 binary. On modern cores that alone can change the loop's speed by 15 % or more, in either
 direction, with no change to the code that runs. Bunny has already met this: when the
 square root sped up, `query/ray_aabb` (which takes no square root and reads bit-identical
-inputs) measured 15–19 % slower over 7 and 11 rounds. With `--align-code` it measured
-51.19 ns before and 51.15 ns after.
+inputs) measured 15–19 % slower over 7 and 11 rounds. With `--align-code` one run measured
+51.19 ns before and 51.15 ns after; alignment removes this layout effect but not the
+placement effect described next.
 
 `--align-code` passes `-C llvm-args=-align-all-functions=6` and
 `-C llvm-args=-align-all-nofallthru-blocks=6` to both builds, so every function and branch
@@ -94,12 +97,27 @@ padding can cost a few nanoseconds per call), so use it for comparisons and trea
 numbers as a second opinion. CI always uses it. Inherited `RUSTFLAGS` are kept and the
 alignment flags are appended.
 
+### Bimodal cases
+
+Some kernels change speed from one process to the next with nothing rebuilt. Running the
+same `bunny-perf` binary eight times gave `query/ray_aabb` p50s of 39.6, 39.8, 52.4, 40.3,
+47.2, 52.0, 52.1 and 51.5 ns, while `query/ray_sphere_miss` stayed between 19.5 and 20.8 ns.
+The likely cause is where memory, stack and code land in each process (address
+randomization and cache or branch-predictor aliasing), which no compiler flag controls.
+
+A median over a handful of rounds can land in either mode, so the same code can appear
+20 % faster or slower. The best p50 across rounds does not have that problem: noise only
+adds time, so with enough rounds both sides reach the fast mode. That is why speedups and
+the CI gate use the best p50, while the median columns stay in the table to show spread.
+When a case's median change and best change disagree sharply, suspect placement before
+code.
+
 ### Continuous integration
 
 `.github/workflows/perf.yml` runs the comparison on pull requests that touch crates, the
 perf tooling, the lockfile or the toolchain, against the pull request's base branch, with
 `--rounds 7 --align-code --max-regression 20`. It writes the table to the job summary and fails when a
-case's median p50 slows by more than 20 %. Shared runners are noisier than a quiet laptop;
+case's best p50 slows by more than 20 %. Shared runners are noisier than a quiet laptop;
 the threshold is set to catch real regressions, not to referee single-digit changes. The
 workflow can also be started by hand (`workflow_dispatch`) or called from another workflow
 in this repository (`workflow_call`) with its own `base`, `max-regression` and `rounds`.

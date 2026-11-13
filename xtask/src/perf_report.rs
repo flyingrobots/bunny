@@ -54,16 +54,34 @@ fn median(values: impl Iterator<Item = f64>) -> Option<f64> {
 #[derive(Debug, PartialEq)]
 pub(crate) struct Row {
     pub(crate) case: String,
+    /// Median of each percentile across rounds.
     pub(crate) base: Option<Timing>,
     pub(crate) head: Option<Timing>,
+    /// Lowest p50 across rounds. Noise only adds time, so with enough rounds this finds a
+    /// case's fast mode even when process placement makes it bimodal.
+    pub(crate) base_best: Option<f64>,
+    pub(crate) head_best: Option<f64>,
 }
 
 impl Row {
     /// Relative change of the median p50, in percent (positive is slower).
     pub(crate) fn change_percent(&self) -> Option<f64> {
-        let (base, head) = (self.base?, self.head?);
-        (base.p50 > 0.0).then(|| (head.p50 - base.p50) / base.p50 * 100.0)
+        relative_change(self.base?.p50, self.head?.p50)
     }
+
+    /// Relative change of the best p50, in percent (positive is slower). The regression gate
+    /// uses this one.
+    pub(crate) fn best_change_percent(&self) -> Option<f64> {
+        relative_change(self.base_best?, self.head_best?)
+    }
+}
+
+fn relative_change(before: f64, after: f64) -> Option<f64> {
+    (before > 0.0).then(|| (after - before) / before * 100.0)
+}
+
+fn best_p50(timings: &[Timing]) -> Option<f64> {
+    timings.iter().map(|t| t.p50).min_by(f64::total_cmp)
 }
 
 /// Pairs every case seen in either revision, in case order.
@@ -77,14 +95,16 @@ pub(crate) fn compare(base: &Runs, head: &Runs) -> Vec<Row> {
             case: case.clone(),
             base: base.get(case).and_then(|t| median_timing(t)),
             head: head.get(case).and_then(|t| median_timing(t)),
+            base_best: base.get(case).and_then(|t| best_p50(t)),
+            head_best: head.get(case).and_then(|t| best_p50(t)),
         })
         .collect()
 }
 
-/// Cases whose median p50 slowed down by more than `max_percent`.
+/// Cases whose best p50 slowed down by more than `max_percent`.
 pub(crate) fn regressions(rows: &[Row], max_percent: f64) -> Vec<&Row> {
     rows.iter()
-        .filter(|row| row.change_percent().is_some_and(|change| change > max_percent))
+        .filter(|row| row.best_change_percent().is_some_and(|change| change > max_percent))
         .collect()
 }
 
@@ -94,30 +114,44 @@ pub(crate) fn render(rows: &[Row], base_label: &str, head_label: &str, rounds: u
     let _ = writeln!(out, "### Bunny perf: `{base_label}` → `{head_label}`\n");
     let _ = writeln!(
         out,
-        "Median of {rounds} interleaved rounds; nanoseconds per call. Negative change is faster.\n"
+        "{rounds} interleaved rounds per side; nanoseconds per call. Median and best are taken \
+         across rounds; speedup and the regression gate use the best p50. Negative change is faster.\n"
     );
-    out.push_str("| Case | Before p50 | After p50 | Change | Speedup | Before p95 | After p95 |\n");
-    out.push_str("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n");
+    out.push_str("| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup |");
+    out.push_str(" Before p95 | After p95 |\n");
+    out.push_str("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n");
     for row in rows {
-        let cell = |timing: Option<Timing>, pick: fn(Timing) -> f64| {
-            timing.map_or("—".to_owned(), |t| format!("{:.2}", pick(t)))
-        };
-        let change = row.change_percent().map_or("new".to_owned(), |c| format!("{c:+.1}%"));
-        let speedup = match (row.base, row.head) {
-            (Some(base), Some(head)) if head.p50 > 0.0 => format!("{:.2}×", base.p50 / head.p50),
-            _ => "—".to_owned(),
-        };
         let _ = writeln!(
             out,
-            "| `{}` | {} | {} | {change} | {speedup} | {} | {} |",
+            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
             row.case,
-            cell(row.base, |t| t.p50),
-            cell(row.head, |t| t.p50),
-            cell(row.base, |t| t.p95),
-            cell(row.head, |t| t.p95),
+            ns(row.base.map(|t| t.p50)),
+            ns(row.head.map(|t| t.p50)),
+            percent(row.change_percent()),
+            ns(row.base_best),
+            ns(row.head_best),
+            percent(row.best_change_percent()),
+            speedup(row.base_best, row.head_best),
+            ns(row.base.map(|t| t.p95)),
+            ns(row.head.map(|t| t.p95)),
         );
     }
     out
+}
+
+fn ns(value: Option<f64>) -> String {
+    value.map_or("—".to_owned(), |v| format!("{v:.2}"))
+}
+
+fn percent(value: Option<f64>) -> String {
+    value.map_or("new".to_owned(), |v| format!("{v:+.1}%"))
+}
+
+fn speedup(before: Option<f64>, after: Option<f64>) -> String {
+    match (before, after) {
+        (Some(before), Some(after)) if after > 0.0 => format!("{:.2}×", before / after),
+        _ => "—".to_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -164,8 +198,16 @@ mod tests {
         assert_eq!(rows[0].change_percent(), None);
         assert!((rows[1].change_percent().expect("both sides") + 75.0).abs() < 1e-9);
         let table = render(&rows, "main", "HEAD", 5);
-        assert!(table.contains("| `num/sqrt` | 60.00 | 15.00 | -75.0% | 4.00× |"), "{table}");
-        assert!(table.contains("| `angle/sin_cos` | — | 10.00 | new | — |"), "{table}");
+        assert!(
+            table.contains(
+                "| `num/sqrt` | 60.00 | 15.00 | -75.0% | 60.00 | 15.00 | -75.0% | 4.00× |"
+            ),
+            "{table}"
+        );
+        assert!(
+            table.contains("| `angle/sin_cos` | — | 10.00 | new | — | 10.00 | new | — |"),
+            "{table}"
+        );
     }
 
     #[test]
@@ -182,5 +224,21 @@ mod tests {
         let slow: Vec<&str> = regressions(&rows, 15.0).iter().map(|r| r.case.as_str()).collect();
         assert_eq!(slow, ["b"]);
         assert!(regressions(&rows, 25.0).is_empty());
+    }
+
+    #[test]
+    fn the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes() {
+        // Identical code that runs at 40 or 52 ns depending on process placement.
+        let base =
+            Runs::from([("aabb".to_owned(), vec![timing(40.0), timing(52.0), timing(52.0)])]);
+        let head =
+            Runs::from([("aabb".to_owned(), vec![timing(52.0), timing(40.0), timing(40.0)])]);
+        let rows = compare(&base, &head);
+        assert!(
+            rows[0].change_percent().expect("both sides") < -20.0,
+            "the medians differ by mode"
+        );
+        assert_eq!(rows[0].best_change_percent(), Some(0.0));
+        assert!(regressions(&rows, 15.0).is_empty());
     }
 }
