@@ -20,7 +20,7 @@ type DynError = Box<dyn Error>;
 const CORE_CRATES: &[&str] =
     &["bunny-num", "bunny-linalg", "bunny-geom", "bunny-query", "bunny-broadphase", "bunny-mesh"];
 const GENERATOR_CRATES: &[&str] = &["bunny-wesley"];
-const TOOLING_CRATES: &[&str] = &["xtask"];
+const TOOLING_CRATES: &[&str] = &["xtask", "bunny-perf"];
 const STRICT_CLIPPY_PACKAGES: &[&str] = &[
     "bunny-num",
     "bunny-linalg",
