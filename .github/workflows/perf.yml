@@ -85,5 +85,6 @@ jobs:
           cargo run --locked -p xtask -- perf
           --base "$BASE"
           --rounds "$ROUNDS"
+          --align-code
           --max-regression "$MAX_REGRESSION"
           --summary "$GITHUB_STEP_SUMMARY"

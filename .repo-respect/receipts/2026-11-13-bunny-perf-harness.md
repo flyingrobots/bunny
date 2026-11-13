@@ -59,6 +59,12 @@ cargo run --locked -p xtask -- code-dojo --all
 cargo run --locked -p xtask -- perf --base origin/main --rounds 6 (identical code on both
 sides: most cases within 3 %, the fastest up to 8 %; Apple M5 Pro under desktop load)
 
+Follow-up (--align-code):
+Measuring the sqrt branch showed `query/ray_aabb` 15-19 % slower although it takes no
+square root and reads bit-identical inputs; with forced 64-byte code alignment on both
+sides it measured 51.19 ns before and 51.15 ns after. `--align-code` makes that the
+comparison mode, and CI uses it. Re-ran cargo test -p xtask and code-dojo --all: clean.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on
