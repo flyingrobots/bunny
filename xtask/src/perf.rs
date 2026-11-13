@@ -27,6 +27,7 @@ struct PerfOptions {
     max_regression: Option<f64>,
     summary: Option<PathBuf>,
     harness_args: Vec<String>,
+    align_code: bool,
 }
 
 impl PerfOptions {
@@ -37,8 +38,13 @@ impl PerfOptions {
             max_regression: None,
             summary: None,
             harness_args: Vec::new(),
+            align_code: false,
         };
         while let Some(flag) = args.next() {
+            if flag == "--align-code" {
+                options.align_code = true;
+                continue;
+            }
             let value = args.next().ok_or_else(|| format!("{flag} needs a value"))?;
             match flag.as_str() {
                 "--base" => options.base = value,
@@ -64,11 +70,16 @@ pub(crate) fn handle(args: impl Iterator<Item = String>) -> Result<(), Box<dyn E
     // Both sides build the same way (a standalone copy of the harness), so codegen differences
     // between a workspace build and a standalone build cannot bias the comparison.
     eprintln!("perf: building the harness for the working tree");
-    let head_bin = build_harness(&root, &root, &perf_dir.join("harness-head"))?;
+    let head_bin = build_harness(&root, &root, &perf_dir.join("harness-head"), options.align_code)?;
     eprintln!("perf: building the harness for {} ({short})", options.base);
     let base_tree = perf_dir.join(format!("base-{short}"));
     add_worktree(&root, &base_tree, &sha)?;
-    let base_bin = build_harness(&root, &base_tree, &perf_dir.join(format!("harness-{short}")));
+    let base_bin = build_harness(
+        &root,
+        &base_tree,
+        &perf_dir.join(format!("harness-{short}")),
+        options.align_code,
+    );
     remove_worktree(&root, &base_tree);
     let base_bin = base_bin?;
 
@@ -128,7 +139,12 @@ fn remove_worktree(root: &Path, path: &Path) {
 }
 
 /// Builds the working tree's harness source against the crates in `tree`.
-fn build_harness(root: &Path, tree: &Path, harness: &Path) -> Result<PathBuf, Box<dyn Error>> {
+fn build_harness(
+    root: &Path,
+    tree: &Path,
+    harness: &Path,
+    align_code: bool,
+) -> Result<PathBuf, Box<dyn Error>> {
     let source = root.join("crates").join("bunny-perf");
     let groups = feature_groups(&fs::read_to_string(source.join("Cargo.toml"))?);
     fs::create_dir_all(harness.join("src"))?;
@@ -143,6 +159,7 @@ fn build_harness(root: &Path, tree: &Path, harness: &Path) -> Result<PathBuf, Bo
     let built = |features: &[&str]| -> Result<bool, Box<dyn Error>> {
         let status = cargo()
             .current_dir(harness)
+            .env("RUSTFLAGS", rustflags(align_code))
             .args([
                 "build",
                 "--release",
@@ -172,6 +189,22 @@ fn build_harness(root: &Path, tree: &Path, harness: &Path) -> Result<PathBuf, Bo
         }
     }
     Ok(harness.join("target").join("release").join(binary_name()))
+}
+
+/// Compiler flags for both harness builds. With `align_code`, every function and branch
+/// target starts on a 64-byte boundary, so a change elsewhere in the binary cannot move a
+/// hot loop across a cache-line or fetch boundary and fake a speedup or a regression.
+fn rustflags(align_code: bool) -> String {
+    let inherited = std::env::var("RUSTFLAGS").unwrap_or_default();
+    if !align_code {
+        return inherited;
+    }
+    let aligned = "-C llvm-args=-align-all-functions=6 -C llvm-args=-align-all-nofallthru-blocks=6";
+    if inherited.trim().is_empty() {
+        aligned.to_owned()
+    } else {
+        format!("{inherited} {aligned}")
+    }
 }
 
 /// The feature groups declared in the harness manifest (everything but `default`).
@@ -280,14 +313,24 @@ mod tests {
 
     #[test]
     fn options_forward_harness_flags() {
-        let args =
-            ["--base", "v0.6.0", "--rounds", "3", "--filter", "num/", "--max-regression", "15"];
+        let args = [
+            "--base",
+            "v0.6.0",
+            "--rounds",
+            "3",
+            "--align-code",
+            "--filter",
+            "num/",
+            "--max-regression",
+            "15",
+        ];
         let options =
             PerfOptions::parse(args.iter().map(|s| (*s).to_owned())).expect("valid options");
         assert_eq!(options.base, "v0.6.0");
         assert_eq!(options.rounds, 3);
         assert_eq!(options.harness_args, ["--filter", "num/"]);
         assert_eq!(options.max_regression, Some(15.0));
+        assert!(options.align_code);
         assert!(PerfOptions::parse(["--bogus", "1"].iter().map(|s| (*s).to_owned())).is_err());
     }
 }

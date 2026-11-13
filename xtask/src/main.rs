@@ -65,7 +65,10 @@ fn print_help() {
     println!("                  Check a commit message file");
     println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
-    println!("  perf [--base <rev>] [--rounds <n>] [--max-regression <percent>] [--summary <file>] [--filter <text>]");
+    println!(
+        "  perf [--base <rev>] [--rounds <n>] [--max-regression <percent>] [--summary <file>]"
+    );
+    println!("                  [--filter <text>] [--align-code]");
     println!(
         "                  Time Bunny kernels before (base revision) and after (working tree)"
     );

@@ -50,6 +50,7 @@ cargo run --locked -p xtask -- perf --filter num/ --max-regression 20
 | `--rounds <n>` | `5` | Interleaved runs per side; the report takes the median of each percentile. |
 | `--max-regression <percent>` | off | Exit non-zero when any case's median p50 slows by more than this. |
 | `--summary <file>` | none | Append the Markdown table (CI passes `$GITHUB_STEP_SUMMARY`). |
+| `--align-code` | off | Build both sides with every function and branch target on a 64-byte boundary (see [code-layout noise](#code-layout-noise)). |
 | `--filter <text>`, `--samples <n>` | all cases, 101 | Passed through to the harness. |
 
 How the comparison stays fair:
@@ -76,11 +77,28 @@ normal desktop load showed changes within ±3 % for most cases and up to +8 % fo
 fastest ones (a few nanoseconds per call), so treat differences under about 10 % as noise
 unless they repeat.
 
+### Code-layout noise
+
+A change in one function can move an unrelated hot loop to a different address in the
+binary. On modern cores that alone can change the loop's speed by 15 % or more, in either
+direction, with no change to the code that runs. Bunny has already met this: when the
+square root sped up, `query/ray_aabb` (which takes no square root and reads bit-identical
+inputs) measured 15–19 % slower over 7 and 11 rounds. With `--align-code` it measured
+51.19 ns before and 51.15 ns after.
+
+`--align-code` passes `-C llvm-args=-align-all-functions=6` and
+`-C llvm-args=-align-all-nofallthru-blocks=6` to both builds, so every function and branch
+target starts on a 64-byte boundary and layout luck cannot favour either side. The
+trade-off: absolute times under `--align-code` are not what production code sees (the
+padding can cost a few nanoseconds per call), so use it for comparisons and treat unaligned
+numbers as a second opinion. CI always uses it. Inherited `RUSTFLAGS` are kept and the
+alignment flags are appended.
+
 ### Continuous integration
 
 `.github/workflows/perf.yml` runs the comparison on pull requests that touch crates, the
 perf tooling, the lockfile or the toolchain, against the pull request's base branch, with
-`--rounds 7 --max-regression 20`. It writes the table to the job summary and fails when a
+`--rounds 7 --align-code --max-regression 20`. It writes the table to the job summary and fails when a
 case's median p50 slows by more than 20 %. Shared runners are noisier than a quiet laptop;
 the threshold is set to catch real regressions, not to referee single-digit changes. The
 workflow can also be started by hand (`workflow_dispatch`) or called from another workflow
