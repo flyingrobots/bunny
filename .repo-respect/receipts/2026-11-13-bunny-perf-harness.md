@@ -96,6 +96,19 @@ flyingrobots/ninelives#8, released as ninelives 0.2.1 (tokio ^1.54.1). Cargo.loc
 ninelives 0.2.1 and tokio 1.54.1, produced by `cargo update -p ninelives -p tokio` inside
 flyingrobots/rust-dev:1.96.0 through devcontainers' devrun, exported as a patch and applied.
 
+Follow-up (CodeRabbit review of PR #209, seven findings, all valid):
+- Benchmarks pass each call's whole result through black_box; linalg/normalize read only
+  n.x, so the optimizer could drop the y and z divisions (and similar partial reads in the
+  query cases). Ledger numbers measured with the old harness need re-measuring.
+- Each harness build passes --target-dir, so an inherited CARGO_TARGET_DIR cannot make both
+  sides share (or run stale) binaries.
+- The gate fails when no case was measured on both sides (a mistyped --filter passed before)
+  and its message reports the best-p50 change it tested (PERF-TP-022, PERF-TP-023).
+- The README says best-of-rounds reduces bimodal noise rather than removing it, with the
+  rerun advice for a suspected bimodal CI failure.
+- The Perf workflow pins its actions to commit SHAs and sets CARGO_INCREMENTAL=0.
+Checks: cargo fmt applied from the dev container; full code-dojo --all via devrun.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on

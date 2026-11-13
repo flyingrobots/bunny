@@ -108,8 +108,11 @@ The likely cause is where memory, stack and code land in each process (address
 randomization and cache or branch-predictor aliasing), which no compiler flag controls.
 
 A median over a handful of rounds can land in either mode, so the same code can appear
-20 % faster or slower. The best p50 across rounds does not have that problem: noise only
-adds time, so with enough rounds both sides reach the fast mode. That is why speedups and
+20 % faster or slower. The best p50 across rounds reduces that problem without removing it:
+noise only adds time, so more rounds make it likelier that both sides reach the fast mode,
+but a side can still miss it in every round. A CI failure on a case whose median and best
+disagree sharply, on code the change did not touch, calls for a rerun with more rounds
+before it is treated as a regression. That is why speedups and
 the CI gate use the best p50, while the median columns stay in the table to show spread.
 When a case's median change and best change disagree sharply, suspect placement before
 code.

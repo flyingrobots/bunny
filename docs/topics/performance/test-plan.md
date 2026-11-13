@@ -86,6 +86,8 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-007 | Gate | PERF-REQ-003 | A bimodal case whose medians land in different modes does not fail the gate. | `xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes` |
 | PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
 | PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
+| PERF-TP-022 | Gate | PERF-REQ-003 | A run that measured no case on both sides fails instead of passing. | `xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing` |
+| PERF-TP-023 | Gate | PERF-REQ-003 | The failure message reports the best-p50 change the gate tested. | `xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -167,6 +169,24 @@ requirements = ["PERF-REQ-005"]
 evidence = "test"
 test = "xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes"
 oracle = "Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-022"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing"
+oracle = "A run that measured no case on both sides fails instead of passing."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-023"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested"
+oracle = "The failure message reports the best-p50 change the gate tested."
 tier = "fast"
 status = "implemented"
 ```
