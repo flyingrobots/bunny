@@ -316,6 +316,13 @@ change on top of entry 1):
 | `query/ray_sphere_miss` | 19.61 | 19.65 | +0.2% | 19.45 | 19.57 | +0.6% | 0.99× | 19.78 | 19.78 |
 | `query/ray_triangle` | 49.24 | 50.09 | +1.7% | 48.26 | 48.38 | +0.2% | 1.00× | 52.57 | 52.94 |
 
+**Measured on WebAssembly** (`--base origin/perf/fast-exact-fixed-math --rounds 9 --target
+wasm32-wasip1 --runner wasmtime`, wasmtime 50.0.1 on the same Mac), best p50:
+`num/sqrt` 32.19 → 20.67 ns (1.56×), `linalg/length` 39.02 → 26.41 ns (1.48×),
+`linalg/normalize` 101.81 → 103.60 ns (+1.8 %, within noise), every other case within
+2.5 %. So the change wins clearly on WebAssembly and is mixed on Apple Silicon, which
+makes it a candidate for a [target-specific implementation](#target-specific-implementations).
+
 `num/sqrt` is 1.33× faster than entry 1 (5.3× faster than v0.6.0's loop) and `linalg/length`
 1.26×. `linalg/normalize`, `query/ray_build` and `query/ray_sphere_hit` are slower by
 1.4–6.4 % at best p50, as discussed above; the `query/ray_aabb` control, whose code did not

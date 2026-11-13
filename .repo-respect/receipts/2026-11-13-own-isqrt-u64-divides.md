@@ -42,6 +42,10 @@ cargo run --locked -p xtask -- perf --base origin/perf/fast-exact-fixed-math --r
 cargo run --locked -p xtask -- perf ... --rounds 21 --align-code --filter linalg/
 (linalg/normalize +5.0 % median, +7.4 % best)
 
+WebAssembly measurement (after merging the cross-target harness):
+cargo run --locked -p xtask -- perf --base origin/perf/fast-exact-fixed-math --rounds 9
+--target wasm32-wasip1 --runner wasmtime: sqrt 1.56x, length 1.48x, normalize +1.8 %.
+
 Known risks:
 `linalg/normalize` is measurably slower (5-7 %) although its square root is faster; the
 cause is not established. Recommend landing together with the planned reciprocal-reuse
