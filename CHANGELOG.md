@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* Added `FixedAngle`, Bunny's canonical angle (#110): a binary angle with
+  `2^64` units per turn, wrapping arithmetic, and exact or symmetric-rounding
+  conversions from turns, degrees and radians.
+* Added deterministic `sin`, `cos` and `sin_cos` on `FixedAngle`: a
+  quarter-wave table built at compile time by an integer Taylor series, cubic
+  Hermite interpolation, and quadrant symmetry. Results are within one raw
+  Q32.32 unit of the exact value (0.5001 measured), exact at quarter turns and
+  bit-exact under negation, with golden vectors and the
+  `docs/topics/angle-trigonometry/` chapter.
+
 ## [0.6.0] - 2026-06-26
 
 ### Added
