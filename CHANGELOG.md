@@ -27,9 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
   and the ray queries) now uses the table-seeded integer square root from the
-  standard library: the same exact bits as before, about 2.6 times faster for
-  `sqrt` and 1.8 times faster for a sphere hit. Equivalence tests keep the old
-  bit-by-bit loop as the reference.
+  core library: the same exact bits as before, 4.1 times faster for `sqrt`,
+  2.1 times for `normalize` and 1.7 times for a sphere hit (best p50, Apple
+  M5 Pro). Equivalence tests keep the old bit-by-bit loop as the reference;
+  the performance chapter's ledger records the method, trade-offs and full
+  measurements.
 
 ### Fixed
 

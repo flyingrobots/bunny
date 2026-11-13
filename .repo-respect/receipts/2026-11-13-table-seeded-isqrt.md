@@ -46,6 +46,15 @@ Local release-mode measurements on an Apple M5 Pro (single thread, mean):
 `sqrt` 47.9 ns -> 18.4 ns; build and normalize a ray 205 ns -> 116 ns;
 `ray_intersects_sphere` on a hit 132 ns -> 74.5 ns.
 
+Measurement with the bunny-perf harness (merged from perf/bunny-perf-harness):
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+Best p50: num/sqrt 52.37 -> 12.90 ns (4.06x), linalg/length 3.35x, linalg/normalize
+2.08x, query/ray_build 2.34x, query/ray_sphere_miss 2.35x, query/ray_sphere_hit 1.71x.
+Controls without a square root: num/div +1.3 %, num/mul 0.0 %, query/ray_triangle -0.8 %;
+query/ray_aabb -11.8 % on unchanged code (placement-sensitive, not claimed). Recorded in
+docs/topics/performance/README.md (ledger entry 1) and test-plan PERF-TP-008..010.
+Docs edited for this: docs/topics/performance/README.md, docs/topics/performance/test-plan.md.
+
 Known risks:
 Relies on `u128::isqrt` (stable and const since Rust 1.84, below the 1.96 MSRV)
 being an exact floor square root, which the Rust documentation states and the

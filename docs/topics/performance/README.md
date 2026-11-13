@@ -135,4 +135,71 @@ away.
 Each landed optimization is recorded here with its technique, fidelity, trade-offs and
 measured effect. Measurements name the machine and the command that produced them.
 
-No optimizations have landed yet.
+### 1. Table-seeded integer square root
+
+**Where:** `FixedQ32_32::sqrt_u128` in `bunny-num`, and so `FixedQ32_32::sqrt`,
+`FixedVec3::length`, `FixedVec3::normalize`, `FixedUnitVec3::new`, `FixedRay3::try_new`
+and `ray_intersects_sphere` (which takes two square roots per hit: the half chord and the
+normal).
+
+**Technique.** The previous implementation found the square root one bit pair at a time:
+up to 64 rounds of 128-bit compare, subtract and shift, with a data-dependent branch in
+each. It now calls `u128::isqrt` from Rust's core library, which looks up the square root
+of the leading bits in a table and then refines it with Karatsuba square-root steps on
+halves of the number. Every step is integer arithmetic.
+
+**Fidelity: exact replacement.** Both implementations return the floor of the square root,
+the largest `r` with `r * r <= value`, for every `u128`. The old loop is kept in
+`crates/bunny-num/tests/sqrt_equivalence_tests.rs` as the reference oracle and compared
+against the new code on every power-of-two boundary and its neighbours, perfect squares
+and their neighbours, 20 000 seeded inputs spread across all magnitudes, and every raw
+Q32.32 value from 0 to 65 536. A one-off local check of 2 000 000 seeded inputs also
+matched. No golden vector changed.
+
+**Trade-offs.**
+
+- *Trust moves to the core library.* The square root is no longer Bunny's own code. Its
+  result is specified by Rust's documentation (floor of the square root) and has been
+  stable and `const` since Rust 1.84, below Bunny's 1.96 MSRV. The retained reference
+  tests would catch a future toolchain that changed results; a toolchain could still change
+  the speed.
+- *No new dependency.* `isqrt` lives in `core`, so it adds nothing for `no_std` or WASM
+  builds. Its lookup table is part of `core`, not Bunny.
+- *Readability.* One line replaces a 20-line loop. Readers who want the algorithm read the
+  Rust source rather than Bunny's.
+- *Unmeasured targets.* Results are identical everywhere because the operations are
+  integer-only; the speedup has been measured on an Apple M5 Pro only, not on x86-64 or
+  WASM.
+
+**Rejected alternatives.**
+
+- *Float-seeded square root with integer correction.* Exact and fast, but it uses
+  `f64::sqrt` inside canonical math, which Rule 2 bans.
+- *Table-seeded Newton iteration written in Bunny.* Measured at 87 ns against the old
+  loop's 60 ns: each Newton step needs a 128-bit division.
+- *Fast inverse square root and other approximations.* They change output bits, so they
+  are contract changes, not optimizations.
+
+**Measured.** `cargo run --locked -p xtask -- perf --base origin/main --rounds 11
+--align-code` on an Apple M5 Pro (macOS, Rust 1.96.0, desktop load), base `9bf43600d08f`
+(v0.6.0):
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 55.34 | 16.64 | -69.9% | 51.27 | 15.30 | -70.2% | 3.35× | 56.36 | 17.37 |
+| `linalg/normalize` | 87.85 | 42.24 | -51.9% | 81.91 | 39.31 | -52.0% | 2.08× | 93.42 | 46.55 |
+| `num/div` | 6.75 | 6.88 | +1.9% | 6.39 | 6.47 | +1.3% | 0.99× | 7.00 | 7.00 |
+| `num/mul` | 1.46 | 1.42 | -2.7% | 1.30 | 1.30 | +0.0% | 1.00× | 1.51 | 1.51 |
+| `num/sqrt` | 55.91 | 14.08 | -74.8% | 52.37 | 12.90 | -75.4% | 4.06× | 57.09 | 14.28 |
+| `query/ray_aabb` | 51.88 | 40.85 | -21.3% | 42.56 | 37.52 | -11.8% | 1.13× | 55.95 | 42.40 |
+| `query/ray_build` | 128.13 | 53.10 | -58.6% | 118.41 | 50.58 | -57.3% | 2.34× | 132.57 | 54.93 |
+| `query/ray_sphere_hit` | 116.09 | 67.14 | -42.2% | 111.45 | 65.35 | -41.4% | 1.71× | 119.22 | 72.14 |
+| `query/ray_sphere_miss` | 49.11 | 20.92 | -57.4% | 45.90 | 19.57 | -57.4% | 2.35× | 50.17 | 21.12 |
+| `query/ray_triangle` | 52.82 | 51.92 | -1.7% | 51.68 | 51.27 | -0.8% | 1.01× | 54.40 | 53.92 |
+
+The square-root kernels speed up 4.1× (`num/sqrt`), 3.4× (`linalg/length`), 2.1×
+(`linalg/normalize`), 2.3× (`query/ray_build`, `query/ray_sphere_miss`) and 1.7×
+(`query/ray_sphere_hit`). `num/div`, `num/mul`, `query/ray_triangle` and `query/ray_aabb`
+take no square root and serve as controls. The first three stay within 1.3 % of their
+previous best. `query/ray_aabb` reads 11.8 % faster on unchanged code. It is the
+[bimodal case](#bimodal-cases) described above, so that number is not claimed as a speedup.
