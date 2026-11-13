@@ -2,6 +2,8 @@
 
 mod code_dojo;
 mod git_helpers;
+mod perf;
+mod perf_report;
 mod repo_respect;
 mod topic_docs;
 
@@ -32,6 +34,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "code-dojo-commit-msg" => code_dojo::handle_commit_msg(args),
         "repo-respect" => repo_respect::handle(args),
         "topic-docs" => topic_docs::handle(),
+        "perf" => perf::handle(args),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
@@ -62,6 +65,13 @@ fn print_help() {
     println!("                  Check a commit message file");
     println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
+    println!(
+        "  perf [--base <rev>] [--rounds <n>] [--max-regression <percent>] [--summary <file>]"
+    );
+    println!("                  [--filter <text>] [--align-code]");
+    println!(
+        "                  Time Bunny kernels before (base revision) and after (working tree)"
+    );
     println!("  help            Show this help info");
 }
 

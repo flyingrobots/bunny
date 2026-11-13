@@ -154,6 +154,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bunny-perf"
+version = "0.1.0"
+dependencies = [
+ "bunny-geom",
+ "bunny-linalg",
+ "bunny-num",
+ "bunny-query",
+]
+
+[[package]]
 name = "bunny-query"
 version = "0.6.0"
 dependencies = [
