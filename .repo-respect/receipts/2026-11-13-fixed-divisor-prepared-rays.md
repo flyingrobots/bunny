@@ -50,6 +50,10 @@ A scratch prototype matched checked_div on 1 000 000 random pairs before impleme
 cargo run --locked -p xtask -- topic-docs
 cargo run --locked -p xtask -- code-dojo --all
 
+Follow-up: recorded the rejected division-free normalize experiment (branch
+experiment/divide-free-normalize) under "Tried And Rejected" in
+docs/topics/performance/README.md, with its measurements.
+
 Known risks:
 The correctness of Algorithm 4 rests on the paper's proof and the equivalence tests, which
 sample rather than exhaust the input space. New public API names may change in review.

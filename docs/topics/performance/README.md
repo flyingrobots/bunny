@@ -52,6 +52,8 @@ cargo run --locked -p xtask -- perf --filter num/ --max-regression 20
 | `--summary <file>` | none | Append the Markdown table (CI passes `$GITHUB_STEP_SUMMARY`). |
 | `--align-code` | off | Build both sides with every function and branch target on a 64-byte boundary (see [code-layout noise](#code-layout-noise)). |
 | `--filter <text>`, `--samples <n>` | all cases, 101 | Passed through to the harness. |
+| `--target <triple>` | the host | Build the harness for another Rust target (see [other targets](#measuring-other-targets)). |
+| `--runner <command>` | none | Run the harness through a command, such as `wasmtime`; needed when the target cannot run natively. |
 
 How the comparison stays fair:
 
@@ -112,6 +114,28 @@ the CI gate use the best p50, while the median columns stay in the table to show
 When a case's median change and best change disagree sharply, suspect placement before
 code.
 
+### Measuring other targets
+
+An optimization can win on one CPU and lose on another, because instruction costs differ:
+Apple's cores divide 64-bit integers quickly, x86-64 has a native 128-by-64 divide, and
+WebAssembly has neither, so 128-bit division is a software routine there. Every target
+gets the same bits from Bunny, so only speed differs; the harness can measure any target
+it can run.
+
+```sh
+rustup target add wasm32-wasip1
+brew install wasmtime                     # or the installer at https://wasmtime.dev
+cargo run --locked -p xtask -- perf --target wasm32-wasip1 --runner wasmtime --rounds 5
+```
+
+The report heading names the target it measured. Under wasmtime, kernels run about three
+to four times slower than natively on the same Mac, so compare before and after on one
+target, never across targets. `--align-code` is accepted for WebAssembly but means little
+there, because wasmtime compiles the module to machine code itself.
+
+Hardware you do not have is measured in CI (below). Running an x86-64 binary under
+Rosetta 2 on Apple Silicon works but measures translated code, so it is not used.
+
 ### Continuous integration
 
 `.github/workflows/perf.yml` runs the comparison on pull requests that touch crates, the
@@ -121,6 +145,41 @@ case's best p50 slows by more than 20 %. Shared runners are noisier than a quiet
 the threshold is set to catch real regressions, not to referee single-digit changes. The
 workflow can also be started by hand (`workflow_dispatch`) or called from another workflow
 in this repository (`workflow_call`) with its own `base`, `max-regression` and `rounds`.
+
+A second, report-only job runs the same comparison on GitHub's hosted runners: x86-64
+Linux, ARM Linux, x86-64 Windows, Apple Silicon macOS, and WebAssembly under wasmtime on
+x86-64 Linux. Each writes its own table to the job summary and none can fail the run on
+speed. It runs only when started by hand, to keep runner minutes bounded:
+
+```sh
+gh workflow run perf.yml --ref <branch> -f platforms=true -f base=origin/main
+```
+
+Hosted runners are shared virtual machines, so treat their tables as coarse: they
+reliably show tens of percent, not a few. The WebAssembly job installs wasmtime with the
+official `bytecodealliance/actions/wasmtime/setup` action rather than a downloaded script.
+
+### Target-specific implementations
+
+When a measurement shows an exact optimization winning on some targets and losing on
+others, Bunny may ship it per target. The rules:
+
+1. **Same bits everywhere.** Only implementations that return identical results may be
+   chosen per target. Determinism across targets is the reason Bunny exists.
+2. **Choose by target at compile time**, with `cfg(target_arch = "…")` (or `target_os`),
+   never with a Cargo feature. Features are additive across a whole dependency graph, so
+   one crate enabling a fast path would change it for every other crate; a target choice
+   cannot be switched by accident.
+3. **Compile and test every implementation on every target.** Only the dispatch is
+   conditional. Each implementation stays an ordinary function that the equivalence tests
+   call directly, so the path one target does not ship still runs in that target's tests
+   and cannot rot.
+4. **Measure each claim on its target** with the platform job or `--target`, and record
+   the per-target numbers in the ledger entry. No target gets a special path on a guess.
+
+No target-specific implementation exists yet.
+
+
 
 ### Adding a case
 
@@ -323,3 +382,36 @@ cases on the same inputs, best p50: a prepared division takes 3.54 ns against 6.
 1.77× faster per box after a 24.78 ns preparation. `prepared/div`'s median (7.04 ns) is far
 from its best, the same placement sensitivity described under
 [bimodal cases](#bimodal-cases). Every existing case stayed within 1.5 % at best p50.
+
+## Tried And Rejected
+
+Experiments that kept exact results but did not pay off. They are recorded so the same idea
+is not retried without new evidence (a different target, or a changed design).
+
+### Division-free `normalize`
+
+**Idea.** Replace `normalize`'s three divisions by the length with multiplications: a
+reciprocal of the length from a 256-entry seed table and three Newton steps
+(`y <- y(2 - xy)`, within 0–2 units of `2^127 / x` on 1 000 000 samples), a multiplied
+quotient estimate, and an exact remainder correction. No component is longer than the
+length, so the quotient is at most `2^32` and one correction step suffices.
+
+**Fidelity.** Exact: equivalence tests against `checked_div` and against the previous
+`normalize` (100 000 `FixedVec3` and `FixedVec2` cases each) passed.
+
+**Result on an Apple M5 Pro** (`--base origin/perf/fixed-divisor --rounds 11
+--align-code --filter linalg/`):
+
+| Variant | Best p50 before → after | Median before → after |
+| --- | --- | --- |
+| Branching correction | 42.72 → 41.46 ns (−2.9 %) | 45.49 → 55.66 ns (+22.4 %) |
+| Branch-free correction (masks) | 42.60 → 58.39 ns (+37.1 %) | 44.47 → 61.85 ns (+39.1 %) |
+
+**Why it lost.** The M5's 64-bit divide instruction is fast, so compiler-rt's 128-bit
+division takes few cycles for these operand sizes. The replacement's dependent chain
+(widening multiply, variable 128-bit shift, second multiply, subtract, correct, round) is
+about as long, and the branch-free form only lengthens it. Targets without a fast 64-bit
+divide (wasm32 in particular) were not measured and may behave differently.
+
+**Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
+not proposed for merging.

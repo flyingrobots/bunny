@@ -94,6 +94,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-017 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 10 000 constructed exact ties. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties` |
 | PERF-TP-018 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes` |
 | PERF-TP-019 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes` |
+| PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -257,6 +258,15 @@ test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unp
 oracle = "Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "PERF-TP-020"
+requirements = ["PERF-REQ-005"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::binary_names_follow_the_target"
+oracle = "Harness binary names follow the target (.wasm, .exe, none)."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -267,5 +277,6 @@ runs are deliberately outside the test oracle.
 
 ## Gaps
 
-- The interleaving, worktree handling and CI workflow are exercised by running
-  `cargo xtask perf`, not by automated tests.
+- The interleaving, worktree handling, cross-target runs and CI workflow are exercised by
+  running `cargo xtask perf`, not by automated tests. The platform matrix has not run on
+  GitHub yet.
