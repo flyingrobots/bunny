@@ -80,6 +80,15 @@ under wasmtime 50.0.1 against origin/main (3 rounds; identical code, changes wit
 and with --align-code. cargo test -p xtask (42 passed); workflow YAML parsed with Ruby.
 The platform matrix itself has not run on GitHub yet.
 
+Follow-up (Windows CI, PR #209):
+The Windows determinism job failed harness_manifest_points_at_the_given_crates: Path::join
+adds backslashes there, and the manifest used Debug formatting, which also escapes
+non-ASCII characters as \u{...} (invalid TOML). Manifest paths are now written with forward
+slashes and escaped quotes (toml_path), with a Windows-shaped test (PERF-TP-021).
+cargo test -p xtask: 43 passed. The Dojo job's cargo-deny failure (RUSTSEC-2026-0386,
+tokio 1.48.0 via ninelives 0.2.0 -> wesley-core) is not caused by this branch and is not
+fixed here.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on

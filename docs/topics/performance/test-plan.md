@@ -85,6 +85,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-005 | Build | PERF-REQ-004 | Feature groups exclude `default` and comments. | `xtask/src/perf.rs::tests::feature_groups_skip_default_and_comments` |
 | PERF-TP-007 | Gate | PERF-REQ-003 | A bimodal case whose medians land in different modes does not fail the gate. | `xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes` |
 | PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
+| PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -157,6 +158,15 @@ requirements = ["PERF-REQ-005"]
 evidence = "test"
 test = "xtask/src/perf.rs::tests::binary_names_follow_the_target"
 oracle = "Harness binary names follow the target (.wasm, .exe, none)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-021"
+requirements = ["PERF-REQ-005"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes"
+oracle = "Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML."
 tier = "fast"
 status = "implemented"
 ```

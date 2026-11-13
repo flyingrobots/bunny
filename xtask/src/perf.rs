@@ -260,10 +260,16 @@ fn harness_manifest(tree: &Path, groups: &[String]) -> String {
     }
     manifest.push_str("\n[dependencies]\n");
     for name in BASE_CRATES {
-        let path = tree.join("crates").join(name);
-        let _ = writeln!(manifest, "{name} = {{ path = {:?} }}", path.display().to_string());
+        let path = toml_path(&tree.join("crates").join(name));
+        let _ = writeln!(manifest, "{name} = {{ path = \"{path}\" }}");
     }
     manifest
+}
+
+/// A path as the body of a TOML basic string. Forward slashes work on every platform Cargo
+/// supports, so Windows backslashes need no escaping; quotes are escaped.
+fn toml_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "/").replace('"', "\\\"")
 }
 
 fn run_interleaved(
@@ -347,6 +353,7 @@ mod tests {
     #[test]
     fn harness_manifest_points_at_the_given_crates() {
         let manifest = harness_manifest(Path::new("/tmp/base"), &["num".to_owned()]);
+        // Built with Path::join, so this also holds on Windows, where join adds backslashes.
         assert!(manifest.contains("num = []\n"));
         assert!(manifest.contains("bunny-num = { path = \"/tmp/base/crates/bunny-num\" }"));
         assert!(manifest.contains("[workspace]"));
@@ -387,5 +394,14 @@ mod tests {
         assert_eq!(binary_name(Some("x86_64-pc-windows-msvc")), "bunny-perf.exe");
         assert_eq!(binary_name(Some("aarch64-unknown-linux-gnu")), "bunny-perf");
         assert_eq!(binary_name(None), format!("bunny-perf{}", std::env::consts::EXE_SUFFIX));
+    }
+
+    #[test]
+    fn toml_paths_use_forward_slashes_and_escape_quotes() {
+        assert_eq!(
+            toml_path(Path::new(r"D:\a\bunny\crates\bunny-num")),
+            "D:/a/bunny/crates/bunny-num"
+        );
+        assert_eq!(toml_path(Path::new("/tmp/odd\"name/é")), "/tmp/odd\\\"name/é");
     }
 }
