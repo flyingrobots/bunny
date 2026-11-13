@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::git_helpers::git_command;
-use crate::perf_report::{add_run, compare, regressions, render, Runs};
+use crate::perf_report::{add_run, compare, regressions, render, Heading, Runs};
 
 const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_ROUNDS: usize = 5;
@@ -28,6 +28,19 @@ struct PerfOptions {
     summary: Option<PathBuf>,
     harness_args: Vec<String>,
     align_code: bool,
+    /// A Rust target triple to build the harness for; the host when absent.
+    target: Option<String>,
+    /// A command that runs the harness binary (for example `wasmtime`); run directly when absent.
+    runner: Option<String>,
+}
+
+impl PerfOptions {
+    /// The target being measured, for report headings.
+    fn platform(&self) -> String {
+        self.target.clone().unwrap_or_else(|| {
+            format!("{}-{} (host)", std::env::consts::ARCH, std::env::consts::OS)
+        })
+    }
 }
 
 impl PerfOptions {
@@ -39,6 +52,8 @@ impl PerfOptions {
             summary: None,
             harness_args: Vec::new(),
             align_code: false,
+            target: None,
+            runner: None,
         };
         while let Some(flag) = args.next() {
             if flag == "--align-code" {
@@ -51,6 +66,8 @@ impl PerfOptions {
                 "--rounds" => options.rounds = value.parse::<usize>()?.max(1),
                 "--max-regression" => options.max_regression = Some(value.parse()?),
                 "--summary" => options.summary = Some(PathBuf::from(value)),
+                "--target" => options.target = Some(value),
+                "--runner" => options.runner = Some(value),
                 "--filter" | "--samples" => options.harness_args.extend([flag, value]),
                 other => return Err(format!("unknown perf option {other}").into()),
             }
@@ -70,23 +87,27 @@ pub(crate) fn handle(args: impl Iterator<Item = String>) -> Result<(), Box<dyn E
     // Both sides build the same way (a standalone copy of the harness), so codegen differences
     // between a workspace build and a standalone build cannot bias the comparison.
     eprintln!("perf: building the harness for the working tree");
-    let head_bin = build_harness(&root, &root, &perf_dir.join("harness-head"), options.align_code)?;
+    let head_bin = build_harness(&root, &root, &perf_dir.join("harness-head"), &options)?;
     eprintln!("perf: building the harness for {} ({short})", options.base);
     let base_tree = perf_dir.join(format!("base-{short}"));
     add_worktree(&root, &base_tree, &sha)?;
-    let base_bin = build_harness(
-        &root,
-        &base_tree,
-        &perf_dir.join(format!("harness-{short}")),
-        options.align_code,
-    );
+    let base_bin =
+        build_harness(&root, &base_tree, &perf_dir.join(format!("harness-{short}")), &options);
     remove_worktree(&root, &base_tree);
     let base_bin = base_bin?;
 
     let (base_runs, head_runs) = run_interleaved(&base_bin, &head_bin, &options)?;
     let rows = compare(&base_runs, &head_runs);
-    let table =
-        render(&rows, &format!("{} ({short})", options.base), "working tree", options.rounds);
+    let (base_label, platform) = (format!("{} ({short})", options.base), options.platform());
+    let table = render(
+        &rows,
+        &Heading {
+            base: &base_label,
+            head: "working tree",
+            platform: &platform,
+            rounds: options.rounds,
+        },
+    );
     println!("{table}");
     if let Some(path) = &options.summary {
         fs::OpenOptions::new().create(true).append(true).open(path)?.write_all(table.as_bytes())?;
@@ -104,8 +125,15 @@ fn cargo() -> Command {
     Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
 }
 
-fn binary_name() -> String {
-    format!("bunny-perf{}", std::env::consts::EXE_SUFFIX)
+/// The harness binary's file name for `target` (the host when absent).
+fn binary_name(target: Option<&str>) -> String {
+    let suffix = match target {
+        None => std::env::consts::EXE_SUFFIX,
+        Some(triple) if triple.starts_with("wasm") => ".wasm",
+        Some(triple) if triple.contains("windows") => ".exe",
+        Some(_) => "",
+    };
+    format!("bunny-perf{suffix}")
 }
 
 fn resolve(root: &Path, rev: &str) -> Result<String, Box<dyn Error>> {
@@ -143,7 +171,7 @@ fn build_harness(
     root: &Path,
     tree: &Path,
     harness: &Path,
-    align_code: bool,
+    options: &PerfOptions,
 ) -> Result<PathBuf, Box<dyn Error>> {
     let source = root.join("crates").join("bunny-perf");
     let groups = feature_groups(&fs::read_to_string(source.join("Cargo.toml"))?);
@@ -159,7 +187,7 @@ fn build_harness(
     let built = |features: &[&str]| -> Result<bool, Box<dyn Error>> {
         let status = cargo()
             .current_dir(harness)
-            .env("RUSTFLAGS", rustflags(align_code))
+            .env("RUSTFLAGS", rustflags(options.align_code))
             .args([
                 "build",
                 "--release",
@@ -168,6 +196,7 @@ fn build_harness(
                 "--features",
                 &features.join(","),
             ])
+            .args(options.target.iter().flat_map(|target| ["--target", target.as_str()]))
             .status()?;
         Ok(status.success())
     };
@@ -188,7 +217,9 @@ fn build_harness(
             return Err(format!("the harness does not build against {}", tree.display()).into());
         }
     }
-    Ok(harness.join("target").join("release").join(binary_name()))
+    let output = harness.join("target");
+    let output = options.target.as_ref().map_or(output.clone(), |target| output.join(target));
+    Ok(output.join("release").join(binary_name(options.target.as_deref())))
 }
 
 /// Compiler flags for both harness builds. With `align_code`, every function and branch
@@ -247,11 +278,11 @@ fn run_interleaved(
         let base_output;
         let head_output;
         if round % 2 == 1 {
-            base_output = run_harness(base, &options.harness_args)?;
-            head_output = run_harness(head, &options.harness_args)?;
+            base_output = run_harness(base, options)?;
+            head_output = run_harness(head, options)?;
         } else {
-            head_output = run_harness(head, &options.harness_args)?;
-            base_output = run_harness(base, &options.harness_args)?;
+            head_output = run_harness(head, options)?;
+            base_output = run_harness(base, options)?;
         }
         add_run(&mut base_runs, &base_output)?;
         add_run(&mut head_runs, &head_output)?;
@@ -259,8 +290,18 @@ fn run_interleaved(
     Ok((base_runs, head_runs))
 }
 
-fn run_harness(binary: &Path, args: &[String]) -> Result<String, Box<dyn Error>> {
-    let output = Command::new(binary).args(args).output()?;
+fn run_harness(binary: &Path, options: &PerfOptions) -> Result<String, Box<dyn Error>> {
+    let mut command = match options.runner.as_deref() {
+        // A runner such as `wasmtime` takes the binary as its first argument.
+        Some(runner) => {
+            let mut words = runner.split_whitespace();
+            let mut command = Command::new(words.next().ok_or("--runner is empty")?);
+            command.args(words).arg(binary);
+            command
+        }
+        None => Command::new(binary),
+    };
+    let output = command.args(&options.harness_args).output()?;
     if !output.status.success() {
         return Err(format!(
             "{} failed: {}",
@@ -331,6 +372,20 @@ mod tests {
         assert_eq!(options.harness_args, ["--filter", "num/"]);
         assert_eq!(options.max_regression, Some(15.0));
         assert!(options.align_code);
+        let cross = ["--target", "wasm32-wasip1", "--runner", "wasmtime run"];
+        let cross =
+            PerfOptions::parse(cross.iter().map(|s| (*s).to_owned())).expect("valid options");
+        assert_eq!(cross.target.as_deref(), Some("wasm32-wasip1"));
+        assert_eq!(cross.runner.as_deref(), Some("wasmtime run"));
+        assert_eq!(cross.platform(), "wasm32-wasip1");
         assert!(PerfOptions::parse(["--bogus", "1"].iter().map(|s| (*s).to_owned())).is_err());
+    }
+
+    #[test]
+    fn binary_names_follow_the_target() {
+        assert_eq!(binary_name(Some("wasm32-wasip1")), "bunny-perf.wasm");
+        assert_eq!(binary_name(Some("x86_64-pc-windows-msvc")), "bunny-perf.exe");
+        assert_eq!(binary_name(Some("aarch64-unknown-linux-gnu")), "bunny-perf");
+        assert_eq!(binary_name(None), format!("bunny-perf{}", std::env::consts::EXE_SUFFIX));
     }
 }
