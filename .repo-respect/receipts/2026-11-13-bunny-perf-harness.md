@@ -72,6 +72,14 @@ on identical code. The report now also takes the best p50 across rounds; speedup
 regression gate use it, with a test for the bimodal case. Re-ran cargo test -p xtask,
 topic-docs and code-dojo --all: clean.
 
+Follow-up (cross-target):
+Added --target/--runner to cargo xtask perf, target-named report headings, a report-only
+platform matrix job (workflow_dispatch with platforms=true) and the "Measuring other
+targets" and "Target-specific implementations" sections. Verified locally: wasm32-wasip1
+under wasmtime 50.0.1 against origin/main (3 rounds; identical code, changes within 6 %),
+and with --align-code. cargo test -p xtask (42 passed); workflow YAML parsed with Ruby.
+The platform matrix itself has not run on GitHub yet.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on
