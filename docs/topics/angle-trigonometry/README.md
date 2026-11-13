@@ -91,8 +91,10 @@ time, and there is no generator script or checked-in table to keep in sync.
 | 62-bit table values | Interpolation error stays far below the output's resolution. | 64-bit entries rather than 32-bit. |
 | Binary angles | Exact wraparound and quadrant boundaries; reduction is free. | Radians and degrees round once at the boundary; callers must convert explicitly. |
 
-Measured cost: `sin_cos` takes about 10 ns per call on an Apple M5 Pro, against about 7 ns
-for `f64::sin_cos` on the same machine. See the [performance ledger](../performance/README.md#optimization-ledger).
+Measured cost on an Apple M5 Pro (best p50 of 11 rounds): `sin_cos` 10.2 ns per call,
+`from_radians` 0.9 ns, and `f64::sin_cos` on the same angles 2.8 ns. Bit-exact integer
+trigonometry therefore costs about 3.6 times the platform's float routine, which is not
+deterministic across targets. See the [performance ledger](../performance/README.md#optimization-ledger).
 
 ## Non-Goals
 

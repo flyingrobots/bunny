@@ -44,7 +44,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 [[requirement]]
 id = "PERF-REQ-001"
 summary = "An optimization either preserves every output bit or ships as a new API with a stated error bound."
-status = "reserved"
+status = "active"
 
 [[requirement]]
 id = "PERF-REQ-002"
@@ -67,8 +67,7 @@ summary = "The harness is built from the same source against each revision's own
 status = "active"
 ```
 
-PERF-REQ-001 is reserved until the first optimization lands; each optimization adds its
-equivalence or error-bound case here.
+Each optimization adds its equivalence or error-bound cases under PERF-REQ-001.
 
 ## Fixtures
 
@@ -84,6 +83,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-004 | Gate | PERF-REQ-003 | Only cases past the threshold are reported. | `xtask/src/perf_report.rs::tests::regressions_respect_the_threshold` |
 | PERF-TP-005 | Build | PERF-REQ-004 | Feature groups exclude `default` and comments. | `xtask/src/perf.rs::tests::feature_groups_skip_default_and_comments` |
 | PERF-TP-007 | Gate | PERF-REQ-003 | A bimodal case whose medians land in different modes does not fail the gate. | `xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes` |
+| PERF-TP-011 | Error bound | PERF-REQ-001 | `sin` and `cos` stay within one raw unit of `f64` trigonometry. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -147,6 +147,15 @@ requirements = ["PERF-REQ-003"]
 evidence = "test"
 test = "xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes"
 oracle = "A bimodal case whose medians land in different modes does not fail the gate."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-011"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit"
+oracle = "sin and cos stay within one raw unit of f64 trigonometry."
 tier = "fast"
 status = "implemented"
 ```

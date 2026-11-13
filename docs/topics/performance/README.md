@@ -135,4 +135,30 @@ away.
 Each landed optimization is recorded here with its technique, fidelity, trade-offs and
 measured effect. Measurements name the machine and the command that produced them.
 
-No optimizations have landed yet.
+### 2. Table-based sine and cosine (new approximate API)
+
+**Where:** `FixedAngle::sin`, `cos` and `sin_cos` in `bunny-num`, new with #110. The full
+contract is in the [angle and trigonometry chapter](../angle-trigonometry/README.md).
+
+**Technique.** Angles are binary angles (`2^64` units per turn), so range reduction is a
+bit mask. A 1 025-sample quarter-wave sine table with 62 fractional bits is computed at
+compile time by an integer Taylor series. Values between samples are cubic Hermite
+interpolated, using `cos` (the same table read backwards) as the exact slope, and quadrant
+symmetry rebuilds the full wave. This reproduces the structure of Echo's `warp-math`
+trigonometry (`f32` table, linear interpolation) with integers only.
+
+**Fidelity: new approximate API.** There was no previous result to preserve. Error bound:
+at most one raw Q32.32 unit; the largest error measured over 4 196 611 angles was 0.5001
+raw units, so results are effectively correctly rounded. Quarter turns are exact and
+negation symmetry is bit-exact. Twenty golden vectors lock the output bits.
+
+**Trade-offs.** 8.2 KB of read-only table; a little extra compile time for the const
+evaluation; four more multiplications per call than linear interpolation, in exchange for
+an error about 1 000 times smaller; radians and degrees round once on the way in.
+
+**Measured.** `cargo run --locked -p xtask -- perf --base origin/main --rounds 11
+--align-code --filter angle/` on an Apple M5 Pro (best p50): `angle/sin_cos` 10.21 ns,
+`angle/from_radians` 0.89 ns, and the `angle/f64_sin_cos_reference` case (Rust's `f64`
+`sin_cos` on the same angles) 2.81 ns. The base revision has no trigonometry, so these
+report as new. Deterministic integer trigonometry costs about 3.6 times the platform float
+routine here.

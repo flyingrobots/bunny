@@ -45,7 +45,12 @@ cargo run --locked -p xtask -- code-dojo --all
 Local error sweep: max 0.5001 raw units over 4 196 611 angles against f64 sin/cos.
 Golden values for 30 degrees, 60 degrees, 1 radian and mid-segment angles checked against
 60-digit decimal arithmetic.
-Local timing: sin_cos about 10.3 ns per call (f64::sin_cos about 6.8 ns), Apple M5 Pro.
+Harness timing (merged perf/bunny-perf-harness; angle group added to crates/bunny-perf):
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter angle/
+best p50 sin_cos 10.21 ns, from_radians 0.89 ns, f64 sin_cos reference 2.81 ns (an earlier
+scratch estimate of 6.8 ns for f64 was wrong and is not used). Ledger entry 2 and
+PERF-TP-011 added to docs/topics/performance/; crates/bunny-perf/Cargo.toml and
+src/cases.rs edited.
 
 Known risks:
 The error bound is checked on sampled angles, not exhaustively; the Hermite error analysis
