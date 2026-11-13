@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* Added `crates/bunny-perf`, a timing harness for Bunny's math and query
+  kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
+  `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same
+  harness against a base revision and the working tree, runs them interleaved
+  and prints a before/after table (median and best p50 across rounds;
+  `--align-code` removes code-layout luck).
+* `cargo xtask perf --target <triple> --runner <command>` measures other
+  targets, such as WebAssembly under wasmtime, and every report names the
+  target it measured.
+* The `Perf` workflow has a hand-started, report-only platform matrix (x86-64
+  and ARM Linux, Windows, Apple Silicon macOS, WebAssembly), and the
+  performance chapter states the rules for target-specific implementations.
+* Added the `Perf` GitHub workflow: pull requests get a before/after table in
+  the job summary and fail when a case's best p50 slows by more than 20 %.
+* Added the `docs/topics/performance/` chapter: the fidelity rule every
+  optimization must satisfy, how measurements are made and read, and the
+  optimization ledger.
+
 ## [0.6.0] - 2026-06-26
 
 ### Added
