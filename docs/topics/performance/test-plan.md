@@ -88,6 +88,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-010 | Exact replacement | PERF-REQ-001 | `FixedQ32_32::sqrt` equals the reference for every raw value 0..=65 536. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value` |
 | PERF-TP-012 | Exact replacement | PERF-REQ-001 | The square root equals core's `u128::isqrt` on 200 000 seeded inputs. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_on_many_seeded_inputs` |
 | PERF-TP-013 | Exact replacement | PERF-REQ-001 | The square root equals core's `u128::isqrt` at the 64-bit split and around quotient corrections. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core_isqrt_around_the_split_and_correction_points` |
+| PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -197,6 +198,15 @@ test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_core
 oracle = "The square root equals core's u128::isqrt at the 64-bit split and around quotient corrections."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "PERF-TP-020"
+requirements = ["PERF-REQ-005"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::binary_names_follow_the_target"
+oracle = "Harness binary names follow the target (.wasm, .exe, none)."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -207,5 +217,6 @@ runs are deliberately outside the test oracle.
 
 ## Gaps
 
-- The interleaving, worktree handling and CI workflow are exercised by running
-  `cargo xtask perf`, not by automated tests.
+- The interleaving, worktree handling, cross-target runs and CI workflow are exercised by
+  running `cargo xtask perf`, not by automated tests. The platform matrix has not run on
+  GitHub yet.
