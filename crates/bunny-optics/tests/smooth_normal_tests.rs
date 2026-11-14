@@ -18,7 +18,7 @@ use bunny_optics::{smooth_normal, SMOOTH_NORMAL_ID};
 use bunny_query::BarycentricNumerators;
 use wasm_bindgen_test::wasm_bindgen_test;
 
-use exact::{squared_length, within_unit, Big};
+use exact::{squared_length, within, Big, Signed};
 
 const ONE: i64 = ONE_RAW;
 const SEED: u64 = 0xB002_0289_0000_0002;
@@ -128,34 +128,43 @@ fn seeded_normal(state: &mut u64, other: Raw3) -> Raw3 {
 enum Checked {
     Exact,
     Bounded,
-    Unbounded,
+    Cancelled,
     Zero,
 }
 
-/// Checks one case against the exact interpolation `sum w_i n_i`.
+/// Checks one case against the exact interpolation `S = sum w_i n_i`, computed with big integers
+/// for any `det` below `2^127`: shared normals exactly; `None` only for `S = 0` or, after the
+/// shift, for `rho < 2^-59` (where `|S| / 2^k` is below the floors' error); otherwise within
+/// `1 + 64 det / |S|` raw units (`1 + 2^-26 / rho`), or 1 when `det < 2^62`.
 fn check(normals: [Raw3; 3], u: i128, v: i128, det: i128) -> Result<Checked, String> {
     let weights = [det - u - v, u, v];
-    let exact: [i128; 3] =
-        [0, 1, 2].map(|a| (0..3).map(|i| weights[i] * i128::from(normals[i][a])).sum());
+    let exact: [Signed; 3] = [0, 1, 2].map(|a| {
+        (0..3).fold(Signed::new(0), |s, i| {
+            s.add(&Signed::product(weights[i], i128::from(normals[i][a]), 0))
+        })
+    });
     let found = at(normals, u, v, det);
     let present: Vec<Raw3> = (0..3).filter(|&i| weights[i] > 0).map(|i| normals[i]).collect();
     if present.iter().all(|n| *n == present[0]) {
         return (found == Some(present[0])).then_some(Checked::Exact).ok_or("shared".into());
     }
-    if exact == [0; 3] {
+    let zero = Signed::new(0);
+    if exact.iter().all(|c| *c == zero) {
         return found.is_none().then_some(Checked::Zero).ok_or("a normal for zero".into());
     }
-    // rho >= 2^-26 exactly when |sum|^2 >= det^2 2^64 2^-52.
-    let det_big = Big::new(det.unsigned_abs());
-    let floor = det_big.mul(&det_big).mul(&Big::new(1 << 12));
-    let long = squared_length(exact).compare(&floor) != std::cmp::Ordering::Less;
     let shifted = det >= 1 << 62;
-    match (found, shifted, long) {
-        (Some(r), false, _) if within_unit(r, exact, 1) => Ok(Checked::Bounded),
-        (Some(r), true, true) if within_unit(r, exact, 2) => Ok(Checked::Bounded),
-        (_, true, false) => Ok(Checked::Unbounded),
-        (other, ..) => Err(format!("{other:?} for the exact {exact:?}")),
+    let slack = if shifted { Signed::product(det, 64, 0) } else { zero };
+    match found {
+        Some(r) if within(r, &exact, 1, &slack) => Ok(Checked::Bounded),
+        None if shifted && tiny(&exact, det) => Ok(Checked::Cancelled),
+        other => Err(format!("{other:?} for the exact {exact:?}")),
     }
+}
+
+/// Whether `rho < 2^-59`: `|S|^2 2^118 < det^2 2^64`, that is `|S|^2 2^54 < det^2`.
+fn tiny(exact: &[Signed; 3], det: i128) -> bool {
+    let scaled = squared_length(exact).mul(&Big::new(1 << 54));
+    scaled.compare(&Signed::new(det).square()) == std::cmp::Ordering::Less
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -163,7 +172,7 @@ fn optics_tp_076_shading_normals_are_within_the_bound_of_the_exact_oracle() {
     let mut state = SEED;
     let mut counts = [0_usize; 4];
     for case in 0..3000 {
-        let bits = [1, 8, 40, 61, 62, 63, 80, 93][(next(&mut state) % 8) as usize];
+        let bits = [1, 8, 40, 61, 62, 63, 80, 93, 110, 116][(next(&mut state) % 10) as usize];
         let det = 1 + below(&mut state, 1 << bits) as i128;
         let u = below(&mut state, det.unsigned_abs() + 1) as i128;
         let v = below(&mut state, (det - u).unsigned_abs() + 1) as i128;
@@ -175,9 +184,9 @@ fn optics_tp_076_shading_normals_are_within_the_bound_of_the_exact_oracle() {
         });
         counts[outcome as usize] += 1;
     }
-    let [exact, bounded, unbounded, zero] = counts;
-    assert!(exact > 100 && bounded > 1000 && zero > 10, "{counts:?}");
-    assert!(unbounded < 30, "{counts:?}");
+    let [exact, bounded, cancelled, zero] = counts;
+    assert!(exact > 100 && bounded > 1000 && zero >= 5, "{counts:?}");
+    assert!(cancelled < 30, "{counts:?}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -189,9 +198,10 @@ fn optics_tp_077_golden_shading_normals_lock_the_rule() {
     let negated = R.map(|c| -c);
     let (u, v, det) = ((1 << 100) + 1, 3, (1 << 116) + 5);
     assert_eq!(at([G, negated, Y], u, v, det), Some([3_435_957_821, 2_577_001_731, -24_396]));
-    // The oracle's exact sum fits i128 for the first two (det below 2^93), not the third.
+    // Each is also within the bound of the exact oracle.
     let twenty = ((1 << 80) + 12_345, (1 << 79) + 999, (1 << 81) + 77);
     for (u, v, det) in [(3, 4, 9), twenty] {
         assert_eq!(check([R, G, X], u, v, det), Ok(Checked::Bounded));
     }
+    assert_eq!(check([G, negated, Y], (1 << 100) + 1, 3, (1 << 116) + 5), Ok(Checked::Bounded));
 }
