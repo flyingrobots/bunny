@@ -21,12 +21,12 @@ const GRID: i64 = 48;
 /// Camera rays per side; `RAYS_PER_SIDE^2` must equal the batch size the cases report.
 const RAYS_PER_SIDE: i64 = 32;
 
-type Triangle = [FixedVec3; 3];
+pub(crate) type Triangle = [FixedVec3; 3];
 
-struct Scene {
-    triangles: Vec<Triangle>,
-    nodes: Vec<BvhNode>,
-    prim_indices: Vec<u32>,
+pub(crate) struct Scene {
+    pub(crate) triangles: Vec<Triangle>,
+    pub(crate) nodes: Vec<BvhNode>,
+    pub(crate) prim_indices: Vec<u32>,
 }
 
 const fn fixed(raw: i64) -> FixedQ32_32 {
@@ -84,7 +84,7 @@ fn bounds(triangle: &Triangle) -> FixedAabb3 {
     )
 }
 
-fn scene() -> Scene {
+pub(crate) fn scene() -> Scene {
     let triangles = mesh();
     let boxes: Vec<FixedAabb3> = triangles.iter().map(bounds).collect();
     let empty = BvhNode {
@@ -158,13 +158,13 @@ pub(crate) fn visitor_cases() -> Vec<Case> {
 }
 
 #[cfg(feature = "trace")]
-fn trace_rays() -> Vec<bunny_query::TraceRay> {
+pub(crate) fn trace_rays() -> Vec<bunny_query::TraceRay> {
     let (origin, directions) = camera();
     directions.iter().filter_map(|&d| bunny_query::TraceRay::new(origin, d)).collect()
 }
 
 #[cfg(feature = "trace")]
-fn trace_triangles(scene: &Scene) -> Vec<bunny_query::TraceTriangle> {
+pub(crate) fn trace_triangles(scene: &Scene) -> Vec<bunny_query::TraceTriangle> {
     scene
         .triangles
         .iter()
@@ -174,7 +174,7 @@ fn trace_triangles(scene: &Scene) -> Vec<bunny_query::TraceTriangle> {
 
 /// Closest hit with `closest_hit` and the trace triangle test.
 #[cfg(feature = "trace")]
-fn trace_closest(
+pub(crate) fn trace_closest(
     scene: &Scene,
     triangles: &[bunny_query::TraceTriangle],
     ray: &bunny_query::TraceRay,
