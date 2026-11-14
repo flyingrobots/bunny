@@ -707,7 +707,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-301 to TRACE-TP-304 fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -770,6 +770,35 @@ the floor of `det / 2^32` for its ceiling, `t + 1 >= bound`, and the ceiling com
 `2^32 - 2`. Each made at least one of `TRACE-TP-201` to `TRACE-TP-205` fail; the last two
 survived until `TRACE-TP-204` was added. The table is in the performance chapter's entry 6.
 
+The rewritten box test (flyingrobots/bunny#258) was checked the same way in a container
+copy of the final source, running `box_entry_equivalence_tests`, `trace_tests`,
+`closest_hit_tests` and the `bunny-perf` scene test `TRACE-TP-304`. Every mutation made at
+least one case fail; the restored source passed every `bunny-query` and `bunny-broadphase`
+test.
+
+| Mutation in `trace.rs` | Rule broken | Failing cases |
+| --- | --- | --- |
+| Near and far planes swapped in `offsets` | Near and far selection by direction sign | TRACE-TP-301 to 304, TRACE-TP-005, 007, 008, 010, TRACE-TP-101 to 109 |
+| `far >= origin` made `far > origin` | A far plane through the origin is reached | TRACE-TP-301 to 303, TRACE-TP-010 |
+| Parallel-axis near check disabled (`direction == 0` made `direction == i64::MIN`) | A parallel ray outside the slab misses | TRACE-TP-301 to 303 |
+| `!` not applied to the origin in `offsets` | The origin is flipped with the planes for a negative direction | TRACE-TP-301 to 304, TRACE-TP-005, 007, 008, 010, TRACE-TP-101 to 109 |
+| Upper multiplier `r + 1` made `r` | The upper bound rounds up | TRACE-TP-302, 303 |
+| Upper bound step `+ 1` made `+ 0` | The upper bound rounds up | TRACE-TP-302, 303 |
+| Parallel-axis upper bound not `u64::MAX` | A parallel axis does not limit the exit | TRACE-TP-301 to 303, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
+| `saturating_add` made `wrapping_add` in the upper bound | Saturation | TRACE-TP-301 to 303, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
+| `enter <= limit` made `enter < limit` | The distance limit is inclusive | TRACE-TP-301 to 304, TRACE-TP-008 |
+| `limit >= 0` dropped | A negative limit rejects | TRACE-TP-301 to 304, TRACE-TP-008 |
+| The z-axis flag dropped | Every axis can reject | TRACE-TP-301 to 303, TRACE-TP-008 |
+| `enter <= exit` made `enter < exit` | Touching contact is reached | TRACE-TP-302, 303 |
+| Lower-bound saturation replaced by truncation | Saturation | TRACE-TP-301 to 303, TRACE-TP-010 |
+| Near offset not clamped at zero behind the origin | An origin inside the slab enters at 0 | TRACE-TP-301 to 304, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
+
+Three of these (`r + 1` made `r`, the `+ 0` step and the strict exit) pass every
+case that existed before #258; only the equivalence corpora `TRACE-TP-302` and
+`TRACE-TP-303` catch them. The first run of the parallel-axis mutation deleted the check
+outright, which left an unused-parentheses lint that `deny(warnings)` turned into a build
+error, so no test ran; it was redone as the comparison change above.
+
 ## Determinism Obligations And Evidence
 
 The kernels, the traversals and their tests use only integer arithmetic: `i64`, `u64`, `i128`
@@ -807,6 +836,10 @@ Current tests cover:
 - empty trees, dangling child indices and leaf ranges past the primitive
   buffer;
 - primitive tests that report distances beyond the limit or below zero.
+- for `box_entry` against its retained reference: box coordinates at and near
+  `i64::MIN` and `i64::MAX`, inverted boxes, faces through the origin,
+  direction components of 1 raw unit, -1, 0 and `2^32`, and limits of
+  `i64::MIN`, -1, 0 and exactly the entry bound;
 - for `ray_intersects_aabb`: direction components of 1 to 4 000 raw units,
   coordinate differences past `i64`, slab distances past Q32.32 on one or both
   sides, two saturated entries, an origin on a face at the edge of the range,
@@ -825,6 +858,10 @@ their failure messages name the seed and the case index.
 and `TRACE-TP-007` are seeded property cases over 4 000 to 40 000 inputs each;
 `TRACE-TP-101`, `TRACE-TP-102`, `TRACE-TP-103` and `TRACE-TP-106` are seeded
 traversal cases over 1 500 to 3 000 rays each.
+
+`TRACE-TP-302` (300 000 cases) and `TRACE-TP-303` (a 42 525-case sweep and 200 000 seeded
+cases) compare `box_entry` with its retained reference at ten limits each; their failure
+messages name the case index, the ray, the box and the limit.
 
 Every minimized fuzz failure must become a committed deterministic regression
 case with a stable test name.

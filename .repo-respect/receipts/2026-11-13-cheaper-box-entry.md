@@ -7,22 +7,66 @@ reference oracle in the tests, measure each change, and record the outcome in th
 performance ledger.
 
 Files read:
-(in progress)
+CODE_STANDARDS.md
+CHANGELOG.md
+clippy.toml
+docs/CODE_DOJO.md
+docs/topics/performance/README.md
+docs/topics/performance/test-plan.md
+docs/topics/ray-tracing/README.md
+docs/topics/ray-tracing/test-plan.md
+crates/bunny-query/src/trace.rs
+crates/bunny-query/tests/trace_tests.rs
+crates/bunny-query/README.md
+crates/bunny-broadphase/src/closest_hit.rs
+crates/bunny-perf/src/main.rs
+crates/bunny-perf/src/profile.rs
+crates/bunny-perf/src/scene.rs
+crates/bunny-perf/src/cases.rs
+xtask/src/code_dojo.rs
+xtask/src/repo_respect.rs
 
 Files edited:
-(in progress)
+crates/bunny-query/src/trace.rs
+crates/bunny-query/tests/box_entry_equivalence_tests.rs (new)
+crates/bunny-query/tests/support/box_entry_reference.rs (new)
+crates/bunny-perf/src/main.rs
+crates/bunny-perf/src/profile.rs
+docs/topics/performance/README.md
+docs/topics/ray-tracing/README.md
+docs/topics/ray-tracing/test-plan.md
+CHANGELOG.md
+.repo-respect/receipts/2026-11-13-cheaper-box-entry.md
 
 Topic docs:
-(in progress)
+docs/topics/ray-tracing/README.md (how the box test computes its unchanged bounds:
+i64 differences with bitwise-not flipping, parallel axes in the same path, straight-line
+code, precomputed fields and TraceRay's size)
+docs/topics/ray-tracing/test-plan.md (TRACE-REQ-028, TRACE-TP-301..305, mutation checks)
+docs/topics/performance/README.md (ledger entry 7, and the rejected single-comparison exit
+test under the entry)
 
 Generated artifacts:
 None.
 
 Checks run:
-(in progress)
+All inside flyingrobots/rust-dev:1.96.0 through devcontainers' devrun; nothing on the host.
+cargo fmt --all (applied from the container as a patch), cargo fmt --all --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked -p bunny-query (equivalence, trace and all other suites)
+cargo test --locked -p bunny-perf (TRACE-TP-304 and the replica tests)
+14 deliberate mutations of the new box test in a container copy (test plan, Mutation
+Checks); each failed at least one case.
+cargo run --locked -p xtask -- perf --base <rev> --rounds 11 --align-code [--filter trace/],
+with --exclusive, once per step and twice for the final build (ledger entry 7).
+cargo test --locked --workspace
+cargo run --locked -p xtask -- code-dojo --all
 
 Known risks:
-(in progress)
+x86-64 and wasm32 codegen of the straight-line version are not measured locally; the CI
+perf job gives the x86-64 reading. TraceRay grows from 72 to 120 bytes, which costs about
+0.4 ns in `trace/ray_prepare`. The replayed triangle-kernel cases read slower in full-table
+runs only (see ledger entry 7); the function they time is unchanged.
 
 Human reviewer:
 James Ross (maintainer); review pending.
