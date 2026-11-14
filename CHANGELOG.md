@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
+  `trace/triangle_beyond_limit`, which time `TraceRay::hit_triangle` alone on the
+  benchmark scene's nearest hits with no limit and with the limit one raw unit
+  short. Added a frozen reference copy of the triangle test's arithmetic
+  (`crates/bunny-query/tests/support/trace_reference.rs`) with equivalence
+  tests over seeded, constructed and domain-corner corpora at limits around the
+  true distance, and scene tests that compare every triangle test of
+  `trace/closest_hit` with it and count how many reach the division. No library
+  function changes. A pre-check that rejects hits beyond the limit before the
+  division (flyingrobots/bunny#214) was measured and not shipped: only 24 of 714
+  crossings on the scene are beyond the limit, and the result is within noise;
+  see "Tried And Rejected" in the performance chapter.
 * Added deterministic sampling to `bunny-optics`. `PixelStream`
   (`bunny-sample-hash/1`) is a counter-based hash: 64 mixed bits per (seed,
   pixel x, pixel y, sample index, dimension) from three chained SplitMix64
@@ -29,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   avalanche guards run natively and under WebAssembly. The `bunny-perf`
   harness has a new `sample` group, and `cargo xtask perf` now leaves out of
   the base manifest any harness crate the base revision lacks.
+
 ## [0.7.0] - 2026-11-13
 
 This is an early cut of the 0.7 line. It exists so downstream repositories can

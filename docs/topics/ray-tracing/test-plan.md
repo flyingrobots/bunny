@@ -75,6 +75,7 @@ formatting.
 | TRACE-REQ-024 | The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is. | `README.md#search-order-and-pruning` |
 | TRACE-REQ-025 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
 | TRACE-REQ-026 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
+| TRACE-REQ-027 | hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit. | `README.md#exact-triangle-test` |
 
 ```toml
 [[requirement]]
@@ -176,6 +177,11 @@ status = "active"
 id = "TRACE-REQ-026"
 summary = "Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-027"
+summary = "hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit."
+status = "active"
 ```
 
 ## Fixtures
@@ -200,6 +206,13 @@ five is zero or a few raw units. Constructed traversal cases stack flat
 triangles under a ray falling with direction exactly -1.0, so every box bound
 and hit distance is a whole number of units, and build the two-leaf trees by
 hand so the search order is known.
+
+`TRACE-TP-201` to `TRACE-TP-205` compare `hit_triangle` with a frozen reference copy of
+its arithmetic in `crates/bunny-query/tests/support/trace_reference.rs`, which the
+`bunny-perf` scene tests include as well. The copy must not be edited to follow the
+kernel: it is the plain version that an optimized kernel is held to. The seeded corpus uses
+`EQUIVALENCE_SEED` (`0xB002_7ACE_0000_0214`); magnitudes are drawn bit length first, so small
+and large values are equally common.
 
 The golden vectors in `TRACE-TP-009` and `TRACE-TP-010` are hand computed; the
 comments beside each case give the exact value the floor is taken of.
@@ -246,6 +259,11 @@ Regenerating them is a contract change.
 | TRACE-TP-108 | Equal bound kept | TRACE-REQ-021, TRACE-REQ-024 | Two coincident triangles whose leaf bounds equal the hit distance 5.0 exactly; the leaf searched first holds index 1. Both are tested and index 0 is returned, and the same holds when one leaf lists them as 1, 0. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_108_a_subtree_that_starts_at_the_best_distance_is_still_searched` |
 | TRACE-TP-109 | Early stop | TRACE-REQ-025 | Four stacked triangles that the ray hits: any_hit is true after exactly one primitive test; with t_max 4.0, below every box, it is false after none. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_109_any_hit_stops_at_the_first_hit` |
 | TRACE-TP-110 | Deliberate traversal mutations | TRACE-REQ-021, TRACE-REQ-024, TRACE-REQ-025 | Each pruning, ordering or stop rule, broken on purpose, makes at least one traversal case fail. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-201 | Seeded limits around the true distance | TRACE-REQ-027 | Over 30 000 seeded rays aimed at seeded triangles in five size classes (unit scale, det below 2^32, full domain budgets), hit_triangle equals the frozen reference at upper and lower limits equal to the true distance, one and two raw units below, one above, 0, -1, 1, i64::MIN, i64::MAX and i64::MAX - 1; each class has over 2 000 crossings. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_201_seeded_limits_around_the_true_distance_agree` |
+| TRACE-TP-202 | Whole distances with det a multiple of 2^32 | TRACE-REQ-027 | Rays falling straight onto a fixed triangle at whole raw distances, where det is a multiple of 2^32, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_202_exact_distances_at_the_limit_agree` |
+| TRACE-TP-203 | Extreme domain values against the reference | TRACE-REQ-027 | The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree` |
+| TRACE-TP-204 | det at and just past multiples of 2^32 | TRACE-REQ-027 | Raw-unit triangles hit at a corner with det exactly 2^32, 3 * 2^32, 2^32 + 1 (641 * 6 700 417) and 1 equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_204_determinants_at_multiples_of_2_pow_32_agree` |
+| TRACE-TP-205 | The benchmark scene's triangle tests | TRACE-REQ-027 | Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance. | `crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal` |
 
 ```toml
 [[case]]
@@ -580,6 +598,51 @@ artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Each pruning, ordering or stop rule, broken on purpose, makes at least one implemented traversal case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-201"
+requirements = ["TRACE-REQ-027"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_201_seeded_limits_around_the_true_distance_agree"
+oracle = "Over 30 000 seeded rays aimed at seeded triangles in five size classes (unit scale, det below 2^32, full domain budgets), hit_triangle equals the frozen reference at upper and lower limits equal to the true distance, one and two raw units below, one above, 0, -1, 1, i64::MIN, i64::MAX and i64::MAX - 1; each class has over 2 000 crossings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-202"
+requirements = ["TRACE-REQ-027"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_202_exact_distances_at_the_limit_agree"
+oracle = "Rays falling straight onto a fixed triangle at whole raw distances, where det is a multiple of 2^32, equal the frozen reference at the same limits."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-203"
+requirements = ["TRACE-REQ-027"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree"
+oracle = "The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-204"
+requirements = ["TRACE-REQ-027"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_204_determinants_at_multiples_of_2_pow_32_agree"
+oracle = "Raw-unit triangles hit at a corner with det exactly 2^32, 3 * 2^32, 2^32 + 1 (641 * 6 700 417) and 1 equal the frozen reference at the same limits."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-205"
+requirements = ["TRACE-REQ-027"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal"
+oracle = "Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -634,6 +697,13 @@ stop `any_hit` still returns the right value. All three survived the
 brute-force cases `TRACE-TP-101` to `TRACE-TP-105`. `TRACE-TP-107`,
 `TRACE-TP-108` and `TRACE-TP-109` were added to catch them, by checking which
 primitives the search tests as well as what it returns.
+
+The pre-check tried in flyingrobots/bunny#214 (reject when
+`t >= (t_max + 1) * ceil(det / 2^32)`, not shipped) was mutated the same way, running
+`bunny-query`, `bunny-broadphase` and `bunny-perf` tests: `t_max` for `t_max + 1`,
+the floor of `det / 2^32` for its ceiling, `t + 1 >= bound`, and the ceiling computed with
+`2^32 - 2`. Each made at least one of `TRACE-TP-201` to `TRACE-TP-205` fail; the last two
+survived until `TRACE-TP-204` was added. The table is in the performance chapter's entry 6.
 
 ## Determinism Obligations And Evidence
 
