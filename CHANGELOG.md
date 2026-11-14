@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-num` tests pin the exact ties-to-even result at every rounding site:
+  `checked_mul` and `Mul`, `checked_div`, `Div` and `FixedDivisor`, and float
+  ingress and egress, with hand-derived raw values for both signs, both
+  neighbour parities, near-ties and operands at the widest intermediates. Before
+  them no `bunny-num` test failed when multiplication or float conversion rounded
+  ties away from zero or truncated. No library function changes. See the new
+  `docs/topics/fixed-point-rounding/` chapter (flyingrobots/bunny#287).
+
 * `bunny-optics`'s `SmoothHit` (`bunny-smooth-shading/1`, `SMOOTH_SHADING_ID`)
   shades a `SurfaceHit` with the `smooth_normal` of its triangle's vertex
   normals at the hit's exact weights. The frame faces the arrival side by the
