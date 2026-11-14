@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added a compact BVH node layout to `bunny-broadphase` (flyingrobots/bunny#215):
+  `compact_bvh` converts a tree from `build_bvh` into nodes that hold both
+  children's boxes and references, with leaf ranges in the parent (`CompactNode`,
+  `CompactChild`, `CompactRoot`, `CompactError`), and `compact_closest_hit` and
+  `compact_any_hit` search it over a `CompactView`. They make the same primitive
+  calls and return the same results as `closest_hit` and `any_hit` on the source
+  tree; malformed input is a typed error, including reference cycles. On the
+  benchmark scene both searches are 10 to 12 % faster on an Apple M5 Pro (ledger
+  entry 8). Existing functions are unchanged.
+* Added `bunny-perf` cases that estimate the memory share of a box test
+  (`trace/kernel_box_load`, `trace/kernel_box_load_chain`,
+  `trace/kernel_box_entry_addr_chain`), a two-box replica of the box test
+  (`trace/kernel_box_single`, `trace/kernel_box_pair`), `closest_hit` on a tree
+  with shuffled sibling pairs (`trace/closest_hit_shuffled`), and a
+  `trace_compact` group that times the compact layout, its conversion and three
+  node orders.
+
 * Added diffuse shading for a one-bounce path tracer to `bunny-optics`, as
   `bunny-diffuse-shading/1` (`SHADING_ID`), integer-only, with golden vectors
   and stated bounds (flyingrobots/bunny#160, the diffuse slice).
@@ -33,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cosine-weighted bounce has no `pi`) complete the step, and the optics chapter
   states the order of operations for one path. Adds the `shade` group to
   `bunny-perf`. No existing function changes.
+
 * Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
   `trace/triangle_beyond_limit`, which time `TraceRay::hit_triangle` alone on the
   benchmark scene's nearest hits with no limit and with the limit one raw unit
