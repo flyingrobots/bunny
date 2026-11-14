@@ -83,7 +83,15 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-004 | Gate | PERF-REQ-003 | Only cases past the threshold are reported. | `xtask/src/perf_report.rs::tests::regressions_respect_the_threshold` |
 | PERF-TP-005 | Build | PERF-REQ-004 | Feature groups exclude `default` and comments. | `xtask/src/perf.rs::tests::feature_groups_skip_default_and_comments` |
 | PERF-TP-007 | Gate | PERF-REQ-003 | A bimodal case whose medians land in different modes does not fail the gate. | `xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes` |
+<<<<<<< HEAD
 | PERF-TP-011 | Error bound | PERF-REQ-001 | `sin` and `cos` stay within one raw unit of `f64` trigonometry. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit` |
+||||||| 996afee
+=======
+| PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
+| PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
+| PERF-TP-022 | Gate | PERF-REQ-003 | A run that measured no case on both sides fails instead of passing. | `xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing` |
+| PERF-TP-023 | Gate | PERF-REQ-003 | The failure message reports the best-p50 change the gate tested. | `xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested` |
+>>>>>>> origin/main
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -149,6 +157,7 @@ test = "xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_m
 oracle = "A bimodal case whose medians land in different modes does not fail the gate."
 tier = "fast"
 status = "implemented"
+<<<<<<< HEAD
 
 [[case]]
 id = "PERF-TP-011"
@@ -158,6 +167,45 @@ test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_o
 oracle = "sin and cos stay within one raw unit of f64 trigonometry."
 tier = "fast"
 status = "implemented"
+||||||| 996afee
+=======
+
+[[case]]
+id = "PERF-TP-020"
+requirements = ["PERF-REQ-005"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::binary_names_follow_the_target"
+oracle = "Harness binary names follow the target (.wasm, .exe, none)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-021"
+requirements = ["PERF-REQ-005"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes"
+oracle = "Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-022"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing"
+oracle = "A run that measured no case on both sides fails instead of passing."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-023"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested"
+oracle = "The failure message reports the best-p50 change the gate tested."
+tier = "fast"
+status = "implemented"
+>>>>>>> origin/main
 ```
 
 ## Determinism Obligations And Evidence
@@ -168,5 +216,6 @@ runs are deliberately outside the test oracle.
 
 ## Gaps
 
-- The interleaving, worktree handling and CI workflow are exercised by running
-  `cargo xtask perf`, not by automated tests.
+- The interleaving, worktree handling, cross-target runs and CI workflow are exercised by
+  running `cargo xtask perf`, not by automated tests. The platform matrix has not run on
+  GitHub yet.
