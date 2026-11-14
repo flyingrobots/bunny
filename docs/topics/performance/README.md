@@ -197,6 +197,88 @@ away.
 Each landed optimization is recorded here with its technique, fidelity, trade-offs and
 measured effect. Measurements name the machine and the command that produced them.
 
+### 1. Table-seeded integer square root
+
+**Where:** `FixedQ32_32::sqrt_u128` in `bunny-num`, and so `FixedQ32_32::sqrt`,
+`FixedVec3::length`, `FixedVec3::normalize`, `FixedUnitVec3::new`, `FixedRay3::try_new`
+and `ray_intersects_sphere` (which takes two square roots per hit: the half chord and the
+normal).
+
+**Technique.** The previous implementation found the square root one bit pair at a time:
+up to 64 rounds of 128-bit compare, subtract and shift, with a data-dependent branch in
+each. It now calls `u128::isqrt` from Rust's core library, which looks up the square root
+of the leading bits in a table and then refines it with Karatsuba square-root steps on
+halves of the number. Every step is integer arithmetic.
+
+**Fidelity: exact replacement.** Both implementations return the floor of the square root,
+the largest `r` with `r * r <= value`, for every `u128`. The old loop is kept in
+`crates/bunny-num/tests/sqrt_equivalence_tests.rs` as the reference oracle and compared
+against the new code on every power-of-two boundary and its neighbours, perfect squares
+and their neighbours, 20 000 seeded inputs spread across all magnitudes, and every raw
+Q32.32 value from 0 to 65 536. A one-off local check of 2 000 000 seeded inputs also
+matched. No golden vector changed.
+
+**Trade-offs.**
+
+- *Trust moves to the core library.* The square root is no longer Bunny's own code. Its
+  result is specified by Rust's documentation (floor of the square root) and has been
+  stable and `const` since Rust 1.84, below Bunny's 1.96 MSRV. The retained reference
+  tests would catch a future toolchain that changed results; a toolchain could still change
+  the speed.
+- *No new dependency.* `isqrt` lives in `core`, so it adds nothing for `no_std` or WASM
+  builds. Its lookup table is part of `core`, not Bunny.
+- *Readability.* One line replaces a 20-line loop. Readers who want the algorithm read the
+  Rust source rather than Bunny's.
+- *Unmeasured targets.* Results are identical everywhere because the operations are
+  integer-only; the speedup has been measured on an Apple M5 Pro (in a Linux container) only, not on
+  x86-64 or WASM.
+
+**Rejected alternatives.**
+
+- *Float-seeded square root with integer correction.* Exact and fast, but it uses
+  `f64::sqrt` inside canonical math, which Rule 2 bans.
+- *Table-seeded Newton iteration written in Bunny.* Measured with the earlier
+  harness (not re-measured) as slower than the old loop: each Newton step needs a 128-bit
+  division.
+- *Fast inverse square root and other approximations.* They change output bits, so they
+  are contract changes, not optimizations.
+
+**Measured.** Re-measured on 2026-11-13 with the corrected harness, which passes every
+result through `black_box`. Environment: Apple M5 Pro, inside the
+`flyingrobots/rust-dev:1.96.0` container (Linux VM, `aarch64-linux`), one run of 11
+rounds. Command, run through the guarded container runner with the branch's merge of
+`origin/main` as the working tree:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Base revision `be55424fef16` (`origin/main` after PR #209). This table supersedes the
+earlier numbers, which were taken on the host with the older harness that let the
+optimizer drop work in some cases; none of those numbers is retained.
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 70.15 | 15.58 | -77.8% | 63.92 | 14.89 | -76.7% | 4.29× | 79.51 | 17.25 |
+| `linalg/normalize` | 86.79 | 39.92 | -54.0% | 80.93 | 38.66 | -52.2% | 2.09× | 110.35 | 42.03 |
+| `num/div` | 6.47 | 6.63 | +2.5% | 6.14 | 6.18 | +0.7% | 0.99× | 6.67 | 7.24 |
+| `num/mul` | 1.38 | 1.46 | +5.8% | 1.34 | 1.34 | +0.0% | 1.00× | 1.71 | 1.71 |
+| `num/sqrt` | 72.10 | 13.35 | -81.5% | 62.54 | 12.82 | -79.5% | 4.88× | 78.65 | 15.79 |
+| `query/ray_aabb` | 43.95 | 41.67 | -5.2% | 39.67 | 39.27 | -1.0% | 1.01× | 51.15 | 48.99 |
+| `query/ray_build` | 125.33 | 50.21 | -59.9% | 118.49 | 49.60 | -58.1% | 2.39× | 149.17 | 54.40 |
+| `query/ray_sphere_hit` | 103.92 | 67.06 | -35.5% | 100.34 | 63.40 | -36.8% | 1.58× | 126.83 | 70.23 |
+| `query/ray_sphere_miss` | 51.68 | 19.90 | -61.5% | 45.70 | 19.73 | -56.8% | 2.32× | 57.90 | 19.98 |
+| `query/ray_triangle` | 49.44 | 49.68 | +0.5% | 48.42 | 48.71 | +0.6% | 0.99× | 52.78 | 52.98 |
+
+The square-root kernels speed up 4.9× (`num/sqrt`), 4.3× (`linalg/length`), 2.4×
+(`query/ray_build`), 2.3× (`query/ray_sphere_miss`), 2.1× (`linalg/normalize`) and 1.6×
+(`query/ray_sphere_hit`). `num/div`, `num/mul`, `query/ray_triangle` and `query/ray_aabb`
+take no square root and serve as controls. Their best p50 moved by +0.7 %, 0.0 %, +0.6 %
+and -1.0 %, and their median p50 by +2.5 %, +5.8 %, +0.5 % and -5.2 %, all inside the
+roughly 10 % noise band. `query/ray_aabb`, the [bimodal case](#bimodal-cases), did not
+show a layout or placement effect in this run. That does not mean it cannot. This is one
+run on one machine under a Linux VM, not an x86-64 or WASM measurement.
+
 ### 2. Table-based sine and cosine (new approximate API)
 
 **Where:** `FixedAngle::sin`, `cos` and `sin_cos` in `bunny-num`, new with #110. The full
