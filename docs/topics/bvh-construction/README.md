@@ -19,7 +19,7 @@ exported from `bunny_broadphase` as `build_bvh` and `build_bvh_sah`, with
 
 Evidence is listed in the [test plan](test-plan.md). Timings of both builders
 and of traversal through their trees are in the
-[performance ledger](../performance/README.md#7-binned-sah-bvh-builder-new-api).
+[performance ledger](../performance/README.md#8-binned-sah-bvh-builder-new-api).
 
 All arithmetic is integer arithmetic on raw Q32.32 values. There is no
 floating point, no `unsafe` code and no target-specific path, so every
@@ -154,7 +154,7 @@ reach it.
 Each node makes one pass to find its bounds and centroid spans, one to bin, a
 sweep over 16 bins per axis, and a partition with two in-place sorts. Build
 time and traversal time on the benchmark scene are in the
-[performance ledger](../performance/README.md#7-binned-sah-bvh-builder-new-api).
+[performance ledger](../performance/README.md#8-binned-sah-bvh-builder-new-api).
 
 ## Choosing A Builder
 
