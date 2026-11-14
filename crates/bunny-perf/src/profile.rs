@@ -188,7 +188,16 @@ pub(crate) struct Rig {
 
 impl Rig {
     pub(crate) fn new() -> Self {
-        let scene = scene();
+        Self::with(scene())
+    }
+
+    /// The same triangles and rays in the tree `build_bvh_sah` builds.
+    #[cfg(feature = "sah")]
+    fn sah() -> Self {
+        Self::with(crate::scene::sah_scene())
+    }
+
+    fn with(scene: Scene) -> Self {
         let triangles = trace_triangles(&scene);
         Self { scene, triangles, rays: trace_rays() }
     }
@@ -558,15 +567,24 @@ fn render_packets(rig: &Rig) -> String {
     out
 }
 
-/// The `--stats` report, as Markdown tables.
+/// The `--stats` report, as Markdown tables: for the `build_bvh` tree and, with the `sah`
+/// group, again for the `build_bvh_sah` tree.
 pub(crate) fn report() -> String {
-    let rig = Rig::new();
+    #[allow(unused_mut)]
+    let mut out = report_for(&Rig::new(), "");
+    #[cfg(feature = "sah")]
+    out.push_str(&report_for(&Rig::sah(), " (build_bvh_sah tree)"));
+    out
+}
+
+fn report_for(rig: &Rig, tree: &str) -> String {
     format!(
-        "## BVH\n\n| | |\n| --- | ---: |\n{}\n## closest_hit\n\n{}\n## any_hit\n\n{}\n## Neighbouring rays\n\n{}",
-        render_tree(&rig),
-        render_counts(&rig, Mode::Closest),
-        render_counts(&rig, Mode::Any),
-        render_packets(&rig),
+        "## BVH{tree}\n\n| | |\n| --- | ---: |\n{}\n## closest_hit{tree}\n\n{}\n\
+         ## any_hit{tree}\n\n{}\n## Neighbouring rays{tree}\n\n{}",
+        render_tree(rig),
+        render_counts(rig, Mode::Closest),
+        render_counts(rig, Mode::Any),
+        render_packets(rig),
     )
 }
 
