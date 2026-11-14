@@ -875,7 +875,7 @@ id = "ND-TP-065"
 requirements = ["ND-REQ-005", "ND-REQ-014", "ND-REQ-015"]
 evidence = "test"
 test = "xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate"
-oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them; so are the issue forms of flyingrobots/bunny#349 (`bunny-geom` on the workspace member `crates/zz-probe-crate`, `bunny-num` with `build = \"../../scripts/zz_build.rs\"`), `bunny-mesh`'s `build.rs` and the three workspace members no list names, and nothing else is."
+oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them; so are the issue forms of flyingrobots/bunny#349 (`bunny-geom` on the workspace member `crates/zz-probe-crate`, `bunny-num` with `build = '../../scripts/zz_build.rs'`), `bunny-mesh`'s `build.rs` and the three workspace members no list names, and nothing else is."
 tier = "fast"
 status = "implemented"
 
@@ -1082,7 +1082,7 @@ id = "ND-TP-093"
 requirements = ["ND-REQ-015"]
 evidence = "test"
 test = "xtask/src/crate_manifests/tests.rs::a_deterministic_crate_has_no_build_script_and_no_target_outside_it"
-oracle = "Eleven manifests: the issue's `build = \"../../scripts/zz_build.rs\"`, a build script inside the crate, `build = true` and a `build.rs` Cargo finds are `build-script` at the stated line; `build = false` beside a `build.rs` is none; a `[lib]`, `[[test]]`, absolute `[[bench]]` and inline example `path` outside the crate are `target-outside-crate`; paths that stay inside are none; invalid TOML is an error."
+oracle = "Eleven manifests: the issue's `build = '../../scripts/zz_build.rs'`, a build script inside the crate, `build = true` and a `build.rs` Cargo finds are `build-script` at the stated line; `build = false` beside a `build.rs` is none; a `[lib]`, `[[test]]`, absolute `[[bench]]` and inline example `path` outside the crate are `target-outside-crate`; paths that stay inside are none; invalid TOML is an error."
 tier = "fast"
 status = "implemented"
 
