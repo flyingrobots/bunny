@@ -28,6 +28,10 @@ math for graphics pipelines.
 * **Viewport Mapping**: `Viewport::try_ndc_to_viewport` and
   `try_viewport_to_ndc` convert between NDC and continuous top-left, y-down
   viewport coordinates with floored raw rounding and typed `ViewportError`s.
+* **Look-At View Matrix**: `FixedMat4::try_look_at(eye, target, up)` builds a
+  right-handed `view_from_world` matrix (camera looks down `-Z`). The basis is
+  orthonormal within 2 raw units; degenerate input returns a typed
+  `LookAtError`.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
