@@ -55,6 +55,9 @@ and `point_at`:
   `SMOOTH_NORMAL_ID`): hand-derived points, a golden input on the boundary of
   each of its four roundings, an exact big-integer oracle over seeded weights
   and normals, and golden vectors.
+- the smooth-shaded hit `bunny-smooth-shading/1` (`SmoothHit`,
+  `SMOOTH_SHADING_ID`): the choice of frame on each side and its fallbacks, a
+  grazing case decided by the exact plane, and the light term.
 
 Projection matrices (flyingrobots/bunny#201, #202), and reflection, refraction
 and other material helpers (#160) are out of scope.
@@ -132,6 +135,8 @@ formatting.
 | OPTICS-REQ-046 | A vertex with no face, or whose faces sum to exactly zero, has no normal (`None`); vertices are never welded. `VertexNormals::new` refuses, in this order, more than `MAX_NORMAL_TRIANGLES` (`2^32`) triangles (`TooManyTriangles`), a position with a coordinate magnitude of at least `TRACE_COORD_LIMIT_RAW` (`PositionOutsideTraceDomain`, the first such vertex), and an index not below the number of positions (`IndexOutOfRange`, the first such triangle and corner). | `README.md#vertex-normals` |
 | OPTICS-REQ-047 | `smooth_normal` (`bunny-smooth-normal/1`, `SMOOTH_NORMAL_ID`) at exact weights `(det - u - v, u, v) / det` returns the vertex normal unchanged when every vertex with a nonzero weight shares it; otherwise it shifts each weight right (floored) by the smallest `k` that puts `det >> k` below `2^62`, combines `m = sum (w_i >> k) n_i` exactly, and normalizes `m` as `TriangleSurface::new` does, each component within `1 + 2^-26 / rho` raw units of the exact unit vector along `sum w_i n_i` (within 1 when `k = 0`), where `rho = |sum w_i n_i| / (2^32 det)`; it returns `None` exactly when `m` is zero. | `README.md#smooth-normal` |
 | OPTICS-REQ-048 | Each rounding of `bunny-smooth-normal/1` is the stated one, and each has a golden input on its boundary: the weight shift floors, the prescale floors when it scales down, the length is the floor of the square root, and the division rounds to nearest with ties to even. | `README.md#smooth-normal` |
+| OPTICS-REQ-049 | `SmoothHit::new` (`bunny-smooth-shading/1`) uses `ShadingFrame::new(n)` when the exact `n . N > 0` and `ShadingFrame::new(n).flipped()` when it is negative, where `n` is `smooth_normal` at the hit's exact weights and `N` the exact normal of the face the ray arrived on (chosen by `front_face`), and the geometric frame when `n . N = 0`, a vertex normal is missing or `smooth_normal` returns `None`; the `SurfaceHit` it holds is unchanged. | `README.md#smooth-shading` |
+| OPTICS-REQ-050 | `SmoothHit::light_sample` has the shadow ray and the side test of `SurfaceHit::light_sample` (the exact geometric plane) and the radiance `reflected_radiance(cosine(n'))` of the shading normal `n'`, clamped at zero. | `README.md#smooth-shading` |
 
 ```toml
 [[requirement]]
@@ -353,6 +358,16 @@ status = "active"
 id = "OPTICS-REQ-048"
 summary = "Each rounding of bunny-smooth-normal/1 is the stated one, and each has a golden input on its boundary: the weight shift floors, the prescale floors when it scales down, the length is the floor of the square root, and the division rounds to nearest with ties to even."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-049"
+summary = "SmoothHit::new (bunny-smooth-shading/1) uses ShadingFrame::new(n) when the exact n . N > 0 and ShadingFrame::new(n).flipped() when it is negative, where n is smooth_normal at the hit's exact weights and N the exact normal of the face the ray arrived on (chosen by front_face), and the geometric frame when n . N = 0, a vertex normal is missing or smooth_normal returns None; the SurfaceHit it holds is unchanged."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-050"
+summary = "SmoothHit::light_sample has the shadow ray and the side test of SurfaceHit::light_sample (the exact geometric plane) and the radiance reflected_radiance(cosine(n')) of the shading normal n', clamped at zero."
+status = "active"
 ```
 
 ## Fixtures
@@ -558,6 +573,10 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-076 | Exact oracle | OPTICS-REQ-047 | 3 000 seeded cases (`det` below `2^1` to `2^93`, so `k` from 0 to 32; seeded normals, axes, repeated and opposite normals): shared normals exact, `None` exactly for a zero exact interpolation, within 1 raw unit when `k = 0` and within 2 when `k > 0` and `rho >= 2^-26`, by the [vertex-normal oracle's comparison](#the-vertex-normal-oracle); cases with `k > 0` and `rho < 2^-26` are counted, not checked. Witness counts require every checked outcome. | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_076_shading_normals_are_within_the_bound_of_the_exact_oracle` |
 | OPTICS-TP-077 | Golden smooth normals | OPTICS-REQ-047 | Locked raw normals with shifts of 0, 20 and 55 bits (model); the first two are also checked against the oracle (the third's exact sum needs more than `i128`). | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_077_golden_shading_normals_lock_the_rule` |
 | OPTICS-TP-078 | Smooth-normal mutations | OPTICS-REQ-047, OPTICS-REQ-048 | Each rule broken on purpose fails at least one case above. | [Smooth-normal mutation checks](#smooth-normal-mutation-checks) |
+| OPTICS-TP-079 | Frame and fallbacks | OPTICS-REQ-049 | The identity string; on the ground with a shared normal `(0.6, 0.8, 0)`: a front-face hit uses its frame and keeps the surface hit; a back-face hit uses it flipped (normal `-n`); a normal along the surface, a missing vertex normal, and opposite normals at their edge's midpoint give the geometric frame; distinct normals give the frame of `smooth_normal` at the hit's own weights. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_079_the_shading_frame_faces_the_arrival_side_or_falls_back` |
+| OPTICS-TP-080 | Grazing side | OPTICS-REQ-049 | A front-face hit on a triangle with an inexact normal and a shared vertex normal nearly along it, found by search: the exact `n . N` is negative and `n . g` with the rounded unit normal `g` is `+1 191 621 077`; the frame is flipped. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_080_a_grazing_shading_normal_is_sided_by_the_exact_plane` |
+| OPTICS-TP-081 | Light term | OPTICS-REQ-050 | A light straight above: the geometric shadow ray and the radiance of the shading cosine (0.8), not the geometric one; a light above the plane but behind the shading normal: the shadow ray and zero radiance; lights along and below the plane: no shadow ray and no radiance, although the shading cosine of the first is 0.6. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_081_the_light_uses_the_shading_cosine_and_the_geometric_side` |
+| OPTICS-TP-082 | Smooth-shading mutations | OPTICS-REQ-049, OPTICS-REQ-050 | Each rule broken on purpose fails at least one case above. | [Smooth-shading mutation checks](#smooth-shading-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1216,6 +1235,42 @@ artifact = "docs/topics/optics/test-plan.md#smooth-normal-mutation-checks"
 oracle = "Mutation checks: each listed mutation fails at least one case; recorded in Smooth-Normal Mutation Checks."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-079"
+requirements = ["OPTICS-REQ-049"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_079_the_shading_frame_faces_the_arrival_side_or_falls_back"
+oracle = "Specified: the frame rule on constructed hits, and the composition with smooth_normal."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-080"
+requirements = ["OPTICS-REQ-049"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_080_a_grazing_shading_normal_is_sided_by_the_exact_plane"
+oracle = "Constructed by search: exact and rounded dot products of opposite sign, both asserted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-081"
+requirements = ["OPTICS-REQ-050"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_081_the_light_uses_the_shading_cosine_and_the_geometric_side"
+oracle = "Specified: the composition of the geometric side test with the shading cosine."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-082"
+requirements = ["OPTICS-REQ-049", "OPTICS-REQ-050"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#smooth-shading-mutation-checks"
+oracle = "Mutation checks: each listed mutation fails at least one case; recorded in Smooth-Shading Mutation Checks."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1362,6 +1417,28 @@ least one case fail; the restored source passed all four.
 | `wide.rs`: the prescale rounds when it scales down | The prescale floors | OPTICS-TP-075 |
 | `bunny-linalg` `fixed_vec3.rs`: the length's square root rounded to nearest | The length is floored | OPTICS-TP-075, OPTICS-TP-076 |
 | `bunny-num` `fixed_q32_32.rs`: division ties away from zero | Ties to even | OPTICS-TP-075 |
+
+## Smooth-Shading Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/smooth_hit.rs`, and the smooth-shading tests
+were run with `timeout 120 cargo test --locked -p bunny-optics --no-fail-fast
+--test smooth_hit_tests` per mutation. Every mutation made at least one case
+fail; the restored source passed all three.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| No flip for `s < 0` | The shading normal faces the arrival side | OPTICS-TP-079, OPTICS-TP-080 |
+| `s = 0` keeps the shading frame | Fallback for a normal along the surface | OPTICS-TP-079 |
+| `s` taken against the rounded unit geometric normal | Sides decided by the exact plane | OPTICS-TP-080 |
+| A missing vertex normal replaced by another vertex's | Fallback for a missing normal | OPTICS-TP-079 |
+| The light's cosine taken against the geometric normal | The shading cosine | OPTICS-TP-081 |
+| The shadow ray given whenever the shading cosine is positive | The geometric side test | OPTICS-TP-081 |
+
+A first form of the last mutation (computing the radiance from the shading
+cosine when there is no shadow ray) passed every case and is equivalent:
+`LightSample::radiance` is zero without a shadow ray, so it cannot be
+observed.
 
 ## Timing
 

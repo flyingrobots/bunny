@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`'s `SmoothHit` (`bunny-smooth-shading/1`, `SMOOTH_SHADING_ID`)
+  shades a `SurfaceHit` with the `smooth_normal` of its triangle's vertex
+  normals at the hit's exact weights. The frame faces the arrival side by the
+  sign of an exact dot product with the face's exact plane normal (flipped when
+  negative), and falls back to the geometric frame when that product is zero, a
+  vertex normal is missing or the normals cancel. `light_sample` keeps the
+  geometric shadow ray and side test and takes the cosine against the shading
+  normal, clamped at zero. The `SurfaceHit`, its start point and
+  `bunny-diffuse-shading/1` are unchanged. Part of flyingrobots/bunny#289; see
+  `docs/topics/optics/README.md#smooth-shading`.
+
 * `bunny-query`'s `TriangleHit::barycentric_numerators` returns the exact `u`,
   `v` and `det` (each below `2^117`) that the triangle test decided the hit
   with, as a `BarycentricNumerators`, which `BarycentricNumerators::new` also
