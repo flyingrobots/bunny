@@ -347,8 +347,8 @@ fn check_start_points(seed: u64, cases: usize) -> Steps {
         };
         let context = format!("seed {seed:#x}, case {case}");
         let point = point_at(&ray, hit.distance)
-            .map(raw3)
             .unwrap_or_else(|| panic!("{context}: point_at is not representable"));
+        let point = raw3(point);
         let shading = SurfaceHit::new(&surface, &ray, &hit);
         let (k, start) = rule(vertices, hit.front_face, point)
             .unwrap_or_else(|| panic!("{context}: three steps do not reach the arrival side"));
