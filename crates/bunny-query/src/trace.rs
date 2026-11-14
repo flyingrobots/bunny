@@ -247,22 +247,26 @@ fn slab(
     ((origin, direction), reciprocal): ((i64, i64), u64),
     (min, max): (i64, i64),
 ) -> Option<(u64, u64)> {
-    if direction == 0 {
-        return (min <= origin && origin <= max).then_some((0, u64::MAX));
-    }
     // Against a negative direction, `!` (which reverses the order of `i64` and keeps
-    // `!a - !b == b - a`) turns the slab into one crossed forwards.
+    // `!a - !b == b - a`) turns the slab into one crossed forwards. A zero component is
+    // treated as forwards too.
     let flip = direction >> 63;
-    let (near, far) = if direction > 0 { (min, max) } else { (max, min) };
+    let (near, far) = if direction < 0 { (max, min) } else { (min, max) };
     let (origin, near, far) = (origin ^ flip, near ^ flip, far ^ flip);
-    // A far plane behind the origin rejects the box. A difference `a - b` with `a >= b` lies
-    // in `0..2^64`, so the wrapping `i64` difference read as `u64` is exact.
-    if far < origin {
+    // A far plane behind the origin rejects the box; so does a near plane ahead of it when
+    // the ray runs parallel to the slab.
+    let parallel = direction == 0;
+    if far < origin || (parallel && near > origin) {
         return None;
     }
+    // A difference `a - b` with `a >= b` lies in `0..2^64`, so the wrapping `i64` difference
+    // read as `u64` is exact.
     let far = far.wrapping_sub(origin).cast_unsigned();
     let near = if near > origin { near.wrapping_sub(origin).cast_unsigned() } else { 0 };
-    Some((scaled(near, reciprocal), scaled(far, reciprocal + 1).saturating_add(1)))
+    // A parallel axis has a zero reciprocal, so its lower bound is 0, and its upper bound
+    // saturates to `u64::MAX`.
+    let step = if parallel { u64::MAX } else { 1 };
+    Some((scaled(near, reciprocal), scaled(far, reciprocal + 1).saturating_add(step)))
 }
 
 /// `floor(2^63 / |d|)`, or zero for a zero component.
