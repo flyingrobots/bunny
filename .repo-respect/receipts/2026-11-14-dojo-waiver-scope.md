@@ -62,7 +62,11 @@ inside a multi-line TOML string counted as a manifest comment. ND-TP-066 to -068
 the three new tests failed on the unfixed code. Comments are now read whole and manifest
 lines inside multi-line strings are skipped. Mutations, under `timeout 120`, both caught:
 block comments cut at the line end (ND-TP-066 fails), multi-line strings not tracked
-(ND-TP-068 fails).
+(ND-TP-068 fails). A follow-up review note showed that an escaped quote before two quotes
+inside a basic string closed it in the line count; the manifest scan now reads strings
+byte by byte (escapes, single-line strings, trailing comments, up to two quotes after a
+closing delimiter), ND-TP-068 has that case and a string closed on its own line, and
+the mutation that ignores escapes fails it.
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
 cargo test --locked -p xtask: 98 passed.
 cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository with the new

@@ -133,8 +133,8 @@ pub(super) fn module_path_finding(
     origin: &Origin,
 ) -> Option<(usize, (&'static str, &'static str))> {
     attrs.iter().find_map(|attr| {
-        let path = module_path(&attr.meta)?;
-        (!origin.scans(&path)).then(|| (line_of(attr.pound_token.span), INCLUDE_SOURCE_RULE))
+        let unscanned = module_paths(&attr.meta).iter().any(|path| !origin.scans(path));
+        unscanned.then(|| (line_of(attr.pound_token.span), INCLUDE_SOURCE_RULE))
     })
 }
 
@@ -156,10 +156,9 @@ pub(super) fn token_module_path_findings(
             let attribute = (pound.as_char() == '#' && body.delimiter() == Delimiter::Bracket)
                 .then(|| syn::parse2::<Meta>(body.stream()).ok())
                 .flatten();
-            if let Some(path) = attribute.as_ref().and_then(module_path) {
-                if !origin.scans(&path) {
-                    found.push((line_of(pound.span()), INCLUDE_SOURCE_RULE));
-                }
+            let paths = attribute.as_ref().map(module_paths).unwrap_or_default();
+            if paths.iter().any(|path| !origin.scans(path)) {
+                found.push((line_of(pound.span()), INCLUDE_SOURCE_RULE));
             }
         }
     }
@@ -174,29 +173,30 @@ enum ModulePath {
     NotLiteral,
 }
 
-/// The value of `path = ..`, or of a `path` inside `cfg_attr(..)` at any depth; `None` for
-/// any other attribute.
-fn module_path(meta: &Meta) -> Option<ModulePath> {
+/// The value of `path = ..`, or every `path` inside `cfg_attr(..)` at any depth (the gate
+/// cannot tell which configuration the compiler keeps, so each one must be scanned); empty
+/// for any other attribute.
+fn module_paths(meta: &Meta) -> Vec<ModulePath> {
     if meta.path().is_ident("path") {
-        return Some(match meta {
+        return vec![match meta {
             Meta::NameValue(pair) => match &pair.value {
                 Expr::Lit(ExprLit { lit: Lit::Str(text), .. }) => ModulePath::Literal(text.value()),
                 _ => ModulePath::NotLiteral,
             },
             Meta::Path(_) | Meta::List(_) => ModulePath::NotLiteral,
-        });
+        }];
     }
     let Meta::List(list) = meta else {
-        return None;
+        return Vec::new();
     };
     if !list.path.is_ident("cfg_attr") {
-        return None;
+        return Vec::new();
     }
     let Ok(nested) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(list.tokens.clone())
     else {
-        return Some(ModulePath::NotLiteral);
+        return vec![ModulePath::NotLiteral];
     };
-    nested.iter().skip(1).find_map(module_path)
+    nested.iter().skip(1).flat_map(module_paths).collect()
 }
 
 /// A macro invocation found inside another macro's tokens.

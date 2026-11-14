@@ -56,7 +56,7 @@ formatting.
 
 | ID | Requirement | Current Source |
 | --- | --- | --- |
-| TRACE-REQ-001 | TraceRay and TraceTriangle refuse coordinates outside the trace domain, direction components above 1.0 and a zero direction. | `README.md#trace-domain` |
+| TRACE-REQ-001 | `TraceRay::new` and `TraceTriangle::new` refuse coordinates outside the trace domain, direction components above 1.0 (`TraceRay::new`) and a zero direction. | `README.md#trace-domain` |
 | TRACE-REQ-002 | box_entry never returns None for a box the ray reaches within 0..=t_max, including face, edge and corner contact. | `README.md#conservative-box-test` |
 | TRACE-REQ-003 | box_entry returns a lower bound on the exact entry distance, short by at most 2^11 + 2 raw units plus entry / 2^30. | `README.md#conservative-box-test` |
 | TRACE-REQ-004 | hit_triangle reports a hit exactly when the ray crosses the triangle at a non-negative distance within its limits, and reports the floor of the true distance. | `README.md#exact-triangle-test` |
@@ -81,11 +81,12 @@ formatting.
 | TRACE-REQ-029 | box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included. | `README.md#conservative-box-test` |
 | TRACE-REQ-030 | TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det. | `README.md#exact-triangle-test` |
 | TRACE-REQ-031 | intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions. | `README.md#malformed-buffers` |
+| TRACE-REQ-032 | `TraceRay::from_ray` returns `None` only for an origin outside the trace domain: it accepts every unit direction, including a component of `2^32 + 1` raw, which `FixedUnitVec3::try_from_unit` allows and `TraceRay::new` refuses; every width bound of the kernels holds for it, and `FixedUnitVec3::new` never produces a component above `2^32`. | `README.md#trace-domain` |
 
 ```toml
 [[requirement]]
 id = "TRACE-REQ-001"
-summary = "TraceRay and TraceTriangle refuse coordinates outside the trace domain, direction components above 1.0 and a zero direction."
+summary = "TraceRay::new and TraceTriangle::new refuse coordinates outside the trace domain, direction components above 1.0 (TraceRay::new) and a zero direction."
 status = "active"
 
 [[requirement]]
@@ -206,6 +207,11 @@ status = "active"
 [[requirement]]
 id = "TRACE-REQ-031"
 summary = "intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-032"
+summary = "TraceRay::from_ray returns None only for an origin outside the trace domain: it accepts every unit direction, including a component of 2^32 + 1 raw, which FixedUnitVec3::try_from_unit allows and TraceRay::new refuses; every width bound of the kernels holds for it, and FixedUnitVec3::new never produces a component above 2^32."
 status = "active"
 ```
 
@@ -336,6 +342,10 @@ Regenerating them is a contract change.
 | TRACE-TP-405 | Shared subtrees | TRACE-REQ-031 | With a query reaching every node, a shared leaf within the budget is searched as the tree it unfolds into (callbacks 0, 1, 0, as the retained functions give); a shared interior node and a 40-node ladder whose unfolding is exponential are InvalidNodeIndex; each is refused exactly when compact_bvh calls it NotATree. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_405_shared_subtrees_are_searched_within_the_budget_and_refused_beyond_it` |
 | TRACE-TP-406 | Differential against the retained functions | TRACE-REQ-031 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, a 70-level comb (deeper than the stack) and a 64-level comb ending in out-of-range children reached with a full stack, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over up to 5 040 seeded queries (a ray with t_max unbounded or up to 15 units, and a box; over 2 500 required); failures name the seed and case. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback` |
 | TRACE-TP-407 | Deliberate guard mutations | TRACE-REQ-031 | Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-408 | `from_ray` and the unit vector of the issue | TRACE-REQ-032 | `(2^32 + 1, 0, 0)` and its negation on each axis are unit vectors (`try_from_unit`), `from_ray` returns `Some` with the direction unchanged, `new` returns `None` for the same direction and for `2^32 + 2` (not a unit vector), and the origin bound still refuses `2^40`. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_408_from_ray_accepts_the_unit_vector_of_the_issue_on_every_axis` |
+| TRACE-TP-409 | Normalization never exceeds 1.0 | TRACE-REQ-032 | Over 200 000 generated vectors (scales from 3 raw to `2^61`, axis-aligned, near-axis and tiny), at least 130 000 normalize and at least 50 000 are refused; no result has a component above `2^32`, at least 15 000 have one equal to it, the largest is exactly `2^32`, and `from_ray` accepts every result. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_409_normalisation_never_yields_a_component_above_one` |
+| TRACE-TP-410 | Kernels for long unit directions | TRACE-REQ-032 | 20 000 seeded rays with a component of `2^32 + 1` and 20 000 boxes: `hit_triangle` equals the signed-volume oracle (hit, floor distance, facing, exact numerators; at least 4 000 hits and 4 000 misses) and `box_entry` is never past the exact rational entry and short by at most `T / 2^31 + 2` (at least 1 000 reached and 1 000 certainly missed boxes). | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_410_kernels_agree_with_the_oracles_for_long_unit_directions` |
+| TRACE-TP-411 | Known distance | TRACE-REQ-032 | A triangle in the plane `x = 2.0` and the ray along `+x` from 0 and along `-x` from 4.0, direction `2^32 + 1`: distance `floor(2^65 / (2^32 + 1)) = 8 589 934 590` raw, back face for `+x` and front face for `-x`. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_long_direction_hit_has_the_exactly_floored_distance` |
 
 ```toml
 [[case]]
@@ -921,6 +931,42 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case."
 tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-408"
+requirements = ["TRACE-REQ-032"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_408_from_ray_accepts_the_unit_vector_of_the_issue_on_every_axis"
+oracle = "`from_ray` accepts the unit vectors with a component of `2^32 + 1` on each axis and sign; `new` keeps its bound."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-409"
+requirements = ["TRACE-REQ-032"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_409_normalisation_never_yields_a_component_above_one"
+oracle = "`FixedUnitVec3::new` produces no component above `2^32` over 200 000 generated vectors with minimum counts."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-410"
+requirements = ["TRACE-REQ-032"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_410_kernels_agree_with_the_oracles_for_long_unit_directions"
+oracle = "Derived: signed-volume oracle for hit_triangle and exact rational entry for box_entry, with the contract slack."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-411"
+requirements = ["TRACE-REQ-032"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_long_direction_hit_has_the_exactly_floored_distance"
+oracle = "Constructed: the distance is floor(2^65 / (2^32 + 1)) raw."
+tier = "fast"
 status = "implemented"
 ```
 
