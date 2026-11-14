@@ -207,7 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole function (the waiver-scope part of flyingrobots/bunny#286). A
   refused waiver no longer hides a valid one, a rule ID must match exactly
   (`std-fs-extra` does not waive `std-fs`), and a manifest waiver must be a
-  whole-line TOML comment. Part of flyingrobots/bunny#321.
+  whole-line TOML comment outside any multi-line string. A block comment over
+  several lines is read whole, so two clauses in it waive neither rule. Part
+  of flyingrobots/bunny#321.
 
 * Code Dojo's nondeterminism rules resolve `extern crate` renames like imports
   (`extern crate std as host; host::env::var(..)` is a `std-env` finding, and

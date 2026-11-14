@@ -207,3 +207,36 @@ fn a_waiver_after_code_covers_only_its_line() {
 
     assert_eq!(lines_of("std-fs", &source), vec![3]);
 }
+
+#[test]
+fn a_block_comment_over_two_lines_with_two_clauses_waives_nothing() {
+    let source = format!(
+        "/* dojo: allow std-fs -- {REASON}\n   dojo: allow std-env -- {REASON} */\npub fn f() {{\n    \
+         let _ = std::fs::read(\"x\");\n    let _ = std::env::var(\"X\");\n}}"
+    );
+
+    assert_eq!((lines_of("std-fs", &source), lines_of("std-env", &source)), (vec![4], vec![5]));
+}
+
+#[test]
+fn a_block_comment_over_two_lines_with_one_clause_waives_the_item_below() {
+    let source =
+        "/* dojo: allow std-fs -- reviewed fixture loader,\n   kept for the golden vectors */\n\
+                  pub fn f() { let _ = std::fs::read(\"x\"); }";
+
+    assert_eq!(lines_of("std-fs", source), Vec::<usize>::new());
+}
+
+#[test]
+fn manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment() {
+    let basic =
+        format!("[package.metadata]\nnote = \"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n");
+    let literal = format!("note = '''\n# dojo: allow random -- {REASON}\n'''\n");
+    let closed = format!("note = \"\"\"one line\"\"\"\n# dojo: allow random -- {REASON}\n");
+
+    assert_eq!(
+        (dependency_rules(&basic), dependency_rules(&literal), dependency_rules(&closed)),
+        (vec!["random"], vec!["random"], vec![]),
+        "text in a multi-line basic or literal string waives nothing; a comment after a closed one does"
+    );
+}

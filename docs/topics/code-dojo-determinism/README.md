@@ -147,7 +147,9 @@ finding reported; it does not hide a valid waiver for the same finding.
 
 Comments are what the token stream does not cover, so the same text inside a
 string, raw-string, byte-string or character literal, a doc comment, a
-`#[doc]` attribute or a macro's tokens is not a waiver.
+`#[doc]` attribute or a macro's tokens is not a waiver. Each comment is read
+whole: a block comment over several lines holding two clauses waives
+neither.
 
 A waiver after code covers its own line. A waiver on a line of its own covers
 that line, the comment lines below it, and the whole of the outermost item,
@@ -157,7 +159,8 @@ the next line holding code; if none starts there, that line only. A
 and a float in the next function is reported.
 
 A dependency waiver is the same clause in a whole-line TOML comment, anywhere
-in the manifest of the crate the finding names. There are no dependency
+in the manifest of the crate the finding names, but not on a line inside a
+multi-line string. There are no dependency
 waivers in the repository.
 
 ## Where The Rules Run
