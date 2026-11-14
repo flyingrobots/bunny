@@ -245,18 +245,23 @@ const fn pair<A, B>(lhs: A, rhs: B) -> (A, B) {
 #[inline]
 fn slab(
     ((origin, direction), reciprocal): ((i64, i64), u64),
-    bounds: (i64, i64),
+    (min, max): (i64, i64),
 ) -> Option<(u64, u64)> {
-    let origin = i128::from(origin);
-    let (min, max) = (i128::from(bounds.0), i128::from(bounds.1));
     if direction == 0 {
         return (min <= origin && origin <= max).then_some((0, u64::MAX));
     }
-    let (near, far) =
-        if direction > 0 { (min - origin, max - origin) } else { (origin - max, origin - min) };
-    // A negative far plane is behind the origin. Both differences fit `u64`.
-    let far = u64::try_from(far).ok()?;
-    let near = u64::try_from(near).unwrap_or(0);
+    // Against a negative direction, `!` (which reverses the order of `i64` and keeps
+    // `!a - !b == b - a`) turns the slab into one crossed forwards.
+    let flip = direction >> 63;
+    let (near, far) = if direction > 0 { (min, max) } else { (max, min) };
+    let (origin, near, far) = (origin ^ flip, near ^ flip, far ^ flip);
+    // A far plane behind the origin rejects the box. A difference `a - b` with `a >= b` lies
+    // in `0..2^64`, so the wrapping `i64` difference read as `u64` is exact.
+    if far < origin {
+        return None;
+    }
+    let far = far.wrapping_sub(origin).cast_unsigned();
+    let near = if near > origin { near.wrapping_sub(origin).cast_unsigned() } else { 0 };
     Some((scaled(near, reciprocal), scaled(far, reciprocal + 1).saturating_add(1)))
 }
 
