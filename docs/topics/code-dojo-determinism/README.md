@@ -23,14 +23,15 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `host-parallelism` | `std::thread::available_parallelism`, also as a bare name |
 | `random` | the `rand`, `getrandom` and `fastrand` crates, and the name `thread_rng` |
 | `host-callback` | the `js_sys`, `wasm_bindgen` and `web_sys` crates |
-| `network` | `std::net`, the `reqwest` and `ureq` crates, and the names `TcpStream::connect` and `UdpSocket::bind` |
+| `network` | `std::net`, `std::os::<platform>::net`, the `reqwest` and `ureq` crates, and the names `TcpStream::connect` and `UdpSocket::bind` |
 | `unordered-container` | the names `HashMap`, `HashSet`, `FxHashMap`, `FxHashSet`; `std::collections::hash_map` and `hash_set` except `hash_map::DefaultHasher`; `std::hash::RandomState`; the `hashbrown` and `rustc_hash` crates |
 | `hand-hashed-table` | any line, comments included, that names open addressing |
 | `json-serialization` | the `serde_json` crate |
 | `wasm-serde` | the `serde_wasm_bindgen` crate |
-| `std-env` | `std::env`, and the macros `env!` and `option_env!` (also under `std::` and `core::`) |
-| `std-fs` | `std::fs`, and the names `fs::…` and `File::open` |
-| `std-process` | `std::process` |
+| `std-env` | `std::env`, `std::path::absolute` and a zero-argument `.absolute()` call (they read the current directory), and the macros `env!` and `option_env!` (also under `std::` and `core::`) |
+| `std-fs` | `std::fs`, `std::os::<platform>::fs`, `io` and `prelude`, `std::os::fd`; the names `fs::…` and `File::open`; the `Path`/`PathBuf` methods that read the filesystem (`canonicalize`, `exists`, `is_dir`, `is_file`, `is_symlink`, `metadata`, `read_dir`, `read_link`, `symlink_metadata`, `try_exists`) as zero-argument calls or `Path::` paths |
+| `std-process` | `std::process`, `std::os::<platform>::process`, `std::io::pipe`, `PipeReader`, `PipeWriter` |
+| `host-input` | terminal input: `std::io::stdin`, `Stdin`, `StdinLock`, `IsTerminal` and a zero-argument `.is_terminal()` call |
 | `include-source` | `include!` in every spelling, and a `#[path]` module naming anything but a `.rs` file inside the crate directory |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
 | `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies |
@@ -102,6 +103,32 @@ including file's directory, as the compiler resolves `include_str!` and a
 top-level `#[path]`; inside an inline module the compiler uses a deeper
 directory, so the lexical answer can only call an inside path outside.
 Symbolic links are not followed, and a path with a backslash is rejected.
+
+### Host Access Beyond Echo
+
+`CODE_STANDARDS.md` Rule 4 forbids the filesystem, the environment, process
+arguments and the current directory in core crates; Echo's list does not name
+every way to reach them. The gate also bans `Path` methods that read the
+filesystem, the platform modules of `std::os` that do (`*` stands for
+`unix`, `windows`, `linux`, `wasi` and the rest), `std::path::absolute`,
+`std::io::pipe`, and terminal input (`host-input`). A method call is matched
+by its name when it takes no arguments, since the receiver's type is unknown;
+a type of Bunny's with an `exists()` or `metadata()` method would need
+another name or a waiver. Writing to standard output or standard error is not
+banned: `println!` in a test cannot change a result, and tests print the
+seeds that replay them.
+
+### Doc Tests
+
+`cargo test` compiles and runs doc tests, so the rules read them too: each
+fenced block in a doc comment that rustdoc treats as Rust (no info string, or
+only `rust`, `no_run`, `ignore`, `should_panic`, `compile_fail`,
+`test_harness`, `standalone_crate` or an edition) is parsed with its hidden
+`# ` lines, as a file or else as the body of `fn main`, and scanned like the
+file around it. A finding is reported at the line of the doc comment that
+holds it; a waiver above the documented item covers it. A `text` or other
+non-Rust block is not read, nor is doc text brought in with
+`#[doc = include_str!(..)]`.
 
 ### Dependency Rules
 

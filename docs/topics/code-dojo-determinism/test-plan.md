@@ -168,6 +168,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-061 | terminal input | ND-REQ-008 | `std::io::stdin`, `Stdin` in a group, `IsTerminal`, an `is_terminal()` call, `stdin` through a module alias and inside `format!` are `host-input`. | `xtask/src/nondeterminism/host_access_tests.rs::terminal_input_is_host_input` |
 | ND-TP-062 | doc tests | ND-REQ-008 | Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it. | `xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned` |
 | ND-TP-063 | host-access look-alikes | ND-REQ-003 | A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family. | `xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted` |
+| ND-TP-064 | documented Path methods | ND-REQ-008 | Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented. | `xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule` |
 
 ```toml
 [[case]]
@@ -699,7 +700,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/host_access_tests.rs::path_methods_that_read_the_filesystem_are_std_fs"
 oracle = "`exists`, `try_exists`, `is_file`, `is_dir`, `metadata`, `canonicalize`, `read_dir` as zero-argument method calls, `Path::exists` and `PathBuf::is_symlink` as paths, and `exists` inside `format!` are `std-fs`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-060"
@@ -708,7 +709,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/host_access_tests.rs::platform_filesystem_modules_are_banned"
 oracle = "`std::os::<platform>::fs` (unix, windows, linux), `std::os::fd` and a platform `prelude` glob are `std-fs`; `std::os::unix::net` is `network`; `std::os::unix::process` and `std::io::pipe` are `std-process`; `std::path::absolute` and `p.absolute()` are `std-env`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-061"
@@ -717,7 +718,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/host_access_tests.rs::terminal_input_is_host_input"
 oracle = "`std::io::stdin`, `Stdin` in a group, `IsTerminal`, an `is_terminal()` call, `stdin` through a module alias and inside `format!` are `host-input`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-062"
@@ -726,7 +727,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned"
 oracle = "Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-063"
@@ -735,7 +736,16 @@ evidence = "test"
 test = "xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted"
 oracle = "A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family."
 tier = "fast"
-status = "planned"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-064"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule"
+oracle = "Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence

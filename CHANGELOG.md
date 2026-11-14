@@ -161,6 +161,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo enforces what `CODE_STANDARDS.md` Rule 4 says beyond Echo's
+  rule list: the `Path` methods that read the filesystem (`exists`,
+  `metadata`, `canonicalize` and seven more), `std::os::<platform>::fs`,
+  `io`, `prelude`, `net` and `process`, `std::os::fd`, `std::path::absolute`
+  and `std::io::pipe` are findings, terminal input is a new `host-input`
+  rule, and doc tests are scanned like other code. The docs compare the list
+  with Lumen's gate. Part of flyingrobots/bunny#321.
+
 * Code Dojo names every item of `std::thread` and `std::time` deliberately
   instead of matching whole-segment prefixes, checked by a test against the
   pinned toolchain's documentation: `sleep_ms`, `sleep_until`, `park`,

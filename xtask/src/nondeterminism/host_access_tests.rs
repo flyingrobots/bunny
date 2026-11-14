@@ -20,7 +20,11 @@ fn path_methods_that_read_the_filesystem_are_std_fs() {
             ("metadata", "pub fn f(p: &Path) -> bool { p.metadata().is_ok() }", 1),
             ("canonicalize", "pub fn f(p: &Path) -> bool { p.canonicalize().is_ok() }", 1),
             ("read_dir", "pub fn f(p: &Path) -> bool { p.read_dir().is_ok() }", 1),
-            ("qualified call", "pub fn f(p: &std::path::Path) -> bool { std::path::Path::exists(p) }", 1),
+            (
+                "qualified call",
+                "pub fn f(p: &std::path::Path) -> bool { std::path::Path::exists(p) }",
+                1,
+            ),
             ("PathBuf call", "pub fn f(p: &PathBuf) -> bool { PathBuf::is_symlink(p) }", 1),
             ("macro body", "pub fn f(p: &Path) -> String { format!(\"{}\", p.exists()) }", 1),
         ],
@@ -68,8 +72,16 @@ fn terminal_input_is_host_input() {
             ("stdin", "pub fn f() { let _ = std::io::stdin(); }", 1),
             ("Stdin in a group", "use std::io::{self, Stdin};", 1),
             ("IsTerminal", "use std::io::IsTerminal;", 1),
-            ("is_terminal method", "pub fn f(out: &std::io::Stdout) -> bool { out.is_terminal() }", 1),
-            ("module alias", "use std::io as host;\npub fn f() { let _ = host::stdin().lock(); }", 2),
+            (
+                "is_terminal method",
+                "pub fn f(out: &std::io::Stdout) -> bool { out.is_terminal() }",
+                1,
+            ),
+            (
+                "module alias",
+                "use std::io as host;\npub fn f() { let _ = host::stdin().lock(); }",
+                2,
+            ),
             ("macro body", "pub fn f() -> String { format!(\"{:?}\", std::io::stdin()) }", 1),
         ],
     );
@@ -95,7 +107,7 @@ fn doc_tests_are_scanned() {
             "hidden line",
             "/// ```\n/// # use std::collections::HashMap;\n/// let m: HashMap<u8, u8> = HashMap::new();\n\
              /// ```\npub fn f() {}",
-            3,
+            2,
         )],
     );
     assert_rejects(
@@ -121,7 +133,10 @@ fn doc_tests_are_scanned() {
 const ACCEPTED: &[(&str, &str)] = &[
     ("a method named exists with an argument", "pub fn f(s: &Set) -> bool { s.exists(3) }"),
     ("a field named metadata", "pub fn f(m: &Mesh) -> u8 { m.metadata }"),
-    ("lexical path operations", "pub fn f() -> std::path::PathBuf { std::path::Path::new(\"x\").join(\"y\") }"),
+    (
+        "lexical path operations",
+        "pub fn f() -> std::path::PathBuf { std::path::Path::new(\"x\").join(\"y\") }",
+    ),
     ("writing to stdout", "pub fn f() { let _ = std::io::stdout(); }"),
     ("C integer types", "pub fn f(x: std::os::raw::c_int) -> i32 { x }"),
     ("a text block", "/// ```text\n/// std::fs::read(\"x\")\n/// ```\npub fn f() {}"),
