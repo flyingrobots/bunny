@@ -7,6 +7,9 @@ edition.workspace = true
 keywords = ["bunny", "contract", "schema", "dto"]
 license.workspace = true
 readme = "README.md"
+# This test compares the generated files at the repository root, which the package
+# does not contain; `scripts/publish-crates.sh packaged-tests` builds the packaged tests.
+exclude = ["tests/generated_version_tests.rs"]
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
