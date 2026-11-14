@@ -5,8 +5,8 @@ use core::fmt;
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
-use super::{edge_cut, keeps};
 use super::FixedPlane3;
+use super::{edge_cut, keeps};
 
 /// The result of clipping a polygon against a plane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
