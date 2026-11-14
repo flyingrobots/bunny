@@ -12,6 +12,9 @@ This is a living topic chapter, not a proposal. It is implemented in
 
 - `parse_ascii_ply`, `AsciiPlyMesh` (`vertex_count`, `face_count`, `vertices`,
   `triangles`), `AsciiPlyVertices`, `AsciiPlyTriangles`, `AsciiPlyVertex`;
+- `parse_ascii_ply_with_limits`, `AsciiPlyLimits` (`DEFAULT`, `UNLIMITED`, `new`),
+  `AsciiPlyLimitedError`, `AsciiPlyLimitExceeded` (`limit`, `maximum`, `observed`,
+  `line`) and `AsciiPlyLimit`; see [Limits](#limits);
 - `AsciiPlyError` (`kind`, `line`) and `AsciiPlyErrorKind`;
 - `parse_decimal_q32_32`, `DecimalError`, `DECIMAL_Q32_32_ID`
   (`"bunny-decimal-q32-32/1"`) and `MAX_FRACTIONAL_SIGNIFICANT_DIGITS` (28);
@@ -128,7 +131,62 @@ item of a validated mesh is `Ok`). Declared counts are never used to reserve mem
 They are only upper bounds on how many records are read, so a header that declares
 `element vertex 4294967295` over a short body fails with a typed error after reading
 that body. A count that does not fit `usize` is `IntegerOverflow`; a count that is not
-a run of ASCII digits is `InvalidCount`. Neither reader limits the counts further.
+a run of ASCII digits is `InvalidCount`. `parse_ascii_ply` limits the counts no further;
+[`parse_ascii_ply_with_limits`](#limits) does, at the caller's choice.
+
+### Limits
+
+`parse_ascii_ply` has no limit of its own. Its implicit limits are those of the input:
+a count is at most the number of non-blank lines, which is at most the input length, and a
+line is at most the input length; a declared count is only an upper bound on the records read,
+so no count sizes anything, memory stays constant and a hostile header costs one pass over
+the input, not an allocation. What it cannot do is refuse a large input early. A caller that
+wants that uses `parse_ascii_ply_with_limits(input, &limits)`, which returns the same mesh
+and the same profile errors, and refuses an input past the limits:
+
+| Field of `AsciiPlyLimits` | Meaning | `DEFAULT` | `UNLIMITED` |
+| --- | --- | --- | --- |
+| `max_vertices` | the declared vertex count | `2^24` | `usize::MAX` |
+| `max_faces` | the declared face count | `2^24` | `usize::MAX` |
+| `max_line_bytes` | the length of any line, without its `\n` or `\r\n` terminator, in the header or the body, blank lines included | 4096 | `usize::MAX` |
+
+Every limit is inclusive: a value equal to it is accepted and one more is refused. The
+error is `AsciiPlyLimitedError::Limit(AsciiPlyLimitExceeded)`, naming the `limit`
+(`Vertices`, `Faces` or `LineBytes`), the `maximum`, the `observed` value (the declared
+count, or the full length of the first long line) and the 1-based `line` (the `element` line
+of a count). An input the profile refuses gives `AsciiPlyLimitedError::Format` with the
+`AsciiPlyError` that `parse_ascii_ply` gives, unless a limit applies first. The checks run
+in this order, which decides the error when several apply:
+
+1. the header terminator and UTF-8 (`MissingHeaderEnd`, `HeaderUtf8`);
+2. the length of every header line, `end_header` included;
+3. the rest of the header;
+4. the declared vertex count, then the declared face count, before any body line is read,
+   so an input that declares `4294967295` vertices is refused after its header;
+5. each body line in order, blank lines and the lines after the last record included: its
+   length, then its record.
+
+`parse_ascii_ply` itself is not changed: it behaves as `parse_ascii_ply_with_limits` with
+`AsciiPlyLimits::UNLIMITED`, and the test of that claim compares the two on generated valid
+and invalid inputs ([test plan](test-plan.md), APLY-TP-059). `AsciiPlyLimits` is
+`#[non_exhaustive]`, so fields can be added later; build it with `new` or a constant.
+
+**Cost.** The time is linear in the input and the memory constant, with or without a limit.
+The structure is the argument: every loop is bounded by the line or token it scans, none is
+nested in a loop over the input, and a body line is read a fixed number of times (the
+newline search, the blank test, the token count, one lookup per coordinate and the
+conversion of each coordinate token). The limits bound what one declaration or one line can
+claim; a line is still scanned once to find its end before its length is compared.
+
+**Skipped columns.** The text of an extra vertex column is counted, never parsed, with or
+without limits, as stated in [The Profile](#the-profile): the header gives a type, but no
+type's value grammar is part of this profile, and the binary reader refuses extra
+properties instead of reading them. Behaviour is unchanged.
+
+**For a Lumen caller.** Lumen's retired reader enforced `2^20` vertices, `2^20` faces and
+256-byte lines. The same protection is `AsciiPlyLimits::new(1 << 20, 1 << 20, 256)`. Whether
+Lumen counted the terminator in the 256 is not known here; this limit does not. A caller with
+no such history can pass `AsciiPlyLimits::DEFAULT`.
 
 ### Errors And Line Numbers
 

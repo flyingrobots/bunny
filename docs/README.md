@@ -16,7 +16,7 @@ evidence exist.
 | Chapter | Owns |
 | --- | --- |
 | [`topics/angle-trigonometry/`](topics/angle-trigonometry/) | Binary angles (`FixedAngle`), conversions from turns, degrees and radians, and table-based deterministic sine and cosine with error bounds. |
-| [`topics/ascii-ply/`](topics/ascii-ply/) | The ASCII PLY triangle-mesh profile `bunny-ascii-ply-triangle-mesh/1` read by `parse_ascii_ply`, its line, whitespace and comment rules and error contract, and the exact integer-only decimal to Q32.32 conversion rule `bunny-decimal-q32-32/1`. |
+| [`topics/ascii-ply/`](topics/ascii-ply/) | The ASCII PLY triangle-mesh profile `bunny-ascii-ply-triangle-mesh/1` read by `parse_ascii_ply`, its line, whitespace and comment rules and error contract, the caller-chosen limits of `parse_ascii_ply_with_limits`, and the exact integer-only decimal to Q32.32 conversion rule `bunny-decimal-q32-32/1`. |
 | [`topics/bvh-construction/`](topics/bvh-construction/) | The flat BVH node format and its two builders: the quartile builder `build_bvh` and the binned SAH builder `build_bvh_sah`, with costs, overflow rule, tie rules, depth cap and stable partition. |
 | [`topics/code-dojo-determinism/`](topics/code-dojo-determinism/) | The Code Dojo rules that enforce Echo's `ban-nondeterminism` rule IDs: banned paths and crates, import and macro resolution, crate scope, waivers, and the dependency check. |
 | [`topics/contract-generation/`](topics/contract-generation/) | Schema-to-artifact generation, generated Rust/TypeScript DTO shape, manifest witnesses, and Bunny-owned object boundaries. |
@@ -30,6 +30,7 @@ evidence exist.
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, and segment clipping with its rounding contract. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | The ray-tracing kernels: trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, and rounding of distances and barycentrics. |
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, segment and convex polygon clipping with its rounding contract. |
+| [`topics/release-packaging/`](topics/release-packaging/) | The `scripts/publish-crates.sh` archive checks, including building every crate's tests from its own unpacked package, and the rule that a test and the files it reads ship together. |
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |
 | [`NUMERIC_CONSTITUTION.md`](NUMERIC_CONSTITUTION.md) | Q32.32 arithmetic law, construction policy, rounding, overflow, and numeric golden-vector expectations. |
 | [`MATH_GEOMETRY_CAPABILITY_MAP.md`](MATH_GEOMETRY_CAPABILITY_MAP.md) | Bunny's durable math/geometry ownership boundary, non-goals, missing surface, and build order. |

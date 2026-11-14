@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | `parse_binary_ply` | Canonical binary little-endian PLY triangle mesh | Borrowed view, zero allocations after warm-up |
 | `parse_ascii_ply` | ASCII PLY triangle mesh, `bunny-ascii-ply-triangle-mesh/1`, with exact decimal to Q32.32 positions | Borrowed view and iterators, zero allocations after warm-up |
+| `parse_ascii_ply_with_limits` | The same profile, refusing a declared vertex or face count or a line past an `AsciiPlyLimits` | The same, and none either |
 | `parse_obj_text` | Supported OBJ text triangle mesh | Borrowed source view, zero allocations after warm-up |
 | `decode_compressed_mesh` | Bunny-native compressed mesh profile v1 | Borrowed byte-section view, zero allocations after warm-up |
 
@@ -35,6 +36,13 @@ holds only Bunny crates, with no crates.io crate; the full gate checks this on
 every run. See
 [`docs/topics/ascii-ply`](../../docs/topics/ascii-ply/README.md#dependencies-and-features).
 
+## Package Contents
+
+The published package leaves out the 143 KB Stanford bunny asset under
+`tests/fixtures/stanford-bunny-ascii/` and the one test that reads it,
+`tests/ply_ascii_stanford_tests.rs`; every other test compiles from the package.
+See [`docs/topics/release-packaging`](../../docs/topics/release-packaging/README.md).
+
 ## ASCII PLY
 
 `parse_ascii_ply` reads `format ascii 1.0` PLY triangle meshes. Vertex positions
@@ -45,7 +53,10 @@ properties other than `x`, `y`, `z` are skipped by their declaration, and errors
 carry a 1-based line number. The profile, the line, whitespace and comment rules
 and the error contract are in
 [`docs/topics/ascii-ply`](../../docs/topics/ascii-ply/README.md). The binary reader
-is unchanged.
+is unchanged. `parse_ascii_ply_with_limits` takes an `AsciiPlyLimits` (vertex count, face
+count, line length in bytes; `DEFAULT`, `UNLIMITED`, `new`) and returns a typed error naming
+the limit, the maximum and the observed value; see
+[Limits](../../docs/topics/ascii-ply/README.md#limits).
 
 ## Verification
 

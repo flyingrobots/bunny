@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* The published `bunny-codec` package no longer contains a test that cannot
+  compile: `tests/ply_ascii_stanford_tests.rs` is excluded together with the
+  Stanford fixture it reads with `include_bytes!`. `bunny-contract` had the same
+  fault, with `tests/generated_version_tests.rs` reading the generated files at
+  the repository root, and is fixed the same way. `scripts/publish-crates.sh
+  packaged-tests`, now part of `verify` and so of the release workflow, packages
+  every crate, unpacks the archives side by side with the sibling crates patched
+  to the unpacked copies, and runs `cargo check --tests` over them; on the old
+  manifests it fails and names both tests. No library code changes
+  (flyingrobots/bunny#283).
+
+### Fixed
+
 * The ASCII PLY chapter states what the reader does at three points where it said
   otherwise; no code changes. A face element before the vertex element, or before `x`, `y`
   and `z` are all declared, is `MissingVertexElement` at its `element face` line (not the
@@ -22,6 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before) (flyingrobots/bunny#323).
 
 ### Added
+
+* `bunny-codec`'s `parse_ascii_ply_with_limits(input, &AsciiPlyLimits)` refuses an ASCII
+  PLY input whose declared vertex count, declared face count or line length (bytes
+  without the terminator, blank lines included) is past an inclusive limit, with an
+  `AsciiPlyLimitedError::Limit` naming the limit, the maximum, the observed value and
+  the line; counts are refused before any body line is read. `AsciiPlyLimits::DEFAULT`
+  is `2^24` vertices, `2^24` faces and 4096-byte lines; `UNLIMITED` is `usize::MAX`
+  for each. `parse_ascii_ply` is not changed: a differential test over 20 000
+  generated valid and invalid inputs shows the new function with unreachable limits
+  returns the same meshes and the same errors, and the reader already used constant
+  memory and linear time, so the limits refuse early rather than close a resource
+  hole. Text in skipped vertex columns is still counted, never parsed. A Lumen caller
+  keeping its retired reader's protection passes
+  `AsciiPlyLimits::new(1 << 20, 1 << 20, 256)` (flyingrobots/bunny#300).
 
 * `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
   hits on the benchmark sphere: `shade/smooth_normal` (the shipped
