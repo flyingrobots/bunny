@@ -6,6 +6,7 @@
 //! integer wide enough to hold its true value, and the one division happens only after the
 //! ray is known to hit. See `docs/topics/ray-tracing/README.md`.
 
+use crate::BarycentricNumerators;
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
@@ -214,6 +215,14 @@ impl TriangleHit {
             FixedQ32_32::from_raw(shifted_quotient(numerator, self.det).unwrap_or(i64::MAX))
         };
         (weight(self.u), weight(self.v))
+    }
+
+    /// The exact barycentric numerators the triangle test decided this hit with: `u` and `v`
+    /// over `det`, the unrounded values behind [`Self::barycentrics`]. Each is below `2^117`
+    /// for a ray and triangle in the trace domain.
+    #[must_use]
+    pub const fn barycentric_numerators(&self) -> BarycentricNumerators {
+        BarycentricNumerators::from_hit(self.u, self.v, self.det)
     }
 }
 

@@ -27,6 +27,9 @@ targets.
 * Ray-tracing kernels (`TraceRay`, `TraceTriangle`): a division-free
   conservative ray-box test and an exact integer ray-triangle test with
   inclusive edges; see `docs/topics/ray-tracing/`.
+* `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
+  triangle test decided a hit with, as a `BarycentricNumerators` (also
+  buildable from any point on a triangle with `BarycentricNumerators::new`).
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License

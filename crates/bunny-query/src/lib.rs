@@ -6,6 +6,7 @@
 
 //! Ray-casting and spatial query math solvers for Bunny.
 
+mod barycentric;
 #[allow(clippy::module_name_repetitions)]
 mod closest;
 #[allow(clippy::module_name_repetitions)]
@@ -13,6 +14,7 @@ mod ray;
 #[allow(clippy::module_name_repetitions)]
 mod trace;
 
+pub use barycentric::BarycentricNumerators;
 pub use closest::{
     aabb_intersects_sphere, closest_point_aabb, closest_point_triangle, closest_points_segments,
 };
