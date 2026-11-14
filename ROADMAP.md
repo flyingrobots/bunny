@@ -321,7 +321,7 @@ cut.
 | Release | Cut Trigger | Scope |
 | --- | --- | --- |
 | `v0.6.0` | Frame-commons and contract-profile release cut. | Coordinate law, numeric preconditions, deterministic property corpora, matrices, affine transforms, and deterministic contract-profile witnesses. |
-| `v0.7.0` | `v0.7.0 Geometry Law and Primitive Coverage` milestone complete. | Remaining frame math, projection and viewport mapping, quaternion orientation, angle policy, interpolation, curves, degeneracy law, robust predicates, shape expansion, clipping, bounds, topology, and mass properties. |
+| `v0.7.0` | Early cut on 2026-11-13; the `v0.7.0 Geometry Law and Primitive Coverage` milestone continues as additive `0.7.x` releases. | Remaining frame math, projection and viewport mapping, quaternion orientation, angle policy, interpolation, curves, degeneracy law, robust predicates, shape expansion, clipping, bounds, topology, and mass properties. |
 | `v0.8.0` | `v0.8.0 Collision and Contact` milestone complete. | Narrowphase, support mapping, GJK/EPA, collision architecture, manifolds, and swept queries. |
 | `v0.9.0` | `v0.9.0 Acceleration, Visibility, and Ray Tracing` milestone complete. | Dynamic broadphase, spatial hashing, mesh BVHs, visibility, occlusion, and ray-tracing hit suites. |
 | `v0.10.0` | `v0.10.0 Optics, SIMD, and Codec Completion` milestone complete. | Optics, deterministic SIMD exploration, benchmarks, no-std audit, codec encoder, external mesh profiles, and fuzzing. |
@@ -404,7 +404,21 @@ cut.
 
 ## Release v0.7.0: Geometry Law and Primitive Coverage
 
-* **Status**: Planned.
+* **Status**: Cut early on 2026-11-13 (`0.7.0`); the remaining goalposts
+  continue in the `0.7` line and ship as additive `0.7.x` releases.
+* **Early Cut**: `0.7.0` was cut before this milestone was complete because
+  downstream repositories needed the new APIs, and because `main` carries a
+  declared behaviour change (`ray_intersects_aabb` no longer reports a miss on
+  overflow, #211), which a minor version signals before 1.0. It ships ray-tracing
+  kernels, closest-hit and any-hit BVH traversal, the `bunny-optics` pinhole
+  camera (an early start on work this roadmap places in `v0.10.0`), `FixedAngle`
+  with `sin_cos`, projection matrices, the look-at view matrix, viewport mapping,
+  plane classification with segment and polygon clipping, the ray-box overflow
+  fix, a faster exact square root, and the perf harness. It does not ship
+  quaternions, interpolation and curves, degeneracy policy, robust predicates,
+  the shape library, 2D coverage, frustum primitives, bounds utilities, topology
+  validation, or mass properties; those goalposts are unchanged below. Releases
+  `v0.8.0` onward keep their names and scope.
 * **GitHub Milestone**: `v0.7.0 Geometry Law and Primitive Coverage`
 * **Description**: Completes the remaining frame math moved forward from
   `v0.6.0`, then defines degeneracy behavior, robust predicates, richer shape
