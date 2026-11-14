@@ -56,8 +56,16 @@ Mutations, each under `timeout 120`, all caught: every path inside the crate (2 
 fail), backslashes accepted (1), any `#[path]` extension accepted (1), `cfg_attr` not
 read (1), macro tokens not searched for calls (3), any module path counted as a standard
 macro (the look-alike test).
+Review findings (CodeRabbit on #332, verified here): `#[path]` emitted by a macro, a
+`path` inside a nested `cfg_attr`, and a `.rs` target under `vendor`, `third_party` or
+`target`, which the gate does not list, all escaped. ND-TP-069 seeds five forms; all
+five slipped through on the unfixed code. `#[path]` attributes are now also read from
+macro tokens, `cfg_attr` is parsed as nested attributes at any depth, and a module path
+must name a file the gate lists. Mutations, under `timeout 120`, all caught: macro tokens
+not searched for path attributes, `cfg_attr` read one level deep, unlisted directories
+accepted.
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
-cargo test --locked -p xtask: 99 passed; cargo test -p bunny-contract --test
+cargo test --locked -p xtask: 103 passed; cargo test -p bunny-contract --test
 generated_version_tests: 2 passed.
 cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository: three new
 findings, all real and all in crates/bunny-contract/tests/generated_version_tests.rs:

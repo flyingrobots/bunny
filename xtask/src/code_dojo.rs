@@ -9,8 +9,8 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro,
-    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, Lit, Macro,
-    Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
+    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, ItemUse, Lit,
+    Macro, Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath, UseTree,
 };
 
 use crate::git_helpers::git_command;
@@ -849,7 +849,9 @@ fn command_error(command: &str, stderr: &[u8]) -> DojoError {
     DojoError::new(format!("{command} failed: {}", detail.trim()))
 }
 
-fn is_rust_source(path: &Path) -> bool {
+/// Whether the gate lists `path` as a Rust source: a `.rs` file outside `target`, `.git`,
+/// `vendor` and `third_party`.
+pub(super) fn is_rust_source(path: &Path) -> bool {
     if path.extension() != Some(OsStr::new("rs")) {
         return false;
     }
@@ -1111,6 +1113,41 @@ impl PolicyVisitor<'_> {
         }
     }
 
+    /// A `use` leaf naming a float (`use core::f64::consts::PI as P`, a renamed `to_f32`)
+    /// is reported where it is imported, since the name it binds hides the float.
+    fn check_use_floats(&mut self, tree: &UseTree, prefix: &mut Vec<String>) {
+        let leaf = match tree {
+            UseTree::Path(path) => {
+                prefix.push(crate::nondeterminism::ident_name(&path.ident));
+                self.check_use_floats(&path.tree, prefix);
+                prefix.pop();
+                return;
+            }
+            UseTree::Group(group) => {
+                for item in &group.items {
+                    self.check_use_floats(item, prefix);
+                }
+                return;
+            }
+            UseTree::Name(name) => Some(&name.ident),
+            UseTree::Rename(rename) => Some(&rename.ident),
+            UseTree::Glob(_) => None,
+        };
+        let mut path = prefix.clone();
+        path.extend(leaf.map(crate::nondeterminism::ident_name));
+        let line = line_of(tree.span());
+        if self.category == Category::Core
+            && names_float(&path)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                "importing a float name in core requires a boundary/proof waiver",
+            );
+        }
+    }
+
     fn check_type_path(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
@@ -1230,6 +1267,11 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     fn visit_macro(&mut self, node: &'ast Macro) {
         self.check_macro_floats(node);
         visit::visit_macro(self, node);
+    }
+
+    fn visit_item_use(&mut self, node: &'ast ItemUse) {
+        self.check_use_floats(&node.tree, &mut Vec::new());
+        visit::visit_item_use(self, node);
     }
 
     fn visit_type_path(&mut self, node: &'ast TypePath) {
