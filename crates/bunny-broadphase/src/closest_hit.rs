@@ -127,9 +127,6 @@ struct Search<'a> {
     stop_at_first: bool,
     stack: [(u32, FixedQ32_32); STACK_CAPACITY],
     len: usize,
-    /// Interior visits still allowed. A tree of `n` nodes has at most `n / 2` interior nodes
-    /// and visits each once, so running out proves a node was reached twice.
-    interior_visits_left: usize,
 }
 
 impl<'a> Search<'a> {
@@ -147,7 +144,6 @@ impl<'a> Search<'a> {
             stop_at_first,
             stack: [(0, FixedQ32_32::ZERO); STACK_CAPACITY],
             len: 0,
-            interior_visits_left: bvh.nodes.len() / 2,
         }
     }
 
@@ -159,7 +155,10 @@ impl<'a> Search<'a> {
             let root = self.entry(0)?;
             self.push((0, root))?;
         }
-        let mut interior_visits_left = self.interior_visits_left;
+        // A tree of `n` nodes has at most `n / 2` interior nodes and visits each once, so
+        // running out proves a node was reached twice. A tree whose child is out of range
+        // reports that during the visit, so its own error is unchanged.
+        let mut interior_visits_left = self.bvh.nodes.len() / 2;
         while let Some(node) = self.pop()? {
             if node.prim_count == 0 {
                 interior_visits_left =

@@ -84,10 +84,18 @@ where
     Visit: FnMut(u32),
 {
     let mut stack = TraversalStack::new(nodes)?;
+    // A tree of `n` nodes has at most `n / 2` interior nodes and visits each once, so running
+    // out proves a node was reached twice. Spent after the visit's pushes, so a full stack
+    // still reports `StackOverflow` first.
+    let mut interior_visits_left = nodes.len() / 2;
     while let Some(node_idx) = stack.pop() {
         let node = nodes.get(node_idx as usize).ok_or(TraversalError::InvalidNodeIndex)?;
         if matches_node(node) {
             visit_matching_node(node, prim_indices, &mut stack, &mut visit_leaf)?;
+            if node.prim_count == 0 {
+                interior_visits_left =
+                    interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
+            }
         }
     }
     Ok(())
@@ -114,15 +122,11 @@ where
 struct TraversalStack {
     values: [u32; STACK_CAPACITY],
     len: usize,
-    /// Interior visits still allowed. A tree of `n` nodes has at most `n / 2` interior nodes
-    /// and visits each once, so running out proves a node was reached twice.
-    interior_visits_left: usize,
 }
 
 impl TraversalStack {
     fn new(nodes: &[BvhNode]) -> Result<Self, TraversalError> {
-        let interior_visits_left = nodes.len() / 2;
-        let mut stack = Self { values: [0_u32; STACK_CAPACITY], len: 0, interior_visits_left };
+        let mut stack = Self { values: [0_u32; STACK_CAPACITY], len: 0 };
         if !nodes.is_empty() {
             stack.push(0)?;
         }
@@ -143,15 +147,10 @@ impl TraversalStack {
         self.values.get(self.len).copied()
     }
 
-    /// Pushes an interior node's children, then spends one interior visit (after the pushes,
-    /// so a full stack still reports `StackOverflow` first).
     fn push_children(&mut self, node: &BvhNode) -> Result<(), TraversalError> {
         let left_child = node.first_child_or_prim_idx;
         let right_child = left_child.checked_add(1).ok_or(TraversalError::InvalidNodeIndex)?;
         self.push(left_child)?;
-        self.push(right_child)?;
-        self.interior_visits_left =
-            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
-        Ok(())
+        self.push(right_child)
     }
 }
