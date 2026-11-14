@@ -137,7 +137,8 @@ the geometric predicate.
 | `FixedVec2` / `FixedVec3` arithmetic operators | Saturating | Compose saturating scalar operators component-wise. |
 | `FixedVec2::length` / `FixedVec3::length` | Checked | Uses wide raw-square accumulation and returns `None` if the length cannot fit in Q32.32. |
 | `FixedVec2::try_from_float` / `FixedVec3::try_from_float` | Checked | Rejects invalid float components before fixed-point ingress. |
-| `bunny-query` ray intersections | Checked predicate math | Return `None` when intermediate ray math overflows. |
+| `bunny-query` ray/sphere and ray/triangle intersections | Checked predicate math | Return `None` when intermediate ray math overflows. |
+| `bunny-query::ray_intersects_aabb` | Checked, then exact | A slab distance that overflows saturates by sign; on that path the hit is decided with exact `i128` rationals, so saturation never creates a hit. Hits without overflow are bit-identical to the checked-only version (flyingrobots/bunny#211). |
 | `bunny-query` closest-point helpers | Saturating today | Open audit path: these APIs return values, not `Result`/`Option`, so overflow cannot yet be reported distinctly. |
 | `bunny-mesh` quantization | Proven-infallible within `i128` intermediates | Uses wide ratio math; outside points clamp to quantized endpoints. |
 | `bunny-mesh` dequantization | Proven-infallible with endpoint clamps | Uses wide ratio math and clamps final raw reconstruction into `i64`. |

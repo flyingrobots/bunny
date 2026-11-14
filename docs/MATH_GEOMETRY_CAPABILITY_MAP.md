@@ -161,6 +161,7 @@ Current surface:
 - `FixedRay3`
 - `FixedAabb3`
 - `FixedSphere3`
+- `FixedPlane3` and `FixedSegment3` with checked segment clipping
 - validated fixed/float boundary conversions
 - ray and closest-point query inputs
 

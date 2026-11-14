@@ -170,19 +170,127 @@ Queries may define stricter behavior for degeneracy. Degeneracy policy belongs
 with the shape or query API and must cite this coordinate law when the behavior
 depends on orientation, winding, units, or boundary contact.
 
-## Projection and NDC Reservations
+## Projection and NDC
 
-Bunny does not yet expose canonical projection or viewport APIs. Future APIs
-must use these reserved defaults unless their names explicitly say otherwise:
+`FixedMat4::try_look_at` builds the matching `view_from_world` matrix: rows
+right, up and `-forward` of the right-handed frame below, so the view axis maps
+to `-Z`.
 
-- Normalized device coordinate `x` range: `[-1, 1]`.
-- Normalized device coordinate `y` range: `[-1, 1]`.
-- Normalized device coordinate `z` range: `[0, 1]`.
+`FixedMat4::try_orthographic` and `FixedMat4::try_perspective` in
+`bunny-linalg` are the canonical projection builders. Each returns a
+`clip_from_view` matrix that follows the transform convention above
+(`p_clip = clip_from_view * p_view`, column vectors).
+
+Canonical normalized device coordinates (NDC):
+
+- `x` range: `[-1, 1]`.
+- `y` range: `[-1, 1]`.
+- `z` (depth) range: `[0, 1]`.
 - Positive NDC `y` points up.
 
-Viewport conversion must explicitly name the viewport origin and `y` direction.
-OpenGL, WebGPU, DirectX, image buffers, and UI systems disagree here; Bunny must
-not hide that disagreement behind ambient defaults.
+View space is the right-handed canonical frame with the camera at the origin
+looking down `-Z`. A point at distance `d` in front of the camera has
+`z_view = -d`, `+X` is to the camera's right, and `+Y` is up. `near` and `far`
+are positive distances in front of the camera, with `near < far`.
+
+Depth range choice: the near plane maps to NDC `z = 0` and the far plane to
+`z = 1`. Reason: the coordinate law already reserved `[0, 1]` for NDC depth
+(it is the WebGPU and Direct3D range and keeps fixed-point depth precision
+non-negative), and the right-handed frame with a `-Z` camera requires no
+handedness flip. The `[-1, 1]` OpenGL range is not canonical; a boundary
+adapter that needs it must convert explicitly (`z_gl = 2 * z - 1`).
+
+Orthographic matrix (`half_width`, `half_height`, `near`, `far`, with
+`depth = far - near`):
+
+```text
+| 1/half_width  0              0            0           |
+| 0             1/half_height  0            0           |
+| 0             0              -1/depth     -near/depth |
+| 0             0              0            1           |
+```
+
+Perspective matrix (`tan_half_fov_y`, `aspect = width / height`):
+
+```text
+| 1/(aspect*tan)  0        0              0                  |
+| 0               1/tan    0              0                  |
+| 0               0        -far/depth     -far*near/depth    |
+| 0               0        -1             0                  |
+```
+
+The perspective builder takes the tangent of half the vertical field of view,
+so Bunny needs no trigonometry to build it. After the matrix, `w_clip =
+-z_view`, and NDC is the component-wise division by `w_clip`. A point behind
+the camera has `w_clip < 0`; callers clip before dividing. Bunny does not yet
+expose a clip or divide helper, unprojection, or rays; viewport conversion is
+defined in [Viewport Conversion](#viewport-conversion).
+
+Both builders use checked Q32.32 arithmetic and return `ProjectionError`
+instead of panicking or saturating:
+
+- `NonPositiveExtent`: a half extent, tangent, or aspect is zero or negative.
+- `InvalidNear`: `near < 0` (orthographic) or `near <= 0` (perspective).
+- `InvalidDepthRange`: `near >= far`.
+- `Overflow`: a checked operation overflowed, including `far * near`, or a
+  divisor rounded to zero.
+
+Each matrix entry is rounded to the nearest Q32.32 value, so a matrix is exact
+only when its entries are representable. Golden vectors therefore use
+power-of-two parameters.
+
+## Viewport Conversion
+
+OpenGL, WebGPU, DirectX, image buffers, and UI systems disagree about the
+viewport origin and the `y` direction, so Bunny names them explicitly.
+`Viewport::try_new(width, height)` in `bunny-linalg` takes a size in device
+pixels (`u32`), and `try_ndc_to_viewport` and `try_viewport_to_ndc` convert
+between NDC and viewport coordinates as `FixedVec3` values.
+
+The coordinate law already fixed that a conversion names its origin and `y`
+direction; the rest of this section is a choice recorded here, with its reason.
+
+- Origin: the top-left corner of the viewport. Pixel `y` runs down. NDC
+  `(-1, +1)` is `(0, 0)` and NDC `(+1, -1)` is `(width, height)`. Reason: the
+  issue specified it, and it matches image buffers and WebGPU framebuffer
+  coordinates, which are the consumers.
+- Pixel corners, not centres: a viewport coordinate is continuous, integers lie
+  on pixel corners, pixel `i` spans `[i, i + 1)` and its centre is `i + 1/2`.
+  The NDC edges `-1` and `+1` land exactly on `0` and `width`, and the NDC
+  origin lands on `width / 2`. Reason: it keeps the map linear and invertible
+  with no half-pixel offset baked in; deciding which pixel a point falls in
+  (snapping, fill rules) stays with the rasterizer.
+- Depth: viewport `z` equals NDC `z`, in `[0, 1]`, unchanged.
+- No clipping or clamping: points outside the NDC cube map linearly, so values
+  below `0` or above the size are possible.
+
+Forward mapping, with `x` and `y` in raw Q32.32 units and `ONE = 2^32`:
+
+```text
+x_px = floor((x_ndc + ONE) * width  / 2)
+y_px = floor((ONE - y_ndc) * height / 2)
+```
+
+The product is exact in `i128`, so the only rounding is one floor of at most
+half a raw unit. Floor (round toward negative infinity, an arithmetic right
+shift) is used rather than truncation or round-half-up so that the rule is the
+same on both sides of zero. At NDC `-1`, `0` and `+1` and on power-of-two sizes
+(and any even size) the result is exact.
+
+Inverse mapping: `x_ndc = floor(2 * x_px / width) - ONE` and
+`y_ndc = ONE - floor(2 * y_px / height)`, flooring the Euclidean quotient.
+
+Round trip: the exact integer reasoning is `a = x_ndc + ONE`,
+`p = floor(a * width / 2)`, then `floor(2p / width)`. When `width` is even, or
+`a` is even, `a * width` is even and the round trip returns `a`. When both are
+odd, `2p = a * width - 1` and the round trip returns exactly `a - 1`. So the
+round trip is within one raw unit per axis: `x` never comes back above its
+original and `y` never below, and it is exact unless the size and the shifted
+NDC raw value are both odd.
+
+Errors (`ViewportError`): `EmptyExtent` for a zero width or height, and
+`Overflow` when a result does not fit Q32.32. Sizes are unsigned, so a negative
+size cannot be expressed. Nothing panics or saturates.
 
 ## Camera Image Convention
 
@@ -203,7 +311,7 @@ Boundary adapters must document:
 - source up axis
 - source unit scale, if known
 - source winding order
-- source depth range, if projection data is imported
+- source depth range, if projection data is imported (Bunny's is `[0, 1]`)
 - the exact conversion into Bunny's canonical convention
 
 Lossy display or diagnostic conversion may use floats, but canonical geometry
@@ -219,13 +327,19 @@ enforce:
 - reversed cross product signs
 - `XY` counter-clockwise winding produces a `+Z` normal
 
-Future transform, projection, angle, and camera APIs must add tests for:
+Projection builders keep tests that map near and far plane points to NDC
+`z = 0` and `z = 1`, and that check the `-Z` camera and `+Y` up convention.
+
+Viewport conversion keeps golden vectors on power-of-two and odd sizes, exact
+raw rounding at the edges, and a seeded round-trip property test against exact
+integer arithmetic.
+
+Future transform, angle, and camera APIs must add tests for:
 
 - `target_from_source` naming examples
 - matrix composition order
 - point versus vector translation behavior
 - positive rotation direction
-- NDC and viewport conversion examples
 
 ## Documentation Rule
 
