@@ -19,7 +19,7 @@ use crate::cases::{case, Case};
 /// Quads along each edge of each cube face: 6 * 48 * 48 * 2 = 27 648 triangles.
 const GRID: i64 = 48;
 /// Camera rays per side; `RAYS_PER_SIDE^2` must equal the batch size the cases report.
-const RAYS_PER_SIDE: i64 = 32;
+pub(crate) const RAYS_PER_SIDE: i64 = 32;
 
 pub(crate) type Triangle = [FixedVec3; 3];
 

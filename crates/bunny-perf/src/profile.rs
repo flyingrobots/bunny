@@ -9,7 +9,7 @@
 //! The replica also records every box test and triangle test it makes, so the kernel cases
 //! can replay exactly those calls and time them in isolation (see [`kernel_cases`]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 use std::hint::black_box;
 
@@ -18,7 +18,7 @@ use bunny_num::FixedQ32_32;
 use bunny_query::{TraceRay, TraceTriangle};
 
 use crate::cases::{case, Case};
-use crate::scene::{scene, trace_rays, trace_triangles, Scene};
+use crate::scene::{scene, trace_rays, trace_triangles, Scene, RAYS_PER_SIDE};
 
 const FAR: FixedQ32_32 = FixedQ32_32::from_raw(i64::MAX);
 
@@ -518,14 +518,55 @@ fn render_tree(rig: &Rig) -> String {
     )
 }
 
+/// For square blocks of neighbouring rays (the camera grid is row-major): the box tests the
+/// rays make in total, and the number of distinct nodes they test. Their ratio bounds what
+/// a packet that tests each node once for the whole block could share.
+pub(crate) fn packet_sharing(rig: &Rig, block: usize) -> (usize, usize) {
+    let side = usize::try_from(RAYS_PER_SIDE).unwrap_or(0);
+    let tested: Vec<Vec<u32>> = rig
+        .rays
+        .iter()
+        .map(|ray| walk(rig, ray, Mode::Closest).boxes.iter().map(|b| b.0).collect())
+        .collect();
+    let (mut total, mut distinct) = (0, 0);
+    for row in (0..side).step_by(block) {
+        for column in (0..side).step_by(block) {
+            let mut seen = HashSet::new();
+            for (r, c) in
+                (row..row + block).flat_map(|r| (column..column + block).map(move |c| (r, c)))
+            {
+                for &node in tested.get(r * side + c).into_iter().flatten() {
+                    total += 1;
+                    seen.insert(node);
+                }
+            }
+            distinct += seen.len();
+        }
+    }
+    (total, distinct)
+}
+
+fn render_packets(rig: &Rig) -> String {
+    let mut out = String::from(
+        "| block | box tests, summed | distinct nodes | shared |\n| --- | ---: | ---: | ---: |\n",
+    );
+    for block in [1, 2, 4, 8] {
+        let (total, distinct) = packet_sharing(rig, block);
+        let shared = 100.0 * (1.0 - per_ray(distinct as u64, total as u64));
+        let _ = writeln!(out, "| {block} x {block} rays | {total} | {distinct} | {shared:.0} % |");
+    }
+    out
+}
+
 /// The `--stats` report, as Markdown tables.
 pub(crate) fn report() -> String {
     let rig = Rig::new();
     format!(
-        "## BVH\n\n| | |\n| --- | ---: |\n{}\n## closest_hit\n\n{}\n## any_hit\n\n{}",
+        "## BVH\n\n| | |\n| --- | ---: |\n{}\n## closest_hit\n\n{}\n## any_hit\n\n{}\n## Neighbouring rays\n\n{}",
         render_tree(&rig),
         render_counts(&rig, Mode::Closest),
         render_counts(&rig, Mode::Any),
+        render_packets(&rig),
     )
 }
 
@@ -591,7 +632,8 @@ fn replay_boxes(rig: &Rig, calls: &[(usize, u32, FixedQ32_32)], chain: bool) -> 
         };
         let tie = if chain { previous & black_box(0) } else { 0 };
         let limit = FixedQ32_32::from_raw(limit.raw() | tie);
-        previous = black_box(ray.box_entry(&node.bounds, black_box(limit))).map_or(0, FixedQ32_32::raw);
+        previous =
+            black_box(ray.box_entry(&node.bounds, black_box(limit))).map_or(0, FixedQ32_32::raw);
         total = total.wrapping_add(previous);
     }
     total
@@ -641,9 +683,9 @@ mod tests {
         let bvh = BvhView::new(&rig.scene.nodes, &rig.scene.prim_indices);
         let found = any_hit(bvh, ray, FAR, |primitive| {
             calls.push(primitive);
-            rig.triangles.get(primitive as usize).is_some_and(|t| {
-                ray.hit_triangle(t, FixedQ32_32::ZERO, FAR).is_some()
-            })
+            rig.triangles
+                .get(primitive as usize)
+                .is_some_and(|t| ray.hit_triangle(t, FixedQ32_32::ZERO, FAR).is_some())
         });
         (calls, found.unwrap_or(false))
     }
@@ -714,6 +756,16 @@ mod tests {
         assert_eq!(t.nodes, 2 * t.leaves - 1);
         assert_eq!(t.leaf_sizes.values().sum::<usize>(), t.leaves);
         assert!(t.max_depth < 64);
+    }
+
+    #[test]
+    fn packet_sharing_is_exact_for_one_ray_and_never_negative() {
+        let rig = Rig::new();
+        let (total, distinct) = packet_sharing(&rig, 1);
+        assert_eq!(total, distinct);
+        let (total_four, distinct_four) = packet_sharing(&rig, 4);
+        assert_eq!(total_four, total);
+        assert!(distinct_four < total_four);
     }
 
     #[test]
