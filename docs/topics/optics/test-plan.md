@@ -51,6 +51,10 @@ and `point_at`:
   `VERTEX_NORMALS_ID`): hand-derived meshes, vertices with no normal, the
   refusals and their order, an exact big-integer oracle over seeded meshes,
   independence from face order and vertex labels, and golden vectors.
+- the interpolated shading normal `bunny-smooth-normal/1` (`smooth_normal`,
+  `SMOOTH_NORMAL_ID`): hand-derived points, a golden input on the boundary of
+  each of its four roundings, an exact big-integer oracle over seeded weights
+  and normals, and golden vectors.
 
 Projection matrices (flyingrobots/bunny#201, #202), and reflection, refraction
 and other material helpers (#160) are out of scope.
@@ -126,6 +130,8 @@ formatting.
 | OPTICS-REQ-044 | `VertexNormals::new` (`bunny-vertex-normals/1`, `VERTEX_NORMALS_ID`) gives each vertex the exact `i128` sum of the cross products `(p[b] - p[a]) x (p[c] - p[a])` of the triangles `[a, b, c]` that list it (area weighting), normalized as `TriangleSurface::new` normalizes a face normal; each component is within one raw unit of the exact unit vector along the sum. | `README.md#vertex-normals` |
 | OPTICS-REQ-045 | A vertex normal depends only on the mesh: the same faces in any order, with any corner of each face listed first, give the same bits, and relabelling the vertices relabels the normals. | `README.md#vertex-normals` |
 | OPTICS-REQ-046 | A vertex with no face, or whose faces sum to exactly zero, has no normal (`None`); vertices are never welded. `VertexNormals::new` refuses, in this order, more than `MAX_NORMAL_TRIANGLES` (`2^32`) triangles (`TooManyTriangles`), a position with a coordinate magnitude of at least `TRACE_COORD_LIMIT_RAW` (`PositionOutsideTraceDomain`, the first such vertex), and an index not below the number of positions (`IndexOutOfRange`, the first such triangle and corner). | `README.md#vertex-normals` |
+| OPTICS-REQ-047 | `smooth_normal` (`bunny-smooth-normal/1`, `SMOOTH_NORMAL_ID`) at exact weights `(det - u - v, u, v) / det` returns the vertex normal unchanged when every vertex with a nonzero weight shares it; otherwise it shifts each weight right (floored) by the smallest `k` that puts `det >> k` below `2^62`, combines `m = sum (w_i >> k) n_i` exactly, and normalizes `m` as `TriangleSurface::new` does, each component within `1 + 2^-26 / rho` raw units of the exact unit vector along `sum w_i n_i` (within 1 when `k = 0`), where `rho = |sum w_i n_i| / (2^32 det)`; it returns `None` exactly when `m` is zero. | `README.md#smooth-normal` |
+| OPTICS-REQ-048 | Each rounding of `bunny-smooth-normal/1` is the stated one, and each has a golden input on its boundary: the weight shift floors, the prescale floors when it scales down, the length is the floor of the square root, and the division rounds to nearest with ties to even. | `README.md#smooth-normal` |
 
 ```toml
 [[requirement]]
@@ -337,6 +343,16 @@ status = "active"
 id = "OPTICS-REQ-046"
 summary = "A vertex with no face, or whose faces sum to exactly zero, has no normal (None); vertices are never welded. VertexNormals::new refuses, in this order, more than MAX_NORMAL_TRIANGLES (2^32) triangles (TooManyTriangles), a position with a coordinate magnitude of at least TRACE_COORD_LIMIT_RAW (PositionOutsideTraceDomain, the first such vertex), and an index not below the number of positions (IndexOutOfRange, the first such triangle and corner)."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-047"
+summary = "smooth_normal (bunny-smooth-normal/1, SMOOTH_NORMAL_ID) at exact weights (det - u - v, u, v) / det returns the vertex normal unchanged when every vertex with a nonzero weight shares it; otherwise it shifts each weight right (floored) by the smallest k that puts det >> k below 2^62, combines m = sum (w_i >> k) n_i exactly, and normalizes m as TriangleSurface::new does, each component within 1 + 2^-26 / rho raw units of the exact unit vector along sum w_i n_i (within 1 when k = 0), where rho = |sum w_i n_i| / (2^32 det); it returns None exactly when m is zero."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-048"
+summary = "Each rounding of bunny-smooth-normal/1 is the stated one, and each has a golden input on its boundary: the weight shift floors, the prescale floors when it scales down, the length is the floor of the square root, and the division rounds to nearest with ties to even."
+status = "active"
 ```
 
 ## Fixtures
@@ -437,6 +453,15 @@ with the signs handled first) in an unsigned big integer written in the test
 (`Big`, base-`2^32` limbs). Seeded meshes use the plan's generator with the
 seed `0xB002_0289_0000_0001`; failures print the seed and case.
 
+`crates/bunny-optics/tests/smooth_normal_tests.rs` uses the same comparison
+(`tests/exact/mod.rs`, shared by both files) against the exact interpolation
+`sum w_i n_i` of the unshifted weights, computed in `i128` (seeded `det` below
+`2^93`). Golden values marked "model" there come from a separate Python model
+written from the [Smooth Normal](README.md#smooth-normal) definition, with
+unbounded integers and each rounding rule switchable; it found the boundary
+inputs of `OPTICS-TP-075` by construction, and it is not committed. Seeded
+cases use the seed `0xB002_0289_0000_0002`.
+
 ### The Image-Plane Oracle
 
 The oracle shares no code or rounding with the camera. For a sample with
@@ -528,6 +553,11 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-071 | Order and labels | OPTICS-REQ-045 | 300 seeded meshes, each rebuilt with its faces shuffled, each face's corners rotated and its vertices relabelled by a seeded permutation: every relabelled normal has the same bits. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_071_vertex_normals_do_not_depend_on_face_order_or_vertex_labels` |
 | OPTICS-TP-072 | Golden vertex normals | OPTICS-REQ-044 | A tetrahedron with irregular corners and a fifth vertex on one extra face: locked raw normals (produced by the crate, checked here against the oracle and separately against an exact Python computation, where each is the correctly rounded unit vector). | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_072_golden_vertex_normals_lock_the_rule` |
 | OPTICS-TP-073 | Vertex-normal mutations | OPTICS-REQ-044, OPTICS-REQ-045, OPTICS-REQ-046 | Equal weights per face, a fallback vector for a zero sum, a sum replaced by the last face, a face added to its first corner only, the domain check made inclusive of `2^40`, the wrong corner named and the count limit made exclusive each make at least one case above fail. | [Vertex-normal mutation checks](#vertex-normal-mutation-checks) |
+| OPTICS-TP-074 | Hand-derived smooth normals | OPTICS-REQ-047 | The identity string; each corner returns its vertex normal unchanged, including one (`R`) that normalizing again would change; equal normals on a face or an edge return that normal; the midpoint of an `X`-`Y` edge gives raw `(3 037 000 500, 3 037 000 500, 0)`; weights `(6, 1, 3) / 10` on `(X, Y, Z)` (model, and not symmetric in the last two weights); opposite normals at their edge's midpoint give `None`. | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_074_hand_derived_points_give_exact_shading_normals` |
+| OPTICS-TP-075 | Rounding boundaries | OPTICS-REQ-048 | The weight shift: `det = 2^62 + 11` (`k = 1`) on `(X, -X, Y)`, with the first weight one below, on and one above a tie (`B`, `B + 1`, `B + 2`): `+Y`, `+Y` (floored; rounding to nearest even would tilt it) and `(1, 3, 0) / sqrt(10)`. The division: a component that is exactly `q + 1/2` raw (`q` even) and its neighbours one raw weight below and above, giving `q`, `q` and `q + 1`. The length: an exact tie at an odd `q` with a squared length above `(L + 1/2)^2` (a rounded square root would give `q`). The prescale: the division tie with dropped bits above one half (rounding would give `q + 1`). All values from the model. | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_075_every_rounding_rule_is_pinned_at_its_boundary` |
+| OPTICS-TP-076 | Exact oracle | OPTICS-REQ-047 | 3 000 seeded cases (`det` below `2^1` to `2^93`, so `k` from 0 to 32; seeded normals, axes, repeated and opposite normals): shared normals exact, `None` exactly for a zero exact interpolation, within 1 raw unit when `k = 0` and within 2 when `k > 0` and `rho >= 2^-26`, by the [vertex-normal oracle's comparison](#the-vertex-normal-oracle); cases with `k > 0` and `rho < 2^-26` are counted, not checked. Witness counts require every checked outcome. | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_076_shading_normals_are_within_the_bound_of_the_exact_oracle` |
+| OPTICS-TP-077 | Golden smooth normals | OPTICS-REQ-047 | Locked raw normals with shifts of 0, 20 and 55 bits (model); the first two are also checked against the oracle (the third's exact sum needs more than `i128`). | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_077_golden_shading_normals_lock_the_rule` |
+| OPTICS-TP-078 | Smooth-normal mutations | OPTICS-REQ-047, OPTICS-REQ-048 | Each rule broken on purpose fails at least one case above. | [Smooth-normal mutation checks](#smooth-normal-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1141,6 +1171,51 @@ artifact = "docs/topics/optics/test-plan.md#vertex-normal-mutation-checks"
 oracle = "Mutation checks: each listed mutation fails at least one case; recorded in Vertex-Normal Mutation Checks."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-074"
+requirements = ["OPTICS-REQ-047"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_074_hand_derived_points_give_exact_shading_normals"
+oracle = "Hand computed, and the Python model for one inexact case."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-075"
+requirements = ["OPTICS-REQ-048"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_075_every_rounding_rule_is_pinned_at_its_boundary"
+oracle = "Constructed boundary inputs; expected values from the Python model with each rule switchable."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-076"
+requirements = ["OPTICS-REQ-047"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_076_shading_normals_are_within_the_bound_of_the_exact_oracle"
+oracle = "Independent exact oracle: the unshifted interpolation in i128 and big-integer comparisons of squares."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-077"
+requirements = ["OPTICS-REQ-047"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_077_golden_shading_normals_lock_the_rule"
+oracle = "Golden vectors from the Python model, two also checked against the oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-078"
+requirements = ["OPTICS-REQ-047", "OPTICS-REQ-048"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#smooth-normal-mutation-checks"
+oracle = "Mutation checks: each listed mutation fails at least one case; recorded in Smooth-Normal Mutation Checks."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1266,6 +1341,27 @@ made at least one case fail; the restored source passed all seven cases.
 | A coordinate of exactly `2^40` raw accepted (`>` for `>=`) | Positions inside the trace domain | OPTICS-TP-068 |
 | The third corner named for a bad second corner | The first bad corner is named | OPTICS-TP-068 |
 | The count limit made exclusive (`>=` for `>`) | `2^32` triangles accepted | OPTICS-TP-069 |
+
+## Smooth-Normal Mutation Checks
+
+Each rule below was broken on purpose in a container copy of the file named,
+and the smooth-normal tests were run with `timeout 120 cargo test --locked -p
+bunny-optics --no-fail-fast --test smooth_normal_tests` per mutation. The last
+three break code that `bunny-smooth-normal/1` shares with every other
+normalization (`wide::unit`, `FixedVec3::length`, the Q32.32 division), so
+other suites would fail too; only these cases were run. Every mutation made at
+least one case fail; the restored source passed all four.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `smooth_normal.rs`: weights shifted with rounding (half up) | The weight shift floors | OPTICS-TP-075 |
+| `smooth_normal.rs`: shift until `det >> k < 2^63` | The shift's threshold | OPTICS-TP-075 |
+| `smooth_normal.rs`: the shared-normal step removed | A shared normal is returned unchanged | OPTICS-TP-074, OPTICS-TP-076 |
+| `smooth_normal.rs`: the weights of `v1` and `v2` swapped | The weights `(det - u - v, u, v)` | OPTICS-TP-074, OPTICS-TP-075, OPTICS-TP-076, OPTICS-TP-077 |
+| `smooth_normal.rs`: a zero `m` gives `normals[0]` | `None` when the normals cancel | OPTICS-TP-074, OPTICS-TP-076 |
+| `wide.rs`: the prescale rounds when it scales down | The prescale floors | OPTICS-TP-075 |
+| `bunny-linalg` `fixed_vec3.rs`: the length's square root rounded to nearest | The length is floored | OPTICS-TP-075, OPTICS-TP-076 |
+| `bunny-num` `fixed_q32_32.rs`: division ties away from zero | Ties to even | OPTICS-TP-075 |
 
 ## Timing
 

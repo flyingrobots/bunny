@@ -9,12 +9,15 @@
 //! each refusal with a [`SecondaryRayError`]. See `docs/topics/optics/README.md#diffuse-shading`.
 //!
 //! [`VertexNormals`] (`bunny-vertex-normals/1`, not part of the shading model's identity) gives
-//! each vertex of an indexed mesh the area-weighted unit normal of the faces around it.
+//! each vertex of an indexed mesh the area-weighted unit normal of the faces around it, and
+//! [`smooth_normal`] (`bunny-smooth-normal/1`) interpolates three of them at a point of a
+//! triangle.
 
 mod frame;
 mod hit;
 mod light;
 mod refusal;
+mod smooth_normal;
 mod surface;
 mod vertex_normals;
 mod wide;
@@ -23,6 +26,7 @@ pub use frame::ShadingFrame;
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;
+pub use smooth_normal::{smooth_normal, SMOOTH_NORMAL_ID};
 pub use surface::TriangleSurface;
 pub use vertex_normals::{
     VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTEX_NORMALS_ID,
