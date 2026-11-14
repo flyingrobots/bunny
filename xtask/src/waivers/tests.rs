@@ -220,7 +220,8 @@ fn a_block_comment_over_two_lines_with_two_clauses_waives_nothing() {
 
 #[test]
 fn a_block_comment_over_two_lines_with_one_clause_waives_the_item_below() {
-    let source = "/* dojo: allow std-fs -- reviewed fixture loader,\n   kept for the golden vectors */\n\
+    let source =
+        "/* dojo: allow std-fs -- reviewed fixture loader,\n   kept for the golden vectors */\n\
                   pub fn f() { let _ = std::fs::read(\"x\"); }";
 
     assert_eq!(lines_of("std-fs", source), Vec::<usize>::new());
@@ -228,7 +229,8 @@ fn a_block_comment_over_two_lines_with_one_clause_waives_the_item_below() {
 
 #[test]
 fn manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment() {
-    let basic = format!("[package.metadata]\nnote = \"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n");
+    let basic =
+        format!("[package.metadata]\nnote = \"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n");
     let literal = format!("note = '''\n# dojo: allow random -- {REASON}\n'''\n");
     let closed = format!("note = \"\"\"one line\"\"\"\n# dojo: allow random -- {REASON}\n");
 

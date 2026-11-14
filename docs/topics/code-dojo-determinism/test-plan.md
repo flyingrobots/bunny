@@ -541,7 +541,7 @@ evidence = "test"
 test = "xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_two_clauses_waives_nothing"
 oracle = "A `/* */` comment whose two lines hold a `std-fs` and a `std-env` clause waives neither: both findings (lines 4 and 5) are reported."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-067"
@@ -550,7 +550,7 @@ evidence = "test"
 test = "xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_one_clause_waives_the_item_below"
 oracle = "A `/* */` comment over two lines with one clause, its reason running onto the second line, waives the item below it."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-068"
@@ -559,7 +559,7 @@ evidence = "test"
 test = "xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment"
 oracle = "A waiver line inside a multi-line basic or literal TOML string waives nothing; a whole-line comment after a multi-line string closed on its own line waives."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-045"

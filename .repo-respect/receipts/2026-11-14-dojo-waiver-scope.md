@@ -56,8 +56,15 @@ a second clause allowed (2), the rule matched as a prefix (1), no token masked (
 group's whole span masked instead of its delimiters (3). The review's surviving mutation,
 shrinking the old two-line window, has no counterpart: the window is gone, and shrinking
 the new coverage to the next code line is the first mutant above.
+Review findings (CodeRabbit on #332, verified here): a block comment over two lines with
+two clauses waived its first rule, because comments were read line by line; a waiver line
+inside a multi-line TOML string counted as a manifest comment. ND-TP-066 to -068: two of
+the three new tests failed on the unfixed code. Comments are now read whole and manifest
+lines inside multi-line strings are skipped. Mutations, under `timeout 120`, both caught:
+block comments cut at the line end (ND-TP-066 fails), multi-line strings not tracked
+(ND-TP-068 fails).
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
-cargo test --locked -p xtask: 95 passed.
+cargo test --locked -p xtask: 98 passed.
 cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository with the new
 waivers: clean. All 26 waivers on main sit directly above their finding, so each still
 covers it.

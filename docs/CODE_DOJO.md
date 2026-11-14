@@ -240,12 +240,15 @@ What a waiver covers:
   an expression), it covers that one line.
 
 The gate finds comments from the token stream (`xtask/src/waivers.rs`):
-whatever part of a line no token covers is a comment.
+whatever text no token covers is whitespace or a comment, and each comment is
+read whole, so a block comment over several lines with two clauses waives
+neither rule.
 
 A dependency-rule waiver is the same clause in a whole-line TOML comment
 (`#` first on the line) anywhere in the manifest of the crate the finding
-names; the same text inside a TOML string, or after a value on the line, is
-not a waiver:
+names; the same text inside a TOML string (a line inside a multi-line
+`"""` or `'''` string included), or after a value on the line, is not a
+waiver:
 
 ```toml
 # dojo: allow random -- seeded generator behind the reviewed `fuzz` feature
