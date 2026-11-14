@@ -128,6 +128,12 @@ impl SurfaceHit {
         self.frame
     }
 
+    /// The exact normal of the face the ray arrived on: `(v1 - v0) x (v2 - v0)`, negated for the
+    /// back face, each component below `2^83`. Every side decision is made against it.
+    pub(crate) const fn facing_normal(&self) -> Wide {
+        self.plane
+    }
+
     /// The bounce ray for the unit-square point `sample`: from [`Self::point`] along
     /// [`ShadingFrame::cosine_direction`]. Query it with a minimum distance of zero.
     ///
