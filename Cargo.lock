@@ -154,6 +154,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bunny-optics"
+version = "0.6.0"
+dependencies = [
+ "bunny-linalg",
+ "bunny-num",
+ "bunny-query",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "bunny-perf"
 version = "0.1.0"
 dependencies = [

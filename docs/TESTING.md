@@ -69,6 +69,7 @@ RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-contract --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-query --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-broadphase --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-mesh --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-optics --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
 ```
 
