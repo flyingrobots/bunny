@@ -143,7 +143,7 @@ fn starts_with(segments: &[String], prefix: &[&str]) -> bool {
 }
 
 /// Items below a banned prefix that are deterministic. `DefaultHasher::new()` uses fixed
-/// SipHash keys; only `RandomState` seeds a hasher from the host.
+/// `SipHash` keys; only `RandomState` seeds a hasher from the host.
 const PERMITTED: &[&[&str]] = &[&["std", "collections", "hash_map", "DefaultHasher"]];
 
 /// Every rule a fully expanded path breaks.
