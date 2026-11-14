@@ -544,7 +544,7 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-034 | Pixel timing | OPTICS-REQ-019, OPTICS-REQ-020, OPTICS-REQ-024 | `pixel/resolve_srgb_rgba8` in `bunny-perf` times resolve, tone and RGBA8 output per pixel. | [Timing](#timing) |
 | OPTICS-TP-040 | Golden surfaces | OPTICS-REQ-030, OPTICS-REQ-031, OPTICS-REQ-032 | Exact unit normals, tangents and bitangents for the six axis-aligned faces, a triangle with one-raw-unit edges, and (model) a diagonal, a domain-corner, a sliver and a downward-tilted triangle; the flipped ground frame; collinear, duplicate and all-equal vertices return None. | `crates/bunny-optics/tests/shading_tests.rs::optics_tp_040_golden_surfaces_lock_normals_and_frames` |
 | OPTICS-TP-041 | Normal property | OPTICS-REQ-030 | 4 000 seeded triangles at scales from one raw unit to the whole domain (at least 3 900 checked): each normal component within one raw unit of the floating-point unit vector of the exact i128 cross product; exact zero area gives None. | `crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_041_normals_are_within_one_raw_unit_of_the_exact_unit_normal` |
-| OPTICS-TP-042 | Frame property | OPTICS-REQ-031 | 4 000 seeded and special unit normals (the axes, z exactly 0, z one raw unit either side of 0): exact i128 residuals of every frame and its flipped form within 8 raw units, and each tangent and bitangent component within half a raw unit of the formula, checked as an exact rational inequality. | `crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_042_frames_are_orthonormal_and_follow_the_stated_formula` |
+| OPTICS-TP-042 | Frame property | OPTICS-REQ-031 | 4 000 seeded and special unit normals (the axes, z exactly 0, z one raw unit either side of 0): exact i128 residuals of every frame and its flipped form within 8 raw units, and each tangent and bitangent component exactly the formula rounded to nearest with ties to even (an exact rational comparison), on the seeded normals and on five unit normals given as they stand whose `q(x y)` is an exact tie (at least ten tied quotients checked). | `crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_042_frames_are_orthonormal_and_follow_the_stated_formula` |
 | OPTICS-TP-043 | Golden directions | OPTICS-REQ-034 | Seven sample points (0, the centre, 3/4, 1 - 2^-32, eighth turns) on the +Z frame (hand computed), the downward and flipped frames (permutations of it) and (model) a diagonal and a tilted frame; points outside [0, 1) return None. | `crates/bunny-optics/tests/shading_tests.rs::optics_tp_043_golden_directions_lock_the_hemisphere_map` |
 | OPTICS-TP-044 | Hemisphere property | OPTICS-REQ-034 | 600 seeded and special frames, both orientations, 16 sampler points and 36 edge points (u, v in 0, 2^-32, 1/4, 1/2, 1 - 2^-16, 1 - 2^-32) each: components within 1.0, exact dot with the normal at least 2^15 raw units, length within 8 raw units, each component within 4 raw units of the floating-point ideal map. | `crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_044_bounce_directions_are_above_the_surface_and_near_the_ideal_map` |
 | OPTICS-TP-045 | Distribution guard | OPTICS-REQ-035 | For the +Z frame and four seeded frames: the mean cosine of 4 096 sampler points within 2^-12 of 2/3; the cosine bands of 1 024 points within one of 64, 192, 320 and 448; each azimuth quarter within two of 256. A regression guard with stated thresholds, not a statistical test. | `crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_045_directions_follow_the_cosine_distribution` |
@@ -588,6 +588,10 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-083 | The plane test's boundary | OPTICS-REQ-051 | On the ground, directions one raw unit of `y` above, on and below the plane; on a sloped triangle with exact normal `(-2^32, 0, 2^64)`, the direction `(2^32, 0, 1)` with `d . N = 0` exactly and one raw unit of `z` either side, from the front and from the back (the sides swap, the zero stays rejected). | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_083_bounces_are_above_the_exact_plane_or_rejected` |
 | OPTICS-TP-084 | Grazing bounce | OPTICS-REQ-051 | The triangle of OPTICS-TP-080: the direction `n` is below by the exact plane although `n . g > 0` with the rounded unit normal, and `-n` is above although `-n . g < 0`. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_084_a_grazing_bounce_is_sided_by_the_exact_plane` |
 | OPTICS-TP-085 | Bounce rejection | OPTICS-REQ-051 | A 16 by 16 grid of sampler points on the ground with the shading normal 53 degrees off: each accepted bounce starts at the start point along the frame's direction and is above, each rejected one is not, and the counts are locked (207 rays, 49 below); with the shading normal along the geometric one, 256 rays; a sample of 1.0 gives `None`. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_085_bounces_below_the_surface_are_rejected_without_a_ray` |
+| OPTICS-TP-092 | Light cosine rounding | OPTICS-REQ-036 | With the light toward `(1, 2^-32, 0)`, which normalizes to exactly `(1.0, 1 raw, 0)`, unit normals `(x, 2^31 + k, 0)` for `k = -1, 0, 1` and `x` even and odd: below a tie, an exact tie with an even and an odd truncation, and above it (`x`, `x` or `x + 1`, `x + 1`); the review's tie (2 147 462 912.5 to 2 147 462 912) and its triangle whose exact cosine 3 992 045 243.556 rounds up. | `crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_092_the_light_cosine_rounds_to_nearest_with_ties_to_even` |
+| OPTICS-TP-093 | Frame-combination rounding | OPTICS-REQ-034 | On the exact `+Z` frame, `u = 2^-6` and `9 * 2^-6` (radius `2^29` and `3 * 2^29`) at 1/8 and 7/8 turn: each disk component is an exact tie, `379 625 062.5` (even truncation) and `1 138 875 187.5` (odd), positive and negative. | `crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_093_the_frame_combination_rounds_ties_to_even_in_both_signs` |
+| OPTICS-TP-094 | Frame-division rounding | OPTICS-REQ-031 | Four triangles (found by search) whose unit normals have `z = 0` and a tie in `q(x y)`, with an even and an odd truncation, each with its mirror image (a negative quotient), and a sliver whose unit normal is `(2^31, 3 719 550 787, 0)`: the whole frame; the review's tie `(2^31, 3 719 550 789, 0)`, which no triangle's normal reaches, given as it stands; and two unit normals with `z > 0` (an odd divisor, so no tie exists) whose remainder is half a unit of the divisor below and above the half. | `crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_094_the_frame_division_rounds_ties_to_even_in_both_signs` |
+| OPTICS-TP-095 | Shading rounding mutations | OPTICS-REQ-031, OPTICS-REQ-034, OPTICS-REQ-036 | Each of the three rounding rules changed to each plausible wrong rule fails at least one case above that does not compare with the retained 0.7.1 code. | [Shading rounding mutation checks](#shading-rounding-mutation-checks) |
 
 ```toml
 [[case]]
@@ -919,7 +923,7 @@ id = "OPTICS-TP-042"
 requirements = ["OPTICS-REQ-031"]
 evidence = "property"
 test = "crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_042_frames_are_orthonormal_and_follow_the_stated_formula"
-oracle = "4 000 seeded and special unit normals (the axes, z exactly 0, z one raw unit either side of 0): exact i128 residuals of every frame and its flipped form within 8 raw units, and each tangent and bitangent component within half a raw unit of the formula, checked as an exact rational inequality."
+oracle = "4 000 seeded and special unit normals (the axes, z exactly 0, z one raw unit either side of 0): exact i128 residuals of every frame and its flipped form within 8 raw units, and each tangent and bitangent component exactly the formula rounded to nearest with ties to even (an exact rational comparison), on the seeded normals and on five unit normals given as they stand whose `q(x y)` is an exact tie (at least ten tied quotients checked)."
 tier = "fast"
 status = "implemented"
 
@@ -1309,6 +1313,42 @@ test = "crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_085_bounces_bel
 oracle = "Specified per sample (the exact plane test and the frame's direction); the counts are a regression lock."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-092"
+requirements = ["OPTICS-REQ-036"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_092_the_light_cosine_rounds_to_nearest_with_ties_to_even"
+oracle = "Derived from the exact rational cosine (x + k / 2^32 for the constructed light), checked by a separate exact Python model; ties to the even neighbour."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-093"
+requirements = ["OPTICS-REQ-034"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_093_the_frame_combination_rounds_ties_to_even_in_both_signs"
+oracle = "Hand computed: r * 3 037 000 500 / 2^32 with r = 2^29 and 3 * 2^29, from FixedAngle's golden eighth-turn values; ties to the even neighbour."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-094"
+requirements = ["OPTICS-REQ-031"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_094_the_frame_division_rounds_ties_to_even_in_both_signs"
+oracle = "Derived from the exact rational quotients and checked by a separate exact Python model of the unit normal and the frame; ties to the even neighbour."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-095"
+requirements = ["OPTICS-REQ-031", "OPTICS-REQ-034", "OPTICS-REQ-036"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#shading-rounding-mutation-checks"
+oracle = "round_shift and div_round with ties away from zero, toward zero, toward +inf, toward -inf and to odd, or truncated, and the cosine and combination sites floored, each fail a case that does not compare with the retained 0.7.1 code."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1416,6 +1456,63 @@ side of the fast/diagnostic pair alone, which the agreement cases must catch.
 The second row is the 0.7.1 failure itself: its plane test overflows `i128` on
 a point `2^30` units above the ground (a panic in a debug build; release
 builds return `None`).
+
+### Shading Rounding Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/`, with every source file touched before the
+build, and the crate's tests were run (`timeout 120 cargo test --locked -p
+bunny-optics --no-fail-fast`). Before OPTICS-TP-092 to OPTICS-TP-094, the
+cosine floored, `round_shift` with ties away from zero and the frame division
+with ties away from zero each passed every test: the golden cosines all had a
+remainder below one half, and OPTICS-TP-042 accepted both neighbours of a
+tie. Every mutation now fails a case that does not compare with the retained
+0.7.1 code; the restored source passed every test of the crate.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `round_shift` ties away from zero | Ties to even (cosine and combination) | OPTICS-TP-092, OPTICS-TP-093 |
+| `round_shift` ties toward zero | Ties to even | OPTICS-TP-092, OPTICS-TP-093 |
+| `round_shift` ties toward `+inf` (`remainder >= half`) | Ties to even | OPTICS-TP-092, OPTICS-TP-093 |
+| `round_shift` ties toward `-inf` (`remainder > half`) | Ties to even | OPTICS-TP-092, OPTICS-TP-093 |
+| `round_shift` ties to odd | Ties to even | OPTICS-TP-092, OPTICS-TP-093 |
+| `round_shift` floored | Rounding to nearest | OPTICS-TP-043, OPTICS-TP-092, OPTICS-TP-093; also OPTICS-TP-062, OPTICS-TP-064 |
+| The cosine alone floored (`>> 32` in `light.rs`) | The cosine rounds to nearest | OPTICS-TP-092 |
+| The combination alone floored (`>> 64` in `frame.rs`) | The direction rounds to nearest | OPTICS-TP-043, OPTICS-TP-093; also OPTICS-TP-062, OPTICS-TP-064 |
+| `div_round` ties away from zero (`twice >= d`) | Ties to even (frame division) | OPTICS-TP-042, OPTICS-TP-094 |
+| `div_round` ties toward zero (`twice > d`) | Ties to even | OPTICS-TP-042, OPTICS-TP-094 |
+| `div_round` ties toward `+inf` | Ties to even | OPTICS-TP-042, OPTICS-TP-094 |
+| `div_round` ties toward `-inf` | Ties to even | OPTICS-TP-042, OPTICS-TP-094 |
+| `div_round` ties to odd | Ties to even | OPTICS-TP-042, OPTICS-TP-094 |
+| `div_round` truncated toward zero | Rounding to nearest | OPTICS-TP-040, OPTICS-TP-042, OPTICS-TP-043, OPTICS-TP-094 |
+
+### Rounding Sites Of The Shading Path
+
+Every place `bunny-diffuse-shading/1` rounds, and the cases that fail when its
+rule changes. "Mutated here" marks the sites whose mutations above were run;
+the others are pinned by the cases named, and their mutation evidence is in
+the chapter or table cited.
+
+| Site | Rule | Pinned by |
+| --- | --- | --- |
+| `point_at` products (Q32.32 multiplication) | Nearest, ties to even | OPTICS-TP-008; `bunny-num` FPR-TP-001 to FPR-TP-005 |
+| `wide::unit` prescale when it scales down | Floor | OPTICS-TP-075 ([smooth-normal mutations](#smooth-normal-mutation-checks)) |
+| `FixedUnitVec3::new` length and division (unit normal, light direction) | Length floored; division nearest, ties to even | OPTICS-TP-075 ([smooth-normal mutations](#smooth-normal-mutation-checks)); `bunny-num` FPR-TP-006 to FPR-TP-010 |
+| Frame division `q(a) = a / (s + z)` | Nearest, ties to even | OPTICS-TP-042, OPTICS-TP-094 (mutated here) |
+| Hemisphere square roots `floor_sqrt(u)`, `floor_sqrt(1 - u)` | Floor | OPTICS-TP-043 (hand-computed floors); not mutated here |
+| `FixedAngle::sin_cos` | Within one raw unit (its own table) | The angle-trigonometry chapter's golden table |
+| Frame combination `round_shift(.., 64)` | Nearest, ties to even | OPTICS-TP-043, OPTICS-TP-093 (mutated here) |
+| Light cosine `round_shift(.., 32)` | Nearest, ties to even | OPTICS-TP-092 (mutated here) |
+| `cosine * FRAC_1_PI` (first product of the term) | Nearest, ties to even | `bunny-num` FPR-TP-003, FPR-TP-004 only: no optics case has a tie at this product |
+| `irradiance * weight` (second product) | Nearest, ties to even | OPTICS-TP-048 (a tie, 2 050 695 826.5 to even) |
+| `Albedo::reflect` product | Nearest, ties to even | OPTICS-TP-052 (a tie, 2 587 566 738.5 to even) |
+
+So the one rounding site of the shading path with no tie case inside the
+optics tests is the term's first product, `cosine * FRAC_1_PI`; it is the
+shared Q32.32 multiplication, whose ties are pinned in `bunny-num`. The
+combination site has exact ties but no case one raw unit either side of one:
+its radius moves in steps of several raw units near a tie, so such an input
+was not constructed; OPTICS-TP-043's goldens fail when it floors.
 
 ## Vertex-Normal Mutation Checks
 

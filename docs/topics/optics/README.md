@@ -822,7 +822,17 @@ bitangent = (-q(x y), s - q(y y), -y)
 ```
 
 `|s + z|` is at least 1.0, so the quotients always exist. Each component is
-within half a raw unit of the formula evaluated exactly on the given normal.
+the formula evaluated exactly on the given normal and rounded once, so within
+half a raw unit of it. Exact ties occur: with `z = 0` the divisor is 1.0 and
+`q(x y)` is a tie whenever the 2-adic valuations of `x` and `y` add up to 31,
+which unit normals of real triangles reach (the test plan has four). Not
+every such normal comes from a triangle: a triangle's unit normal is
+normalized after the prescale to `[2^61, 2^62)`, which keeps it within
+`2^-29` raw units of the exact unit circle before each component is rounded,
+so one with `x = 2^31` and `z = 0` has `y = 3 719 550 786` or
+`3 719 550 787` (a tie, which a sliver in the test plan reaches). The tie at
+`(2^31, 3 719 550 789, 0)` reaches `ShadingFrame::new` only from a unit vector
+built another way, such as `FixedUnitVec3::try_from_unit`.
 The frame is right-handed (`tangent x bitangent = normal`). Because the given
 normal is unit length only to within a raw unit, the exact formula is
 orthonormal only to within a few raw units: the test plan checks every
