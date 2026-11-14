@@ -195,7 +195,7 @@ impl Big {
     fn add(&self, other: &Self) -> Self {
         let mut out = Vec::new();
         let mut carry = 0_u64;
-        for k in 0..self.0.len().max(other.0.len()) + 1 {
+        for k in 0..=self.0.len().max(other.0.len()) {
             let limb = |b: &Self| u64::from(b.0.get(k).copied().unwrap_or(0));
             let t = limb(self) + limb(other) + carry;
             out.push((t & 0xFFFF_FFFF) as u32);
