@@ -733,8 +733,8 @@ integer square root of its squared raw length is `2^32 - 1`, `2^32` or
 vector along it is `n 2^32 / L`, so each component is off by
 `|n_i| |L - 2^32| / L < 2` raw units, and by at most one when `L <= 2^32`. So
 **each component of a shared normal is within 2 raw units** (strictly less) of
-the exact unit vector along it, and within one raw unit of the vertex normal
-the caller gave, which it is. The worst case is a dominant component near
+the exact unit vector along it, and it is exactly the vertex normal the caller
+gave. The worst case is a dominant component near
 `2^32 + 1` with the length just below `2^32 + 2`: the normal `(2^32 + 1,
 92 681, 0)` is a valid `FixedUnitVec3` (its floored length is `2^32 + 1`), its
 length is `2^32 + 1.999 98`, and its `x` is `1.999 98` raw units from the exact
