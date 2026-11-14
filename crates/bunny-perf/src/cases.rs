@@ -13,7 +13,7 @@ use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
 
 /// Calls per timed batch.
-const BATCH: usize = 1024;
+pub(crate) const BATCH: usize = 1024;
 const PERF_SEED: u64 = 0xB002_9E2F_0000_0001;
 
 /// A named kernel; `run` makes `calls` calls and returns a checksum. Each call's whole result
