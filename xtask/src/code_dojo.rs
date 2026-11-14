@@ -235,7 +235,11 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     check_determinism_receipts(true)?;
     ensure_cargo_manifest("full gate")?;
     check_dependency_rules()?;
+    crate::feature_configs::check_trees(&git_root()?)?;
     run_quality_commands(true)?;
+    for command in crate::feature_configs::commands() {
+        run_command_strings(&command)?;
+    }
     println!("Code Dojo: full gate clean");
     Ok(())
 }
