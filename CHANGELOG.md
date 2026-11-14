@@ -182,6 +182,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo enforces what `CODE_STANDARDS.md` Rule 4 says beyond Echo's
+  rule list: the `Path` methods that read the filesystem (`exists`,
+  `metadata`, `canonicalize` and seven more), `std::os::<platform>::fs`,
+  `io`, `prelude`, `net` and `process`, `std::os::fd`, `std::path::absolute`
+  and `std::io::pipe` are findings, terminal input is a new `host-input`
+  rule, and doc tests are scanned like other code. The docs compare the list
+  with Lumen's gate. Part of flyingrobots/bunny#321.
+
+* Code Dojo names every item of `std::thread` and `std::time` deliberately
+  instead of matching whole-segment prefixes, checked by a test against the
+  pinned toolchain's documentation: `sleep_ms`, `sleep_until`, `park`,
+  `park_timeout`, `park_timeout_ms` and `yield_now` are now `thread-sleep`
+  findings and `SystemTimeError` a `time-system` one. In core crates any name
+  ending in `_f32` or `_f64` is a `float-boundary` finding, so
+  `d.mul_f64(d.as_secs_f64())` and `Duration::from_secs_f64(..)` no longer
+  pass with no float token; six float DTO conversions in `bunny-linalg` and
+  `bunny-geom` that the gate could not see before now carry waivers. A waiver
+  between a doc comment and `fn` now covers the function. Part of
+  flyingrobots/bunny#321.
+
+* Code Dojo no longer lets code or host files into a deterministic crate
+  unscanned: `include!` is banned in every spelling (`include-source`), a
+  `#[path]` module must name a `.rs` file inside the crate directory, and
+  `include_str!`/`include_bytes!` must name a literal path inside it
+  (`include-data`). `env!` and `option_env!` are now `std-env` findings, as
+  in Lumen's gate; the `bunny-contract` test that reads `CARGO_PKG_VERSION`
+  and the committed generator outputs carries waivers. Part of
+  flyingrobots/bunny#321.
+
+* Code Dojo waivers are comments only. `dojo: allow` text inside a string,
+  raw-string or byte-string literal, a doc comment, a `#[doc]` attribute or a
+  macro's tokens no longer waives anything, and a comment with two clauses
+  waives neither rule. A waiver on a line of its own now covers the item,
+  statement, field, variant or match arm that starts below it, every line of
+  it, instead of a fixed window of three lines: one waiver no longer silences
+  the next statement, and a `float-boundary` waiver above a function covers
+  the whole function (the waiver-scope part of flyingrobots/bunny#286). A
+  refused waiver no longer hides a valid one, a rule ID must match exactly
+  (`std-fs-extra` does not waive `std-fs`), and a manifest waiver must be a
+  whole-line TOML comment. Part of flyingrobots/bunny#321.
+
+* Code Dojo's nondeterminism rules resolve `extern crate` renames like imports
+  (`extern crate std as host; host::env::var(..)` is a `std-env` finding, and
+  `extern crate rand;` a `random` one) and compare identifiers without their
+  `r#` prefix, so `r#std::fs::read`, `use std::collections::r#HashMap`,
+  `r#f64`, `x.r#unwrap()` and `r#panic!` no longer get past the gate. A test
+  now fails if `self` in a `use` group is treated as a path segment. Part of
+  flyingrobots/bunny#321.
+
 * `bunny_optics::SurfaceHit::new` no longer overflows `i128` for a hit whose
   point is far outside the trace domain (for example a `hit.distance` of
   `-2^30` units set by the caller): 0.7.1 panicked there in debug builds and

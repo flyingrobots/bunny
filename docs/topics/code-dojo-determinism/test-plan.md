@@ -38,10 +38,13 @@ topic-docs`.
 | ID | Requirement | Current Source |
 | --- | --- | --- |
 | ND-REQ-001 | Every rule of Echo's `ban-nondeterminism` scan maps to a Code Dojo rule that rejects its seeded forms in deterministic library crates: qualified paths, `use` items, `use` groups, renamed imports, module aliases, glob imports, type positions and macro bodies. | `README.md#rules` |
-| ND-REQ-002 | Waivers are local and rule-scoped and must carry a reason of at least eight characters; a waiver without a reason, with a too-short reason or naming another rule does not suppress a finding. | `README.md#waivers` |
+| ND-REQ-002 | A waiver is a comment (never literal, doc or macro text) holding exactly one `dojo: allow <rule> -- <reason>` clause with a reason of at least eight characters; it covers its own line when it follows code, and otherwise the comment lines below it and the whole outermost item, statement, field, variant, arm or struct-literal field starting on the next code line; a refused waiver does not hide a valid one, and a manifest waiver is a whole-line TOML comment. | `README.md#waivers` |
 | ND-REQ-003 | Deterministic look-alikes of banned forms are accepted. | `README.md#rules` |
 | ND-REQ-004 | The source rules cover the core crates, `bunny-codec` and `bunny-contract`, including their tests; `xtask`, `bunny-perf` and `bunny-wesley` are outside them; `float-boundary` stays core-only. | `README.md#scope` |
 | ND-REQ-005 | The dependency graph of each deterministic library crate, over normal and build edges and with both the workspace's features and all features, contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
+| ND-REQ-006 | No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory. | `README.md#compile-time-file-access` |
+| ND-REQ-007 | The time and thread rules name every documented item of `std::thread` and `std::time` deliberately, banned or permitted, from a snapshot of the pinned toolchain's documentation that a test ties to `rust-toolchain.toml`; every documented float method of `Duration` is `float-boundary` in core. | `docs/CODE_DOJO.md#keeping-the-name-lists-current` |
+| ND-REQ-008 | Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code. | `README.md#host-access-beyond-echo` |
 
 ```toml
 [[requirement]]
@@ -51,7 +54,7 @@ status = "active"
 
 [[requirement]]
 id = "ND-REQ-002"
-summary = "Waivers are local and rule-scoped and must carry a reason of at least eight characters; a waiver without a reason, with a too-short reason or naming another rule does not suppress a finding."
+summary = "A waiver is a comment (never literal, doc or macro text) holding exactly one `dojo: allow <rule> -- <reason>` clause with a reason of at least eight characters; it covers its own line when it follows code, and otherwise the comment lines below it and the whole outermost item, statement, field, variant, arm or struct-literal field starting on the next code line; a refused waiver does not hide a valid one, and a manifest waiver is a whole-line TOML comment."
 status = "active"
 
 [[requirement]]
@@ -67,6 +70,21 @@ status = "active"
 [[requirement]]
 id = "ND-REQ-005"
 summary = "The dependency graph of each deterministic library crate, over normal and build edges and with both the workspace's features and all features, contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-006"
+summary = "No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-007"
+summary = "The time and thread rules name every documented item of `std::thread` and `std::time` deliberately, banned or permitted, from a snapshot of the pinned toolchain's documentation that a test ties to `rust-toolchain.toml`; every documented float method of `Duration` is `float-boundary` in core."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-008"
+summary = "Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code."
 status = "active"
 ```
 
@@ -113,7 +131,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-018 | reasoned waiver | ND-REQ-002 | For every rule, a waiver with a reason on the line above suppresses the finding. | `xtask/src/nondeterminism/tests.rs::waiver_with_reason_suppresses_each_rule` |
 | ND-TP-019 | reasonless waiver | ND-REQ-002 | For every rule, a waiver with no reason or the reason `ok` leaves the finding reported. | `xtask/src/nondeterminism/tests.rs::waiver_without_reason_is_refused_for_each_rule` |
 | ND-TP-020 | rule-scoped waiver | ND-REQ-002 | A `std-env` waiver does not suppress a `std-fs` finding. | `xtask/src/nondeterminism/tests.rs::waiver_for_another_rule_does_not_suppress` |
-| ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
+| ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test` and local `env`/`process` modules produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
 | ND-TP-022 | library scope | ND-REQ-004 | A `std::fs` call is reported in a core test file, a core `src/**/tests` file, `bunny-codec` and `bunny-contract`. | `xtask/src/nondeterminism/tests.rs::nondeterminism_rules_cover_core_tests_codec_and_contract` |
 | ND-TP-023 | tooling scope | ND-REQ-004 | Clock and filesystem use in `xtask`, `bunny-perf` and `bunny-wesley` is not reported by the rule family. | `xtask/src/nondeterminism/tests.rs::tooling_and_generator_crates_are_outside_nondeterminism_scope` |
 | ND-TP-024 | float scope | ND-REQ-004 | `f32::NAN` in `bunny-codec` is not reported as `float-boundary`. | `xtask/src/nondeterminism/tests.rs::float_rules_stay_core_only` |
@@ -122,6 +140,41 @@ real `cargo tree` output and the real manifests.
 | ND-TP-027 | permitted dependencies | ND-REQ-005 | `sha2`, `digest` and `cpufeatures` produce no finding. | `xtask/src/nondeterminism/tests.rs::permitted_dependencies_are_accepted` |
 | ND-TP-028 | manifest waiver | ND-REQ-005 | A reasoned `random` waiver in the `bunny-num` manifest leaves only the `json-serialization` finding. | `xtask/src/nondeterminism/tests.rs::manifest_waiver_with_reason_suppresses_a_dependency_rule` |
 | ND-TP-029 | reasonless manifest waiver | ND-REQ-005 | Manifest waivers without a reason or with the reason `ok` leave all three findings reported. | `xtask/src/nondeterminism/tests.rs::manifest_waiver_without_reason_is_refused` |
+| ND-TP-030 | extern crate aliases | ND-REQ-001 | `extern crate std as host;` makes `host::env::var`, `use host::fs::read` and `host::time::Instant` findings under `std-env`, `std-fs` and `time-instant`; `extern crate rand;` and a renamed `rand` are `random` findings. | `xtask/src/nondeterminism/evasion_tests.rs::extern_crate_aliases_resolve_like_imports` |
+| ND-TP-031 | raw identifiers | ND-REQ-001 | `r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line. | `xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names` |
+| ND-TP-032 | raw float types | ND-REQ-001 | `r#f64` as a type and as a path segment is reported as `float-boundary`. | `xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary` |
+| ND-TP-033 | self in a use group | ND-REQ-001 | `use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case. | `xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself` |
+| ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include`, another crate's macro named `include` and a binding named `env` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
+| ND-TP-035 | waiver outside a comment | ND-REQ-002 | Waiver text in a string, raw string, byte string, a line of a multi-line raw string, an outer, inner or block doc comment, a doc attribute or macro tokens leaves the `std-fs` finding reported. | `xtask/src/waivers/tests.rs::waiver_text_outside_a_comment_waives_nothing` |
+| ND-TP-036 | comment waivers | ND-REQ-002 | A line comment or block comment above the finding, or a line comment on its line, suppresses it. | `xtask/src/waivers/tests.rs::line_and_block_comments_waive` |
+| ND-TP-037 | one rule per waiver | ND-REQ-002 | A comment with a `std-fs` and a `std-env` clause leaves both findings reported. | `xtask/src/waivers/tests.rs::a_comment_with_two_clauses_waives_nothing` |
+| ND-TP-038 | refused then valid waiver | ND-REQ-002 | A short-reason waiver followed by a valid one for the same rule suppresses the finding. | `xtask/src/waivers/tests.rs::a_valid_waiver_after_a_refused_one_applies` |
+| ND-TP-039 | next statement only | ND-REQ-002 | A waiver above the first of two one-line statements leaves exactly the second one's finding (line 4) reported. | `xtask/src/waivers/tests.rs::a_waiver_covers_only_the_next_statement` |
+| ND-TP-040 | multi-line statement | ND-REQ-002 | A finding on the fourth line of a waived statement is suppressed; the next statement's finding (line 8) is reported. | `xtask/src/waivers/tests.rs::a_waiver_covers_every_line_of_a_multi_line_statement` |
+| ND-TP-041 | float waiver scope | ND-REQ-002 | A `float-boundary` waiver above a function covers a float use five lines into it; the same use in the next function (line 8) is reported. | `xtask/src/waivers/tests.rs::a_float_waiver_covers_its_item_and_nothing_after_it` |
+| ND-TP-042 | comment lines below a waiver | ND-REQ-002 | A `hand-hashed-table` finding on a comment line between the waiver and the item is suppressed. | `xtask/src/waivers/tests.rs::a_waiver_covers_the_comment_lines_below_it` |
+| ND-TP-043 | stacked waivers | ND-REQ-002 | Two waiver comments for two rules above one item suppress both findings. | `xtask/src/waivers/tests.rs::stacked_waivers_each_cover_the_item` |
+| ND-TP-044 | exact rule name | ND-REQ-002 | A waiver for `std-fs-extra` leaves a `std-fs` finding reported. | `xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly` |
+| ND-TP-045 | manifest waiver form | ND-REQ-002, ND-REQ-005 | A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not. | `xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments` |
+| ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
+| ND-TP-047 | include of source | ND-REQ-006 | Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named` |
+| ND-TP-048 | path attributes | ND-REQ-006 | `#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file` |
+| ND-TP-049 | included data | ND-REQ-006 | `include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`. | `xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate` |
+| ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
+| ND-TP-051 | sibling names | ND-REQ-001 | `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park` and `park_timeout_ms` in a group, `yield_now` and `park_timeout` through an alias are `thread-sleep`; `SystemTimeError` is `time-system`. | `xtask/src/nondeterminism/evasion_tests.rs::sibling_names_in_banned_families_are_rejected` |
+| ND-TP-052 | float methods | ND-REQ-001 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line. | `xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_token_are_float_boundary` |
+| ND-TP-053 | inferred float (known gap) | ND-REQ-001 | Known gap pinned with inverted meaning: `text.parse()` into an inferred float with no float name on the way produces no `float-boundary` finding. | `xtask/src/nondeterminism/evasion_tests.rs::an_inferred_float_with_no_float_name_is_not_seen` |
+| ND-TP-054 | std snapshot toolchain | ND-REQ-007 | The toolchain named in `std_api_1.96.0.txt` is the channel pinned in `rust-toolchain.toml`. | `xtask/src/nondeterminism/std_api_tests.rs::the_std_snapshot_is_of_the_pinned_toolchain` |
+| ND-TP-055 | std items classified | ND-REQ-007 | The items the 1.96.0 documentation lists for `std::thread` (23) and `std::time` (6) are exactly the items the hand classification names. | `xtask/src/nondeterminism/std_api_tests.rs::every_documented_thread_and_time_item_is_classified` |
+| ND-TP-056 | std items reported | ND-REQ-007 | For each of the 29 items, as a path and as a `use`, the gate reports exactly the classified rule, or nothing for a permitted item. | `xtask/src/nondeterminism/std_api_tests.rs::each_thread_and_time_item_gets_its_classified_rule` |
+| ND-TP-057 | Duration float methods | ND-REQ-007 | Every documented `Duration` method whose name ends in `_f32` or `_f64` (14) is `float-boundary` as a method call and as a path, and no other documented method is. | `xtask/src/nondeterminism/std_api_tests.rs::every_float_method_of_duration_is_float_boundary` |
+| ND-TP-058 | waiver after doc comment | ND-REQ-002 | A waiver between a method's doc comment and attributes and its `fn` covers the whole method; the float use in the next, unwaived method (line 12) is reported. | `xtask/src/waivers/tests.rs::a_waiver_between_doc_comment_and_function_covers_the_function` |
+| ND-TP-059 | filesystem Path methods | ND-REQ-008 | `exists`, `try_exists`, `is_file`, `is_dir`, `metadata`, `canonicalize`, `read_dir` as zero-argument method calls, `Path::exists` and `PathBuf::is_symlink` as paths, and `exists` inside `format!` are `std-fs`. | `xtask/src/nondeterminism/host_access_tests.rs::path_methods_that_read_the_filesystem_are_std_fs` |
+| ND-TP-060 | platform modules | ND-REQ-008 | `std::os::<platform>::fs` (unix, windows, linux), `std::os::fd` and a platform `prelude` glob are `std-fs`; `std::os::unix::net` is `network`; `std::os::unix::process` and `std::io::pipe` are `std-process`; `std::path::absolute` and `p.absolute()` are `std-env`. | `xtask/src/nondeterminism/host_access_tests.rs::platform_filesystem_modules_are_banned` |
+| ND-TP-061 | terminal input | ND-REQ-008 | `std::io::stdin`, `Stdin` in a group, `IsTerminal`, an `is_terminal()` call, `stdin` through a module alias and inside `format!` are `host-input`. | `xtask/src/nondeterminism/host_access_tests.rs::terminal_input_is_host_input` |
+| ND-TP-062 | doc tests | ND-REQ-008 | Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it. | `xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned` |
+| ND-TP-063 | host-access look-alikes | ND-REQ-003 | A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family. | `xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted` |
+| ND-TP-064 | documented Path methods | ND-REQ-008 | Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented. | `xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule` |
 | ND-TP-065 | optional and build dependencies | ND-REQ-005 | On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is. | `xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate` |
 
 ```toml
@@ -310,7 +363,7 @@ id = "ND-TP-021"
 requirements = ["ND-REQ-003"]
 evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted"
-oracle = "Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family."
+oracle = "Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test` and local `env`/`process` modules produce no finding in the rule family."
 tier = "fast"
 status = "implemented"
 
@@ -387,6 +440,321 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "ND-TP-030"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::extern_crate_aliases_resolve_like_imports"
+oracle = "`extern crate std as host;` makes `host::env::var`, `use host::fs::read` and `host::time::Instant` findings under `std-env`, `std-fs` and `time-instant`; `extern crate rand;` and a renamed `rand` are `random` findings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-031"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names"
+oracle = "`r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-032"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary"
+oracle = "`r#f64` as a type and as a path segment is reported as `float-boundary`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-033"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself"
+oracle = "`use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-034"
+requirements = ["ND-REQ-003"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted"
+oracle = "An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include`, another crate's macro named `include` and a binding named `env` produce no finding in the rule family."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-035"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::waiver_text_outside_a_comment_waives_nothing"
+oracle = "Waiver text in a string, raw string, byte string, a line of a multi-line raw string, an outer, inner or block doc comment, a doc attribute or macro tokens leaves the `std-fs` finding reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-036"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::line_and_block_comments_waive"
+oracle = "A line comment or block comment above the finding, or a line comment on its line, suppresses it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-037"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_comment_with_two_clauses_waives_nothing"
+oracle = "A comment with a `std-fs` and a `std-env` clause leaves both findings reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-038"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_valid_waiver_after_a_refused_one_applies"
+oracle = "A short-reason waiver followed by a valid one for the same rule suppresses the finding."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-039"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_covers_only_the_next_statement"
+oracle = "A waiver above the first of two one-line statements leaves exactly the second one's finding (line 4) reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-040"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_covers_every_line_of_a_multi_line_statement"
+oracle = "A finding on the fourth line of a waived statement is suppressed; the next statement's finding (line 8) is reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-041"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_float_waiver_covers_its_item_and_nothing_after_it"
+oracle = "A `float-boundary` waiver above a function covers a float use five lines into it; the same use in the next function (line 8) is reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-042"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_covers_the_comment_lines_below_it"
+oracle = "A `hand-hashed-table` finding on a comment line between the waiver and the item is suppressed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-043"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::stacked_waivers_each_cover_the_item"
+oracle = "Two waiver comments for two rules above one item suppress both findings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-044"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly"
+oracle = "A waiver for `std-fs-extra` leaves a `std-fs` finding reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-045"
+requirements = ["ND-REQ-002", "ND-REQ-005"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments"
+oracle = "A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-046"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line"
+oracle = "A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-047"
+requirements = ["ND-REQ-006"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named"
+oracle = "Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-048"
+requirements = ["ND-REQ-006"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file"
+oracle = "`#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-049"
+requirements = ["ND-REQ-006"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate"
+oracle = "`include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-050"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env"
+oracle = "`env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-051"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::sibling_names_in_banned_families_are_rejected"
+oracle = "`std::thread::sleep_ms` under `#[allow(deprecated)]`, `park` and `park_timeout_ms` in a group, `yield_now` and `park_timeout` through an alias are `thread-sleep`; `SystemTimeError` is `time-system`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-052"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_token_are_float_boundary"
+oracle = "`d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-053"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::an_inferred_float_with_no_float_name_is_not_seen"
+oracle = "Known gap pinned with inverted meaning: `text.parse()` into an inferred float with no float name on the way produces no `float-boundary` finding."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-054"
+requirements = ["ND-REQ-007"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_api_tests.rs::the_std_snapshot_is_of_the_pinned_toolchain"
+oracle = "The toolchain named in `std_api_1.96.0.txt` is the channel pinned in `rust-toolchain.toml`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-055"
+requirements = ["ND-REQ-007"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_api_tests.rs::every_documented_thread_and_time_item_is_classified"
+oracle = "The items the 1.96.0 documentation lists for `std::thread` (23) and `std::time` (6) are exactly the items the hand classification names."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-056"
+requirements = ["ND-REQ-007"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_api_tests.rs::each_thread_and_time_item_gets_its_classified_rule"
+oracle = "For each of the 29 items, as a path and as a `use`, the gate reports exactly the classified rule, or nothing for a permitted item."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-057"
+requirements = ["ND-REQ-007"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_api_tests.rs::every_float_method_of_duration_is_float_boundary"
+oracle = "Every documented `Duration` method whose name ends in `_f32` or `_f64` (14) is `float-boundary` as a method call and as a path, and no other documented method is."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-058"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_between_doc_comment_and_function_covers_the_function"
+oracle = "A waiver between a method's doc comment and attributes and its `fn` covers the whole method; the float use in the next, unwaived method (line 12) is reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-059"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::path_methods_that_read_the_filesystem_are_std_fs"
+oracle = "`exists`, `try_exists`, `is_file`, `is_dir`, `metadata`, `canonicalize`, `read_dir` as zero-argument method calls, `Path::exists` and `PathBuf::is_symlink` as paths, and `exists` inside `format!` are `std-fs`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-060"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::platform_filesystem_modules_are_banned"
+oracle = "`std::os::<platform>::fs` (unix, windows, linux), `std::os::fd` and a platform `prelude` glob are `std-fs`; `std::os::unix::net` is `network`; `std::os::unix::process` and `std::io::pipe` are `std-process`; `std::path::absolute` and `p.absolute()` are `std-env`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-061"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::terminal_input_is_host_input"
+oracle = "`std::io::stdin`, `Stdin` in a group, `IsTerminal`, an `is_terminal()` call, `stdin` through a module alias and inside `format!` are `host-input`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-062"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned"
+oracle = "Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-063"
+requirements = ["ND-REQ-003"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted"
+oracle = "A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-064"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule"
+oracle = "Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "ND-TP-065"
 requirements = ["ND-REQ-005"]
 evidence = "test"
@@ -410,9 +778,11 @@ The current executable surface has no known failing cases.
 ## Edge Cases And Unusual Inputs
 
 Covered: `use` groups, nested groups, `self` in a group, renamed imports,
+`extern crate` renames, raw identifiers (`r#std`, `r#HashMap`, `r#f64`),
 module aliases, glob imports, leading `::`, turbofish generics, type
 positions, macro invocation paths and macro bodies, comments, waivers with
-short reasons and waivers for other rules, a banned crate reached through
+short reasons and waivers for other rules, waiver text in literals, doc
+comments and macro tokens, two clauses in one comment, a banned crate reached through
 another deterministic crate.
 
 ## Stress And Fuzz
@@ -426,6 +796,7 @@ around a banned leaf) would be the next instrument if a form slips through.
 | Gap | Blocking Work |
 | --- | --- |
 | Alias resolution is file-wide, not per module scope: an import in one module resolves a same-named path in a sibling module. This can only over-report. | Scope-aware name resolution; not needed while no false positive is reported on `main`. |
+| A float whose type is only inferred (`text.parse()` passed to a float parameter, `x.into()` to an `f64`) with no float token, float-suffixed name or float literal on the way is invisible to `float-boundary` (pinned as ND-TP-053). The defence today: no float type, float literal or float-suffixed name can be written in core without a waiver. | `-D clippy::float_arithmetic` for the seven core crates in the strict Clippy step would catch arithmetic on an inferred float; it is a restriction lint, which Rule 10 does not forbid cherry-picking. Proposed, not enforced. |
 | A banned type returned by another crate's function and never named in the file is invisible to the source rules. | Covered by the dependency rule for third-party crates; a type-aware check would need `rustc` (for example a lint driver). |
-| `float-op` is enforced through float types and literals, not method names, because Bunny's fixed-point types have `sqrt` and `sin` methods. A float binding admitted by a `float-boundary` waiver can call float methods further than two lines below that waiver. | Review of each `float-boundary` waiver; a type-aware check would close it. |
+| `float-op` is enforced through float types and literals, not method names, because Bunny's fixed-point types have `sqrt` and `sin` methods. A float admitted by a waived item can leave it (as a return value) and be operated on elsewhere where its type is only inferred. | Review of each `float-boundary` waiver; a type-aware check would close it. |
 

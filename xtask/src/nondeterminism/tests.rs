@@ -10,19 +10,19 @@ use std::path::PathBuf;
 
 use crate::code_dojo::{dependency_violations, file_violations};
 
-const CORE_PATH: &str = "crates/bunny-num/src/lib.rs";
+pub(super) const CORE_PATH: &str = "crates/bunny-num/src/lib.rs";
 
 /// One seeded form of a rule: a label, the source, and the line that must be reported.
-type Form = (&'static str, &'static str, usize);
+pub(super) type Form = (&'static str, &'static str, usize);
 
-fn reported(path: &str, source: &str) -> Vec<(usize, String)> {
+pub(super) fn reported(path: &str, source: &str) -> Vec<(usize, String)> {
     file_violations(PathBuf::from(path), source)
         .iter()
         .map(|violation| (violation.line, violation.rule.to_string()))
         .collect()
 }
 
-fn reported_rules(path: &str, source: &str) -> Vec<String> {
+pub(super) fn reported_rules(path: &str, source: &str) -> Vec<String> {
     reported(path, source).into_iter().map(|(_, rule)| rule).collect()
 }
 
@@ -30,7 +30,7 @@ fn reported_rules(path: &str, source: &str) -> Vec<String> {
 ///
 /// On failure the message lists every form that slipped through together with what the
 /// gate did report for it, so a red run records the exact coverage gap.
-fn assert_rejects(rule: &str, forms: &[Form]) {
+pub(super) fn assert_rejects(rule: &str, forms: &[Form]) {
     let mut missed = Vec::new();
     for (label, source, line) in forms {
         let found = reported(CORE_PATH, source);
@@ -444,12 +444,11 @@ const ACCEPTED: &[(&str, &str)] = &[
     ("json-serialization", "pub fn f(bytes: &[u8]) -> usize { bytes.len() }"),
     ("float-op on fixed point", "pub fn f(x: Fixed, a: Angle) -> (Option<Fixed>, Fixed) { (x.sqrt(), a.sin()) }"),
     ("std-env", "mod env { pub fn name() -> &'static str { \"bunny\" } }\npub fn f() -> &'static str { env::name() }"),
-    ("compile-time env macro", "pub fn f() -> &'static str { env!(\"CARGO_PKG_VERSION\") }"),
     ("std-process", "mod process { pub fn run() {} }\npub fn f() { process::run(); }"),
 ];
 
 /// Every rule ID that maps an Echo `ban-nondeterminism` rule.
-const FAMILY: &[&str] = &[
+pub(super) const FAMILY: &[&str] = &[
     "time-system",
     "time-instant",
     "thread-sleep",
@@ -465,6 +464,9 @@ const FAMILY: &[&str] = &[
     "std-env",
     "std-fs",
     "std-process",
+    "include-source",
+    "include-data",
+    "host-input",
 ];
 
 #[test]

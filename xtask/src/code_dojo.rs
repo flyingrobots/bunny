@@ -14,6 +14,7 @@ use syn::{
 };
 
 use crate::git_helpers::git_command;
+use crate::waivers::{manifest_waives, Waivers};
 
 type DynError = Box<dyn Error>;
 
@@ -188,8 +189,8 @@ struct FileContext<'a> {
     path: PathBuf,
     category: Category,
     limits: Limits,
-    source: &'a str,
     lines: &'a [String],
+    waivers: &'a Waivers,
 }
 
 struct RustSource {
@@ -291,28 +292,33 @@ fn check_rust(mode: Mode) -> Result<(), DynError> {
 
 /// Applies every per-file Rust policy rule to one source file at a repository-relative path.
 pub(super) fn file_violations(path: PathBuf, source: &str) -> Vec<Violation> {
-    let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
     let category = crate_category(&path);
-    let context = FileContext { path, category, limits: category.limits(), source, lines: &lines };
+    policy_violations(path, category, source)
+}
+
+fn policy_violations(path: PathBuf, category: Category, source: &str) -> Vec<Violation> {
+    let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
+    let parsed = syn::parse_file(source);
+    let waivers = Waivers::parse(source, parsed.as_ref().ok());
+    let context =
+        FileContext { path, category, limits: category.limits(), lines: &lines, waivers: &waivers };
     let mut violations = Vec::new();
     check_textual_limits(&mut violations, &context);
-    check_ast(&mut violations, &context);
+    check_ast(&mut violations, &context, parsed);
     violations
 }
 
 /// Applies the dependency-level nondeterminism rules to `cargo tree` output.
 ///
-/// `manifest` returns the text of a deterministic crate's `Cargo.toml`; a line
-/// `# dojo: allow <rule> -- <reason>` anywhere in it waives that rule for that crate.
+/// `manifest` returns the text of a deterministic crate's `Cargo.toml`; a whole-line
+/// comment `# dojo: allow <rule> -- <reason>` anywhere in it waives that rule for that crate.
 pub(super) fn dependency_violations(
     tree: &str,
     manifest: &dyn Fn(&str) -> String,
 ) -> Vec<Violation> {
     crate::nondeterminism::dependency_findings(tree, NONDETERMINISM_CRATES)
         .into_iter()
-        .filter(|finding| {
-            !manifest(&finding.root).lines().any(|line| waiver_accepts(line, finding.rule))
-        })
+        .filter(|finding| !manifest_waives(&manifest(&finding.root), finding.rule))
         .map(|finding| {
             Violation::new(
                 PathBuf::from("crates").join(&finding.root).join("Cargo.toml"),
@@ -901,7 +907,7 @@ fn check_textual_limits(violations: &mut Vec<Violation>, context: &FileContext<'
             if line.len() <= limit || line.contains("http://") || line.contains("https://") {
                 continue;
             }
-            if has_waiver(context.lines, index, "line-length") {
+            if context.waivers.covers(index + 1, "line-length") {
                 continue;
             }
             violations.push(Violation::new(
@@ -923,8 +929,12 @@ fn source_line_count<'a>(lines: impl Iterator<Item = &'a str>) -> usize {
         .count()
 }
 
-fn check_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>) {
-    match syn::parse_file(context.source) {
+fn check_ast(
+    violations: &mut Vec<Violation>,
+    context: &FileContext<'_>,
+    parsed: syn::Result<File>,
+) {
+    match parsed {
         Ok(file) => visit_file_ast(violations, context, &file),
         Err(error) => violations.push(Violation::new(
             context.path.clone(),
@@ -937,11 +947,11 @@ fn check_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>) {
 
 fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, file: &File) {
     if in_nondeterminism_scope(&context.path) {
-        let findings = crate::nondeterminism::source_findings(file)
+        let findings = crate::nondeterminism::source_findings(&context.path, file)
             .into_iter()
             .chain(crate::nondeterminism::text_findings(context.lines));
         for finding in findings {
-            if !has_waiver(context.lines, finding.line.saturating_sub(1), finding.rule) {
+            if !context.waivers.covers(finding.line, finding.rule) {
                 violations.push(Violation::new(
                     context.path.clone(),
                     finding.line,
@@ -957,6 +967,7 @@ fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, fi
         category: context.category,
         limits: context.limits,
         lines: context.lines,
+        waivers: context.waivers,
     };
     visitor.visit_file(file);
 }
@@ -967,6 +978,7 @@ struct PolicyVisitor<'a> {
     category: Category,
     limits: Limits,
     lines: &'a [String],
+    waivers: &'a Waivers,
 }
 
 impl PolicyVisitor<'_> {
@@ -975,7 +987,7 @@ impl PolicyVisitor<'_> {
     }
 
     fn waived(&self, line: usize, rule: &str) -> bool {
-        has_waiver(self.lines, line.saturating_sub(1), rule)
+        self.waivers.covers(line, rule)
     }
 
     fn check_function(&mut self, span: Span, signature: &Signature, body: Option<&Block>) {
@@ -1082,6 +1094,23 @@ impl PolicyVisitor<'_> {
         }
     }
 
+    /// A method such as `d.mul_f64(..)` or `d.as_secs_f64()` is float arithmetic even when
+    /// no float type is written.
+    fn check_float_method(&mut self, line: usize, method: &str) {
+        if self.category == Category::Core
+            && is_float_name(method)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                format!(
+                    "`{method}` takes or returns a float; core requires a boundary/proof waiver"
+                ),
+            );
+        }
+    }
+
     fn check_type_path(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
@@ -1168,7 +1197,8 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let line = line_of(node.span());
-        let method = node.method.to_string();
+        let method = crate::nondeterminism::ident_name(&node.method);
+        self.check_float_method(line_of(node.method.span()), &method);
         if !self.limits.panics_allowed
             && (method == "unwrap" || method == "expect")
             && !self.waived(line, "panic-path")
@@ -1318,42 +1348,23 @@ trait Pipe: Sized {
 
 impl<T> Pipe for T {}
 
-fn has_waiver(lines: &[String], index: usize, rule: &str) -> bool {
-    let needle = format!("dojo: allow {rule}");
-    let start = index.saturating_sub(2);
-    for line_index in start..=index {
-        let Some(text) = lines.get(line_index) else {
-            continue;
-        };
-        if !text.contains(&needle) {
-            continue;
-        }
-        if let Some((_, reason)) = text.split_once("--") {
-            return reason.trim().len() >= 8;
-        }
-    }
-    false
-}
-
-/// Whether one line is a `dojo: allow <rule> -- <reason>` waiver with a real reason.
-fn waiver_accepts(text: &str, rule: &str) -> bool {
-    let Some((_, after)) = text.split_once(&format!("dojo: allow {rule}")) else {
-        return false;
-    };
-    after.starts_with([' ', '\t'])
-        && after.split_once("--").is_some_and(|(_, reason)| reason.trim().len() >= 8)
-}
-
 fn in_nondeterminism_scope(path: &Path) -> bool {
     crate_name(path).is_some_and(|name| NONDETERMINISM_CRATES.contains(&name))
 }
 
 fn names_float(segments: &[String]) -> bool {
-    segments.iter().any(|segment| segment == "f32" || segment == "f64")
+    segments.iter().any(|segment| is_float_name(segment))
+}
+
+/// `f32`, `f64`, and every name ending in `_f32` or `_f64`: `Duration::mul_f64`,
+/// `as_secs_f32`, `from_secs_f64` and Bunny's own `to_f32` take or return a float without
+/// a float token appearing at the call.
+fn is_float_name(name: &str) -> bool {
+    name == "f32" || name == "f64" || name.ends_with("_f32") || name.ends_with("_f64")
 }
 
 fn path_segments(path: &SynPath) -> Vec<String> {
-    path.segments.iter().map(|segment| segment.ident.to_string()).collect()
+    path.segments.iter().map(|segment| crate::nondeterminism::ident_name(&segment.ident)).collect()
 }
 
 fn is_panicking_macro(name: &str) -> bool {
@@ -1421,15 +1432,7 @@ mod tests {
     }
 
     fn core_policy_violations(source: &str) -> Vec<Violation> {
-        let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
-        let path = PathBuf::from("crates/bunny-num/src/lib.rs");
-        let category = Category::Core;
-        let context =
-            FileContext { path, category, limits: category.limits(), source, lines: &lines };
-        let mut violations = Vec::new();
-        check_textual_limits(&mut violations, &context);
-        check_ast(&mut violations, &context);
-        violations
+        policy_violations(PathBuf::from("crates/bunny-num/src/lib.rs"), Category::Core, source)
     }
 
     fn has_rule(violations: &[Violation], rule: &str) -> bool {
