@@ -73,23 +73,27 @@ see [`test-plan.md`](test-plan.md#feature-configurations).
    `float`, `float32`, `double` or `float64`. Every other property is skipped by
    its position in the declared list. Its type must be one of `char`, `uchar`,
    `short`, `ushort`, `int`, `uint`, `float`, `double`, `int8`, `uint8`, `int16`,
-   `uint16`, `int32`, `uint32`, `float32`, `float64`, but its text is never
+   `uint16`, `int32`, `uint32`, `float32`, `float64` (any other type is
+   `UnsupportedProperty`), but its text is never
    interpreted, only counted: a vertex line holds exactly one whitespace-separated
    value per declared property. List properties in the vertex element are refused.
 3. `element face M` after the vertex element, with exactly one property
    `property list <count> <index> vertex_indices`, where `<count>` is `uchar` or
    `uint8` and `<index>` is `int`, `uint`, `int32` or `uint32`.
 4. Any other element is accepted only with count 0, together with its properties,
-   and is ignored. A vertex or face element declared twice, or a face element before
-   the vertex element, is refused.
+   and is ignored. A vertex or face element declared twice is `UnsupportedElement`; a face
+   element before the vertex element, or before `x`, `y` and `z` are all declared, is
+   `MissingVertexElement`, reported at the `element face` line.
 5. A body of exactly `N` vertex records, then `M` face records, one record per line.
 
 ### Faces
 
-A face line is `3 a b c`: the count must be the decimal integer `3`, then three
-indices. An index is a decimal integer with no sign; `a`, `b`, `c` must each be less
-than `N` and fit `u32`. Any other count is `NonTriangularFace`; a wrong number of
-values is `FaceFieldCount`; a leading `-` is `NegativeIndex`; any other non-digit
+A face line is `3 a b c`: the count must be the decimal integer `3` (leading zeros are
+allowed: `03` and `0003` are 3), then three indices. An index is a decimal integer with no sign; `a`, `b`, `c` must each be less
+than `N` and fit `u32`. A count that is a run of digits other than the integer 3, however long, is
+`NonTriangularFace`; a count that is not a run of digits (`+3`, `3.0`, `-3`, `x`) is
+`InvalidIndex`, the one kind this reader gives to a face value that is not an unsigned
+decimal integer; a wrong number of values is `FaceFieldCount`; a leading `-` is `NegativeIndex`; any other non-digit
 text (`+1`, `1.0`, `0x1`) is `InvalidIndex`; an index at or above `N` or above
 `u32::MAX` is `IndexOutOfBounds`.
 
@@ -189,7 +193,8 @@ no such history can pass `AsciiPlyLimits::DEFAULT`.
 `AsciiPlyError` carries an `AsciiPlyErrorKind` and a 1-based line number counted from
 the start of the input by `\n` characters. The line is where the problem was found:
 the offending header or body line; the `end_header` line for a missing element or
-property; and, for something that is absent (no `end_header`, too few records), the
+property, except that a face element declared before the vertex element or before `x`, `y`
+and `z` are all declared is reported at its own `element face` line; and, for something that is absent (no `end_header`, too few records), the
 line after the last line of the input. Its `Display` is `line <n>: <message>`.
 
 | Kind | Raised for |
@@ -201,7 +206,7 @@ line after the last line of the input. Its `Display` is `line <n>: <message>`.
 | `InvalidHeaderLine` | unknown first word, or extra words on an `element` line |
 | `InvalidCount` | an element count that is missing or not digits |
 | `IntegerOverflow` | an element count above `usize::MAX` |
-| `MissingVertexElement` | no vertex element, or `x`, `y`, `z` not all declared |
+| `MissingVertexElement` | no vertex element, or `x`, `y`, `z` not all declared; a face element declared before either |
 | `MissingFaceElement` | no face element or no `vertex_indices` property |
 | `UnsupportedElement` | a non-empty extra element, or a repeated vertex or face element |
 | `UnsupportedProperty` | wrong type, duplicate coordinate, list property in a vertex, wrong face property |
@@ -209,7 +214,7 @@ line after the last line of the input. Its `Display` is `line <n>: <message>`.
 | `TrailingData` | a record after the last declared one |
 | `VertexFieldCount` | a vertex line with other than one value per declared property |
 | `InvalidNumber`, `NumberOverflow`, `NumberTooLong` | the [conversion](#the-conversion-rule) of a coordinate failed |
-| `NonTriangularFace`, `FaceFieldCount`, `InvalidIndex`, `NegativeIndex`, `IndexOutOfBounds` | the [face rules](#faces) |
+| `NonTriangularFace`, `FaceFieldCount`, `InvalidIndex`, `NegativeIndex`, `IndexOutOfBounds` | the [face rules](#faces); `InvalidIndex` also covers a count that is not digits |
 
 ## The Conversion Rule
 
@@ -260,7 +265,10 @@ decided by rules 1 to 3 and never overflows.
 
 `TooLong` is therefore a statement about the reader, not about the value: an
 exact conversion of those inputs exists but is not attempted. Rules 2 and 3 mean it
-is never reported for a value that is certainly out of range or certainly zero.
+is never reported for a value that is certainly out of range or certainly zero: with 32
+digits, `12345678901.234567890123456789012` is `Overflow` and
+`9999999999.123456789012345678901234` is `TooLong`; `0.000000000012345678901234567890123456789`
+is zero and the same digits one place higher are `TooLong`.
 
 ## Verification
 
