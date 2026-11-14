@@ -76,6 +76,7 @@ formatting.
 | TRACE-REQ-025 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
 | TRACE-REQ-026 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
 | TRACE-REQ-027 | hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit. | `README.md#exact-triangle-test` |
+| TRACE-REQ-028 | closest_hits returns, for every ray of any packet of up to 64 rays (coherent or not, one origin or many), exactly the hit closest_hit returns for that ray alone; its whole-packet test never rejects a node that box_entry accepts for some ray of the packet at that ray's limit, and never accepts one that box_entry rejects for some ray. | `README.md#packet-traversal` |
 
 ```toml
 [[requirement]]
@@ -182,6 +183,11 @@ status = "active"
 id = "TRACE-REQ-027"
 summary = "hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-028"
+summary = "closest_hits returns, for every ray of any packet of up to 64 rays, exactly the hit closest_hit returns for that ray alone; its whole-packet test never rejects a node box_entry accepts for some ray at its limit, and never accepts one box_entry rejects for some ray."
+status = "active"
 ```
 
 ## Fixtures
@@ -264,6 +270,12 @@ Regenerating them is a contract change.
 | TRACE-TP-203 | Extreme domain values against the reference | TRACE-REQ-027 | The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree` |
 | TRACE-TP-204 | det at and just past multiples of 2^32 | TRACE-REQ-027 | Raw-unit triangles hit at a corner with det exactly 2^32, 3 * 2^32, 2^32 + 1 (641 * 6 700 417) and 1 equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_204_determinants_at_multiples_of_2_pow_32_agree` |
 | TRACE-TP-205 | The benchmark scene's triangle tests | TRACE-REQ-027 | Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance. | `crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal` |
+| TRACE-TP-111 | Packets of every size | TRACE-REQ-028 | Packets of 1 to 64 rays over about 440 seeded triangles (a tenth duplicated, for ties), fanned from one origin with three spreads and scattered with their own origins and zero or tiny components: every variant returns, per ray, exactly closest_hit's primitive and distance bits; the corpus has over 5 000 hits. | `crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_111_every_packet_size_agrees_with_closest_hit_on_every_ray` |
+| TRACE-TP-112 | Oracle of the oracle | TRACE-REQ-028 | On 40 seeded fans of 16 rays, closest_hit equals a test of every triangle, so TRACE-TP-111 compares against the full test. | `crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_112_the_oracle_equals_a_test_of_every_primitive_on_packet_rays` |
+| TRACE-TP-113 | Degenerate packets | TRACE-REQ-028 | Nine copies of one ray, three copies limited one raw unit below their hit, rays that all miss, limits 0, -1 and i64::MIN, and two rays with different origins agree with closest_hit for every variant. | `crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_113_degenerate_packets_agree_with_closest_hit` |
+| TRACE-TP-114 | Empty tree | TRACE-REQ-028 | An empty node buffer returns no hit for every ray and every variant, without calling the primitive test. | `crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_114_an_empty_tree_misses_for_every_ray` |
+| TRACE-TP-115 | Whole-packet test against box_entry | TRACE-REQ-028 | Over 20 000 seeded packets of 1 to 64 rays from one origin (spreads from 0 to half a unit, with zero, tiny and sign-changing components) and seeded boxes and per-ray limits: a rejected box is rejected by box_entry for every ray, an accepted one is accepted for every ray with a bound at or above the packet's; over 2 000 rejects, 1 000 accepts and 1 000 undecided cases occur. | `crates/bunny-broadphase/src/packet/tests/mod.rs::the_packet_verdict_never_contradicts_box_entry_for_any_ray` |
+| TRACE-TP-116 | Deliberate packet mutations | TRACE-REQ-028 | Each culling, accepting and pruning rule of closest_hits, broken on purpose, makes at least one of TRACE-TP-111 to TRACE-TP-115 fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -642,6 +654,60 @@ evidence = "test"
 test = "crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal"
 oracle = "Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance."
 tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-111"
+requirements = ["TRACE-REQ-028"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_111_every_packet_size_agrees_with_closest_hit_on_every_ray"
+oracle = "Packets of 1 to 64 rays over about 440 seeded triangles (a tenth duplicated, for ties), fanned from one origin with three spreads and scattered with their own origins and zero or tiny components: every variant returns, per ray, exactly closest_hit's primitive and distance bits; the corpus has over 5 000 hits."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-112"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_112_the_oracle_equals_a_test_of_every_primitive_on_packet_rays"
+oracle = "On 40 seeded fans of 16 rays, closest_hit equals a test of every triangle, so TRACE-TP-111 compares against the full test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-113"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_113_degenerate_packets_agree_with_closest_hit"
+oracle = "Nine copies of one ray, three copies limited one raw unit below their hit, rays that all miss, limits 0, -1 and i64::MIN, and two rays with different origins agree with closest_hit for every variant."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-114"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/packet_tests.rs::trace_tp_114_an_empty_tree_misses_for_every_ray"
+oracle = "An empty node buffer returns no hit for every ray and every variant, without calling the primitive test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-115"
+requirements = ["TRACE-REQ-028"]
+evidence = "property"
+test = "crates/bunny-broadphase/src/packet/tests/mod.rs::the_packet_verdict_never_contradicts_box_entry_for_any_ray"
+oracle = "Over 20 000 seeded packets of 1 to 64 rays from one origin (spreads from 0 to half a unit, with zero, tiny and sign-changing components) and seeded boxes and per-ray limits: a rejected box is rejected by box_entry for every ray, an accepted one is accepted for every ray with a bound at or above the packet's; over 2 000 rejects, 1 000 accepts and 1 000 undecided cases occur."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-116"
+requirements = ["TRACE-REQ-028"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
+oracle = "Each culling, accepting and pruning rule of closest_hits, broken on purpose, makes at least one of TRACE-TP-111 to TRACE-TP-115 fail."
+tier = "manual"
 status = "implemented"
 ```
 
