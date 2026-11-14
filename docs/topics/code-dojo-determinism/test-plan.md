@@ -155,6 +155,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
 | ND-TP-051 | sibling names | ND-REQ-001 | `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park` and `park_timeout_ms` in a group, `yield_now` and `park_timeout` through an alias are `thread-sleep`; `SystemTimeError` is `time-system`. | `xtask/src/nondeterminism/evasion_tests.rs::sibling_names_in_banned_families_are_rejected` |
 | ND-TP-052 | float methods | ND-REQ-001 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line. | `xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_token_are_float_boundary` |
+| ND-TP-070 | float names in use declarations | ND-REQ-001 | `use core::f64::consts::PI as P`, `use crate::boundary::to_f32 as convert`, the same in a group, and a glob of `core::f32::consts` are each `float-boundary` at the `use` line in core, so a rename cannot hide a float name. | `xtask/src/nondeterminism/evasion_tests.rs::float_names_in_use_declarations_are_float_boundary` |
 | ND-TP-053 | inferred float (known gap) | ND-REQ-001 | Known gap pinned with inverted meaning: `text.parse()` into an inferred float with no float name on the way produces no `float-boundary` finding. | `xtask/src/nondeterminism/evasion_tests.rs::an_inferred_float_with_no_float_name_is_not_seen` |
 | ND-TP-054 | std snapshot toolchain | ND-REQ-007 | The toolchain named in `std_api_1.96.0.txt` is the channel pinned in `rust-toolchain.toml`. | `xtask/src/nondeterminism/std_api_tests.rs::the_std_snapshot_is_of_the_pinned_toolchain` |
 | ND-TP-055 | std items classified | ND-REQ-007 | The items the 1.96.0 documentation lists for `std::thread` (23) and `std::time` (6) are exactly the items the hand classification names. | `xtask/src/nondeterminism/std_api_tests.rs::every_documented_thread_and_time_item_is_classified` |
@@ -666,6 +667,15 @@ test = "xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_t
 oracle = "`d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "ND-TP-070"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::float_names_in_use_declarations_are_float_boundary"
+oracle = "`use core::f64::consts::PI as P`, `use crate::boundary::to_f32 as convert`, the same in a group, and a glob of `core::f32::consts` are each `float-boundary` at the `use` line in core, so a rename cannot hide a float name."
+tier = "fast"
+status = "planned"
 
 [[case]]
 id = "ND-TP-053"

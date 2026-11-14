@@ -270,6 +270,19 @@ fn float_methods_with_no_float_token_are_float_boundary() {
     );
 }
 
+#[test]
+fn float_names_in_use_declarations_are_float_boundary() {
+    assert_rejects(
+        "float-boundary",
+        &[
+            ("renamed float constant", "use core::f64::consts::PI as P;\npub fn f() -> u64 { P.to_bits() }", 1),
+            ("renamed float function", "use crate::boundary::to_f32 as convert;", 1),
+            ("float function in a group", "use crate::boundary::{to_f32 as convert, Other};", 1),
+            ("float module glob", "use core::f32::consts::*;", 1),
+        ],
+    );
+}
+
 /// Known gap, pinned with inverted meaning: a float whose type is only inferred, with no
 /// float token, float-suffixed name or float literal on the way, is beyond a syntactic
 /// gate. If this test starts failing the gate has learned to see it; move the case to the
@@ -315,6 +328,7 @@ const ACCEPTED: &[(&str, &str)] = &[
     ("integer widening", "pub fn f(x: u32) -> u64 { u64::from(x) }"),
     ("scoped threads", "pub fn f() { std::thread::scope(|_| {}); }"),
     ("a name that starts with f64", "pub fn f(x: Fixed) -> u64 { x.f64_bits() }"),
+    ("a fixed-point import", "use crate::fixed::FixedQ32_32;\npub fn f(x: FixedQ32_32) -> FixedQ32_32 { x }"),
 ];
 
 #[test]
