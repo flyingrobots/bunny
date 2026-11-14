@@ -114,4 +114,5 @@ jobs:
           wasm-pack test --node crates/bunny-query --locked
           wasm-pack test --node crates/bunny-broadphase --locked
           wasm-pack test --node crates/bunny-mesh --locked
+          wasm-pack test --node crates/bunny-optics --locked
           wasm-pack test --node crates/bunny-codec --locked
