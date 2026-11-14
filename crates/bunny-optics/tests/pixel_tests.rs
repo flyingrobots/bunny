@@ -1,4 +1,4 @@
-//! Pixel-value contract tests (`docs/topics/optics/test-plan.md`, OPTICS-TP-010 to 020):
+//! Pixel-value contract tests (`docs/topics/optics/test-plan.md`, OPTICS-TP-022 to 032):
 //! exact accumulation and its limits, the mean's rounding, the sRGB and linear tone curves
 //! against an `f64` reference oracle, 8-bit and 16-bit quantization, and the RGBA8 writer.
 //!
@@ -96,7 +96,7 @@ fn first_raw(reaches: impl Fn(i64) -> bool) -> i64 {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_010_golden_accumulation_and_mean() {
+fn optics_tp_022_golden_accumulation_and_mean() {
     let pixel = accumulate(&[[fixed(1), fixed(2), fixed(3)], [fixed(4), fixed(5), fixed(6)]]);
     assert_eq!((raws(pixel.sums()), pixel.count()), ([5, 7, 9], 2));
     // 2.5, 3.5 and 4.5 raw: ties go to the even neighbour.
@@ -123,7 +123,7 @@ fn optics_tp_010_golden_accumulation_and_mean() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_011_accumulation_is_order_independent() {
+fn optics_tp_023_accumulation_is_order_independent() {
     let mut seeds = Seeds(PIXEL_SEED);
     for case in 0..64 {
         let count = 1 + usize::try_from(seeds.upto(255)).expect("small count");
@@ -160,7 +160,7 @@ fn optics_tp_011_accumulation_is_order_independent() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_012_accumulation_limits_are_exact_at_their_edges() {
+fn optics_tp_024_accumulation_limits_are_exact_at_their_edges() {
     let mut full = accumulate(&vec![[fixed(MAX); 3]; 1024]);
     assert_eq!(MAX_SAMPLES_PER_PIXEL, 1024);
     assert_eq!(MAX, 1 << 52);
@@ -209,7 +209,7 @@ fn mean_oracle(sum: i64, count: u32) -> i64 {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_013_mean_rounds_to_nearest_with_ties_to_even() {
+fn optics_tp_025_mean_rounds_to_nearest_with_ties_to_even() {
     let mut seeds = Seeds(PIXEL_SEED ^ 0x13);
     for high in [1, 3, 1 << 20, MAX] {
         let mut pixel = PixelAccumulator::new();
@@ -243,7 +243,7 @@ fn knot_input(i: i64) -> i64 {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_014_srgb_knots_are_the_correctly_rounded_curve() {
+fn optics_tp_026_srgb_knots_are_the_correctly_rounded_curve() {
     let curve = ToneCurve::SrgbV1;
     let mut previous = i64::MIN;
     for i in 0..=9 * 128 {
@@ -300,7 +300,7 @@ const LINEAR_GOLDEN: &[(i64, i64, u8, u16)] = &[
 ];
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_015_golden_tone_vectors_lock_exact_outputs() {
+fn optics_tp_027_golden_tone_vectors_lock_exact_outputs() {
     for (curve, golden) in
         [(ToneCurve::SrgbV1, SRGB_GOLDEN), (ToneCurve::LinearClampV1, LINEAR_GOLDEN)]
     {
@@ -333,7 +333,7 @@ fn dense_inputs() -> Vec<i64> {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_016_srgb_is_within_its_bound_of_the_exact_curve() {
+fn optics_tp_028_srgb_is_within_its_bound_of_the_exact_curve() {
     let mut worst = 0.0_f64;
     for x in dense_inputs() {
         #[allow(clippy::cast_precision_loss)]
@@ -386,7 +386,7 @@ fn check_code_thresholds(max_code: i64, encode: impl Fn(i64) -> i64) -> (i64, i6
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_017_codes_are_within_one_of_the_correctly_rounded_codes() {
+fn optics_tp_029_codes_are_within_one_of_the_correctly_rounded_codes() {
     let curve = ToneCurve::SrgbV1;
     let (lag_8, lead_8) = check_code_thresholds(255, |x| i64::from(curve.encode_8(fixed(x))));
     let (lag_16, lead_16) = check_code_thresholds(65_535, |x| i64::from(curve.encode_16(fixed(x))));
@@ -397,7 +397,7 @@ fn optics_tp_017_codes_are_within_one_of_the_correctly_rounded_codes() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_018_tone_curves_and_quantization_are_monotone() {
+fn optics_tp_030_tone_curves_and_quantization_are_monotone() {
     // Within a segment the power curve is a floored affine function with a non-negative
     // slope, so it is monotone; these checks cover every place where pieces meet.
     for curve in [ToneCurve::SrgbV1, ToneCurve::LinearClampV1] {
@@ -432,7 +432,7 @@ fn optics_tp_018_tone_curves_and_quantization_are_monotone() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_019_quantization_rounds_to_nearest_with_ties_to_even() {
+fn optics_tp_031_quantization_rounds_to_nearest_with_ties_to_even() {
     // (display raw, 8-bit code, 16-bit code)
     let golden: &[(i64, u8, u16)] = &[
         (0, 0, 0),
@@ -468,7 +468,7 @@ fn optics_tp_019_quantization_rounds_to_nearest_with_ties_to_even() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_020_rgba8_writes_four_opaque_bytes_or_refuses() {
+fn optics_tp_032_rgba8_writes_four_opaque_bytes_or_refuses() {
     let mut out = [7_u8; 4];
     write_rgba8(&mut out, ToneCurve::SrgbV1, [fixed(773_094_113), fixed(ONE / 2), fixed(2 * ONE)])
         .expect("four bytes");

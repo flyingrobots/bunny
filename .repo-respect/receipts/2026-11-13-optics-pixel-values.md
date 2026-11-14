@@ -60,25 +60,25 @@ Topic docs:
 docs/topics/optics/README.md (new Pixel Values sections: accumulation and its bit budget,
 resolve, tone curves with the knot table, hold and error bound, output codes, accuracy of the
 codes against correct rounding, versioned identities)
-docs/topics/optics/test-plan.md (OPTICS-REQ-010..018, OPTICS-TP-010..022 implemented, the sRGB
+docs/topics/optics/test-plan.md (OPTICS-REQ-017..018, OPTICS-TP-022..022 implemented, the sRGB
 reference oracle, pixel mutation checks, timing)
 
 Generated artifacts:
 crates/bunny-optics/src/pixel/srgb_knots.rs: 1153 knot values of `1.055 x^(1/2.4) - 0.055`
 rounded to nearest raw Q32.32, computed with Python's standard `decimal` module at 60 digits
-in a scratch directory (not committed); OPTICS-TP-014 recomputes each one with `f64`.
+in a scratch directory (not committed); OPTICS-TP-026 recomputes each one with `f64`.
 
 Checks run:
 All inside flyingrobots/rust-dev:1.96.0 through devcontainers' devrun; nothing on the host.
 cargo test --locked -p bunny-optics --test pixel_tests against stubs (accumulator, curve,
-quantization and writer returning constants): 2 passed, 9 failed. OPTICS-TP-013 and
-OPTICS-TP-018 pass vacuously on the stub (zero sums have a zero mean; constant outputs are
+quantization and writer returning constants): 2 passed, 9 failed. OPTICS-TP-025 and
+OPTICS-TP-030 pass vacuously on the stub (zero sums have a zero mean; constant outputs are
 monotone).
 cargo fmt --all (exported patch applied), cargo clippy --locked --workspace --all-targets
 --all-features -- -D warnings, strict library Clippy for bunny-optics, cargo test --locked -p
 bunny-optics (camera 8 + pixel 11 passed), cargo test --locked -p bunny-perf,
 cargo run --locked -p xtask -- code-dojo-rust --all (clean), topic-docs (clean).
-One golden vector in OPTICS-TP-019 was wrong as first written (16-bit code of display raw
+One golden vector in OPTICS-TP-031 was wrong as first written (16-bit code of display raw
 8 421 505 is 129, not 128: 65535 = 257 * 255); the implementation exposed it and it was
 corrected.
 Eight deliberate mutations of src/pixel/ (see the test plan's Pixel Mutation Checks), run
@@ -95,12 +95,16 @@ runs each of --filter pixel/ and --filter num/div) gave pixel/resolve_srgb_rgba8
 8.95 ns per pixel (three channels resolved, toned and quantized, four bytes written), against
 num/div p50 6.59 to 6.84 ns in the same runs.
 
+Renumbered after the sampler (flyingrobots/bunny#221) merged with OPTICS-REQ-010..016 and
+OPTICS-TP-010..021: this work's requirements are now OPTICS-REQ-017..025 and its cases
+OPTICS-TP-022..034, test functions renamed to match, before merging origin/main.
+
 Known risks:
 The 8-bit and 16-bit sRGB codes are not exactly the correctly rounded codes: 245 of 255 8-bit
 codes begin up to 9 447 raw inputs late (486 760 inputs of 2^32 in [0, 1] differ by one). An
 exact 8-bit encoding (255 thresholds) would be a different identity; the maintainer may prefer
 it for the 8-bit output contract. The knot table is a checked-in literal generated outside the
-repository; OPTICS-TP-014 rechecks it with f64, not with the 60-digit generator. Knots 0..76
+repository; OPTICS-TP-026 rechecks it with f64, not with the 60-digit generator. Knots 0..76
 are never read. The f64 oracle relies on libm powf being accurate to about one ulp on every
 target, including wasm32. No speed claim is made, so there is no ledger entry.
 

@@ -3,7 +3,7 @@
 //! Knot `i` sits at the raw Q32.32 input `x_i = 2^(31 - e) + j * 2^(24 - e)` with
 //! `e = 8 - i / 128` and `j = i % 128`; the last knot (`i = 1152`) is 1.0. Its value is the raw
 //! Q32.32 of `1.055 * x_i^(1 / 2.4) - 0.055`, rounded to nearest (no knot is near a tie). The
-//! values were computed with 60-digit decimal arithmetic; `optics_tp_012` recomputes every knot
+//! values were computed with 60-digit decimal arithmetic; `optics_tp_024` recomputes every knot
 //! with an independent `f64` oracle. Changing any value is a new tone curve version.
 
 /// Sub-segments per octave, as a power of two.
