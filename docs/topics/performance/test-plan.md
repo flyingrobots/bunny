@@ -39,6 +39,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-003 | The regression gate fails only when a case's best p50 slows past the threshold. | `README.md#continuous-integration` |
 | PERF-REQ-004 | Cases the base revision cannot build are reported as new. | `README.md#measuring` |
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
+| PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
 
 ```toml
 [[requirement]]
@@ -64,6 +65,11 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-005"
 summary = "The harness is built from the same source against each revision's own crates."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-006"
+summary = "The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray."
 status = "active"
 ```
 
@@ -91,6 +97,10 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
 | PERF-TP-022 | Gate | PERF-REQ-003 | A run that measured no case on both sides fails instead of passing. | `xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing` |
 | PERF-TP-023 | Gate | PERF-REQ-003 | The failure message reports the best-p50 change the gate tested. | `xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested` |
+| PERF-TP-024 | Build | PERF-REQ-005 | The generated manifest lists every crate the cases use, including `bunny-broadphase`. | `xtask/src/perf.rs::tests::harness_manifest_includes_every_crate_the_cases_use` |
+| PERF-TP-025 | Comparability | PERF-REQ-006 | `scene/closest_visitor` and `trace/closest_hit` choose the same primitive (or both miss) on all 1 024 camera rays. | `crates/bunny-perf/src/scene.rs::tests::both_paths_choose_the_same_primitive_on_every_ray` |
+| PERF-TP-026 | Comparability | PERF-REQ-006 | The benchmark scene has 27 650 triangles. | `crates/bunny-perf/src/scene.rs::tests::the_scene_has_the_stated_size` |
+| PERF-TP-027 | Comparability | PERF-REQ-006 | More than 600 of the 1 024 rays hit the mesh, so the cases do traversal work, not only misses. | `crates/bunny-perf/src/scene.rs::tests::most_rays_hit_something` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -225,6 +235,42 @@ requirements = ["PERF-REQ-003"]
 evidence = "test"
 test = "xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested"
 oracle = "The failure message reports the best-p50 change the gate tested."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-024"
+requirements = ["PERF-REQ-005"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::harness_manifest_includes_every_crate_the_cases_use"
+oracle = "The generated manifest lists every crate the cases use."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-025"
+requirements = ["PERF-REQ-006"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::both_paths_choose_the_same_primitive_on_every_ray"
+oracle = "Both APIs choose the same primitive on every benchmark ray."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-026"
+requirements = ["PERF-REQ-006"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::the_scene_has_the_stated_size"
+oracle = "The scene has 27 650 triangles."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-027"
+requirements = ["PERF-REQ-006"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::most_rays_hit_something"
+oracle = "Most benchmark rays hit the mesh."
 tier = "fast"
 status = "implemented"
 ```

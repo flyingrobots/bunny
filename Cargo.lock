@@ -157,6 +157,7 @@ dependencies = [
 name = "bunny-perf"
 version = "0.1.0"
 dependencies = [
+ "bunny-broadphase",
  "bunny-geom",
  "bunny-linalg",
  "bunny-num",
