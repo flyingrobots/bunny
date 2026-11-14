@@ -971,7 +971,10 @@ today). A real change gets a fraction of it. Nothing below was tried.
    to order its children, so only a conservative whole-packet test saves anything, and it
    saves less as rays diverge. These are primary camera rays on one smooth surface; secondary
    rays share far less. #217 has the largest ceiling of the five and the least certain
-   payoff.
+   payoff. **Tried (entry 7, "Tried And Rejected"): the ceiling was not
+   reachable.** A whole-packet test decided only 19 % of its tests at 4 x 4 and cost about
+   1.6 box tests each, so packets with culling were 14 to 43 % slower on this Mac, and the
+   shared descent alone was within 4 % of single rays (faster only in 8 x 8 tiles).
 5. **Rejecting far triangle hits before dividing: #214 cannot pay off on this scene.** Only
    0.02 of the 0.70 divisions per ray are rejected by the distance limit afterwards, worth
    about 0.3 ns. Accepted divisions are 1.03 per sphere ray and 1.00 per ground ray, one
@@ -1183,3 +1186,253 @@ test gives the fraction directly; above about 15 % of crossings it is worth re-m
 x86-64 (with a hardware 128-by-64 divide the saving per skipped division is smaller) and
 wasm32 (where both the division and the 128-bit multiply are software routines) were not
 measured; the CI job measured x86-64 only on the withdrawn state.
+
+### 7. Ray packets for coherent camera rays
+
+**Where tried:** a new `closest_hits` beside `closest_hit` in `bunny-broadphase`
+(flyingrobots/bunny#217), with harness cases and counters in `bunny-perf`. The code is in
+commit `7c65c5e` of branch `perf/ray-packets`; it was measured there and removed before the
+branch's last commit, so `main` gains no packet API.
+
+**What was built.** `closest_hits(bvh, &RayPacket::new(&rays, t_max, tests), hit)` traced a
+fixed-size array of up to 64 rays together and returned one `Option<ClosestHit>` per ray;
+the primitive closure took the ray's index. One stack holds `(node, mask of rays that may
+enter it, smallest entry bound among them)`. At a pop, the rays whose limit is below that
+bound are dropped from the mask. At an interior node each child is tested for the rays still
+in the mask; children are pushed nearer smallest bound first, ties to the left, one order for
+the whole packet. At a leaf every ray in the mask tests every primitive with its own limit
+and keeps hits by `closest_hit`'s rule (smaller distance, then lower index). Three variants:
+
+| Variant | Test at each child |
+| --- | --- |
+| `per_ray` | `box_entry` for every ray in the mask (a shared descent, no new geometry) |
+| `cull` | one whole-packet test first; a node it rejects is not tested ray by ray |
+| `accept` | as `cull`, and a node that every ray certainly enters is not tested ray by ray either; its bound for every ray is the packet's smallest entry |
+
+**The whole-packet test, and why it is exact.** It applies only when every ray has the same
+origin (the camera's rays do). On one axis, `box_entry` computes the slab lower bound
+`scaled(near, r)` and upper bound `scaled(far, r + 1) + 1`, where `near` and `far` depend only
+on the origin, the box and the sign of the direction component, `r = floor(2^63 / |d|)` is
+the ray's reciprocal and `scaled(v, r) = min(floor(v * r / 2^31), u64::MAX)`. For a fixed
+`v >= 0`, `scaled` is non-decreasing in `r`, so if every ray's component on the axis has one
+sign, the packet's smallest and largest reciprocal `r_lo`, `r_hi` bound every ray's slab
+bounds on that axis: `scaled(near, r_lo) <= lower_i <= scaled(near, r_hi)` and
+`scaled(far, r_lo + 1) + 1 <= upper_i <= scaled(far, r_hi + 1) + 1` (saturation is monotone
+too). An axis whose components are all zero gives every ray the same answer (inside the slab
+or not). An axis whose components change sign contributes only the trivial bounds
+`0 <= lower_i` and `upper_i <= u64::MAX`. With `E_lo`, `E_hi` the largest over axes of the low
+and high lower bounds and `X_lo`, `X_hi` the smallest over axes of the low and high upper
+bounds:
+
+- **Reject** when a common-sign axis has `far < 0`, an all-zero axis has the origin outside
+  the slab, `E_lo > X_hi`, or `E_lo` exceeds the largest limit in the mask (or that limit is
+  negative). Then for every ray `enter_i >= E_lo > X_hi >= exit_i` or
+  `enter_i >= E_lo > limit_max >= limit_i`, so `box_entry` returns `None` for every ray: the
+  test never culls a node that `box_entry` would accept for some ray at its own limit.
+- **Accept** when no axis changes sign, `E_hi <= X_lo` and `E_hi` is at most the smallest
+  limit in the mask. Then for every ray `enter_i <= E_hi <= X_lo <= exit_i` and
+  `enter_i <= limit_i`, so `box_entry` returns `Some(enter_i)` with `enter_i >= E_lo`, and
+  `E_lo` is a valid lower bound to push for every ray.
+
+This argument is about `box_entry`'s computed bounds, floors and per-axis reciprocal
+rounding included, not about exact slab distances; it needs `r` to be exactly the reciprocal
+`TraceRay::new` stores, which the packet recomputed from `TraceRay::direction`, so a change
+to that formula would have to change both. A seeded test (20 000 packets of 1 to 64 rays from
+one origin, spreads from zero to half a unit, zero, tiny and sign-changing components, seeded
+boxes and per-ray limits including negative ones) checked every verdict against `box_entry`
+ray by ray: 2 000 or more rejects, 1 000 or more accepts and 1 000 or more undecided cases,
+no contradiction.
+
+**Why the answers equal `closest_hit`'s.** The correctness argument of the
+[ray-tracing chapter](../ray-tracing/README.md#correctness-the-answer-does-not-depend-on-the-tree)
+does not depend on the visiting order. Per ray: a node is removed from a ray's mask only
+when that ray's own `box_entry` rejects it (the per-ray test, or a whole-packet reject that
+implies it), or at a pop when the pushed bound, at most that ray's own bound, exceeds the
+ray's own limit. So every ancestor of the ray's winner stays in its mask (steps 1 to 4 of the
+argument, with the ray's own limit), the winner is tested, and the tie rule keeps it whatever
+order the hits arrive in. Visiting order only changes how soon each ray's limit shrinks, that
+is, the amount of work.
+
+**Fidelity: a new API that returned exactly `closest_hit`'s hit for every ray.** Evidence at
+commit `7c65c5e`: packets of every size from 1 to 64 over about 440 seeded triangles (a
+tenth duplicated, so ties occur), fanned from one origin with three spreads and scattered
+with their own origins and zero or tiny components, matched `closest_hit` (primitive and
+distance bits) for every ray and every variant, over 5 000 hits; `closest_hit` in turn
+matched a test of every triangle on the packet rays; nine copies of one ray, copies limited
+one raw unit short of their hit, packets that all miss, limits 0, -1 and `i64::MIN`, two
+origins in one packet, and an empty tree all agreed; and the harness checked every packing of
+the 1 024 benchmark rays against `closest_hit` before timing. A replica of the search in the
+harness made the same primitive calls with the same limits in the same order as
+`closest_hits`. Deliberate mutations, each run against the tests:
+
+| Mutation of the whole-packet test | Result |
+| --- | --- |
+| Smallest entry from the largest reciprocal (`scaled(near, r_hi)` as `E_lo`) | caught (seeded verdict test) |
+| Largest exit from the smallest reciprocal (`upper(r_lo)` as `X_hi`) | caught (seeded verdict test) |
+| Reject against the smallest limit in the mask instead of the largest | caught (seeded verdict test) |
+| A sign-changing axis treated as unbounded and exact | caught (seeded verdict test and the hand-built accept case) |
+| Accept from the smallest entry instead of the largest (`E_lo <= X_lo`) | caught (seeded verdict test) |
+| Accepted bound not a lower bound (`i64::MAX`) | caught (seeded verdict test and the hand-built accept case) |
+| The "no sign-changing axis" condition dropped from accept | survives, by construction: such an axis already sets `E_hi = u64::MAX`, so the condition is redundant |
+| Pop skip made strict (`bound < limit`) | survives: it changes an answer only for a tie exactly on a subtree's bound (as `TRACE-TP-108` shows for `closest_hit`); no packet case was constructed for it |
+| Children always left first | survives, as expected: order changes work, not answers |
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), 2026-11-14, two complete runs with `--exclusive` (no other container run
+overlapped) of:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Base revision `57bc035f69f2` (`origin/main`), which has no packet API, so the packet cases
+are reported as new and compare with `trace/closest_hit` of the same run and binary. Every
+case traces all 1 024 camera rays, so the times are per ray. Coherent packets are square
+tiles of the 32 x 32 camera grid; shuffled packets are consecutive runs of a seeded
+permutation of the rays, compared with `packet/single_shuffled` (`closest_hit` one ray at a
+time in that shuffled order). Best p50, nanoseconds per ray, change against the single-ray
+reference of the same run:
+
+| Case | Run 1 | Change | Run 2 | Change |
+| --- | ---: | ---: | ---: | ---: |
+| `trace/closest_hit` (reference, camera order) | 222.53 | | 222.37 | |
+| `packet/per_ray_2x2` | 245.57 | +10.4 % | 246.50 | +10.9 % |
+| `packet/per_ray_4x4` | 225.10 | +1.2 % | 225.22 | +1.3 % |
+| `packet/per_ray_8x8` | 213.42 | -4.1 % | 212.93 | -4.2 % |
+| `packet/cull_2x2` | 316.94 | +42.4 % | 317.30 | +42.7 % |
+| `packet/cull_4x4` | 276.45 | +24.2 % | 275.80 | +24.0 % |
+| `packet/cull_8x8` | 262.04 | +17.8 % | 262.94 | +18.2 % |
+| `packet/accept_2x2` | 277.47 | +24.7 % | 276.82 | +24.5 % |
+| `packet/accept_4x4` | 257.45 | +15.7 % | 256.92 | +15.5 % |
+| `packet/accept_8x8` | 253.13 | +13.8 % | 253.95 | +14.2 % |
+| `packet/single_shuffled` (reference, shuffled order) | 227.38 | | 227.78 | |
+| `packet/per_ray_shuffled_4` | 313.96 | +38.1 % | 312.09 | +37.0 % |
+| `packet/per_ray_shuffled_16` | 319.78 | +40.6 % | 319.30 | +40.2 % |
+| `packet/per_ray_shuffled_64` | 295.90 | +30.1 % | 296.22 | +30.0 % |
+| `packet/cull_shuffled_4` | 421.75 | +85.5 % | 421.71 | +85.1 % |
+| `packet/cull_shuffled_16` | 405.64 | +78.4 % | 406.37 | +78.4 % |
+| `packet/cull_shuffled_64` | 367.88 | +61.8 % | 366.66 | +61.0 % |
+| `packet/accept_shuffled_4` | 419.03 | +84.3 % | 420.29 | +84.5 % |
+| `packet/accept_shuffled_16` | 404.13 | +77.7 % | 404.05 | +77.4 % |
+| `packet/accept_shuffled_64` | 367.88 | +61.8 % | 366.17 | +60.8 % |
+
+The existing cases moved between base and head by at most 1.4 % in best p50 except
+`num/mul` (-5.6 % on 1.4 ns) and `trace/kernel_tri_divided` (+5.7 %, run 1), on unchanged
+code. `trace/closest_hit` read 219.4 to 219.6 ns on the base side and 222.4 to 222.5 ns on the
+head side, so the -4 % of `per_ray_8x8` is about the size of the between-binary spread.
+
+The x86-64 CI runner (`Perf / before and after` job of the pull request, shared GitHub
+runner, 7 rounds, `--align-code`; coarse) read, best p50 in nanoseconds per ray:
+
+| Case | CI run 1 | Change | CI run 2 | Change |
+| --- | ---: | ---: | ---: | ---: |
+| `trace/closest_hit` (reference, camera order) | 633.74 | | 375.61 | |
+| `packet/per_ray_2x2` | 604.48 | -4.6 % | 347.03 | -7.6 % |
+| `packet/per_ray_4x4` | 576.18 | -9.1 % | 325.72 | -13.3 % |
+| `packet/per_ray_8x8` | 545.16 | -14.0 % | 299.32 | -20.3 % |
+| `packet/cull_2x2` | 829.25 | +30.9 % | 474.69 | +26.4 % |
+| `packet/cull_4x4` | 737.42 | +16.4 % | 423.13 | +12.7 % |
+| `packet/cull_8x8` | 712.43 | +12.4 % | 391.54 | +4.2 % |
+| `packet/accept_2x2` | 733.73 | +15.8 % | 417.04 | +11.0 % |
+| `packet/accept_4x4` | 687.46 | +8.5 % | 388.62 | +3.5 % |
+| `packet/accept_8x8` | 687.60 | +8.5 % | 377.81 | +0.6 % |
+| `packet/single_shuffled` (reference, shuffled order) | 653.20 | | 386.57 | |
+| `packet/per_ray_shuffled_4` | 758.88 | +16.2 % | 440.80 | +14.0 % |
+| `packet/per_ray_shuffled_16` | 822.67 | +25.9 % | 465.19 | +20.3 % |
+| `packet/per_ray_shuffled_64` | 700.32 | +7.2 % | 418.33 | +8.2 % |
+| `packet/cull_shuffled_4` | 1141.32 | +74.7 % | 624.69 | +61.6 % |
+| `packet/cull_shuffled_16` | 1111.13 | +70.1 % | 602.76 | +55.9 % |
+| `packet/cull_shuffled_64` | 966.89 | +48.0 % | 531.30 | +37.4 % |
+| `packet/accept_shuffled_4` | 1140.05 | +74.5 % | 623.88 | +61.4 % |
+| `packet/accept_shuffled_16` | 1106.86 | +69.5 % | 602.09 | +55.8 % |
+| `packet/accept_shuffled_64` | 966.25 | +47.9 % | 529.75 | +37.0 % |
+
+The two CI runs ran on different runner machines (absolute times differ by 1.7 times) and
+compared against different `main` revisions (`57bc035f69f2` and `cda15ecc020a`, the pull
+request merged into the newer `main`); only the ratios within one run mean anything.
+
+**Counts.** From a replica of the packet search in the harness (as in the profile,
+the library carried no counters), per ray, summed over all packets of a packing and divided
+by 1 024. "Packet node visits" counts each node the packet visits once; "ray-node visits"
+counts it once per ray in the mask. For comparison, `closest_hit` makes 19.76 `box_entry`
+calls, 11.37 pops and 1.63 triangle tests per ray.
+
+| Packing, variant | Per-ray box tests | Packet tests | Packet rejects | Packet accepts | Packet node visits | Ray-node visits | Pops | Triangle tests |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 x 2, per_ray | 19.91 | 0.00 | 0.00 | 0.00 | 5.80 | 10.65 | 6.10 | 1.63 |
+| 4 x 4, per_ray | 20.12 | 0.00 | 0.00 | 0.00 | 4.41 | 10.78 | 4.59 | 1.66 |
+| 8 x 8, per_ray | 20.24 | 0.00 | 0.00 | 0.00 | 4.03 | 10.85 | 4.17 | 1.67 |
+| shuffled 4, per_ray | 21.66 | 0.00 | 0.00 | 0.00 | 9.36 | 11.72 | 9.94 | 1.92 |
+| shuffled 16, per_ray | 23.59 | 0.00 | 0.00 | 0.00 | 8.43 | 12.88 | 8.88 | 2.21 |
+| shuffled 64, per_ray | 23.64 | 0.00 | 0.00 | 0.00 | 7.00 | 12.92 | 7.31 | 2.22 |
+| 2 x 2, cull | 13.66 | 10.10 | 3.09 | 0.00 | 5.80 | 10.65 | 6.10 | 1.63 |
+| 4 x 4, cull | 15.94 | 7.28 | 1.23 | 0.00 | 4.41 | 10.78 | 4.59 | 1.66 |
+| 8 x 8, cull | 17.89 | 6.49 | 0.60 | 0.00 | 4.03 | 10.85 | 4.17 | 1.67 |
+| shuffled 4, cull | 21.00 | 16.82 | 0.58 | 0.00 | 9.36 | 11.72 | 9.94 | 1.92 |
+| shuffled 16, cull | 23.32 | 14.87 | 0.27 | 0.00 | 8.43 | 12.88 | 8.88 | 2.21 |
+| shuffled 64, cull | 23.42 | 12.05 | 0.22 | 0.00 | 7.00 | 12.92 | 7.31 | 2.22 |
+| 2 x 2, accept | 8.32 | 10.10 | 3.09 | 1.39 | 5.80 | 10.65 | 6.10 | 1.63 |
+| 4 x 4, accept | 13.12 | 7.28 | 1.23 | 0.18 | 4.41 | 10.78 | 4.59 | 1.66 |
+| 8 x 8, accept | 16.57 | 6.49 | 0.60 | 0.02 | 4.03 | 10.85 | 4.17 | 1.67 |
+| shuffled 4, accept | 20.97 | 16.82 | 0.58 | 0.01 | 9.36 | 11.72 | 9.94 | 1.92 |
+| shuffled 16, accept | 23.32 | 14.87 | 0.27 | 0.00 | 8.43 | 12.88 | 8.88 | 2.21 |
+| shuffled 64, accept | 23.42 | 12.05 | 0.22 | 0.00 | 7.00 | 12.92 | 7.31 | 2.22 |
+
+**Why the profile's ceiling was not reachable.** The profile estimated about 134 ns per ray
+"at best" for 4 x 4 packets, from the box tests a block makes (20 238) against the distinct
+nodes it tests (7 346): if one test per distinct node served the block, at the cost of one
+box test, the box row would fall by 64 %. Both assumptions fail:
+
+- *A packet test does not replace the per-ray tests at most nodes.* The shared descent does
+  visit few nodes (4.41 packet visits per ray at 4 x 4 against 11.37 pops for `closest_hit`),
+  but every ray in the mask still needs its own answer at every child: whether it enters
+  (which sets its mask below) and its own entry bound (which prunes it at the pop). A
+  whole-packet test can skip those only where it decides for all rays at once. At 4 x 4 it
+  decided 1.41 of its 7.28 tests per ray (19 %: 1.23 rejects, 0.18 accepts); at 2 x 2, 4.48
+  of 10.10 (44 %). The interval bound over the packet's reciprocals widens with the packet,
+  so larger packets decide less, and a packet whose rays have not all hit yet carries the
+  largest limit (often unlimited), which stops limit-based rejects.
+- *A packet test costs more than a box test.* It computes four scaled bounds per axis instead
+  of two, and the smallest and largest limit over the mask. From the counts and the timings,
+  each packet test costs about 10.6 ns (at 2 x 2: 11.6 per-ray box tests saved, about 75 ns,
+  against 10.10 packet tests and +32 ns measured; at 4 x 4: 7.0 saved, about 45 ns, against
+  7.28 tests and +32 ns), about 1.6 box tests. To pay, a packet test must remove more than
+  1.6 per-ray tests on average; it removed 1.15 at 2 x 2 and 0.96 at 4 x 4.
+- *The shared descent alone is roughly neutral on this Mac.* It removes pops and stack
+  traffic (6.10, 4.59 and 4.17 packet pops per ray), but the per-ray mask loops at every
+  pop and child cost about as much, and the per-ray box tests rise slightly (19.91 to
+  20.24 against 19.76) because one visiting order for the packet is not every ray's own
+  front-to-back order, so rays find their hits later and prune less. Net: +10 % at 2 x 2,
+  +1 % at 4 x 4, -4 % at 8 x 8.
+- *Incoherent packets are much worse*, 30 to 41 % slower with per-ray tests and 61 to 86 %
+  with packet tests, because the rays share few nodes (ray-node visits rise only from about
+  10.7 to 12.9, but packet visits per ray do not fall much) and the mask overheads stay.
+
+**Decision: not kept.** No variant beats single-ray tracing on this Mac by a margin outside
+noise: the best, the shared descent in 8 x 8 tiles, is 4 % faster in both runs, about the
+spread between binaries, and the culling variants are 14 to 43 % slower on coherent rays.
+The packet code is removed from the library and the harness (it needs the API); the record
+and commit `7c65c5e` keep it reproducible.
+
+**What would change the verdict.**
+
+- *x86-64.* The CI runner's readings above favour the shared descent more than the Mac does.
+  In both CI runs the shared descent was faster than `closest_hit`, by 5 and 8 % at 2 x 2,
+  9 and 13 % at 4 x 4 and 14 and 20 % at 8 x 8, and the culling variants were slower or level.
+  Two 7-round readings on shared runners are coarse, and this experiment's target is the
+  Mac, so the shared descent is not shipped for x86-64 here. A dedicated measurement on
+  x86-64 (the platform job with more rounds, or local x86 hardware) is what would justify a
+  target-specific choice under [the rules above](#target-specific-implementations): one
+  `closest_hits` whose x86-64 build runs the shared descent and whose other builds trace each
+  ray with `closest_hit`, both tested on every target, both returning the same bits.
+- *SIMD in a quarantined backend crate.* The per-ray mask loop is the loop that vector lanes
+  do for free; with 4 or 8 lanes of 64-bit products the per-ray box tests of a packet would
+  cost about one test's latency. Core crates cannot do this (no SIMD intrinsics).
+- *A cheaper or tighter whole-packet test*: the limit range kept incrementally instead of
+  recomputed per node, or a frustum of planes through the corner rays (needs its own proof
+  for `box_entry`'s rounding).
+- *A wider tree* (flyingrobots/bunny#216): fewer, larger nodes would give a packet test more
+  rays to decide per node.
+- *A different scene*: large coherent regions (walls, floors) where whole packets enter the
+  same boxes would give more accepts. Secondary rays (reflections, shadows from area lights)
+  are less coherent than these camera rays, so they would gain less.
