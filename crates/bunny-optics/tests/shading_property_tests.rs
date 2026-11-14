@@ -182,11 +182,39 @@ fn optics_tp_041_normals_are_within_one_raw_unit_of_the_exact_unit_normal() {
     assert!(checked >= 3_900, "only {checked} triangles checked");
 }
 
+/// Unit normals whose frame division `x y / (s + z)` is an exact tie (`z = 0`, the 2-adic
+/// valuations of `x` and `y` adding up to 31): the review's `(2^31, 3 719 550 789, 0)` and the
+/// four triangle normals of `OPTICS-TP-094`, each a tie with an even or an odd truncation.
+const TIE_NORMALS: [Raw3; 5] = [
+    [1 << 31, 3_719_550_789, 0],
+    [607_322_112, 4_251_811_840, 0],
+    [-607_322_112, 4_251_811_840, 0],
+    [4_171_038_720, 1_024_294_912, 0],
+    [-4_171_038_720, 1_024_294_912, 0],
+];
+
+/// `numerator / denominator` rounded to the nearest integer, ties to the even one: the floor
+/// of the signed quotient, moved up when twice the remainder exceeds the divisor or equals it
+/// with an odd floor.
+fn nearest_even(numerator: i128, denominator: i128) -> i128 {
+    let (n, d) =
+        if denominator < 0 { (-numerator, -denominator) } else { (numerator, denominator) };
+    let (floor, twice) = (n.div_euclid(d), 2 * n.rem_euclid(d));
+    if twice > d || (twice == d && floor % 2 != 0) {
+        floor + 1
+    } else {
+        floor
+    }
+}
+
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_042_frames_are_orthonormal_and_follow_the_stated_formula() {
     let mut seeds = Seeds(SHADING_TEST_SEED ^ 0x42);
     let one_squared = WIDE_ONE * WIDE_ONE;
-    for (case, normal) in seeded_normals(&mut seeds, 4_000).into_iter().enumerate() {
+    let mut normals = seeded_normals(&mut seeds, 4_000);
+    normals.extend(TIE_NORMALS.map(|v| FixedUnitVec3::try_from_unit(vec3(v)).expect("unit")));
+    let mut ties = 0;
+    for (case, normal) in normals.into_iter().enumerate() {
         for frame in [ShadingFrame::new(normal), ShadingFrame::new(normal).flipped()] {
             let [t, b, n] = frame_vectors(&frame);
             for (name, residual, limit) in [
@@ -204,8 +232,8 @@ fn optics_tp_042_frames_are_orthonormal_and_follow_the_stated_formula() {
                 assert!(residual.abs() <= FRAME_CROSS_LIMIT * WIDE_ONE, "case {case} axis {axis}");
             }
         }
-        // Each component within half a raw unit of the formula on this normal, exactly:
-        // |c * d - e| <= |d| / 2 for the rational e / d.
+        // Each component is the formula on this normal rounded to nearest with ties to even,
+        // exactly: the nearest integer to the rational e / d, the even one on a tie.
         let [x, y, z] = wide(normal.into_inner());
         let sign = if z >= 0 { 1 } else { -1 };
         let d = sign * WIDE_ONE + z;
@@ -217,11 +245,13 @@ fn optics_tp_042_frames_are_orthonormal_and_follow_the_stated_formula() {
             (b[1], sign * WIDE_ONE * d - y * y),
         ];
         for (index, (component, numerator)) in rationals.into_iter().enumerate() {
-            let twice = 2 * (component * d - numerator);
-            assert!(twice.abs() <= d.abs(), "case {case} rational {index}");
+            assert_eq!(component, nearest_even(numerator, d), "case {case} rational {index}");
+            ties += usize::from((2 * numerator) % d == 0 && (2 * numerator / d) % 2 != 0);
         }
         assert_eq!((t[2], b[2]), (-sign * x, -y), "case {case}");
     }
+    // Two tied quotients (q(x y) in the tangent and the bitangent) per tie normal.
+    assert!(ties >= 2 * TIE_NORMALS.len(), "only {ties} exact ties checked");
 }
 
 /// The ideal map on `frame` for `[u, v]`, in raw units, by floating point.

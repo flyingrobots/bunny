@@ -44,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generated hits needed two. No library function changes
   (flyingrobots/bunny#288).
 
+* `bunny-optics` tests pin the three rounding rules of
+  `bunny-diffuse-shading/1` that had none: the light cosine rounds to nearest,
+  and `round_shift` (cosine and hemisphere direction) and the frame division
+  round ties to even. Exact ties with even and odd truncations, in both signs
+  where the sign is observable, and the nearest inputs either side of a tie,
+  including frame-division ties on real triangles found by search.
+  OPTICS-TP-042 now asserts the exact ties-to-even result instead of "within
+  half a raw unit". Before them, flooring the cosine or rounding either kind of
+  tie away from zero passed every test. No library function changes
+  (flyingrobots/bunny#298).
+
 * `bunny-query` tests check `TraceRay::hit_triangle` against an independent
   signed-volume oracle in 256-bit integers (TRACE-TP-315): 40 000 generated
   cases on and within three numerator units of every edge and vertex, with
