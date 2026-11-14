@@ -161,7 +161,8 @@ Current surface:
 - `FixedRay3`
 - `FixedAabb3`
 - `FixedSphere3`
-- `FixedPlane3` and `FixedSegment3` with checked segment clipping
+- `FixedPlane3` and `FixedSegment3` with checked segment clipping and
+  `clip_polygon` for convex polygons
 - validated fixed/float boundary conversions
 - ray and closest-point query inputs
 
