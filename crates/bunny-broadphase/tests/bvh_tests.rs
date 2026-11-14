@@ -269,10 +269,8 @@ fn known_defect_issue_211_intersect_ray_skips_a_leaf_the_ray_passes_through() {
     let one = FixedQ32_32::from_raw(bunny_num::fixed_q32_32::ONE_RAW);
     let neg_one = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
     let zero = FixedQ32_32::from_raw(0);
-    let prims = [FixedAabb3::new(
-        FixedVec3::new(neg_one, neg_one, neg_one),
-        FixedVec3::new(one, one, one),
-    )];
+    let prims =
+        [FixedAabb3::new(FixedVec3::new(neg_one, neg_one, neg_one), FixedVec3::new(one, one, one))];
     let mut nodes = [BvhNode {
         bounds: FixedAabb3::new(FixedVec3::new(zero, zero, zero), FixedVec3::new(zero, zero, zero)),
         first_child_or_prim_idx: 0,
