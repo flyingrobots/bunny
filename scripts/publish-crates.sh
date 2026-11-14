@@ -26,9 +26,12 @@ readonly -a ROOT_CRATES=(
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/publish-crates.sh <verify|dry-run|publish>
+Usage: scripts/publish-crates.sh <verify|packaged-tests|dry-run|publish>
 
-verify   Verify first-publish readiness without uploading.
+verify   Verify first-publish readiness without uploading; includes packaged-tests.
+packaged-tests
+         Package every publishable crate, unpack the archives and build each
+         crate's tests from its archive alone (no crates.io sibling versions).
 dry-run  Dry-run crates whose internal dependencies are registry-visible.
 publish  Publish every publishable Bunny crate to crates.io in dependency order.
 
@@ -117,6 +120,62 @@ verify_packages() {
       printf '::endgroup::\n'
     fi
   done
+}
+
+# Builds the tests of every publishable crate from its unpacked package.
+#
+# `cargo package` does not compile tests, so a test file that the archive ships
+# but whose fixture the archive leaves out (or that reads a path outside the
+# crate) passes every other release check and fails for whoever runs
+# `cargo test` on the downloaded crate. The archives are unpacked side by side
+# and the sibling crates are patched to the unpacked copies, so no sibling needs
+# to exist on crates.io yet. The repository `Cargo.lock` pins every third-party
+# dependency to the version the repository itself tests. `cargo check --tests`
+# expands `include_bytes!` and resolves every import without linking, which keeps
+# the check small enough for a CI runner; `--keep-going` lists every failing crate.
+verify_packaged_tests() {
+  local -a dirty_args=()
+  if local_dirty_args_enabled packaged-tests; then
+    dirty_args=(--allow-dirty)
+  fi
+
+  local work version
+  work="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '${work}'" RETURN
+  version="$(package_version "${CRATES[0]}")"
+
+  local -a package_args=()
+  for crate in "${CRATES[@]}"; do
+    package_args+=(--package "$crate")
+  done
+
+  printf '::group::cargo package (archives for packaged-tests)\n'
+  cargo_cmd package --locked --no-verify --target-dir "${work}/target" \
+    "${package_args[@]}" "${dirty_args[@]}"
+  printf '::endgroup::\n'
+
+  mkdir "${work}/src"
+  {
+    printf '[workspace]\nresolver = "2"\nmembers = [\n'
+    for crate in "${CRATES[@]}"; do
+      printf '  "%s-%s",\n' "$crate" "$version"
+    done
+    printf ']\n\n[patch.crates-io]\n'
+    for crate in "${CRATES[@]}"; do
+      printf '%s = { path = "%s-%s" }\n' "$crate" "$crate" "$version"
+    done
+  } >"${work}/src/Cargo.toml"
+  cp Cargo.lock "${work}/src/Cargo.lock"
+
+  for crate in "${CRATES[@]}"; do
+    tar -xzf "${work}/target/package/${crate}-${version}.crate" -C "${work}/src"
+  done
+
+  printf '::group::cargo check --tests from unpacked packages\n'
+  (cd "${work}/src" \
+    && cargo_cmd check --workspace --tests --keep-going --target-dir "${work}/target")
+  printf '::endgroup::\n'
 }
 
 dry_run_publish() {
@@ -227,7 +286,7 @@ main() {
   local mode="${1:-verify}"
 
   case "$mode" in
-    verify | dry-run | publish) ;;
+    verify | packaged-tests | dry-run | publish) ;;
     -h | --help)
       usage
       exit 0
@@ -241,7 +300,11 @@ main() {
   validate_versions
 
   case "$mode" in
-    verify) verify_packages ;;
+    verify)
+      verify_packages
+      verify_packaged_tests
+      ;;
+    packaged-tests) verify_packaged_tests ;;
     dry-run) dry_run_publish ;;
     publish) publish_packages ;;
   esac
