@@ -30,9 +30,9 @@ struct State {
 }
 
 const COORDINATE_TYPES: [&str; 4] = ["float", "float32", "double", "float64"];
-const SCALAR_TYPES: [&str; 14] = [
+const SCALAR_TYPES: [&str; 16] = [
     "char", "uchar", "short", "ushort", "int", "uint", "float", "double", "int8", "uint8", "int16",
-    "uint16", "int32", "uint32",
+    "uint16", "int32", "uint32", "float32", "float64",
 ];
 const COUNT_TYPES: [&str; 2] = ["uchar", "uint8"];
 const INDEX_TYPES: [&str; 4] = ["int", "uint", "int32", "uint32"];

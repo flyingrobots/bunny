@@ -86,10 +86,7 @@ fn aply_tp_002_coordinate_slots_follow_the_declared_order_and_types() {
     let text = "ply\nformat ascii 1.0\nelement vertex 1\nproperty uchar tag\nproperty double z\n\
 property int id\nproperty float64 x\nproperty float32 y\nproperty short extra\n\
 element face 0\nproperty list uint8 uint32 vertex_indices\nend_header\n9 3 7 -3 0.75 5\n";
-    assert_eq!(
-        collect_vertices(text),
-        [vertex(-12_884_901_888, 3_221_225_472, 12_884_901_888)]
-    );
+    assert_eq!(collect_vertices(text), [vertex(-12_884_901_888, 3_221_225_472, 12_884_901_888)]);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -99,7 +96,15 @@ fn aply_tp_003_lf_crlf_and_mixed_line_endings_are_accepted() {
     let mixed: String = lf
         .split_inclusive('\n')
         .enumerate()
-        .map(|(index, line)| if index % 2 == 0 { line.replace('\n', "\r\n") } else { line.to_owned() })
+        .map(
+            |(index, line)| {
+                if index % 2 == 0 {
+                    line.replace('\n', "\r\n")
+                } else {
+                    line.to_owned()
+                }
+            },
+        )
         .collect();
     for text in [&lf, &crlf, &mixed] {
         assert_eq!(collect_vertices(text), expected_vertices());
@@ -170,11 +175,27 @@ fn aply_tp_007_header_refusals_name_their_kind_and_line() {
         (edit(&base, "vertex 4", "vertex"), Kind::InvalidCount, 4),
         (edit(&base, "vertex 4", "vertex 99999999999999999999999"), Kind::IntegerOverflow, 4),
         (edit(&base, "vertex 4", "vertex 4 5"), Kind::InvalidHeaderLine, 4),
-        (edit(&base, "element face 2", "element edge 1\nproperty int a\nelement face 2"), Kind::UnsupportedElement, 10),
-        (edit(&base, "element face 2", "element vertex 1\nelement face 2"), Kind::UnsupportedElement, 10),
+        (
+            edit(&base, "element face 2", "element edge 1\nproperty int a\nelement face 2"),
+            Kind::UnsupportedElement,
+            10,
+        ),
+        (
+            edit(&base, "element face 2", "element vertex 1\nelement face 2"),
+            Kind::UnsupportedElement,
+            10,
+        ),
         (edit(&base, "property float z\n", ""), Kind::MissingVertexElement, 9),
         (edit(&base, "property list uchar int vertex_indices\n", ""), Kind::MissingFaceElement, 11),
-        (edit(&base, "element vertex 4", "element face 2\nproperty list uchar int vertex_indices\nelement vertex 4"), Kind::MissingVertexElement, 4),
+        (
+            edit(
+                &base,
+                "element vertex 4",
+                "element face 2\nproperty list uchar int vertex_indices\nelement vertex 4",
+            ),
+            Kind::MissingVertexElement,
+            4,
+        ),
         (edit(&base, "end_header\n", ""), Kind::MissingHeaderEnd, 18),
         (String::new(), Kind::MissingHeaderEnd, 1),
     ];
@@ -196,7 +217,14 @@ fn aply_tp_008_property_refusals_name_their_kind_and_line() {
         (edit(&base, "list uchar int vertex_indices", "list uchar int vertex_index"), 11),
         (edit(&base, "list uchar int vertex_indices", "list short int vertex_indices"), 11),
         (edit(&base, "list uchar int vertex_indices", "list uchar float vertex_indices"), 11),
-        (edit(&base, "vertex_indices\n", "vertex_indices\nproperty list uchar int vertex_indices\n"), 12),
+        (
+            edit(
+                &base,
+                "vertex_indices\n",
+                "vertex_indices\nproperty list uchar int vertex_indices\n",
+            ),
+            12,
+        ),
     ];
     for (text, line) in &cases {
         assert_eq!(refusal(text), (Kind::UnsupportedProperty, *line), "refusing {text:?}");
@@ -208,7 +236,11 @@ fn aply_tp_008_property_refusals_name_their_kind_and_line() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn aply_tp_009_empty_elements_are_ignored_with_their_properties() {
-    let text = edit(&mesh_text(), "element face 2", "element edge 0\nproperty int a\nproperty int b\nelement face 2");
+    let text = edit(
+        &mesh_text(),
+        "element face 2",
+        "element edge 0\nproperty int a\nproperty int b\nelement face 2",
+    );
     assert_eq!(collect_vertices(&text), expected_vertices());
     assert_eq!(collect_triangles(&text).len(), 2);
     // A mesh with no vertices and no faces is valid.
@@ -239,8 +271,22 @@ fn aply_tp_010_header_text_must_be_utf8_and_body_may_be_any_ascii() {
 fn aply_tp_011_vertex_line_refusals_name_their_kind_and_line() {
     let base = mesh_text();
     let cases: [(String, Kind); 9] = [
-        (edit(&base, "-0.0378297 0.12794 0.00447467 0.850855 0.5", "-0.0378297 0.12794 0.00447467 0.850855"), Kind::VertexFieldCount),
-        (edit(&base, "-0.0378297 0.12794 0.00447467 0.850855 0.5", "-0.0378297 0.12794 0.00447467 0.850855 0.5 7"), Kind::VertexFieldCount),
+        (
+            edit(
+                &base,
+                "-0.0378297 0.12794 0.00447467 0.850855 0.5",
+                "-0.0378297 0.12794 0.00447467 0.850855",
+            ),
+            Kind::VertexFieldCount,
+        ),
+        (
+            edit(
+                &base,
+                "-0.0378297 0.12794 0.00447467 0.850855 0.5",
+                "-0.0378297 0.12794 0.00447467 0.850855 0.5 7",
+            ),
+            Kind::VertexFieldCount,
+        ),
         (edit(&base, "0.12794", "nan"), Kind::InvalidNumber),
         (edit(&base, "0.12794", "1e"), Kind::InvalidNumber),
         (edit(&base, "0.12794", "0x1p3"), Kind::InvalidNumber),
@@ -282,14 +328,19 @@ fn aply_tp_012_face_refusals_name_their_kind_and_line() {
         assert_eq!(refusal(&text), (kind, 17), "refusing face {face:?}");
     }
     // The last valid index is vertex_count - 1.
-    assert_eq!(collect_triangles(&edit(&base, "3 0 1 2\n", "3 3 3 3\n"))[0], Triangle32::new(3, 3, 3));
+    assert_eq!(
+        collect_triangles(&edit(&base, "3 0 1 2\n", "3 3 3 3\n"))[0],
+        Triangle32::new(3, 3, 3)
+    );
 }
 
 #[wasm_bindgen_test(unsupported = test)]
 fn aply_tp_013_missing_records_and_huge_declared_counts_are_refused_without_allocating() {
-    let three_vertices: String = format!("{HEADER}{}", BODY.lines().take(3).collect::<Vec<_>>().join("\n") + "\n");
+    let three_vertices: String =
+        format!("{HEADER}{}", BODY.lines().take(3).collect::<Vec<_>>().join("\n") + "\n");
     assert_eq!(refusal(&three_vertices), (Kind::PayloadTooShort, 16));
-    let one_face_short = format!("{HEADER}{}", BODY.lines().take(5).collect::<Vec<_>>().join("\n") + "\n");
+    let one_face_short =
+        format!("{HEADER}{}", BODY.lines().take(5).collect::<Vec<_>>().join("\n") + "\n");
     assert_eq!(refusal(&one_face_short), (Kind::PayloadTooShort, 18));
     // A declared count far above the body is a short body, found by reading the body.
     let huge_vertices = edit(&mesh_text(), "vertex 4", "vertex 4294967295");

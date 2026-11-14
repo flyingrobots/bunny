@@ -49,9 +49,6 @@ struct Shape {
 /// `DecimalError::TooLong` when more than 28 significant digits must be read
 /// to decide a value whose magnitude is in `[1e-10, 1e10)`.
 pub fn parse_decimal_q32_32(text: &[u8]) -> Result<FixedQ32_32, DecimalError> {
-    if text.is_empty() || text.len() > 0 {
-        return Err(DecimalError::Invalid);
-    }
     let syntax = Syntax::parse(text)?;
     let Some(shape) = syntax.shape() else {
         return Ok(FixedQ32_32::ZERO);

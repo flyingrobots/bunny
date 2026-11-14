@@ -27,13 +27,14 @@ impl<'a> Lines<'a> {
         if self.rest.is_empty() {
             return None;
         }
-        let (content, rest) = match self.rest.iter().position(|byte| *byte == b'\n') {
-            Some(end) => (self.rest.get(..end)?, self.rest.get(end + 1..)?),
-            None => (self.rest, <&[u8]>::default()),
-        };
         let number = self.next_line;
         self.next_line += 1;
-        self.rest = rest;
+        let Some(end) = self.rest.iter().position(|byte| *byte == b'\n') else {
+            let content = std::mem::take(&mut self.rest);
+            return Some((number, content));
+        };
+        let content = self.rest.get(..end)?;
+        self.rest = self.rest.get(end + 1..)?;
         Some((number, content.strip_suffix(b"\r").unwrap_or(content)))
     }
 
@@ -54,7 +55,7 @@ impl<'a> Lines<'a> {
         }
     }
 
-    pub(super) fn missing_record(&self, kind: Kind) -> AsciiPlyError {
+    pub(super) const fn missing_record(&self, kind: Kind) -> AsciiPlyError {
         AsciiPlyError::new(kind, self.next_line)
     }
 }
@@ -104,7 +105,8 @@ pub(super) fn read_triangle(
         Some(_) => return Err(fail(Kind::NonTriangularFace)),
         None => return Err(fail(Kind::InvalidIndex)),
     }
-    let (Some(a), Some(b), Some(c), None) = (words.next(), words.next(), words.next(), words.next())
+    let (Some(a), Some(b), Some(c), None) =
+        (words.next(), words.next(), words.next(), words.next())
     else {
         return Err(fail(Kind::FaceFieldCount));
     };
@@ -116,7 +118,8 @@ fn parse_unsigned(token: &[u8]) -> Option<u64> {
     if token.is_empty() || !token.iter().all(u8::is_ascii_digit) {
         return None;
     }
-    let saturating = |acc: u64, byte: &u8| acc.saturating_mul(10).saturating_add(u64::from(byte - b'0'));
+    let saturating =
+        |acc: u64, byte: &u8| acc.saturating_mul(10).saturating_add(u64::from(byte - b'0'));
     Some(token.iter().fold(0_u64, saturating))
 }
 

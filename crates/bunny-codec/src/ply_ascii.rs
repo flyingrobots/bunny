@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_variables)]
 use bunny_mesh::Triangle32;
 use bunny_num::FixedQ32_32;
 
@@ -58,7 +57,11 @@ impl<'a> AsciiPlyMesh<'a> {
     /// validated when it was parsed.
     #[must_use]
     pub const fn vertices(&self) -> AsciiPlyVertices<'a> {
-        AsciiPlyVertices { lines: self.vertex_lines, spec: self.spec, remaining: self.spec.vertex_count }
+        AsciiPlyVertices {
+            lines: self.vertex_lines,
+            spec: self.spec,
+            remaining: self.spec.vertex_count,
+        }
     }
 
     /// Returns a forward iterator over the triangles.
@@ -128,11 +131,6 @@ impl Iterator for AsciiPlyTriangles<'_> {
 /// Returns an [`AsciiPlyError`], with the line number, when the header or body
 /// does not match the profile.
 pub fn parse_ascii_ply(input: &[u8]) -> Result<AsciiPlyMesh<'_>, AsciiPlyError> {
-    if input.len() > usize::MAX {
-        return Err(AsciiPlyError::new(AsciiPlyErrorKind::MissingHeaderEnd, 0));
-    }
-    return Err(AsciiPlyError::new(AsciiPlyErrorKind::MissingHeaderEnd, 0));
-    #[allow(unreachable_code)]
     let (header, end_line, body_start) = split_header(input)?;
     let spec = parse_header(header, end_line)?;
     let mut lines = Lines::new(input.get(body_start..).unwrap_or_default(), end_line + 1);
@@ -186,8 +184,8 @@ fn header_parts(
     let text = input.get(..header_end).unwrap_or_default();
     let text = std::str::from_utf8(text).map_err(|error| {
         let valid = text.get(..error.valid_up_to()).unwrap_or_default();
-        let newlines = valid.iter().filter(|byte| **byte == b'\n').count();
-        AsciiPlyError::new(AsciiPlyErrorKind::HeaderUtf8, newlines + 1)
+        let line = valid.split(|byte| *byte == b'\n').count();
+        AsciiPlyError::new(AsciiPlyErrorKind::HeaderUtf8, line)
     })?;
     Ok((text, end_line, body_start))
 }

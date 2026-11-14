@@ -33,7 +33,8 @@ fn aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up() {
     let (counts, stats) = allocations_during(|| {
         let mesh = parse_ascii_ply(bytes)?;
         let vertices = mesh.vertices().try_fold(0_usize, |count, item| item.map(|_| count + 1))?;
-        let triangles = mesh.triangles().try_fold(0_usize, |count, item| item.map(|_| count + 1))?;
+        let triangles =
+            mesh.triangles().try_fold(0_usize, |count, item| item.map(|_| count + 1))?;
         Ok::<_, AsciiPlyError>((vertices, triangles))
     });
 

@@ -3,6 +3,8 @@
 //! Expected values are derived by hand in the comments or computed with exact
 //! integer arithmetic. No floating point is used anywhere in this file.
 
+use std::fmt::Write as _;
+
 use bunny_codec::{parse_decimal_q32_32, DecimalError, DECIMAL_Q32_32_ID};
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -42,7 +44,9 @@ fn aply_tp_021_whole_and_dyadic_values_are_exact() {
 #[wasm_bindgen_test(unsupported = test)]
 fn aply_tp_022_grammar_forms_agree_on_one_value() {
     // Every spelling below is exactly 1.2, and 1.2 * 2^32 = 5153960755.2 rounds to 5153960755.
-    for text in ["1.2", "+1.2", "01.2", "1.20", "1.2e0", "1.2E+0", "12e-1", "0.12e1", "120e-2", "0.0012e3"] {
+    for text in
+        ["1.2", "+1.2", "01.2", "1.20", "1.2e0", "1.2E+0", "12e-1", "0.12e1", "120e-2", "0.0012e3"]
+    {
         assert_eq!(convert(text), Ok(5_153_960_755), "converting {text:?}");
     }
     // 0.1 * 2^32 = 429496729.6 rounds to 429496730; the sign mirrors it.
@@ -175,9 +179,9 @@ fn aply_tp_029_twenty_eight_significant_digits_convert_and_more_are_refused() {
 #[wasm_bindgen_test(unsupported = test)]
 fn aply_tp_030_text_outside_the_grammar_is_invalid() {
     for text in [
-        "", "+", "-", ".", "-.", "e5", ".e5", "1e", "1e+", "1e-", "1e5e3", "1.2.3", "--1", "+-1", "1,5",
-        "0x10", "nan", "NaN", "inf", "-inf", "infinity", "1 ", " 1", "1_000", "１", "1e5.0", "1.5f", "1\r",
-        "1e 5", "٣",
+        "", "+", "-", ".", "-.", "e5", ".e5", "1e", "1e+", "1e-", "1e5e3", "1.2.3", "--1", "+-1",
+        "1,5", "0x10", "nan", "NaN", "inf", "-inf", "infinity", "1 ", " 1", "1_000", "１", "1e5.0",
+        "1.5f", "1\r", "1e 5", "٣",
     ] {
         assert_eq!(convert(text), Err(DecimalError::Invalid), "converting {text:?}");
     }
@@ -229,7 +233,7 @@ fn oracle(negative: bool, digits: &str, exp10: i64) -> Expected {
     }
     let magnitude = match exp10 {
         e if e >= 0 => {
-            if scaled.len() as i64 + e > 40 {
+            if i64::try_from(scaled.len()).unwrap() + e > 40 {
                 return Expected::Overflow;
             }
             let mut shifted = vec![0; usize::try_from(e).unwrap()];
@@ -249,7 +253,8 @@ fn round_after_dropping(scaled: &Digits, k: usize) -> Digits {
     let (dropped, kept) = scaled.split_at(k);
     let mut kept = kept.to_vec();
     // Compare the dropped digits with 5 * 10^(k-1), most significant digit first.
-    let half: Vec<u8> = std::iter::once(5).chain(std::iter::repeat_n(0, k.saturating_sub(1))).collect();
+    let half: Vec<u8> =
+        std::iter::once(5).chain(std::iter::repeat_n(0, k.saturating_sub(1))).collect();
     let dropped_msb: Vec<u8> = dropped.iter().rev().copied().collect();
     let ordering = if k == 0 { std::cmp::Ordering::Less } else { dropped_msb.cmp(&half) };
     let odd = kept.first().is_some_and(|digit| digit % 2 == 1);
@@ -273,7 +278,8 @@ fn add_one(digits: &mut Digits) {
 
 fn to_expected(magnitude: &Digits, negative: bool) -> Expected {
     // i64::MAX = 9223372036854775807 and |i64::MIN| = 9223372036854775808, as digit strings.
-    let limit: Digits = digits_of(if negative { "9223372036854775808" } else { "9223372036854775807" });
+    let limit: Digits =
+        digits_of(if negative { "9223372036854775808" } else { "9223372036854775807" });
     let within = match magnitude.len().cmp(&limit.len()) {
         std::cmp::Ordering::Less => true,
         std::cmp::Ordering::Greater => false,
@@ -332,7 +338,8 @@ fn generate(rng: &mut Xorshift) -> Generated {
         int.push('0');
     }
     let negative = rng.below(2) == 0;
-    let exponent = if rng.below(3) == 0 { Some(i64::try_from(rng.below(30)).unwrap() - 15) } else { None };
+    let exponent =
+        if rng.below(3) == 0 { Some(i64::try_from(rng.below(30)).unwrap() - 15) } else { None };
     let mut text = String::new();
     text.push_str(if negative { "-" } else { "" });
     text.push_str(&int);
@@ -341,7 +348,7 @@ fn generate(rng: &mut Xorshift) -> Generated {
         text.push_str(&frac);
     }
     if let Some(exponent) = exponent {
-        text.push_str(&format!("e{exponent}"));
+        write!(text, "e{exponent}").unwrap();
     }
     let all = format!("{int}{frac}");
     let significant = all.trim_matches('0').len();
