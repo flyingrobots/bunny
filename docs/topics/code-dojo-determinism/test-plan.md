@@ -45,6 +45,9 @@ topic-docs`.
 | ND-REQ-006 | No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory. | `README.md#compile-time-file-access` |
 | ND-REQ-007 | The time and thread rules name every documented item of `std::thread` and `std::time` deliberately, banned or permitted, from a snapshot of the pinned toolchain's documentation that a test ties to `rust-toolchain.toml`; every documented float method of `Duration` is `float-boundary` in core. | `docs/CODE_DOJO.md#keeping-the-name-lists-current` |
 | ND-REQ-008 | Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code. | `README.md#host-access-beyond-echo` |
+| ND-REQ-009 | Code a lexical gate cannot resolve is banned in deterministic crates: in a `macro_rules!` transcriber, a metavariable next to a path separator, as a macro or method name, or inside an attribute other than a `doc` value; `$crate` and matchers are accepted. | `README.md#macro-names-and-metavariables` |
+| ND-REQ-010 | The standard macros that read files or the build (`include!`, `include_str!`, `include_bytes!`, `env!`, `option_env!`, `file!`, CPU feature detection) are recognised by name as a bare name or under any path rooted at `std`, `core` or `alloc`, through imports, and a `use` of a banned one is reported where it is written. | `README.md#macro-names-and-metavariables` |
+| ND-REQ-011 | Every module and macro the pinned toolchain documents directly below `std`, `core` and `alloc` is classified as banned whole, banned item by item or permitted, and the gate reports the classified rule for each and `unclassified-std` for any other; `std::backtrace`, `std::panic::Location`, `std::arch`, `std::random`, `last_os_error` and the platform modules of `std::os` other than `raw` are banned. | `README.md#the-std-classification` |
 
 ```toml
 [[requirement]]
@@ -85,6 +88,21 @@ status = "active"
 [[requirement]]
 id = "ND-REQ-008"
 summary = "Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-009"
+summary = "Code a lexical gate cannot resolve is banned in deterministic crates: in a `macro_rules!` transcriber, a metavariable next to a path separator, as a macro or method name, or inside an attribute other than a `doc` value; `$crate` and matchers are accepted."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-010"
+summary = "The standard macros that read files or the build (`include!`, `include_str!`, `include_bytes!`, `env!`, `option_env!`, `file!`, CPU feature detection) are recognised by name as a bare name or under any path rooted at `std`, `core` or `alloc`, through imports, and a `use` of a banned one is reported where it is written."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-011"
+summary = "Every module and macro the pinned toolchain documents directly below `std`, `core` and `alloc` is classified as banned whole, banned item by item or permitted, and the gate reports the classified rule for each and `unclassified-std` for any other; `std::backtrace`, `std::panic::Location`, `std::arch`, `std::random`, `last_os_error` and the platform modules of `std::os` other than `raw` are banned."
 status = "active"
 ```
 
@@ -181,6 +199,15 @@ real `cargo tree` output and the real manifests.
 | ND-TP-063 | host-access look-alikes | ND-REQ-003 | A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family. | `xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted` |
 | ND-TP-064 | documented Path methods | ND-REQ-008 | Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented. | `xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule` |
 | ND-TP-065 | optional and build dependencies | ND-REQ-005 | On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is. | `xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate` |
+| ND-TP-071 | macro metavariables | ND-REQ-009 | Fifteen transcribers (the issue's `std::time::$t::now()`, `$m!($p)` and `#[path = $p]`; a segment below the root, a first segment, a bracketed call, a whole and an inner attribute, `path` in `cfg_attr`, a method and a turbofish method name, a `::` repetition, a repetition after `::`, a nested `format!`, a `use`) are each `macro-metavariable` at the stated line. | `xtask/src/nondeterminism/macro_tests.rs::metavariables_in_unresolvable_positions_are_rejected` |
+| ND-TP-072 | metavariable look-alikes | ND-REQ-003, ND-REQ-009 | `::` separators in a matcher, `$crate::..`, `<$t>::MAX`, `$a != $b`, a field access, a `doc` attribute value, matcher fragments, an expression and a repetition of values produce no finding in the rule family. | `xtask/src/nondeterminism/macro_tests.rs::metavariable_look_alikes_are_accepted` |
+| ND-TP-073 | standard macros by any path | ND-REQ-010 | `include!` through `std::prelude::v1` (the call and the import), `core::prelude::v1`, a module alias of a prelude and a `use` group; `env!` and `option_env!` through the preludes; `file!` bare, under `core` and renamed; `include_str!` of a host file through a prelude; `is_x86_feature_detected!` and `std::arch::is_aarch64_feature_detected!` are each reported under their rule. | `xtask/src/nondeterminism/macro_tests.rs::banned_macros_are_found_through_every_std_path` |
+| ND-TP-074 | host items beyond the earlier lists | ND-REQ-011 | `Backtrace::capture` (the issue's form), an imported `Backtrace`, `Backtrace::force_capture`, `std::panic::Location::caller`, `core::panic::Location` and `get_backtrace_style` are `std-env`; `std::arch` and `core::arch` are `host-cpu`; `std::random` is `random`; two platform extension traits and `use std::os;` are `host-platform`; `io::Error::last_os_error` is `std-process`. | `xtask/src/nondeterminism/macro_tests.rs::host_state_beyond_the_earlier_lists_is_rejected` |
+| ND-TP-075 | unclassified std names | ND-REQ-011 | A path through an undocumented module below `std`, `core` and `alloc`, and an undocumented `std` macro, are each `unclassified-std`. | `xtask/src/nondeterminism/macro_tests.rs::an_unclassified_std_module_is_reported` |
+| ND-TP-076 | host-item look-alikes | ND-REQ-003 | `std::os::raw::c_int`, `catch_unwind`, `line!` and `column!`, `module_path!`, another crate's `file!`, an `io::Error` from a kind and `alloc::collections::BTreeMap` produce no finding in the rule family. | `xtask/src/nondeterminism/macro_tests.rs::look_alikes_of_the_host_items_are_accepted` |
+| ND-TP-077 | std classification complete | ND-REQ-011 | The modules and macros the 1.96.0 documentation lists at the roots of `std` (76, 45), `core` (70, 37) and `alloc` (15, 2) are exactly the names `std_modules.rs` classifies, each once. | `xtask/src/nondeterminism/std_modules_tests.rs::every_documented_root_module_and_macro_is_classified` |
+| ND-TP-078 | std classification reported | ND-REQ-011 | For each of the 245 documented names under its root, a `use` of the module or a call of the macro gets exactly the classified rule from the gate, or nothing in the rule family for a permitted name. | `xtask/src/nondeterminism/std_modules_tests.rs::each_root_module_and_macro_gets_its_classified_rule` |
+| ND-TP-079 | platform modules | ND-REQ-011 | Each of the eight documented modules of `std::os` is `host-platform`, except `fd`, which is `std-fs` alone, and `std::os::raw`, which is permitted. | `xtask/src/nondeterminism/std_modules_tests.rs::the_platform_modules_of_std_os_are_banned_except_raw` |
 
 ```toml
 [[case]]
@@ -810,6 +837,87 @@ requirements = ["ND-REQ-005"]
 evidence = "test"
 test = "xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate"
 oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-071"
+requirements = ["ND-REQ-009"]
+evidence = "test"
+test = "xtask/src/nondeterminism/macro_tests.rs::metavariables_in_unresolvable_positions_are_rejected"
+oracle = "Fifteen transcribers (the issue's `std::time::$t::now()`, `$m!($p)` and `#[path = $p]`; a segment below the root, a first segment, a bracketed call, a whole and an inner attribute, `path` in `cfg_attr`, a method and a turbofish method name, a `::` repetition, a repetition after `::`, a nested `format!`, a `use`) are each `macro-metavariable` at the stated line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-072"
+requirements = ["ND-REQ-003", "ND-REQ-009"]
+evidence = "test"
+test = "xtask/src/nondeterminism/macro_tests.rs::metavariable_look_alikes_are_accepted"
+oracle = "`::` separators in a matcher, `$crate::..`, `<$t>::MAX`, `$a != $b`, a field access, a `doc` attribute value, matcher fragments, an expression and a repetition of values produce no finding in the rule family."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-073"
+requirements = ["ND-REQ-010"]
+evidence = "test"
+test = "xtask/src/nondeterminism/macro_tests.rs::banned_macros_are_found_through_every_std_path"
+oracle = "`include!` through `std::prelude::v1` (the call and the import), `core::prelude::v1`, a module alias of a prelude and a `use` group; `env!` and `option_env!` through the preludes; `file!` bare, under `core` and renamed; `include_str!` of a host file through a prelude; `is_x86_feature_detected!` and `std::arch::is_aarch64_feature_detected!` are each reported under their rule."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-074"
+requirements = ["ND-REQ-011"]
+evidence = "test"
+test = "xtask/src/nondeterminism/macro_tests.rs::host_state_beyond_the_earlier_lists_is_rejected"
+oracle = "`Backtrace::capture` (the issue's form), an imported `Backtrace`, `Backtrace::force_capture`, `std::panic::Location::caller`, `core::panic::Location` and `get_backtrace_style` are `std-env`; `std::arch` and `core::arch` are `host-cpu`; `std::random` is `random`; two platform extension traits and `use std::os;` are `host-platform`; `io::Error::last_os_error` is `std-process`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-075"
+requirements = ["ND-REQ-011"]
+evidence = "test"
+test = "xtask/src/nondeterminism/macro_tests.rs::an_unclassified_std_module_is_reported"
+oracle = "A path through an undocumented module below `std`, `core` and `alloc`, and an undocumented `std` macro, are each `unclassified-std`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-076"
+requirements = ["ND-REQ-003"]
+evidence = "test"
+test = "xtask/src/nondeterminism/macro_tests.rs::look_alikes_of_the_host_items_are_accepted"
+oracle = "`std::os::raw::c_int`, `catch_unwind`, `line!` and `column!`, `module_path!`, another crate's `file!`, an `io::Error` from a kind and `alloc::collections::BTreeMap` produce no finding in the rule family."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-077"
+requirements = ["ND-REQ-011"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_modules_tests.rs::every_documented_root_module_and_macro_is_classified"
+oracle = "The modules and macros the 1.96.0 documentation lists at the roots of `std` (76, 45), `core` (70, 37) and `alloc` (15, 2) are exactly the names `std_modules.rs` classifies, each once."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-078"
+requirements = ["ND-REQ-011"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_modules_tests.rs::each_root_module_and_macro_gets_its_classified_rule"
+oracle = "For each of the 245 documented names under its root, a `use` of the module or a call of the macro gets exactly the classified rule from the gate, or nothing in the rule family for a permitted name."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-079"
+requirements = ["ND-REQ-011"]
+evidence = "test"
+test = "xtask/src/nondeterminism/std_modules_tests.rs::the_platform_modules_of_std_os_are_banned_except_raw"
+oracle = "Each of the eight documented modules of `std::os` is `host-platform`, except `fd`, which is `std-fs` alone, and `std::os::raw`, which is permitted."
 tier = "fast"
 status = "implemented"
 ```
