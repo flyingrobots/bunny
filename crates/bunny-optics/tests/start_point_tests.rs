@@ -346,9 +346,12 @@ fn check_start_points(seed: u64, cases: usize) -> Steps {
             continue;
         };
         let context = format!("seed {seed:#x}, case {case}");
-        let point = raw3(point_at(&ray, hit.distance).expect("representable"));
+        let point = point_at(&ray, hit.distance)
+            .map(raw3)
+            .unwrap_or_else(|| panic!("{context}: point_at is not representable"));
         let shading = SurfaceHit::new(&surface, &ray, &hit);
-        let (k, start) = rule(vertices, hit.front_face, point).expect("reaches the arrival side");
+        let (k, start) = rule(vertices, hit.front_face, point)
+            .unwrap_or_else(|| panic!("{context}: three steps do not reach the arrival side"));
         assert!(k <= 2, "{context}: {k} steps needed at {point:?}");
         assert_eq!(shading.map(|s| raw3(s.point())), Some(start), "{context}");
         let counts = if octahedron { &mut steps.octahedron } else { &mut steps.general };
