@@ -597,10 +597,11 @@ tree counts nothing; a ray that misses the root box counts one box test.
 These are the definitions of the benchmark profile's replica (`box_calls`,
 `box_some`, `skipped_at_pop`, `interior_visited`, `leaf_visited`, `tri_tests`,
 `stack_peak` in `crates/bunny-perf/src/profile.rs`), which counts on the
-`BvhNode` tree: a compact tree makes the same box tests in the same order. The
-profile's "nodes popped" is `popped_skipped + interior_visits + leaf_visits`.
-The check that every count agrees with the replica on all 1 024 benchmark rays
-is planned as `TRACE-TP-418`.
+`BvhNode` tree: a compact tree makes the same box tests in the same order, and
+`TRACE-TP-418` checks that every count and answer agrees with the replica on
+all 1 024 benchmark rays (20 238 box tests over the `closest_hit` searches, the
+profile table's 19.76 per ray). The profile's "nodes popped" is
+`popped_skipped + interior_visits + leaf_visits`.
 
 **Adding counts.** `+` and `+=` sum each counter, saturating at `u64::MAX`,
 and keep the larger `peak_stack`, so a sum over rays is a total per counter

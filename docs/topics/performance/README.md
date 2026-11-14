@@ -266,6 +266,11 @@ sibling pairs shuffled (`trace/closest_hit_shuffled`); see
 (`_builder_order`, `_near_first`, `_shuffled`). Before timing, the harness checks that every
 compact tree makes the same primitive calls and gives the same answers as the builder's tree on
 every ray, and exits with the differing ray indices if not.
+The `trace_counted` group (`crates/bunny-perf/src/counted.rs`) times the counted compact
+searches on the same tree and rays: `trace/closest_hit_compact_counted` and
+`trace/any_hit_compact_counted`, each summing the answers and the box tests so neither is
+optimized away. A unit test in `profile.rs` (`TRACE-TP-418`) checks that their answers and
+counts equal the profile replica's on every ray.
 
 `trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
 on the scene: each camera ray that hits something against the triangle it hits first,
@@ -1964,8 +1969,25 @@ checked in the assembly. The x86-64 reading comes from the pull request's CI per
 
 The separate copy was not selected: it measured the same on the changed function and on the
 untouched ones, and it would leave two search loops to keep in step by a test instead of one
-source. The counted forms' own cost is measured with their benchmark cases in the follow-up that
-adds them to the harness.
+source.
+
+**The counted forms' own cost.** The `trace_counted` group, three more exclusive runs of the
+command above with `--filter trace/` and base `ee4695d827f8` (the library with the counted
+forms, so both sides build the counted cases and only the harness differs). The existing cases
+stayed level: `trace/closest_hit_compact` -0.3 % to +2.4 % best p50, `trace/any_hit_compact`
++0.9 % to +1.6 %, `trace/closest_hit` -0.5 % to -0.4 %. Within each run's "after" side,
+nanoseconds per ray, median p50 / best p50:
+
+| Run | `closest_hit_compact` | `closest_hit_compact_counted` | Counting costs | `any_hit_compact` | `any_hit_compact_counted` | Counting costs |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 168.91 / 165.85 | 176.84 / 174.07 | +4.7 % / +5.0 % | 145.10 / 144.86 | 166.18 / 164.14 | +14.5 % / +13.3 % |
+| 2 | 169.39 / 166.71 | 176.80 / 175.05 | +4.4 % / +5.0 % | 146.04 / 143.80 | 165.41 / 164.39 | +13.3 % / +14.3 % |
+| 3 | 166.38 / 162.52 | 176.72 / 173.18 | +6.2 % / +6.6 % | 145.26 / 141.85 | 165.73 / 164.51 | +14.1 % / +16.0 % |
+
+Counting costs about 7 to 11 ns a ray (5 to 7 %) on the closest-hit search, which makes about 20
+box tests a ray, and about 20 ns (13 to 16 %) on the any-hit search, which makes slightly fewer;
+why any-hit pays twice as much in absolute time was not investigated (not checked in the
+assembly). The counted forms are for statistics and debug views, not for rendering.
 
 ## Tried And Rejected
 
