@@ -34,6 +34,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(linalg_cases());
     #[cfg(feature = "query")]
     cases.extend(query_cases());
+    #[cfg(feature = "angle")]
+    cases.extend(angle_cases());
     cases
 }
 
@@ -199,5 +201,47 @@ fn triangle() -> [FixedVec3; 3] {
         FixedVec3::new(-one, -one, zero),
         FixedVec3::new(one, -one, zero),
         FixedVec3::new(zero, one, zero),
+    ]
+}
+
+#[cfg(feature = "angle")]
+fn angle_cases() -> Vec<Case> {
+    use bunny_num::FixedAngle;
+
+    let mut seeds = Seeds(PERF_SEED ^ 0xA461);
+    let angles = seeds.batch(|s| FixedAngle::from_raw(s.next()));
+    let radians = seeds.batch(|s| s.fixed(100));
+    // The same angles as f64 radians: a reference point for hardware-assisted float trig.
+    #[allow(clippy::cast_precision_loss)]
+    let float_angles: Vec<f64> = angles
+        .iter()
+        .map(|a| a.raw() as f64 / 18_446_744_073_709_551_616.0 * std::f64::consts::TAU)
+        .collect();
+    vec![
+        case("angle/sin_cos", move || {
+            angles
+                .iter()
+                .map(|&a| {
+                    let (sin, cos) = black_box(black_box(a).sin_cos());
+                    sin.raw() ^ cos.raw()
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+        case("angle/from_radians", move || {
+            radians
+                .iter()
+                .map(|&r| black_box(FixedAngle::from_radians(black_box(r))).raw().cast_signed())
+                .fold(0, i64::wrapping_add)
+        }),
+        #[allow(clippy::cast_possible_truncation)]
+        case("angle/f64_sin_cos_reference", move || {
+            float_angles
+                .iter()
+                .map(|&a| {
+                    let (sin, cos) = black_box(black_box(a).sin_cos());
+                    (sin * 4_294_967_296.0) as i64 ^ (cos * 4_294_967_296.0) as i64
+                })
+                .fold(0, i64::wrapping_add)
+        }),
     ]
 }
