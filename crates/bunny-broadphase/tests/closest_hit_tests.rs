@@ -247,7 +247,10 @@ fn trace_tp_106_differently_shaped_trees_give_the_same_answers() {
     let interleaved: Vec<usize> = (0..count).step_by(2).chain((1..count).step_by(2)).collect();
     let mut shuffled: Vec<usize> = (0..count).collect();
     for slot in (1..count).rev() {
-        shuffled.swap(slot, usize::try_from(seeds.next()).expect("fits") % (slot + 1));
+        // Reduce in `u64` first: the seed does not fit `usize` on 32-bit targets such as wasm32.
+        let bound = u64::try_from(slot + 1).expect("slot count fits u64");
+        let pick = usize::try_from(seeds.next() % bound).expect("below the slot count");
+        shuffled.swap(slot, pick);
     }
     let shapes = [
         scene.reshaped(&reversed),
