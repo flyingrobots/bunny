@@ -70,6 +70,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Behaviour change (contract change, flyingrobots/bunny#211):**
+  `bunny_query::ray_intersects_aabb`, and so
+  `bunny_broadphase::intersect_ray`, no longer report a miss when a slab
+  distance or a coordinate difference overflows. The inputs that change are
+  exactly those for which the old function stopped on an overflowing
+  `bound - origin` subtraction or `(bound - origin) / direction` division:
+  a direction component of a few raw units (for a slab of half-width `k`
+  centred on the origin, any component of at most `2k` raw units), or a bound
+  2^31 units or more from the origin. For them the function now returns
+  `Some((t_enter, t_exit))` when the ray reaches the box ahead of its origin
+  and `None` when it truly misses, decided exactly with `i128` rationals; a
+  slab distance that does not fit Q32.32 saturates to the minimum or maximum
+  by sign, and coordinate differences are widened to `i128` instead of
+  saturated. Every hit the function reported before is reported with the same
+  bits, and every miss not caused by overflow is still a miss; a differential
+  test against the retained old implementation and an exact rational oracle
+  check both. The workspace version is not bumped here: per the Fidelity Rule
+  the next release must carry a version that signals this contract change.
 * Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
   toolchains no longer fails the gate.
 

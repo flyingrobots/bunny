@@ -333,3 +333,36 @@ each of the 4 096 segments (where Hermite error peaks). A float-free check
 deliberate mutation of the Hermite basis (`h11 = t3 + t2`) fails the golden, error and
 identity tests. The earlier claim of a 0.5001 raw-unit maximum over 4 196 611 angles has no
 test or tool in the repository and is withdrawn until it can be reproduced.
+
+## Contract Change Cost Checks
+
+A declared contract change is not an optimization and does not enter the ledger above, but
+when it must leave the common path's cost alone, the measurement that shows it is recorded
+here.
+
+### `ray_intersects_aabb` overflow handling (flyingrobots/bunny#211)
+
+**Change.** When a coordinate difference or slab distance overflows, `ray_intersects_aabb`
+now falls through to an exact `i128` slab test (`crates/bunny-query/src/ray/aabb_wide.rs`,
+marked `#[cold]`) instead of returning `None`. The rounded slab test, which answers every
+input without overflow, still does the same checked subtractions, divisions and comparisons;
+it now reports which of the two stops (zero-component miss or overflow) it hit. See the
+[ray-tracing chapter](../ray-tracing/README.md#general-purpose-ray-aabb-solver).
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), two complete runs through the guarded container runner with the
+branch's commits as history, base revision `2e92ce2748be` (`origin/main`):
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter query/
+```
+
+| Case | Run 1 p50 before | Run 1 p50 after | Run 1 best change | Run 2 p50 before | Run 2 p50 after | Run 2 best change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `query/ray_aabb` | 53.47 | 52.90 | +0.2% | 51.15 | 52.49 | -2.7% |
+| `query/ray_triangle` (control) | 51.96 | 52.53 | +0.4% | 51.51 | 51.92 | -0.2% |
+
+`query/ray_aabb` moved by +0.2 % and -2.7 % in best p50 and by -1.1 % and +2.6 % in median
+p50: inside the noise band, with no consistent direction. Its rays all reach the unit box
+without overflow, so the cases time the common path only; the exact path's cost is not
+measured and is paid only by inputs that used to return a false miss.
