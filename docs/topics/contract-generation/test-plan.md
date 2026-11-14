@@ -145,6 +145,8 @@ cargo run --locked -p xtask -- generate
 | CG-TP-014 | Drift comparison | CG-REQ-011 | Constructed committed and regenerated texts: identical texts are no drift; a changed byte is drift at its line (first, middle and last line, and a change in line endings); a missing final newline, an extra line and a missing committed file are drift at the stated line. | `xtask/src/generated_check/tests.rs::cg_tp_014_drift_is_reported_at_the_first_differing_line` |
 | CG-TP-015 | One argument list | CG-REQ-011 | `cargo run -p xtask -- generate` and the check pass the generator the same schema and the same three output paths, in the same order. | `xtask/src/generated_check/tests.rs::cg_tp_015_the_check_regenerates_what_generate_writes` |
 | CG-TP-016 | Seeded drift fails the gate | CG-REQ-011 | In a container copy, a one-byte change to each committed artifact in turn, and the schema changed without regenerating, each fail the check with the file named; the repository passes. | [Regeneration check evidence](#regeneration-check-evidence) |
+| CG-TP-017 | Pre-commit reads the index | CG-REQ-011 | A temporary repository whose staged artifacts match a hand-written regeneration while a working-tree artifact is stale, and the reverse (a stale staged artifact with a fresh file on disk, and an artifact removed from the index): the index snapshot reports exactly the staged drift and the missing file, the working-tree snapshot exactly the on-disk drift, and the generator's schema is the staged one. | `xtask/src/generated_check/tests.rs::cg_tp_017_the_pre_commit_check_judges_the_staged_artifacts` |
+| CG-TP-018 | Overlapping runs | CG-REQ-011 | A second run started inside the first gets its own scratch directory, leaves the first run's file in place and removes only its own directory; the first removes its own when it ends. | `xtask/src/generated_check/tests.rs::cg_tp_018_overlapping_runs_keep_their_own_scratch_files` |
 
 ```toml
 [[case]]
@@ -279,6 +281,24 @@ requirements = ["CG-REQ-011"]
 evidence = "test"
 test = "xtask/src/generated_check/tests.rs::cg_tp_015_the_check_regenerates_what_generate_writes"
 oracle = "The argument list generate used before this change, written out in the test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-017"
+requirements = ["CG-REQ-011"]
+evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_017_the_pre_commit_check_judges_the_staged_artifacts"
+oracle = "Constructed index and working-tree contents whose drifts are known."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-018"
+requirements = ["CG-REQ-011"]
+evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_018_overlapping_runs_keep_their_own_scratch_files"
+oracle = "Nested runs with distinct run ids; the files each run wrote and the directories that remain are known."
 tier = "fast"
 status = "implemented"
 

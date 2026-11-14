@@ -8,7 +8,7 @@
 
 use std::error::Error;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 type DynError = Box<dyn Error>;
@@ -63,48 +63,112 @@ pub(super) fn first_difference(committed: &[u8], fresh: &[u8]) -> Option<usize> 
     }
 }
 
-/// Regenerates into `root/target/dojo-generated` and returns every committed artifact that
-/// differs, in the order of [`OUTPUTS`].
-pub(super) fn drifts(root: &Path) -> Result<Vec<Drift>, DynError> {
-    let scratch = root.join(SCRATCH);
+/// Which copy of the schema and of the committed artifacts the check reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Snapshot {
+    /// The files on disk: the full gate and `code-dojo-generated`.
+    WorkTree,
+    /// The staged content: the pre-commit gate, so the check judges what the commit records.
+    Index,
+}
+
+/// The bytes of `path` (relative to `root`) in `snapshot`, or `None` when it is absent there.
+pub(super) fn read_snapshot(
+    root: &Path,
+    snapshot: Snapshot,
+    path: &str,
+) -> Result<Option<Vec<u8>>, DynError> {
+    match snapshot {
+        Snapshot::WorkTree | Snapshot::Index => match fs::read(root.join(path)) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.into()),
+        },
+    }
+}
+
+/// The scratch directory of the run identified by `run`, under `root/target/`.
+pub(super) fn scratch_dir(root: &Path, _run: u32) -> PathBuf {
+    root.join(SCRATCH)
+}
+
+/// Runs `body` with a fresh scratch directory for run `run`, then removes the directory,
+/// whatever `body` returned.
+pub(super) fn with_scratch<T>(
+    root: &Path,
+    run: u32,
+    body: impl FnOnce(&Path) -> Result<T, DynError>,
+) -> Result<T, DynError> {
+    let scratch = scratch_dir(root, run);
     if scratch.exists() {
         fs::remove_dir_all(&scratch)?;
     }
+    fs::create_dir_all(&scratch)?;
+    let result = body(&scratch);
+    let removed = fs::remove_dir_all(&scratch);
+    let value = result?;
+    removed?;
+    Ok(value)
+}
+
+/// Runs the generator in `scratch` on the schema of `snapshot`, copied to its repository path.
+fn regenerate(root: &Path, snapshot: Snapshot, scratch: &Path) -> Result<(), DynError> {
+    let schema = read_snapshot(root, snapshot, SCHEMA)?
+        .ok_or("Code Dojo: the contract schema is missing")?;
     let schema_copy = scratch.join(SCHEMA);
     if let Some(parent) = schema_copy.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::copy(root.join(SCHEMA), &schema_copy)?;
-    let manifest_path = root.join("Cargo.toml");
+    fs::write(&schema_copy, schema)?;
     let status = Command::new("cargo")
         .args(["run", "--locked", "-q", "--manifest-path"])
-        .arg(&manifest_path)
+        .arg(root.join("Cargo.toml"))
         .args(["-p", "bunny-wesley", "--"])
         .args(generator_args())
-        .current_dir(&scratch)
+        .current_dir(scratch)
         .status()?;
-    if !status.success() {
-        return Err("Code Dojo: bunny-wesley failed to regenerate the contract artifacts".into());
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Code Dojo: bunny-wesley failed to regenerate the contract artifacts".into())
     }
+}
+
+/// Every artifact of `snapshot` that differs from the regenerated one in `scratch`, in the
+/// order of [`OUTPUTS`].
+pub(super) fn compare(
+    root: &Path,
+    snapshot: Snapshot,
+    scratch: &Path,
+) -> Result<Vec<Drift>, DynError> {
     let mut found = Vec::new();
     for (_, path) in OUTPUTS {
         let fresh = fs::read(scratch.join(path))?;
-        match fs::read(root.join(path)) {
-            Ok(committed) => {
+        match read_snapshot(root, snapshot, path)? {
+            Some(committed) => {
                 if let Some(line) = first_difference(&committed, &fresh) {
                     found.push(Drift { path, line: Some(line) });
                 }
             }
-            Err(_) => found.push(Drift { path, line: None }),
+            None => found.push(Drift { path, line: None }),
         }
     }
     Ok(found)
 }
 
+/// Regenerates from the schema of `snapshot` in a scratch directory of this process and
+/// returns every artifact of `snapshot` that differs.
+pub(super) fn drifts(root: &Path, snapshot: Snapshot) -> Result<Vec<Drift>, DynError> {
+    with_scratch(root, std::process::id(), |scratch| {
+        regenerate(root, snapshot, scratch)?;
+        compare(root, snapshot, scratch)
+    })
+}
+
 /// The gate step: fails, naming each drifted file and the fix, unless every committed artifact
 /// equals the regenerated one.
-pub(super) fn check(root: &Path) -> Result<(), DynError> {
-    let found = drifts(root)?;
+pub(super) fn check(root: &Path, snapshot: Snapshot) -> Result<(), DynError> {
+    let found = drifts(root, snapshot)?;
     if found.is_empty() {
         println!("Code Dojo: generated contract artifacts match bunny-wesley");
         return Ok(());
