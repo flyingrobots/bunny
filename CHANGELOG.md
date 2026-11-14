@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo's `blanket-nursery` check parses the manifests as TOML
+  (`toml_edit`, already in the lockfile through `bunny-wesley`'s `toml`; the
+  lockfile gains only the edge from `xtask`), so `nursery.level = "deny"`, a
+  header with spaces around the dots, inline `clippy` and `lints` tables and
+  quoted keys are found; before, only one `nursery = ..` key per line was. It
+  reads every Rust file of a core crate and bans the group at every scope, on
+  a module, item or statement as well as the crate (`#[deny(clippy::nursery)]`
+  on a function was accepted before), and the `rustflags` of a Cargo
+  configuration in the repository. Nothing on main sets the group. Closes
+  flyingrobots/bunny#350.
+
 * Code Dojo's `float-boundary` bans the float types in core under every
   spelling: `core::ffi::c_double` and `c_float` (also from `std::os::raw`,
   `std::ffi` or `libc`), `f16` and `f128`, and every name a core crate binds

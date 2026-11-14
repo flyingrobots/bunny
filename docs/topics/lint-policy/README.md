@@ -29,22 +29,42 @@ The core crates are those in `CORE_CRATES` in `xtask/src/code_dojo.rs`:
 The `blanket-nursery` rule reports every place that sets the group for a core
 crate, with its file and line:
 
-- an inner attribute of the crate's `src/lib.rs` (`#![deny(clippy::nursery)]`,
-  also with other lints in the list, and inside `cfg_attr`);
-- the `nursery` key of the crate manifest's `[lints.clippy]` table, or the
-  dotted key `clippy.nursery` under `[lints]`;
-- the same keys in the workspace manifest's `[workspace.lints.clippy]` and
-  `[workspace.lints]` tables, which every core crate inherits.
+- a lint attribute anywhere in any Rust file under the crate's directory
+  (outside `target/`): inner or outer, on the crate, a module, an item, an
+  impl, a method or a statement, also inside `cfg_attr`. The group is banned
+  at every scope, because a toolchain update that adds a nursery lint breaks
+  a module the same way it breaks a crate. Every file is read, so a crate
+  root other than `src/lib.rs` (`[lib] path`), its modules and the crate's
+  integration tests are covered;
+- the `nursery` key of the crate manifest's `lints.clippy` table and of the
+  workspace manifest's `workspace.lints.clippy` table, which every core crate
+  inherits;
+- `-D`, `-W`, `-F`, `--deny`, `--warn` or `--forbid` with `clippy::nursery`
+  (joined or as two words) in the `build.rustflags` or any
+  `target.<triple or cfg>.rustflags` of `.cargo/config.toml` or
+  `.cargo/config`, at the repository root or in the crate's directory.
 
-`allow` and `expect` of the group, named nursery lints, attributes on items
-other than the crate, and the group named in a comment or string are not
-findings. A `lib.rs` that does not parse is reported with line 0. The rule has
-no waiver.
+Manifests and configurations are parsed as TOML (`toml_edit`, already in the
+lockfile through `bunny-wesley`'s `toml`), so every spelling of a table is the
+same table: `nursery.level = "deny"`, `[ workspace . lints . clippy ]`,
+`[workspace.lints] clippy = { nursery = "deny" }`, `lints = { clippy = { .. } }`,
+`nursery = { level = "deny", priority = -1 }`, quoted keys, and
+`[workspace.lints.clippy.nursery]` with a `level` key. The finding's line is
+the `nursery` key's.
 
-Limits: the manifest scan reads one key per line, as the repository's
-manifests are written; an inline table such as
-`lints = { clippy = { nursery = "deny" } }` is not read. Lints passed on the
-command line (`-D clippy::nursery`) are outside the files the check reads.
+`allow` and `expect` of the group, named nursery lints, and the group named in
+a comment or string are not findings. A file that does not parse, or a
+manifest or configuration that is not TOML, is reported with line 0. The rule
+has no waiver.
+
+Limits: lints passed on the command line (`cargo clippy -- -D
+clippy::nursery`), in the `RUSTFLAGS` or `CARGO_ENCODED_RUSTFLAGS`
+environment variables, in a Cargo configuration outside the repository (for
+example `~/.cargo/config.toml`) or through a `[alias]`, and a lint attribute
+that a macro emits, are outside the files the check reads. Before
+flyingrobots/bunny#350 the check read only inner attributes of `src/lib.rs`
+and one `nursery` key per line, and missed the dotted, spaced and inline
+spellings and attributes on modules.
 
 ## Named Nursery Lints
 
