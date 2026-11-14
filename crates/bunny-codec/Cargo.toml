@@ -15,8 +15,14 @@ version.workspace = true
 [dependencies]
 bunny-geom = { path = "../bunny-geom", version = "0.7.1" }
 bunny-linalg = { path = "../bunny-linalg", version = "0.7.1" }
-bunny-mesh = { path = "../bunny-mesh", version = "0.7.1" }
+bunny-mesh = { path = "../bunny-mesh", version = "0.7.1", default-features = false }
 bunny-num = { path = "../bunny-num", version = "0.7.1" }
+
+[features]
+default = ["mesh-hash"]
+# Turns on `bunny-mesh/mesh-hash` (`bunny_mesh::compute_mesh_hash` and `sha2`). No
+# `bunny-codec` item depends on it; without it the crate has no crates.io dependency.
+mesh-hash = ["bunny-mesh/mesh-hash"]
 
 [lib]
 path = "src/lib.rs"

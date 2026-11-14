@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`shade/vertex_normals`). Part of flyingrobots/bunny#289; see
   `docs/topics/optics/README.md#vertex-normals`.
 
+* `bunny-mesh` and `bunny-codec` have a `mesh-hash` feature, on by default.
+  In `bunny-mesh` it provides `compute_mesh_hash`, the only item that uses
+  `sha2`; `bunny-codec` uses none of it and forwards the feature. With default
+  features on, both crates' public items and dependency graphs are unchanged.
+  With `default-features = false`, neither crate reaches a crates.io crate and
+  every `bunny-codec` reader (`parse_ascii_ply`, `parse_decimal_q32_32`,
+  `parse_binary_ply`, `parse_obj_text`, `decode_compressed_mesh`) is still
+  available. The full gate lists both crates' dependency graphs with default
+  features off and fails on a third-party crate, then lints, tests and
+  wasm-checks them in that configuration (flyingrobots/bunny#291).
+
 * `bunny-codec` reads ASCII PLY triangle meshes: `parse_ascii_ply` accepts
   `format ascii 1.0` with `x`, `y`, `z` and any other scalar vertex properties
   (skipped by their declaration) and `list uchar int vertex_indices` faces, and

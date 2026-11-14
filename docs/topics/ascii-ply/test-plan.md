@@ -7,6 +7,8 @@ Q32.32 conversion rule. The contract is [`README.md`](README.md).
 
 `parse_ascii_ply` and `parse_decimal_q32_32` in `bunny-codec`: the profile, the
 line, whitespace and comment rules, the conversion rule, and the error contract.
+It also covers the dependency contract of `bunny-codec` with its default features
+off, which is how a consumer without crates.io dependencies uses these readers.
 
 ## Test Goals
 
@@ -37,6 +39,8 @@ line, whitespace and comment rules, the conversion rule, and the error contract.
 | APLY-REQ-009 | The reader allocates nothing and never reserves memory from a declared count; the body must hold exactly the declared records. | `README.md#counts-and-allocation` |
 | APLY-REQ-010 | The binary reader is unchanged. | `README.md#relation-to-the-binary-reader` |
 | APLY-REQ-011 | Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds. | `README.md#the-profile` |
+| APLY-REQ-012 | With default features off, the normal and build dependency graphs of `bunny-codec` and `bunny-mesh` hold only Bunny path crates, and every `bunny-codec` reader and its tests still build and pass. | `README.md#dependencies-and-features` |
+| APLY-REQ-013 | With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature. | `README.md#dependencies-and-features` |
 
 ```toml
 [[requirement]]
@@ -93,6 +97,16 @@ status = "active"
 id = "APLY-REQ-011"
 summary = "Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds."
 status = "active"
+
+[[requirement]]
+id = "APLY-REQ-012"
+summary = "With default features off, the normal and build dependency graphs of `bunny-codec` and `bunny-mesh` hold only Bunny path crates, and every `bunny-codec` reader and its tests still build and pass."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-013"
+summary = "With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature."
+status = "active"
 ```
 
 ## Test Cases
@@ -131,6 +145,9 @@ status = "active"
 | APLY-TP-040 | Allocation | APLY-REQ-009 | Zero allocation blocks for parse and iteration after warm-up, and for a huge declared count. | `crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up` |
 | APLY-TP-051 | Real asset | APLY-REQ-011 | Exact length, 1889 vertices, 3851 faces and per-axis bounds equal to the conversion of the manifest's decimal bounds, for the committed Stanford fixture. | `crates/bunny-codec/tests/ply_ascii_stanford_tests.rs::aply_tp_051_geordi_stanford_bunny_asset_reads_with_exact_bounds` |
 | APLY-TP-050 | Sibling, unchanged | APLY-REQ-010 | The existing binary reader's golden test passes unchanged. | `crates/bunny-codec/tests/ply_tests.rs::parses_binary_triangle_ply_as_borrowed_view` |
+| APLY-TP-052 | Dependencies, negative | APLY-REQ-012 | A seeded `cargo tree` listing with a crates.io crate, a deduplicated crates.io crate and a git crate among path crates reports exactly those three. | `xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported` |
+| APLY-TP-053 | Dependencies, look-alikes | APLY-REQ-012 | A listing of path crates only, with deduplication markers and a Windows path, reports nothing. | `xtask/src/feature_configs.rs::tests::path_crates_are_accepted` |
+| APLY-TP-054 | Public items | APLY-REQ-013 | The rustdoc item lists of both crates at `origin/main` and at the change are identical with default features; without them only `compute_mesh_hash` is gone. | [Feature Configurations](#feature-configurations) |
 
 ```toml
 [[case]]
@@ -420,6 +437,33 @@ test = "crates/bunny-codec/tests/ply_tests.rs::parses_binary_triangle_ply_as_bor
 oracle = "The existing binary reader's golden test passes unchanged."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "APLY-TP-052"
+requirements = ["APLY-REQ-012"]
+evidence = "test"
+test = "xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported"
+oracle = "Exactly `sha2`, the deduplicated `typenum` and the git crate are reported, once each, in listing order."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-053"
+requirements = ["APLY-REQ-012"]
+evidence = "test"
+test = "xtask/src/feature_configs.rs::tests::path_crates_are_accepted"
+oracle = "No crate is reported for path crates, deduplicated path crates and a Windows path."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-054"
+requirements = ["APLY-REQ-013"]
+evidence = "manual-audit"
+artifact = "docs/topics/ascii-ply/test-plan.md#feature-configurations"
+oracle = "Identical rustdoc item lists with default features; only `compute_mesh_hash` absent without them."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Fixtures
@@ -436,6 +480,29 @@ by 2^32 with 32 decimal doublings, shifts by appending or dropping decimal digit
 and rounds by comparing the dropped digits with `5 * 10^(k-1)` as strings. It uses
 no division, no shifts and no 128-bit arithmetic, so it shares no code path with the
 reader. `APLY-TP-033` checks the oracle itself against hand-derived values.
+
+## Feature Configurations
+
+The full gate (`code-dojo --all`) proves APLY-REQ-012 on every run: it lists
+`cargo tree --locked -p <crate> --no-default-features --edges normal,build
+--target all --prefix none --format {p}` for `bunny-mesh` and `bunny-codec` and
+fails on any crate that is not a local path crate, then runs Clippy, the tests
+(doctests included) and a `wasm32-unknown-unknown` check of both crates with
+`--no-default-features`. Each command names only these two packages, so no other
+workspace member can turn the feature back on through feature unification.
+APLY-TP-052 and APLY-TP-053 test the listing check; a seeded violation (the
+`bunny-mesh` dependency of `bunny-codec` without `default-features = false`)
+makes the gate fail.
+
+APLY-TP-054 is an audit, repeated for a change to either crate's features: build
+`cargo doc --no-deps -p bunny-mesh -p bunny-codec` at the base and at the change,
+and compare the `href` entries of each crate's `all.html`. The lists must be
+identical with default features, and without them differ only by
+`fn.compute_mesh_hash.html`.
+
+Audit at flyingrobots/bunny#291 against `origin/main` 3c395f9: the default-feature
+lists were identical (10 entries for `bunny-mesh`, 28 for `bunny-codec`), and the
+no-default lists lacked only `fn.compute_mesh_hash.html`.
 
 ## Mutation Check
 

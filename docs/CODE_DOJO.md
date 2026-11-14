@@ -166,6 +166,18 @@ manifest declares the path to the banned crate; a crate reached through
 another deterministic crate is reported against that crate only. Dev and
 build dependencies are not part of the check.
 
+### No-Default-Features Check
+
+`bunny-mesh` and `bunny-codec` reach crates.io only through their default
+`mesh-hash` feature. The full gate lists `cargo tree --locked -p <crate>
+--no-default-features --edges normal,build --target all --prefix none --format
+{p}` for each and fails on any crate that is not a local path crate. It then
+runs Clippy (`-D warnings`), `cargo test` (doctests included) and a
+`wasm32-unknown-unknown` check of `-p bunny-mesh -p bunny-codec
+--no-default-features`. Each command selects only these two packages, so no
+other workspace member re-enables the feature through feature unification. The
+check is `xtask/src/feature_configs.rs`.
+
 ### Where It Runs
 
 - `cargo run --locked -p xtask -- code-dojo --all` runs the source rules on

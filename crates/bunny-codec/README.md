@@ -23,6 +23,18 @@ accessors:
 The decoder does not reinterpret arbitrary input bytes as typed slices because
 that would require `unsafe`. The repository forbids unsafe code.
 
+## Features
+
+| Feature | Default | Provides |
+| --- | --- | --- |
+| `mesh-hash` | on | Turns on `bunny-mesh/mesh-hash`: `bunny_mesh::compute_mesh_hash` and its `sha2` dependency. |
+
+No item of this crate depends on `mesh-hash`. With `default-features = false`
+every reader and the compressed decoder are available and the dependency graph
+holds only Bunny crates, with no crates.io crate; the full gate checks this on
+every run. See
+[`docs/topics/ascii-ply`](../../docs/topics/ascii-ply/README.md#dependencies-and-features).
+
 ## ASCII PLY
 
 `parse_ascii_ply` reads `format ascii 1.0` PLY triangle meshes. Vertex positions
