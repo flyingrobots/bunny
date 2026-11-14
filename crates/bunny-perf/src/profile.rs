@@ -579,7 +579,8 @@ pub(crate) fn report() -> String {
 
 fn report_for(rig: &Rig, tree: &str) -> String {
     format!(
-        "## BVH{tree}\n\n| | |\n| --- | ---: |\n{}\n## closest_hit{tree}\n\n{}\n## any_hit{tree}\n\n{}\n## Neighbouring rays{tree}\n\n{}",
+        "## BVH{tree}\n\n| | |\n| --- | ---: |\n{}\n## closest_hit{tree}\n\n{}\n\
+         ## any_hit{tree}\n\n{}\n## Neighbouring rays{tree}\n\n{}",
         render_tree(rig),
         render_counts(rig, Mode::Closest),
         render_counts(rig, Mode::Any),

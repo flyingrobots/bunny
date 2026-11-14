@@ -487,7 +487,8 @@ mod tests {
         for (name, scene) in [("build_bvh", &old), ("build_bvh_sah", &new)] {
             let nodes = &scene.nodes;
             println!(
-                "{name}: {} nodes, {} leaves, depth {}, SAH cost {} / 1000, ground leaves at depth {:?} and {:?}, triangle tests (closest, any) {:?}",
+                "{name}: {} nodes, {} leaves, depth {}, SAH cost {} / 1000, \
+                 ground leaves at depth {:?} and {:?}, triangle tests (closest, any) {:?}",
                 nodes.len(),
                 leaves(nodes),
                 depth(nodes, 0),

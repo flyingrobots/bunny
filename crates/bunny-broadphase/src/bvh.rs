@@ -38,8 +38,9 @@ pub const SAH_MAX_LEAF_SIZE: usize = 4;
 
 /// Deepest level [`build_bvh_sah`] creates (the root is level 0).
 ///
-/// A node at this depth is a leaf whatever its size. A tree this deep needs at most 61 entries of the 64-entry stack
-/// that `intersect_aabb`, `intersect_ray`, `closest_hit` and `any_hit` use.
+/// A node at this depth is a leaf whatever its size. A tree this deep needs at most 61
+/// entries of the 64-entry stack that `intersect_aabb`, `intersect_ray`, `closest_hit` and
+/// `any_hit` use.
 pub const SAH_MAX_DEPTH: usize = 60;
 
 /// Weight of visiting a node in the cost [`build_bvh_sah`] minimizes.
