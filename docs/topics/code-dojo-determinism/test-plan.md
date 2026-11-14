@@ -391,7 +391,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::extern_crate_aliases_resolve_like_imports"
 oracle = "`extern crate std as host;` makes `host::env::var`, `use host::fs::read` and `host::time::Instant` findings under `std-env`, `std-fs` and `time-instant`; `extern crate rand;` and a renamed `rand` are `random` findings."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-031"
@@ -400,7 +400,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names"
 oracle = "`r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-032"
@@ -409,7 +409,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary"
 oracle = "`r#f64` as a type and as a path segment is reported as `float-boundary`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-033"
@@ -418,7 +418,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself"
 oracle = "`use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-034"
@@ -427,7 +427,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted"
 oracle = "An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family."
 tier = "fast"
-status = "planned"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -444,6 +444,7 @@ The current executable surface has no known failing cases.
 ## Edge Cases And Unusual Inputs
 
 Covered: `use` groups, nested groups, `self` in a group, renamed imports,
+`extern crate` renames, raw identifiers (`r#std`, `r#HashMap`, `r#f64`),
 module aliases, glob imports, leading `::`, turbofish generics, type
 positions, macro invocation paths and macro bodies, comments, waivers with
 short reasons and waivers for other rules, a banned crate reached through

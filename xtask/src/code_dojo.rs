@@ -1131,7 +1131,7 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let line = line_of(node.span());
-        let method = node.method.to_string();
+        let method = crate::nondeterminism::ident_name(&node.method);
         if !self.limits.panics_allowed
             && (method == "unwrap" || method == "expect")
             && !self.waived(line, "panic-path")
@@ -1316,7 +1316,7 @@ fn names_float(segments: &[String]) -> bool {
 }
 
 fn path_segments(path: &SynPath) -> Vec<String> {
-    path.segments.iter().map(|segment| segment.ident.to_string()).collect()
+    path.segments.iter().map(|segment| crate::nondeterminism::ident_name(&segment.ident)).collect()
 }
 
 fn is_panicking_macro(name: &str) -> bool {

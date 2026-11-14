@@ -150,6 +150,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo's nondeterminism rules resolve `extern crate` renames like imports
+  (`extern crate std as host; host::env::var(..)` is a `std-env` finding, and
+  `extern crate rand;` a `random` one) and compare identifiers without their
+  `r#` prefix, so `r#std::fs::read`, `use std::collections::r#HashMap`,
+  `r#f64`, `x.r#unwrap()` and `r#panic!` no longer get past the gate. A test
+  now fails if `self` in a `use` group is treated as a path segment. Part of
+  flyingrobots/bunny#321.
+
 * `bunny_optics::SurfaceHit::new` no longer overflows `i128` for a hit whose
   point is far outside the trace domain (for example a `hit.distance` of
   `-2^30` units set by the caller): 0.7.1 panicked there in debug builds and

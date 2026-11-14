@@ -45,7 +45,9 @@ change between Rust releases, so it must not reach a golden vector.
 The source rules read `syn` syntax trees, not text:
 
 1. Every `use` leaf is collected from the whole file, including `use` groups,
-   nested groups, `self` inside a group, and renames.
+   nested groups, `self` inside a group, and renames. An `extern crate`
+   item is a leaf too: `extern crate std as host;` binds `host` to `std`, and
+   `extern crate rand;` is itself a `random` finding.
 2. Each leaf is checked as written. A glob import is reported for every banned
    item it would bring into scope, so `use std::thread::*;` is both
    `thread-sleep` and `host-parallelism`.
@@ -56,6 +58,11 @@ The source rules read `syn` syntax trees, not text:
    banned names.
 4. Macro bodies are token streams that `syn` does not parse. Every
    `::`-separated identifier sequence inside them is checked as a path.
+
+Identifiers are compared as the compiler compares them, with any `r#` prefix
+removed: `r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`
+and `r#f64` match like their plain spellings, in paths, `use` trees, macro
+bodies, method names (`x.r#unwrap()`) and macro names (`r#panic!`).
 
 A rule is reported at most once per line. The import map is file-wide, not
 per module, so a name imported in one module also resolves in a sibling

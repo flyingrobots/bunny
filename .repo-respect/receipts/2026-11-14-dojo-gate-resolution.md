@@ -47,13 +47,23 @@ Checks run:
 All inside the rust-dev container through devrun; nothing on the host.
 rustc 1.96.0 --edition 2021 --crate-type lib on each new snippet that names only std,
 core or alloc: all 17 compile.
-cargo test --locked -p xtask evasion at the failing-evidence commit: 3 of 5 fail
-(`r#std::fs::read`, both `r#f64` forms and `host::env::var` through `extern crate std as
-host` slip through); the `self` case and the look-alikes pass, as they must on the unfixed
-gate, since the `self` case exists to kill a mutation.
+cargo test --locked -p xtask evasion at the failing-evidence commit: 3 of 5 fail. With
+`assert_rejects` made to report instead of panic, the unfixed gate misses 14 of the 16
+new forms; the two `self` forms pass, since that test exists to kill a mutation.
+Mutation, under `timeout 120`: `named_leaf` keeping `self` as a segment fails
+`self_in_a_use_group_names_the_module_itself` (exit 101); it survived every test before.
+cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
+cargo test --locked -p xtask: 83 passed.
+cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository with the fix:
+clean, no new finding on main.
+cargo run --locked -p xtask -- code-dojo --all with --history origin/main..HEAD --network
+at the final commit.
 
 Known risks:
-The fix is not in this commit; its tests fail here by design.
+Name resolution is still syntactic and file-wide: a path that reaches a banned item only
+through another crate's re-export or an inferred type is not seen; the dependency check
+covers third-party crates. The other holes of flyingrobots/bunny#321 (waivers, included
+files, sibling names, float methods) are separate pull requests.
 
 Human reviewer:
 James Ross (maintainer); review pending.
