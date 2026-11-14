@@ -230,6 +230,11 @@ impl Xorshift {
         self.0
     }
 
+    /// A value in `0..n`.
+    fn below(&mut self, n: usize) -> usize {
+        usize::try_from(self.next() % u64::try_from(n).unwrap()).unwrap()
+    }
+
     fn range(&mut self, limit: i64) -> i64 {
         (self.next() % (2 * limit.cast_unsigned() + 1)).cast_signed() - limit
     }
@@ -238,10 +243,10 @@ impl Xorshift {
 /// A convex polygon: points on a parabola in ascending order, closed by a chord,
 /// with axes permuted into 3D.
 fn convex_polygon(rng: &mut Xorshift) -> Vec<FixedVec3> {
-    let count = 3 + (rng.next() % 6) as usize;
-    let mut xs: Vec<i64> = (0..count as i64 * 3).collect();
+    let count = 3 + rng.below(6);
+    let mut xs: Vec<i64> = (0..i64::try_from(count * 3).unwrap()).collect();
     for i in (1..xs.len()).rev() {
-        xs.swap(i, (rng.next() % (i as u64 + 1)) as usize);
+        xs.swap(i, rng.below(i + 1));
     }
     xs.truncate(count);
     xs.sort_unstable();
@@ -260,7 +265,7 @@ fn convex_polygon(rng: &mut Xorshift) -> Vec<FixedVec3> {
 
 fn plane_through(rng: &mut Xorshift, poly: &[FixedVec3]) -> FixedPlane3 {
     let normal = pt(rng.range(2 * UNIT), rng.range(2 * UNIT), rng.range(2 * UNIT));
-    let anchor = poly[(rng.next() % poly.len() as u64) as usize];
+    let anchor = poly[rng.below(poly.len())];
     let base = FixedPlane3::new(normal, raw(0)).signed_distance(anchor).unwrap();
     FixedPlane3::new(normal, raw(base.raw() + rng.range(UNIT)))
 }
