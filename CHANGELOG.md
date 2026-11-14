@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `(width + height) / 2^33` of the exact image-plane point. `point_at` gives the
   point at a hit distance. Images up to 32768 pixels per side and tangents up
   to 256.0 are accepted. See the new `docs/topics/optics/` chapter and test plan.
+* Added `bunny-perf --stats` and the `trace/kernel_*` cases: per-ray counters
+  for `closest_hit` and `any_hit` (nodes, box tests, triangle-test stages,
+  divisions, tree shape, shared nodes between neighbouring rays) from a harness
+  replica of the search loop that a test checks against the shipped functions on
+  every benchmark ray, and timed replays of the box and triangle tests the
+  search makes. The performance chapter's new profile section says where the
+  time of `trace/closest_hit` goes and ranks the stage 2 options. No library
+  function changed and the core crates carry no counters.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
