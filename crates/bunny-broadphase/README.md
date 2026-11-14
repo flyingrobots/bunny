@@ -9,7 +9,11 @@ buffer is large enough for the requested operation.
 
 ## Features
 
-* Flat array-backed BVH construction into caller-owned buffers.
+* Flat array-backed BVH construction into caller-owned buffers, with two
+  builders that write the same format: `build_bvh` (quartile splits) and
+  `build_bvh_sah` (binned surface area heuristic, integer costs, stated tie
+  rules, a depth cap and no recursion). See `docs/topics/bvh-construction/` in
+  the repository.
 * Stack-bounded BVH traversal for AABB and ray queries.
 * Front-to-back closest-hit and any-hit ray traversal (`closest_hit`,
   `any_hit`) over the same trees, with a caller-supplied primitive test.

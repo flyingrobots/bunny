@@ -15,7 +15,7 @@ pub mod sweep_and_prune;
 pub mod traversal;
 pub mod utils;
 
-pub use bvh::{build_bvh, BvhNode};
+pub use bvh::{build_bvh, build_bvh_sah, BvhNode};
 pub use closest_hit::{any_hit, closest_hit, BvhView, ClosestHit};
 pub use sweep_and_prune::sweep_and_prune;
 pub use traversal::{intersect_aabb, intersect_ray, TraversalError};

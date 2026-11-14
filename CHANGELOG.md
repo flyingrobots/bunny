@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `build_bvh_sah` to `bunny-broadphase`: a binned surface-area-heuristic
+  BVH builder that writes the same buffers and node format as `build_bvh`, so
+  every traversal accepts its trees. 16 centroid bins per axis, integer `u128`
+  costs with a per-node shift that rules out overflow, stated tie rules (lower
+  axis, then lower plane; an equal split and leaf cost makes a leaf), leaves of
+  at most four primitives below a depth cap of 60, a stable partition (leaves
+  list primitives in ascending index order), no recursion and no allocation.
+  Its parameters are public constants in `bunny_broadphase::bvh`. `build_bvh`'s
+  output is unchanged, and both builders' bytes are now locked by golden
+  fingerprints. The new BVH construction chapter (`docs/topics/bvh-construction/`)
+  states both builders' contracts.
+* Added the `build` and `sah` feature groups to `bunny-perf`: build-time cases
+  for both builders (`build/bvh`, `build/bvh_sah`) and the benchmark rays traced
+  through the SAH tree (`trace/closest_hit_sah`, `trace/any_hit_sah`), with a
+  check that both trees give the same `closest_hit` and `any_hit` answers on
+  every ray. Ledger entry 5 in `docs/topics/performance/` records the
+  measurement.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs

@@ -68,7 +68,7 @@ How the comparison stays fair:
   median of each percentile across rounds and the best (lowest) p50; the speedup column and
   the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
-  `linalg`, `query`, `scene`, `trace`, …). When the base revision cannot compile a group (an API it does not
+  `linalg`, `query`, `scene`, `trace`, `build`, `sah`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
 
 The temporary worktree is removed after the build. Build outputs stay under `target/perf/`.
@@ -199,8 +199,13 @@ The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere o
 triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
 rays (a 32 by 32 grid). Where a case measures an old API against a new one, the harness
 also checks that both give the same answer on every input: `scene/closest_visitor` and
-`trace/closest_hit` must choose the same primitive on every ray. The harness runs that
-check before timing and exits with the differing ray indices if it fails.
+`trace/closest_hit` must choose the same primitive on every ray, and `trace/closest_hit`
+and `trace/any_hit` must give the same answers through the `build_bvh` tree as
+`trace/closest_hit_sah` and `trace/any_hit_sah` through the `build_bvh_sah` tree. The
+harness runs those checks before timing and exits with the differing ray indices if one
+fails. Both trees' traversal cases call the same functions, so they run the same machine
+code and differ only in the tree. The `build` and `sah` groups also time one whole build
+of the scene's tree per call (`build/bvh`, `build/bvh_sah`, into buffers allocated once).
 
 ## Optimization Ledger
 

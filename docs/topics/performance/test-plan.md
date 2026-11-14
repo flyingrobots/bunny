@@ -40,6 +40,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-004 | Cases the base revision cannot build are reported as new. | `README.md#measuring` |
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
+| PERF-REQ-007 | The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree. | `README.md#adding-a-case` |
 
 ```toml
 [[requirement]]
@@ -70,6 +71,11 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-006"
 summary = "The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-007"
+summary = "The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree."
 status = "active"
 ```
 
@@ -104,6 +110,8 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-025 | Comparability | PERF-REQ-006 | `scene/closest_visitor` and `trace/closest_hit` choose the same primitive (or both miss) on all 1 024 camera rays. | `crates/bunny-perf/src/scene.rs::tests::both_paths_choose_the_same_primitive_on_every_ray` |
 | PERF-TP-026 | Comparability | PERF-REQ-006 | The benchmark scene has 27 650 triangles. | `crates/bunny-perf/src/scene.rs::tests::the_scene_has_the_stated_size` |
 | PERF-TP-027 | Comparability | PERF-REQ-006 | More than 600 of the 1 024 rays hit the mesh, so the cases do traversal work, not only misses. | `crates/bunny-perf/src/scene.rs::tests::most_rays_hit_something` |
+| PERF-TP-028 | Comparability | PERF-REQ-007 | `closest_hit` returns the same hit and `any_hit` the same answer on all 1 024 camera rays through both trees. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray` |
+| PERF-TP-029 | Quality | PERF-REQ-007 | The SAH tree's exact SAH cost on the benchmark scene is below the quartile tree's; shapes and triangle-test counts are printed for the ledger. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -301,6 +309,24 @@ requirements = ["PERF-REQ-006"]
 evidence = "test"
 test = "crates/bunny-perf/src/scene.rs::tests::most_rays_hit_something"
 oracle = "Most benchmark rays hit the mesh."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-028"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray"
+oracle = "Both trees give the same closest_hit and any_hit answers on every benchmark ray."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-029"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree"
+oracle = "The exact SAH cost of both trees over the benchmark scene."
 tier = "fast"
 status = "implemented"
 ```

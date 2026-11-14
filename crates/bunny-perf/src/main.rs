@@ -8,7 +8,7 @@
 //! sets the number of timed batches per case (default 101).
 
 mod cases;
-#[cfg(any(feature = "scene", feature = "trace"))]
+#[cfg(any(feature = "scene", feature = "trace", feature = "build", feature = "sah"))]
 mod scene;
 mod timing;
 
@@ -29,6 +29,17 @@ fn run() -> Result<(), Box<dyn Error>> {
         let bad = scene::disagreeing_rays();
         if !bad.is_empty() {
             return Err(format!("closest-hit paths disagree on rays {bad:?}").into());
+        }
+    }
+    #[cfg(all(feature = "trace", feature = "sah"))]
+    {
+        // The SAH cases are comparable with the quartile-tree cases only if both trees give the
+        // same answers.
+        let bad = scene::sah_disagreeing_rays();
+        if !bad.is_empty() {
+            return Err(
+                format!("the SAH tree and the quartile tree disagree on rays {bad:?}").into()
+            );
         }
     }
     for case in cases::all() {
