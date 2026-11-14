@@ -1,7 +1,8 @@
 //! A surface hit shaded with an interpolated normal: `bunny-smooth-shading/1`.
 
-use bunny_linalg::FixedUnitVec3;
-use bunny_query::BarycentricNumerators;
+use bunny_linalg::{FixedUnitVec3, FixedVec3};
+use bunny_num::FixedQ32_32;
+use bunny_query::{BarycentricNumerators, TraceRay};
 
 use super::frame::ShadingFrame;
 use super::hit::SurfaceHit;
@@ -9,8 +10,9 @@ use super::light::{DirectionalLight, LightSample};
 use super::smooth_normal::smooth_normal;
 use super::wide::{dot, wide};
 
-/// The versioned name of the smooth-shaded steps: [`SmoothHit::new`], [`SmoothHit::frame`] and
-/// [`SmoothHit::light_sample`]. `bunny-diffuse-shading/1` does not change.
+/// The versioned name of the smooth-shaded steps: [`SmoothHit::new`], [`SmoothHit::frame`],
+/// [`SmoothHit::light_sample`], [`SmoothHit::is_above_surface`] and [`SmoothHit::bounce`].
+/// `bunny-diffuse-shading/1` does not change.
 pub const SMOOTH_SHADING_ID: &str = "bunny-smooth-shading/1";
 
 /// A [`SurfaceHit`] with a shading frame around the interpolated vertex normal.
@@ -72,6 +74,45 @@ impl SmoothHit {
         let Some(ray) = geometric.shadow_ray().copied() else { return geometric };
         let radiance = light.reflected_radiance(light.cosine(self.frame.normal()));
         LightSample::new(Some(ray), radiance)
+    }
+}
+
+/// The outcome of [`SmoothHit::bounce`] for a sample in the unit square.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SmoothBounce {
+    /// The bounce ray, from the start point along a direction strictly above the geometric
+    /// surface.
+    Ray(TraceRay),
+    /// The direction around the shading normal is at or below the geometric surface: no ray is
+    /// traced and the bounce contributes zero.
+    BelowSurface,
+}
+
+impl SmoothHit {
+    /// Whether `direction` points strictly to the arrival side of the exact geometric plane:
+    /// `direction . N > 0`, exact, with `N` the facing plane normal of [`Self::new`]. Each
+    /// product is below `2^32 * 2^83`, so the sum is below `2^117`.
+    #[must_use]
+    pub fn is_above_surface(&self, direction: FixedVec3) -> bool {
+        dot(wide(direction), self.hit.facing_normal()) > 0
+    }
+
+    /// The bounce for the unit-square point `sample`: the cosine-weighted direction of the
+    /// shading frame ([`ShadingFrame::cosine_direction`]); then [`SmoothBounce::Ray`] from the
+    /// surface hit's start point when [`Self::is_above_surface`] holds, and
+    /// [`SmoothBounce::BelowSurface`] when it does not. Query the ray with a minimum distance of
+    /// zero, as for [`SurfaceHit::bounce_ray`].
+    ///
+    /// Returns `None` when a coordinate of `sample` is outside `[0, 1)`, and, defensively, if
+    /// `TraceRay::new` refuses the ray (the start point is inside the trace domain and the
+    /// direction a valid trace direction, so no input is known to reach that).
+    #[must_use]
+    pub fn bounce(&self, sample: [FixedQ32_32; 2]) -> Option<SmoothBounce> {
+        let direction = self.frame.cosine_direction(sample)?;
+        if !self.is_above_surface(direction) {
+            return Some(SmoothBounce::BelowSurface);
+        }
+        TraceRay::new(self.hit.point(), direction).map(SmoothBounce::Ray)
     }
 }
 

@@ -27,7 +27,7 @@ pub use frame::ShadingFrame;
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;
-pub use smooth_hit::{SmoothHit, SMOOTH_SHADING_ID};
+pub use smooth_hit::{SmoothBounce, SmoothHit, SMOOTH_SHADING_ID};
 pub use smooth_normal::{smooth_normal, SMOOTH_NORMAL_ID};
 pub use surface::TriangleSurface;
 pub use vertex_normals::{

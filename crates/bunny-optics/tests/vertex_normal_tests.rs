@@ -19,7 +19,7 @@ use bunny_optics::{VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTE
 use bunny_query::TRACE_COORD_LIMIT_RAW;
 use wasm_bindgen_test::wasm_bindgen_test;
 
-use exact::within_unit;
+use exact::{within, Signed};
 
 const ONE: i64 = ONE_RAW;
 /// `round(0.6 * 2^32)`: the exact value is 2 576 980 377.6.
@@ -190,7 +190,7 @@ fn check_vertex(normal: Option<Raw3>, sum: [i128; 3]) -> Result<(), String> {
     if sum == [0; 3] {
         return Err(format!("{raw:?} for a zero sum"));
     }
-    if !within_unit(raw, sum, BOUND_RAW) {
+    if !within(raw, &sum.map(Signed::new), BOUND_RAW, &Signed::new(0)) {
         return Err(format!("{raw:?} is not within {BOUND_RAW} raw of the unit {sum:?}"));
     }
     Ok(())
