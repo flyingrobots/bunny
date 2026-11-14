@@ -38,7 +38,7 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `host-platform` | every other part of `std::os` (`std::os::unix::thread`, `std::os::windows::ffi`, `use std::os;`); `std::os::raw` is permitted |
 | `unclassified-std` | a path through a module or macro directly below `std`, `core` or `alloc` that the [classification](#the-std-classification) does not name |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
-| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
+| `float-boundary` | in core crates only: `f32`, `f64`, `f16`, `f128`, `c_float` and `c_double` types and the core crates' aliases of them ([scope](#scope)), float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
 
 A banned path bans everything below it: `std::fs` covers `std::fs::read` and
 `std::fs::File::open`. `std::time` and `std::thread` are not banned as
@@ -220,6 +220,37 @@ crate with `cargo tree --locked --edges normal,build --target all --no-dedupe
 | `serde-wasm-bindgen` | `wasm-serde` |
 | `tokio`, `async-std` | `thread-sleep` |
 
+Every other crate in either listing must be one the gate has reviewed
+(flyingrobots/bunny#349):
+
+- another deterministic crate, at its own `crates/<name>` directory: its code
+  is scanned;
+- a crates.io crate on `ALLOWED_REGISTRY_CRATES` in
+  `xtask/src/nondeterminism.rs`, today's whole registry graph: `sha2` and its
+  dependencies behind `bunny-mesh`'s `mesh-hash` feature (`block-buffer`,
+  `cfg-if`, `cpufeatures`, `crypto-common`, `digest`, `generic-array`,
+  `libc`, `typenum`, `version_check`).
+
+Any other path crate (a workspace member outside the deterministic set, such
+as `bunny-perf`, or a crate outside the workspace) is `unscanned-dependency`,
+and any other crate (a crates.io crate not on the list, or any crate from git
+or another registry, also with an allowed name) is `unlisted-dependency`.
+Neither has a manifest waiver: a new dependency needs a deliberate change to
+the deterministic set or the allow list. A banned crate keeps its own rule.
+
+The manifests are checked too (`xtask/src/crate_manifests.rs`). A
+deterministic crate may not have a build script (`build-script`): a
+`build.rs` that Cargo builds (no `build = false`) or any `build` key but
+`false`, inside the crate or not, since a build script runs on the host and
+can set a `cfg` or environment variable the library reads; none has one. A
+`[lib]`, `[[bin]]`, `[[test]]`, `[[bench]]` or `[[example]]` path that leaves
+the crate directory is `target-outside-crate`, because the source rules scan
+only files under `crates/<name>/`. Every workspace member must be named in
+one of the gate's lists, deterministic, generator (`bunny-wesley`) or tooling
+(`xtask`, `bunny-perf`), or it is `unclassified-crate`; `xtask`, which reads
+manifests with `toml_edit`, is tooling and outside the allow list. These
+rules have no waiver.
+
 The listing is read as a tree. Below another deterministic crate the subtree
 is skipped, because that crate's own tree reports it; a finding therefore
 names the crate whose manifest declares the path to the banned crate. The
@@ -236,6 +267,32 @@ The rules cover every Rust file, tests included, in `bunny-num`,
 `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`, `bunny-mesh`,
 `bunny-optics`, `bunny-codec` and `bunny-contract`. `float-boundary` applies
 only to the non-test files of the first seven, the core crates.
+
+A file is test code when every `mod` declaration that reaches it from a crate
+root is under `#[cfg(test)]` (or a `cfg(all(..))` that requires `test`), on
+the declaration, on an enclosing inline module, through a test parent, or as
+the file's own `#![cfg(test)]`; or when no root reaches it and it lies under
+its crate's top-level `tests/` directory. The roots are `src/lib.rs`,
+`src/main.rs`, `src/bin/`, `build.rs`, `benches/` and `examples/` (library
+code) and `tests/*.rs` (test code); a file reached both ways is library code.
+A file or directory named `tests` decides nothing: `pub mod tests;` without
+`cfg(test)` compiles `src/tests/` into the library, and its files get the
+library's rules (`float-boundary`, `panic-path`, `indexing` and the size
+limits). Module files are found as `rustc` finds them
+(`xtask/src/module_tree.rs`); a `#[path]` under `cfg_attr` is not followed,
+and the pre-commit gate reads the tree from the index. Before
+flyingrobots/bunny#348 any path with a `tests` component was test code.
+
+`float-boundary` bans the float types, not their spellings: `f16`, `f32`,
+`f64`, `f128` and the C aliases `c_float` and `c_double` under any path
+(`core::ffi`, `std::os::raw`, `libc`), names ending in `_f32` or `_f64`, and
+every name a core crate binds to a float with `type` or a renamed `use`.
+Those aliases are resolved together over all core files, to a fixed point, so
+`pub type Scalar = f32;` in `bunny-num` makes every use of `Scalar` in
+`bunny-geom` a finding unless it is waived there. The match is by name: a
+file that defines its own non-float item of the same name keeps it, and in
+any other core file a segment of that name counts as the float (an
+over-report a waiver resolves).
 
 `bunny-perf`, `xtask` and `bunny-wesley` are outside the rules: they time
 code, run Git and Cargo, and read and write files by design.
@@ -271,7 +328,9 @@ function. A
 and a float in the next function is reported.
 
 A dependency waiver is the same clause in a whole-line TOML comment, anywhere
-in the manifest of the crate the finding names, but not on a line inside a
+in the manifest of the crate the finding names (not for `unscanned-dependency`,
+`unlisted-dependency`, `build-script`, `target-outside-crate` or
+`unclassified-crate`), but not on a line inside a
 multi-line string. There are no dependency
 waivers in the repository.
 

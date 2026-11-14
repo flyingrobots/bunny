@@ -1413,6 +1413,7 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "syn 2.0.117",
+ "toml_edit",
 ]
 
 [[package]]

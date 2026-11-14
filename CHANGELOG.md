@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo's dependency check holds every crate a deterministic crate
+  depends on (normal and build edges, workspace and all features) to the
+  scanned set: another deterministic crate at its own directory, or a
+  crates.io crate on a reviewed allow list (`sha2` and its nine dependencies,
+  today's whole registry graph). Any other path crate, such as a new workspace
+  crate or `bunny-perf`, is `unscanned-dependency`, and any other crate, from
+  crates.io, git or another registry, `unlisted-dependency`; before, only 14
+  banned names were checked. Neither can be waived in a manifest. A
+  deterministic crate may no longer have a build script (`build-script`),
+  inside its directory or not (`build = "../../scripts/x.rs"` was accepted
+  and its file never scanned), nor a target path outside its directory
+  (`target-outside-crate`), and every workspace member must be a
+  deterministic, generator or tooling crate (`unclassified-crate`). Main
+  passes unchanged. Closes flyingrobots/bunny#349.
+
+* Code Dojo's `blanket-nursery` check parses the manifests as TOML
+  (`toml_edit`, already in the lockfile through `bunny-wesley`'s `toml`; the
+  lockfile gains only the edge from `xtask`), so `nursery.level = "deny"`, a
+  header with spaces around the dots, inline `clippy` and `lints` tables and
+  quoted keys are found; before, only one `nursery = ..` key per line was. It
+  reads every Rust file of a core crate and bans the group at every scope, on
+  a module, item or statement as well as the crate (`#[deny(clippy::nursery)]`
+  on a function was accepted before), and the `rustflags` of a Cargo
+  configuration in the repository. Nothing on main sets the group. Closes
+  flyingrobots/bunny#350.
+
+* Code Dojo's `float-boundary` bans the float types in core under every
+  spelling: `core::ffi::c_double` and `c_float` (also from `std::os::raw`,
+  `std::ffi` or `libc`), `f16` and `f128`, and every name a core crate binds
+  to a float with `type` or a renamed `use`, resolved across the core crates,
+  so a waiver on `pub type Scalar = f32;` no longer hides every use of
+  `Scalar`. On main this found 18 findings on uses of `Scalar` in the f32 DTO types
+  (`Vec2`, `Vec3`, `Sphere3`, `bunny_num::is_finite`) and their validation,
+  including a float comparison; they now carry waivers and no code changed.
+  Test code is decided by the module tree: a file is test code only when
+  every declaration reaching it is under `cfg(test)`, or when nothing reaches
+  it and it is under the crate's `tests/` directory. Before, any path with a
+  `tests` component was test code, so `src/tests/float.rs` compiled into the
+  library by `pub mod tests;` was not checked for floats, panics or
+  indexing. Closes flyingrobots/bunny#348.
+
 * Code Dojo closes five ways a review found to bring host access or unscanned
   code into a deterministic crate. In a `macro_rules!` transcriber a
   metavariable may no longer stand next to `::`, as a macro or method name,

@@ -17,6 +17,7 @@
 use core::fmt;
 
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
+// dojo: allow float-boundary -- imports the f32 DTO alias for Sphere3
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
 mod conversions;
@@ -81,6 +82,7 @@ pub struct Aabb3 {
     pub max: Vec3,
 }
 
+// dojo: allow float-boundary -- f32 DTO sphere; converted to FixedSphere3 at the boundary
 /// A 3D sphere.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sphere3 {

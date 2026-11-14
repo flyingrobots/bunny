@@ -685,30 +685,59 @@ const BANNED_DEPENDENCIES: &[(&str, &str)] = &[
     ("async-std", "thread-sleep"),
 ];
 
-/// Finds banned crates in `cargo tree --prefix depth --format {p} --no-dedupe` output.
+/// The crates.io crates a deterministic crate may reach, each reviewed: today's whole
+/// registry graph, `sha2` and its dependencies behind `bunny-mesh`'s `mesh-hash` feature
+/// (`cfg-if`, `cpufeatures` and `libc` select an implementation by target at build time,
+/// not by the host at run time; `version_check` is `generic-array`'s build script). A new
+/// registry dependency fails the gate until it is added here with a reason.
+pub(super) const ALLOWED_REGISTRY_CRATES: &[&str] = &[
+    "block-buffer",
+    "cfg-if",
+    "cpufeatures",
+    "crypto-common",
+    "digest",
+    "generic-array",
+    "libc",
+    "sha2",
+    "typenum",
+    "version_check",
+];
+
+/// The dependency rules no manifest waiver can lift: the deterministic set and the allow
+/// list are changed in `xtask/src/code_dojo.rs` and here, in review.
+pub(super) const UNWAIVABLE_DEPENDENCY_RULES: &[&str] =
+    &["unscanned-dependency", "unlisted-dependency"];
+
+/// Finds banned, unscanned and unlisted crates in `cargo tree --prefix depth --format {p}
+/// --no-dedupe` output.
 ///
 /// Each depth-0 line starts a deterministic crate's tree. The subtree below another
-/// crate named in `deterministic` is skipped, because that crate's own tree reports it,
-/// so a finding names the crate whose manifest declares the path to the banned crate.
+/// crate named in `deterministic` (at its own `crates/<name>` directory) is skipped,
+/// because that crate's own tree reports it, so a finding names the crate whose manifest
+/// declares the path to the crate found. Below it, every crate must be another
+/// deterministic crate or an allow-listed crates.io crate: a banned crate is reported
+/// under its rule, any other path crate (a workspace member outside the set, a crate
+/// outside the workspace) as `unscanned-dependency`, and any other crate, crates.io or
+/// another source, as `unlisted-dependency`.
 pub(super) fn dependency_findings(tree: &str, deterministic: &[&str]) -> Vec<DependencyFinding> {
     let mut findings = Vec::new();
     let mut root = None::<String>;
     let mut skip_below = None::<usize>;
-    for (depth, name) in tree.lines().filter_map(tree_entry) {
-        if depth == 0 {
-            root = Some(name.to_string());
+    for entry in tree.lines().filter_map(tree_entry) {
+        if entry.depth == 0 {
+            root = Some(entry.name.to_string());
             skip_below = None;
             continue;
         }
-        if skip_below.is_some_and(|limit| depth > limit) {
+        if skip_below.is_some_and(|limit| entry.depth > limit) {
             continue;
         }
-        skip_below = deterministic.contains(&name).then_some(depth);
-        let banned = BANNED_DEPENDENCIES.iter().find(|(banned, _)| *banned == name);
-        if let (Some(root), Some((_, rule))) = (&root, banned) {
+        let scanned = deterministic.contains(&entry.name) && entry.at_crate_dir();
+        skip_below = scanned.then_some(entry.depth);
+        if let (Some(root), Some(rule)) = (&root, entry.rule(scanned)) {
             findings.push(DependencyFinding {
                 root: root.clone(),
-                dependency: name.to_string(),
+                dependency: entry.name.to_string(),
                 rule,
             });
         }
@@ -716,12 +745,59 @@ pub(super) fn dependency_findings(tree: &str, deterministic: &[&str]) -> Vec<Dep
     findings
 }
 
-/// Splits `3serde_json v1.0.140` into its depth and crate name.
-fn tree_entry(line: &str) -> Option<(usize, &str)> {
+/// One line of the listing: its depth, the crate's name, and its source as `cargo tree`
+/// prints it (`None` for crates.io).
+struct TreeEntry<'a> {
+    depth: usize,
+    name: &'a str,
+    source: Option<&'a str>,
+}
+
+impl TreeEntry<'_> {
+    /// Whether the source is this crate's own `crates/<name>` directory.
+    fn at_crate_dir(&self) -> bool {
+        self.source.is_some_and(|source| {
+            let source = source.replace('\\', "/");
+            source.ends_with(&format!("/crates/{}", self.name))
+        })
+    }
+
+    fn is_path(&self) -> bool {
+        self.source.is_some_and(|source| !source.contains("://") && !source.starts_with("registry"))
+    }
+
+    /// The rule a crate below a deterministic crate breaks, if any.
+    fn rule(&self, scanned: bool) -> Option<&'static str> {
+        if scanned {
+            return None;
+        }
+        if let Some((_, rule)) = BANNED_DEPENDENCIES.iter().find(|(banned, _)| *banned == self.name)
+        {
+            return Some(rule);
+        }
+        if self.is_path() {
+            return Some("unscanned-dependency");
+        }
+        let listed = self.source.is_none() && ALLOWED_REGISTRY_CRATES.contains(&self.name);
+        (!listed).then_some("unlisted-dependency")
+    }
+}
+
+/// Splits `3serde_json v1.0.140`, `1bunny-num v0.7.1 (/work/crates/bunny-num)` or
+/// `2serde_derive v1.0.228 (proc-macro)` into its depth, name and source.
+fn tree_entry(line: &str) -> Option<TreeEntry<'_>> {
     let digits = line.chars().take_while(char::is_ascii_digit).count();
     let depth = line.get(..digits)?.parse().ok()?;
-    let name = line.get(digits..)?.split_whitespace().next()?;
-    Some((depth, name))
+    let rest = line.get(digits..)?;
+    let mut words = rest.splitn(3, ' ');
+    let name = words.next()?;
+    let _version = words.next()?;
+    let mut tail = words.next().unwrap_or_default().trim();
+    for marker in ["(*)", "(proc-macro)"] {
+        tail = tail.strip_suffix(marker).unwrap_or(tail).trim();
+    }
+    let source = tail.strip_prefix('(').and_then(|inner| inner.strip_suffix(')'));
+    Some(TreeEntry { depth, name, source })
 }
 
 fn path_names(path: &SynPath) -> Vec<String> {
@@ -739,7 +815,11 @@ fn line_of(span: Span) -> usize {
 #[cfg(test)]
 mod dependency_graph_tests;
 #[cfg(test)]
+mod dependency_scope_tests;
+#[cfg(test)]
 mod evasion_tests;
+#[cfg(test)]
+mod float_alias_tests;
 #[cfg(test)]
 mod host_access_tests;
 #[cfg(test)]

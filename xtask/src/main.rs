@@ -1,10 +1,13 @@
 //! Bunny workspace automation tasks.
 
 mod code_dojo;
+mod crate_manifests;
 mod feature_configs;
+mod float_aliases;
 mod generated_check;
 mod git_helpers;
 mod lint_policy;
+mod module_tree;
 mod nondeterminism;
 mod perf;
 mod perf_report;

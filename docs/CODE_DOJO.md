@@ -88,7 +88,9 @@ Outside the rules, each for a stated reason:
   regenerates them and compares the bytes.
 
 `float-boundary` keeps its older, narrower scope: core crates only, test files
-excluded. `bunny-codec` parses float text and bytes by design.
+excluded. `bunny-codec` parses float text and bytes by design. Test files are
+decided by the module tree, not by a directory name
+([scope](topics/code-dojo-determinism/README.md#scope)).
 
 ### Mapping
 
@@ -163,6 +165,24 @@ module, came from the automated review of the pull request. Every module and mac
 classification](topics/code-dojo-determinism/README.md#the-std-classification));
 `std_modules_tests.rs` probes the 245 documented names and the eight platform
 modules of `std::os` against the gate.
+
+flyingrobots/bunny#348 adds two more, seeded in
+`xtask/src/nondeterminism/float_alias_tests.rs` and
+`xtask/src/module_tree/tests.rs`:
+
+| Construction | Rules seeded | Caught before #348 | Test |
+| --- | --- | --- | --- |
+| `core::ffi::c_double` with `sqrt`, `std::os::raw::c_float`, `core::ffi::c_float::from`, an imported `c_double`, `std::ffi::c_float`, `libc::c_double`, `core::primitive::f64`, `std::primitive::f32`, `f16`, `f128`, `c_double` in a macro | `float-boundary` | 2 of 11 (the two `primitive` paths, by their `f64`/`f32` segment) | `c_float_aliases_and_unstable_floats_are_float_boundary` |
+| uses of a waived float alias: `type Real = f64`, an alias of an alias in either order, a `c_double` alias, a renamed float import, in a macro, in an inline module; and `bunny-num`'s `Scalar` used in `bunny-geom` | `float-boundary` | 0 of 8 | `uses_of_a_float_alias_are_float_boundary`, `a_float_alias_of_another_core_crate_is_float_boundary` |
+| `src/tests/float.rs` compiled into the library by `pub mod tests;` | `float-boundary`, `indexing` | 0 of 1 (any path with a `tests` component was test code) | `the_issue_form_is_reported_under_the_core_rules` |
+
+On main the alias rule found 18 findings on 15 lines: `bunny_num::is_finite`, which takes the
+f32 DTO alias `Scalar`, and the uses of `Scalar` in `bunny-linalg`'s `Vec2`
+and `Vec3` and `bunny-geom`'s `Sphere3` and its validation, including a float
+comparison in `validate_sphere3`. All are the documented f32 DTO boundary and
+now carry waivers; no code changed. The module tree changed no file's
+category on main: the two test modules inside `src/` are declared under
+`cfg(test)`.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14
@@ -196,6 +216,9 @@ Where the names differ:
 The source rules read syntax and each file's own imports. After
 flyingrobots/bunny#321 these remain outside them:
 
+- A float alias declared outside the core crates (no core crate depends on
+  one), and a name shared by a float alias and an unrelated item of another
+  core crate, which over-reports.
 - A float whose type is only inferred, with no float type, literal or
   `_f32`/`_f64` name on the way (`text.parse()` passed to a float parameter,
   `x.into()` to an `f64`); pinned as a known gap by
@@ -242,14 +265,30 @@ inside macro bodies. They still differ:
   that. Both ban `available_parallelism` and sleeping.
 - **How floats are caught.** Lumen bans the `f32` and `f64` types through
   Clippy and denies `clippy::float_arithmetic`, which also sees arithmetic on
-  an inferred float. Bunny's `float-boundary` is syntactic: float types,
-  literals, paths and `_f32`/`_f64` names, with waivers for boundary
-  conversions; an inferred float with no float name is not seen.
+  an inferred float. Bunny's `float-boundary` is syntactic: float types under
+  every spelling (`c_double`, `f16`, the core crates' aliases), literals,
+  paths and `_f32`/`_f64` names, with waivers for boundary conversions; an
+  inferred float with no float name is not seen. flyingrobots/lumen#156
+  reports that `core::ffi::c_double` passes both of Lumen's layers at its
+  main.
+- **Test files.** Both gates decide test code by the module tree (Lumen
+  since flyingrobots/lumen#124, Bunny since flyingrobots/bunny#348) with the
+  same rule: every declaration under `cfg(test)`, or unreached under the
+  crate's `tests/`.
 - **Mechanism.** Lumen's first layer is Clippy's `disallowed-types`,
   `disallowed-methods` and `disallowed-macros`, which resolve paths exactly,
   re-exports included; Bunny reads syntax with `syn` and resolves through
   the file's own imports. Lumen's dependency rule is `cargo-deny` allowing no
-  registry at all; Bunny lists banned crates over `cargo tree`.
+  registry at all; Bunny allows a reviewed list of crates.io crates over
+  `cargo tree` (Bunny's core reaches `sha2`; Lumen has no crates.io crate).
+- **Crate scope (since flyingrobots/bunny#349).** Both gates refuse a build
+  script in a deterministic crate and a path crate the scan does not read.
+  Lumen (flyingrobots/lumen#166, open) derives its deterministic set from
+  `cargo metadata`, so a workspace member the library depends on becomes
+  deterministic; Bunny keeps an explicit list and fails a dependency on a
+  member outside it (`unscanned-dependency`) and any member no list names
+  (`unclassified-crate`). Lumen also refuses procedural macros; Bunny's allow
+  list holds none, so a new one fails as `unlisted-dependency`.
 - **Bunny only.** `include-source`, `include-data`, `host-input`, the
   platform modules of `std::os`, `std::path::absolute`, `std::io::pipe`, and
   doc tests.
@@ -344,11 +383,19 @@ graph: `rand`, `getrandom`, `fastrand` (`random`); `js-sys`, `wasm-bindgen`,
 `web-sys` (`host-callback`); `reqwest`, `ureq` (`network`); `hashbrown`,
 `rustc-hash` (`unordered-container`); `serde_json` (`json-serialization`);
 `serde-wasm-bindgen` (`wasm-serde`); `tokio`, `async-std` (`thread-sleep`).
-`--all-features` finds a banned crate behind an optional dependency that no
-workspace crate enables, which a downstream crate could still turn on. Build
-edges find a banned crate a build script could use; a build script's own
-source (`build.rs`) is a Rust file of the crate and is read by the source
-rules. No deterministic crate has a build script or build-dependencies today.
+Every other crate in the graph must be another deterministic crate at its own
+directory or a crates.io crate on the reviewed allow list (`sha2` and its nine
+dependencies today); any other path crate is `unscanned-dependency` and any
+other crate `unlisted-dependency`, with no waiver (flyingrobots/bunny#349,
+which replaced a 14-name blocklist as the only rule). The manifest check bans
+build scripts in deterministic crates (`build-script`), target paths outside
+the crate (`target-outside-crate`) and workspace members no list names
+(`unclassified-crate`). `--all-features` finds a banned crate behind an
+optional dependency that no workspace crate enables, which a downstream crate
+could still turn on. Build
+edges find a banned crate a build script could use. No deterministic crate
+has a build script or build-dependencies today, and a build script is now a
+finding in itself.
 A finding names the deterministic crate whose manifest declares the path to
 the banned crate and the feature set that found it first; a crate reached
 through another deterministic crate is reported against that crate only.
@@ -385,8 +432,10 @@ check is `xtask/src/feature_configs.rs`.
 
 The `blanket-nursery` check (`xtask/src/lint_policy.rs`) holds the core crates
 to Rule 10 of `CODE_STANDARDS.md`: it fails the full gate and the pre-commit
-gate on any `deny`, `warn` or `forbid` of `clippy::nursery` as a group in a
-core crate's `src/lib.rs`, its manifest or the workspace manifest, naming the
+gate on any `deny`, `warn` or `forbid` of `clippy::nursery` as a group, at
+any scope, in a Rust file of a core crate, in its manifest or the workspace
+manifest (parsed as TOML, so every spelling of the table counts), or in the
+`rustflags` of a Cargo configuration at the root or in the crate, naming the
 file and line. It runs right after the Rust source rules and has no waiver.
 The chapter is [`topics/lint-policy/`](topics/lint-policy/).
 
