@@ -3,7 +3,7 @@
 
 #![allow(dead_code)]
 
-use bunny_broadphase::bvh::{SAH_INTERSECTION_COST, SAH_MAX_DEPTH, SAH_TRAVERSAL_COST};
+use bunny_broadphase::bvh::{SAH_INTERSECTION_COST, SAH_TRAVERSAL_COST};
 use bunny_broadphase::BvhNode;
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
@@ -104,12 +104,21 @@ pub(crate) struct Shape {
     pub(crate) largest_leaf: usize,
 }
 
-/// Checks the tree's structure and returns its shape. Panics, naming the node, when:
-/// a node is unreachable or reached twice; an interior node's children are out of range;
-/// a leaf's range is out of the index buffer; a primitive is missing or appears twice; a
-/// node's bounds are not exactly the union of its primitives' boxes (so they contain every
-/// child and primitive); the tree is deeper than `SAH_MAX_DEPTH`; or, with `ascending`, a
-/// leaf's indices are not ascending.
+/// The deepest tree `build_bvh_sah` may build (BVH-REQ-010), written out rather than taken
+/// from `SAH_MAX_DEPTH` so that changing the constant fails the tests. The traversals' stacks
+/// hold 64 entries and a tree of depth `d` needs at most `d + 1` of them (TRACE-REQ-033): 60
+/// needs 61.
+pub(crate) const SAH_DEPTH_BOUND: usize = 60;
+
+/// Entries in each traversal's fixed stack.
+pub(crate) const TRAVERSAL_STACK_ENTRIES: usize = 64;
+
+/// Checks the tree's structure and returns its shape, whose `max_depth` the caller judges.
+/// Panics, naming the node, when: a node is unreachable or reached twice; an interior node's
+/// children are out of range; a leaf's range is out of the index buffer; a primitive is
+/// missing or appears twice; a node's bounds are not exactly the union of its primitives'
+/// boxes (so they contain every child and primitive); or, with `ascending`, a leaf's indices
+/// are not ascending.
 pub(crate) fn check_structure(tree: &Tree, primitives: &[FixedAabb3], ascending: bool) -> Shape {
     let count = primitives.len();
     assert_eq!(tree.prim_indices.len(), count);
@@ -133,6 +142,19 @@ pub(crate) fn check_structure(tree: &Tree, primitives: &[FixedAabb3], ascending:
     walk.shape
 }
 
+/// [`check_structure`] for a `build_bvh_sah` tree: leaves ascending, and no node deeper than
+/// [`SAH_DEPTH_BOUND`], so the tree needs at most 61 of the 64 traversal stack entries.
+pub(crate) fn check_sah_structure(tree: &Tree, primitives: &[FixedAabb3]) -> Shape {
+    let shape = check_structure(tree, primitives, true);
+    assert!(shape.max_depth <= SAH_DEPTH_BOUND, "depth {} above 60", shape.max_depth);
+    assert!(
+        shape.max_depth < TRAVERSAL_STACK_ENTRIES,
+        "depth {} needs more stack",
+        shape.max_depth
+    );
+    shape
+}
+
 struct Walk<'a> {
     tree: &'a Tree,
     primitives: &'a [FixedAabb3],
@@ -147,7 +169,6 @@ impl Walk<'_> {
         let tree = self.tree;
         assert!(index < tree.nodes.len(), "node {index} out of range");
         assert!(!self.reached[index], "node {index} reached twice");
-        assert!(depth <= SAH_MAX_DEPTH, "node {index} at depth {depth}");
         self.reached[index] = true;
         self.shape.max_depth = self.shape.max_depth.max(depth);
         let node = tree.nodes[index];

@@ -31,7 +31,8 @@ fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32]
 /// Traverses the BVH to find primitives that overlap with a query AABB.
 ///
 /// # Errors
-/// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
+/// Returns `TraversalError::StackOverflow` if the search needs more than its 64 stack
+/// entries, which a tree of depth at most 63 (the root at depth 0) never does.
 /// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
 /// if the provided BVH buffers are structurally malformed. A buffer that is not a tree (a
 /// child index naming an ancestor, or a subtree reached twice) is `InvalidNodeIndex` once
@@ -51,7 +52,8 @@ where
 /// Traverses the BVH to find primitives intersected by a ray.
 ///
 /// # Errors
-/// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
+/// Returns `TraversalError::StackOverflow` if the search needs more than its 64 stack
+/// entries, which a tree of depth at most 63 (the root at depth 0) never does.
 /// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
 /// if the provided BVH buffers are structurally malformed. A buffer that is not a tree (a
 /// child index naming an ancestor, or a subtree reached twice) is `InvalidNodeIndex` once

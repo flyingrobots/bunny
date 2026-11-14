@@ -19,6 +19,13 @@ pub struct BvhNode {
 
 /// Builds a flat BVH in-place into the provided node and primitive index buffers.
 ///
+/// The tree has no depth cap. For some inputs, including inputs entirely inside the trace
+/// domain, it is deeper than 63 (the root is depth 0), the deepest tree every traversal
+/// holds; a traversal of such a tree returns its complete answer or
+/// `TraversalError::StackOverflow`, never a different answer. For ray tracing, prefer
+/// [`build_bvh_sah`], whose trees are at most [`SAH_MAX_DEPTH`] deep. See
+/// `docs/topics/bvh-construction/README.md#depth`.
+///
 /// Returns the number of nodes actually used, or `None` if buffers are too small.
 #[must_use]
 pub fn build_bvh(
@@ -38,9 +45,10 @@ pub const SAH_MAX_LEAF_SIZE: usize = 4;
 
 /// Deepest level [`build_bvh_sah`] creates (the root is level 0).
 ///
-/// A node at this depth is a leaf whatever its size. A tree this deep needs at most 61
-/// entries of the 64-entry stack that `intersect_aabb`, `intersect_ray`, `closest_hit` and
-/// `any_hit` use.
+/// A node at this depth is a leaf whatever its size (a capped leaf, the only leaf that can
+/// hold more than [`SAH_MAX_LEAF_SIZE`] primitives). A tree this deep needs at most 61
+/// entries of the 64-entry stack that `intersect_aabb`, `intersect_ray`, `closest_hit`,
+/// `any_hit` and the compact searches use, which hold every tree of depth at most 63.
 pub const SAH_MAX_DEPTH: usize = 60;
 
 /// Weight of visiting a node in the cost [`build_bvh_sah`] minimizes.
