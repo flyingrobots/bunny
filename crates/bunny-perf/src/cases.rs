@@ -8,7 +8,7 @@ use std::hint::black_box;
 
 #[cfg(feature = "query")]
 use bunny_geom::FixedSphere3;
-#[cfg(any(feature = "query", feature = "prepared"))]
+#[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
@@ -18,7 +18,9 @@ use bunny_num::FixedQ32_32;
 const BATCH: usize = 1024;
 const PERF_SEED: u64 = 0xB002_9E2F_0000_0001;
 
-/// A named kernel; `run` makes `calls` calls and returns a checksum so the work is kept.
+/// A named kernel; `run` makes `calls` calls and returns a checksum. Each call's whole result
+/// passes through `black_box` before the checksum reads part of it, so the optimizer cannot drop
+/// work whose output the checksum ignores (such as the y and z divisions of `normalize`).
 pub(crate) struct Case {
     pub(crate) name: &'static str,
     pub(crate) calls: usize,
@@ -36,6 +38,10 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(query_cases());
     #[cfg(feature = "prepared")]
     cases.extend(prepared_cases());
+    #[cfg(feature = "trace")]
+    cases.extend(trace_cases());
+    #[cfg(feature = "angle")]
+    cases.extend(angle_cases());
     cases
 }
 
@@ -112,7 +118,7 @@ fn linalg_cases() -> Vec<Case> {
         case("linalg/normalize", move || {
             for_normalize
                 .iter()
-                .map(|&v| black_box(v).normalize().map_or(0, |n| n.x.raw()))
+                .map(|&v| black_box(black_box(v).normalize()).map_or(0, |n| n.x.raw()))
                 .fold(0, i64::wrapping_add)
         }),
     ]
@@ -131,37 +137,39 @@ fn query_cases() -> Vec<Case> {
             origins_and_directions
                 .iter()
                 .map(|&(o, d)| {
-                    FixedRay3::try_new(black_box(o), d)
+                    black_box(FixedRay3::try_new(black_box(o), d))
                         .map_or(0, |r| r.direction.into_inner().x.raw())
                 })
                 .fold(0, i64::wrapping_add)
         }),
         case("query/ray_sphere_hit", move || {
             sum_hits(&sphere_rays, |r| {
-                bunny_query::ray_intersects_sphere(r, &unit_sphere()).map(|(p, _)| p.x.raw())
+                black_box(bunny_query::ray_intersects_sphere(r, &unit_sphere()))
+                    .map(|(p, _)| p.x.raw())
             })
         }),
         case("query/ray_sphere_miss", move || {
             sum_hits(&away, |r| {
-                bunny_query::ray_intersects_sphere(r, &unit_sphere()).map(|(p, _)| p.x.raw())
+                black_box(bunny_query::ray_intersects_sphere(r, &unit_sphere()))
+                    .map(|(p, _)| p.x.raw())
             })
         }),
         case("query/ray_aabb", move || {
             sum_hits(&aabb_rays, |r| {
-                bunny_query::ray_intersects_aabb(r, &unit_box()).map(|(t, _)| t.raw())
+                black_box(bunny_query::ray_intersects_aabb(r, &unit_box())).map(|(t, _)| t.raw())
             })
         }),
         case("query/ray_triangle", move || {
             let [a, b, c] = triangle();
             sum_hits(&triangle_rays, |r| {
-                bunny_query::ray_intersects_triangle(r, a, b, c).map(|p| p.x.raw())
+                black_box(bunny_query::ray_intersects_triangle(r, a, b, c)).map(|p| p.x.raw())
             })
         }),
     ]
 }
 
 /// A ray from `origin` aimed at `target`, or `None` when they coincide.
-#[cfg(any(feature = "query", feature = "prepared"))]
+#[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
 fn ray_toward(origin: FixedVec3, target: FixedVec3) -> Option<FixedRay3> {
     FixedRay3::try_new(origin, target - origin).ok()
 }
@@ -186,7 +194,7 @@ fn unit_sphere() -> FixedSphere3 {
     )
 }
 
-#[cfg(any(feature = "query", feature = "prepared"))]
+#[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
 fn unit_box() -> FixedAabb3 {
     let one = FixedQ32_32::ONE;
     FixedAabb3::new(FixedVec3::new(-one, -one, -one), FixedVec3::new(one, one, one))
@@ -238,6 +246,82 @@ fn prepared_cases() -> Vec<Case> {
                 .map(|r| {
                     ray_intersects_aabb_prepared(black_box(r), &unit_box())
                         .map_or(0, |(t, _)| t.raw())
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+    ]
+}
+
+#[cfg(feature = "angle")]
+fn angle_cases() -> Vec<Case> {
+    use bunny_num::FixedAngle;
+
+    let mut seeds = Seeds(PERF_SEED ^ 0xA461);
+    let angles = seeds.batch(|s| FixedAngle::from_raw(s.next()));
+    let radians = seeds.batch(|s| s.fixed(100));
+    // The same angles as f64 radians: a reference point for hardware-assisted float trig.
+    #[allow(clippy::cast_precision_loss)]
+    let float_angles: Vec<f64> = angles
+        .iter()
+        .map(|a| a.raw() as f64 / 18_446_744_073_709_551_616.0 * std::f64::consts::TAU)
+        .collect();
+    vec![
+        case("angle/sin_cos", move || {
+            angles
+                .iter()
+                .map(|&a| {
+                    let (sin, cos) = black_box(black_box(a).sin_cos());
+                    sin.raw() ^ cos.raw()
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+        case("angle/from_radians", move || {
+            radians
+                .iter()
+                .map(|&r| black_box(FixedAngle::from_radians(black_box(r))).raw().cast_signed())
+                .fold(0, i64::wrapping_add)
+        }),
+        #[allow(clippy::cast_possible_truncation)]
+        case("angle/f64_sin_cos_reference", move || {
+            float_angles
+                .iter()
+                .map(|&a| {
+                    let (sin, cos) = black_box(black_box(a).sin_cos());
+                    (sin * 4_294_967_296.0) as i64 ^ (cos * 4_294_967_296.0) as i64
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+    ]
+}
+
+/// The conservative trace-kernel box test on the same rays and box as `query/ray_aabb` and
+/// `prepared/ray_aabb`, so the three compare directly.
+#[cfg(feature = "trace")]
+fn trace_cases() -> Vec<Case> {
+    use bunny_query::TraceRay;
+
+    let mut seeds = Seeds(PERF_SEED ^ 0x0E77);
+    let _ = seeds.batch(|s| (s.vec3(10), s.vec3(10)));
+    let rays = seeds.batch(|s| ray_toward(s.vec3(10), s.vec3(1)));
+    let prepared: Vec<Option<TraceRay>> =
+        rays.iter().map(|r| r.as_ref().and_then(TraceRay::from_ray)).collect();
+    let t_max = FixedQ32_32::from_raw(100 << 32);
+    vec![
+        case("trace/ray_prepare", move || {
+            rays.iter()
+                .flatten()
+                .map(|r| {
+                    black_box(TraceRay::from_ray(black_box(r))).map_or(0, |t| t.origin().x.raw())
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+        case("trace/box_entry", move || {
+            prepared
+                .iter()
+                .flatten()
+                .map(|r| {
+                    black_box(black_box(r).box_entry(&unit_box(), t_max))
+                        .map_or(0, FixedQ32_32::raw)
                 })
                 .fold(0, i64::wrapping_add)
         }),

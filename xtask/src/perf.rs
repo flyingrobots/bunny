@@ -197,6 +197,9 @@ fn build_harness(
                 &features.join(","),
             ])
             .args(options.target.iter().flat_map(|target| ["--target", target.as_str()]))
+            // An inherited CARGO_TARGET_DIR would send both sides' builds to one directory.
+            .arg("--target-dir")
+            .arg(harness.join("target"))
             .status()?;
         Ok(status.success())
     };
@@ -260,10 +263,16 @@ fn harness_manifest(tree: &Path, groups: &[String]) -> String {
     }
     manifest.push_str("\n[dependencies]\n");
     for name in BASE_CRATES {
-        let path = tree.join("crates").join(name);
-        let _ = writeln!(manifest, "{name} = {{ path = {:?} }}", path.display().to_string());
+        let path = toml_path(&tree.join("crates").join(name));
+        let _ = writeln!(manifest, "{name} = {{ path = \"{path}\" }}");
     }
     manifest
+}
+
+/// A path as the body of a TOML basic string. Forward slashes work on every platform Cargo
+/// supports, so Windows backslashes need no escaping; quotes are escaped.
+fn toml_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "/").replace('"', "\\\"")
 }
 
 fn run_interleaved(
@@ -317,6 +326,9 @@ fn check_threshold(
     rows: &[crate::perf_report::Row],
     max_regression: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
+    if rows.iter().all(|row| row.base.is_none() || row.head.is_none()) {
+        return Err("no case was measured on both sides; check --filter".into());
+    }
     let Some(limit) = max_regression else {
         return Ok(());
     };
@@ -326,9 +338,9 @@ fn check_threshold(
     }
     let names: Vec<String> = slow
         .iter()
-        .map(|row| format!("{} ({:+.1}%)", row.case, row.change_percent().unwrap_or_default()))
+        .map(|row| format!("{} ({:+.1}%)", row.case, row.best_change_percent().unwrap_or_default()))
         .collect();
-    Err(format!("p50 regressed past {limit}%: {}", names.join(", ")).into())
+    Err(format!("best p50 regressed past {limit}%: {}", names.join(", ")).into())
 }
 
 #[cfg(test)]
@@ -347,6 +359,7 @@ mod tests {
     #[test]
     fn harness_manifest_points_at_the_given_crates() {
         let manifest = harness_manifest(Path::new("/tmp/base"), &["num".to_owned()]);
+        // Built with Path::join, so this also holds on Windows, where join adds backslashes.
         assert!(manifest.contains("num = []\n"));
         assert!(manifest.contains("bunny-num = { path = \"/tmp/base/crates/bunny-num\" }"));
         assert!(manifest.contains("[workspace]"));
@@ -387,5 +400,46 @@ mod tests {
         assert_eq!(binary_name(Some("x86_64-pc-windows-msvc")), "bunny-perf.exe");
         assert_eq!(binary_name(Some("aarch64-unknown-linux-gnu")), "bunny-perf");
         assert_eq!(binary_name(None), format!("bunny-perf{}", std::env::consts::EXE_SUFFIX));
+    }
+
+    #[test]
+    fn toml_paths_use_forward_slashes_and_escape_quotes() {
+        assert_eq!(
+            toml_path(Path::new(r"D:\a\bunny\crates\bunny-num")),
+            "D:/a/bunny/crates/bunny-num"
+        );
+        assert_eq!(toml_path(Path::new("/tmp/odd\"name/é")), "/tmp/odd\\\"name/é");
+    }
+
+    fn runs(case: &str, p50s: &[f64]) -> crate::perf_report::Runs {
+        let timings = p50s
+            .iter()
+            .map(|&p50| crate::perf_report::Timing { p50, p95: p50, p99: p50 })
+            .collect();
+        crate::perf_report::Runs::from([(case.to_owned(), timings)])
+    }
+
+    #[test]
+    fn the_gate_refuses_a_run_that_measured_nothing() {
+        let rows = crate::perf_report::compare(
+            &crate::perf_report::Runs::new(),
+            &crate::perf_report::Runs::new(),
+        );
+        let err = check_threshold(&rows, Some(20.0)).expect_err("nothing measured");
+        assert!(err.to_string().contains("no case was measured"), "{err}");
+        let only_new =
+            crate::perf_report::compare(&crate::perf_report::Runs::new(), &runs("a", &[1.0]));
+        assert!(check_threshold(&only_new, None).is_err());
+    }
+
+    #[test]
+    fn the_gate_message_reports_the_best_p50_change_it_tested() {
+        // Median change is -35 %, best change +30 %: the gate fails on the best, and says so.
+        let rows = crate::perf_report::compare(
+            &runs("a", &[100.0, 200.0, 200.0]),
+            &runs("a", &[130.0, 130.0, 130.0]),
+        );
+        let err = check_threshold(&rows, Some(20.0)).expect_err("regressed");
+        assert!(err.to_string().contains("a (+30.0%)"), "{err}");
     }
 }

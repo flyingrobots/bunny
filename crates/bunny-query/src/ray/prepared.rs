@@ -3,7 +3,7 @@
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_num::{FixedDivisor, FixedQ32_32};
 
-use super::{axis_contains_origin, AxisBounds, RayInterval};
+use super::{aabb_wide, AxisBounds, RayInterval, SlabStop};
 
 /// A ray whose direction is prepared for many box tests.
 ///
@@ -36,31 +36,50 @@ impl PreparedRay3 {
 
 /// [`ray_intersects_aabb`] for a prepared ray: identical results, bit for bit, with no
 /// division per box.
+///
+/// When a slab distance or coordinate difference does not fit Q32.32 the hit is decided by the
+/// same exact wide path as [`ray_intersects_aabb`], so the two agree on every input.
 #[must_use]
 pub fn ray_intersects_aabb_prepared(
     prepared: &PreparedRay3,
     aabb: &FixedAabb3,
 ) -> Option<(FixedQ32_32, FixedQ32_32)> {
-    let (origin, dir) = (prepared.ray.origin, prepared.ray.direction.into_inner());
+    match prepared_slab_interval(prepared, aabb) {
+        Ok(interval) => interval.hit(),
+        Err(SlabStop::Miss) => None,
+        Err(SlabStop::Overflow) => aabb_wide::exact_slab_hit(&prepared.ray, aabb),
+    }
+}
+
+fn prepared_slab_interval(
+    prepared: &PreparedRay3,
+    aabb: &FixedAabb3,
+) -> Result<RayInterval, SlabStop> {
     let mut interval = RayInterval::unbounded();
-    interval
-        .update_prepared(AxisBounds::new(origin.x, dir.x, aabb.min.x, aabb.max.x), prepared.x)?;
-    interval
-        .update_prepared(AxisBounds::new(origin.y, dir.y, aabb.min.y, aabb.max.y), prepared.y)?;
-    interval
-        .update_prepared(AxisBounds::new(origin.z, dir.z, aabb.min.z, aabb.max.z), prepared.z)?;
-    (!interval.is_miss()).then_some((interval.enter, interval.exit))
+    let divisors = [prepared.x, prepared.y, prepared.z];
+    for (axis, divisor) in AxisBounds::of(&prepared.ray, aabb).into_iter().zip(divisors) {
+        interval.update_prepared(axis, divisor)?;
+    }
+    Ok(interval)
 }
 
 impl RayInterval {
     /// `update` with the direction's division prepared: the same results, bit for bit.
-    fn update_prepared(&mut self, axis: AxisBounds, divisor: Option<FixedDivisor>) -> Option<()> {
+    fn update_prepared(
+        &mut self,
+        axis: AxisBounds,
+        divisor: Option<FixedDivisor>,
+    ) -> Result<(), SlabStop> {
         let Some(divisor) = divisor else {
-            return axis_contains_origin(axis.origin, axis.min_bound, axis.max_bound);
+            return if axis.contains_origin() { Ok(()) } else { Err(SlabStop::Miss) };
         };
-        let t0 = divisor.checked_div(axis.min_bound.checked_sub(axis.origin)?)?;
-        let t1 = divisor.checked_div(axis.max_bound.checked_sub(axis.origin)?)?;
-        self.include(t0, t1);
-        Some(())
+        let distance = |bound: FixedQ32_32| {
+            bound
+                .checked_sub(axis.origin)
+                .and_then(|delta| divisor.checked_div(delta))
+                .ok_or(SlabStop::Overflow)
+        };
+        self.include(distance(axis.min_bound)?, distance(axis.max_bound)?);
+        Ok(())
     }
 }

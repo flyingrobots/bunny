@@ -14,13 +14,15 @@ path = "src/main.rs"
 workspace = true
 
 [features]
-default = ["num", "linalg", "query", "prepared"]
+default = ["num", "linalg", "query", "angle", "prepared", "trace"]
 # Each group compiles only against the APIs it times, so `cargo xtask perf --base <rev>` can
 # build the same harness against an older Bunny that lacks a newer group.
 num = []
 linalg = []
 query = []
 prepared = []
+trace = []
+angle = []
 
 [dependencies]
 bunny-geom = { path = "../bunny-geom", version = "0.6.0" }

@@ -22,8 +22,11 @@ This plan covers `FixedMat2`, `FixedMat3`, `FixedMat4`, `FixedAffine2`, and
 - determinant and inverse behavior;
 - singular and overflowing input handling.
 
-Normal, bounds, projection, and viewport semantics are out of scope until later
-roadmap slices expose those APIs.
+Normal, bounds, and unprojection semantics are out of scope (viewport mapping
+is covered by the coordinate-law test plan) until later
+roadmap slices expose those APIs. The projection builders (`try_orthographic`,
+`try_perspective`, `ProjectionError`) and the look-at builder
+(`try_look_at`, `LookAtError`) are in scope.
 
 ## Test Goals
 
@@ -56,10 +59,15 @@ formatting.
 | MT-REQ-004 | Multiplication APIs return None when checked Q32.32 arithmetic overflows. | `README.md#multiplication` |
 | MT-REQ-005 | Identity and transpose are stable for 2x2, 3x3, and 4x4 matrices. | `README.md#identity-and-transpose` |
 | MT-REQ-006 | Determinant and inverse APIs return exact values when representable and None for singular or overflowing cases. | `README.md#determinant-and-inverse` |
-| MT-REQ-007 | FixedMat4 does not yet claim affine transform, projection, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
+| MT-REQ-007 | FixedMat4 does not claim affine transform, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
 | MT-REQ-008 | Affine point transforms apply translation while affine vector transforms do not. | `README.md#affine-transforms` |
 | MT-REQ-009 | Affine composition is right-to-left for column-vector semantics. | `README.md#affine-transforms` |
 | MT-REQ-010 | Affine inverse APIs return exact values when representable and None for singular or overflowing cases. | `README.md#affine-transforms` |
+| MT-REQ-011 | Projection builders produce `clip_from_view` matrices with the documented entries and NDC depth range, using checked Q32.32 arithmetic. | `README.md#projection-matrices` |
+| MT-REQ-012 | Projection builders return typed errors for non-positive extents, invalid near, `near >= far`, and overflow. | `README.md#projection-matrices` |
+| MT-REQ-013 | `FixedMat4::try_look_at` builds a `view_from_world` matrix with rows right, true up, and back (negated forward) plus the checked translation `-(row . eye)`, right-handed with the camera looking down `-Z`, per the coordinate law. | `README.md#look-at-view-matrix` |
+| MT-REQ-014 | `try_look_at` returns typed errors for coincident eye and target, a zero or parallel up vector, and overflow, and never panics. | `README.md#look-at-view-matrix` |
+| MT-REQ-015 | The basis rows are orthonormal only within a stated rounding bound: each length within 2 raw units of one and each pairwise dot product within 2 raw units of zero. | `README.md#look-at-view-matrix` |
 
 ```toml
 [[requirement]]
@@ -94,7 +102,7 @@ status = "active"
 
 [[requirement]]
 id = "MT-REQ-007"
-summary = "FixedMat4 does not yet claim affine transform, projection, normal, or bounds propagation semantics."
+summary = "FixedMat4 does not claim affine transform, normal, or bounds propagation semantics."
 status = "active"
 
 [[requirement]]
@@ -110,6 +118,31 @@ status = "active"
 [[requirement]]
 id = "MT-REQ-010"
 summary = "Affine inverse APIs return exact values when representable and None for singular or overflowing cases."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-011"
+summary = "Projection builders produce clip_from_view matrices with the documented entries and NDC depth range, using checked Q32.32 arithmetic."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-012"
+summary = "Projection builders return typed errors for non-positive extents, invalid near, near >= far, and overflow."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-013"
+summary = "FixedMat4::try_look_at builds a view_from_world matrix with rows right, true up, and back (negated forward) plus the checked translation -(row . eye), right-handed with the camera looking down -Z, per the coordinate law."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-014"
+summary = "try_look_at returns typed errors for coincident eye and target, a zero or parallel up vector, and overflow, and never panics."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-015"
+summary = "The basis rows are orthonormal only within a stated rounding bound: each length within 2 raw units of one and each pairwise dot product within 2 raw units of zero."
 status = "active"
 ```
 
@@ -151,6 +184,21 @@ and regeneration policy.
 | MT-TP-012 | 2x2 inverse boundary regression | MT-REQ-006 | Minimum raw off-diagonal is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_012_fixed_mat2_inverse_divides_min_off_diagonal_before_negating` |
 | MT-TP-013 | 3x3 inverse boundary regression | MT-REQ-006 | Minimum raw negative cofactor is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_013_fixed_mat3_inverse_divides_min_cofactor_before_negating` |
 | MT-TP-014 | 4x4 inverse boundary regression | MT-REQ-006 | Minimum raw negative cofactor is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_014_fixed_mat4_inverse_divides_min_cofactor_before_negating` |
+| MT-TP-015 | Orthographic golden rows | MT-REQ-011 | Exact raw rows for half extents 2 x 1, near 1, far 3, and for near 0. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_015_orthographic_matrix_has_exact_golden_rows` |
+| MT-TP-016 | Orthographic frustum corners | MT-REQ-011 | Exact raw NDC for near corners, far corners, and mid depth. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_016_orthographic_frustum_corners_map_to_exact_ndc` |
+| MT-TP-017 | Perspective golden rows | MT-REQ-011 | Exact raw rows for tan 1, aspect 2 and for aspect below 1. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_017_perspective_matrix_has_exact_golden_rows` |
+| MT-TP-018 | Perspective frustum corners | MT-REQ-011 | Exact raw NDC for near corners, far corners, nonlinear mid depth, and aspect below 1. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_018_perspective_frustum_corners_map_to_exact_ndc` |
+| MT-TP-019 | Orthographic errors | MT-REQ-012 | Each invalid parameter class returns its named ProjectionError; near 0 stays valid. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_019_orthographic_rejects_invalid_parameters` |
+| MT-TP-020 | Perspective errors | MT-REQ-012 | Each invalid class including far * near overflow returns its named ProjectionError; the boundary just inside succeeds. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_020_perspective_rejects_invalid_parameters` |
+| MT-TP-021 | Error messages | MT-REQ-012 | Exact Display strings. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_021_projection_errors_have_stable_messages` |
+| MT-TP-022 | Seeded property | MT-REQ-011 | Seeded random valid parameters: center maps to NDC (0, 0) exactly; near and far depth within the documented rounding bound of 0 and 1. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_022_random_valid_parameters_keep_center_and_depth_endpoints` |
+| MT-TP-023 | Axis-aligned golden rows | MT-REQ-013 | Exact raw rows for the default camera, a camera backed off to z = 5, and cameras looking along +Z, +X and -Y. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_023_axis_aligned_views_have_exact_golden_rows` |
+| MT-TP-024 | Diagonal golden rows | MT-REQ-013 | Pinned raw rows for a (1, 0, -1) view and the isometric view from (1, 1, 1), cross-checked against an independent decimal reference. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_024_diagonal_views_have_pinned_golden_rows` |
+| MT-TP-025 | View composed with projection | MT-REQ-013 | A point on the view axis at distance 2 gives w = 2, NDC x = y = 0 and NDC depth 3/4 for three cameras, per the coordinate law. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_025_view_axis_point_composes_with_projection_per_coordinate_law` |
+| MT-TP-026 | Handedness and eye origin | MT-REQ-013 | Right, up and ahead points map to +X, +Y and -Z; the eye maps to the origin and the target lies on -Z. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_026_camera_right_up_and_forward_follow_the_right_handed_law` |
+| MT-TP-027 | Look-at errors | MT-REQ-014 | Each degenerate class returns its named LookAtError; one raw unit apart stays valid. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_027_degenerate_inputs_return_typed_errors` |
+| MT-TP-028 | Look-at error messages | MT-REQ-014 | Exact Display strings. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_028_look_at_error_messages_are_stable` |
+| MT-TP-029 | Seeded orthonormality bound | MT-REQ-015 | Seeded random views spanning 1 raw unit to 2^38: exact i128 lengths and dot products stay within the stated bounds and the eye maps to the origin. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_029_random_views_are_orthonormal_within_the_documented_bound` |
 
 ```toml
 [[case]]
@@ -278,6 +326,141 @@ test = "crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_014_fixed_mat4_inverse_
 oracle = "Minimum raw negative cofactor is divided before negation when the inverse entry is representable."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "MT-TP-015"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_015_orthographic_matrix_has_exact_golden_rows"
+oracle = "Exact raw rows for half extents 2 x 1, near 1, far 3, and for near 0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-016"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_016_orthographic_frustum_corners_map_to_exact_ndc"
+oracle = "Exact raw NDC for near corners, far corners, and mid depth."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-017"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_017_perspective_matrix_has_exact_golden_rows"
+oracle = "Exact raw rows for tan 1, aspect 2 and for aspect below 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-018"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_018_perspective_frustum_corners_map_to_exact_ndc"
+oracle = "Exact raw NDC for near corners, far corners, nonlinear mid depth, and aspect below 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-019"
+requirements = ["MT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_019_orthographic_rejects_invalid_parameters"
+oracle = "Each invalid parameter class returns its named ProjectionError; near 0 stays valid."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-020"
+requirements = ["MT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_020_perspective_rejects_invalid_parameters"
+oracle = "Each invalid class including far * near overflow returns its named ProjectionError; the boundary just inside succeeds."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-021"
+requirements = ["MT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_021_projection_errors_have_stable_messages"
+oracle = "Exact Display strings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-022"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_022_random_valid_parameters_keep_center_and_depth_endpoints"
+oracle = "Seeded random valid parameters: center maps to NDC (0, 0) exactly; near and far depth within the documented rounding bound of 0 and 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-023"
+requirements = ["MT-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_023_axis_aligned_views_have_exact_golden_rows"
+oracle = "Exact raw rows for the default camera, a camera backed off to z = 5, and cameras looking along +Z, +X and -Y."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-024"
+requirements = ["MT-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_024_diagonal_views_have_pinned_golden_rows"
+oracle = "Pinned raw rows for a (1, 0, -1) view and the isometric view from (1, 1, 1), cross-checked against an independent decimal reference."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-025"
+requirements = ["MT-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_025_view_axis_point_composes_with_projection_per_coordinate_law"
+oracle = "A point on the view axis at distance 2 gives w = 2, NDC x = y = 0 and NDC depth 3/4 for three cameras, per the coordinate law."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-026"
+requirements = ["MT-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_026_camera_right_up_and_forward_follow_the_right_handed_law"
+oracle = "Right, up and ahead points map to +X, +Y and -Z; the eye maps to the origin and the target lies on -Z."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-027"
+requirements = ["MT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_027_degenerate_inputs_return_typed_errors"
+oracle = "Each degenerate class returns its named LookAtError; one raw unit apart stays valid."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-028"
+requirements = ["MT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_028_look_at_error_messages_are_stable"
+oracle = "Exact Display strings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-029"
+requirements = ["MT-REQ-015"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_029_random_views_are_orthonormal_within_the_documented_bound"
+oracle = "Seeded random views spanning 1 raw unit to 2^38: exact i128 lengths and dot products stay within the stated bounds and the eye maps to the origin."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -301,7 +484,6 @@ The current executable surface has no known failing matrix or affine cases.
 Future implementation work must add explicit negative tests for:
 
 - normal transform misuse;
-- projection parameters that would produce invalid clip-space mappings;
 - bounds propagation cases where transformed corners overflow.
 
 ## Edge Cases And Unusual Inputs
@@ -324,7 +506,6 @@ Future slices should add boundary cases for:
 - near-singular matrices with nonzero determinants;
 - large translation components;
 - non-uniform scale and inverse-transpose normal handling;
-- projection near and far plane limits;
 - viewport edge coordinates.
 
 ## Stress And Fuzz
@@ -347,5 +528,5 @@ case with a stable test name.
 | Gap | Blocking API |
 | --- | --- |
 | Transform-aware bounds propagation. | Slice 2.3 bounds propagation APIs. |
-| Projection, unprojection, and viewport mapping. | Slice 2.4 projection APIs. |
+| Unprojection. | Slice 2.4 unprojection API. |
 | Quaternion-to-matrix conversion. | Follow-on orientation APIs. |
