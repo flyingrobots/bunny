@@ -572,8 +572,11 @@ sees an error.
 the uncounted functions instantiate it with a zero-sized tally whose methods
 are empty, the counted ones with `TraversalCounts`. There is no second copy of
 the search to keep in step; the pruning rule, order and visit bound are the
-same code. The uncounted functions' cost was measured unchanged (the
-performance chapter's [contract change cost
+same code. On the uncounted functions, `compact_closest_hit` measured
+unchanged and `compact_any_hit` 6 % to 7 % faster with the shared loop, against
+about 2 % with one codegen unit or a separate copy of the loop; the extra
+4 to 5 % appears only with the shared loop, and its cause was not established
+(the performance chapter's [contract change cost
 check](../performance/README.md#counting-compact-traversals-flyingrobotsbunny335)).
 
 **What is counted.** `TraversalCounts` is a `Copy` record of `u64` counters,

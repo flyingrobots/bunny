@@ -53,6 +53,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Review follow-ups, no output changes (flyingrobots/bunny#351). A test pins
+  the compact searches' interior-visit bound at exactly `nodes.len()`
+  (TRACE-TP-421); loosening it by one passed every test before. The
+  `smooth_normal` bound now states the shared-normal case: the step returns
+  its input, which a `FixedUnitVec3` holds to within one raw unit of unit
+  length, so each component is less than 2 raw units from the exact unit
+  vector along it (the worst case, `(2^32 + 1, 92 681, 0)`, is 1.999 98,
+  OPTICS-TP-099), and `None` is said to follow the shift. `FixedAngle`'s final
+  rounding is shown to reach exact ties, six of which are pinned
+  (AT-TP-009); rounding ties away from zero passed every test before. The
+  ray-tracing chapter and the performance ledger say `compact_any_hit` was
+  measured 6 % to 7 % faster with the shared counting loop, cause not
+  established, where they called the uncounted cost unchanged, and drop the
+  citation of an x86-64 reading they did not record. The release-packaging
+  table says `packaged-tests` checks the tests. `smooth_normal`,
+  `compact_closest_hit_counted` and `parse_ascii_ply_with_limits` have
+  compiling examples, and the contract-generation chapter states which
+  generator outputs the regeneration check compares.
+
 * The BVH depth contract is stated and tested; no library code changes. The
   six searches hold at most `d + 1` of their 64 stack entries on a tree of
   depth `d` (the root at depth 0), so every tree of depth at most 63 is searched

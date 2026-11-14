@@ -163,3 +163,29 @@ fn at_tp_007_radians_round_to_the_nearest_unit_symmetrically() {
     let pi = FixedAngle::from_radians(FixedQ32_32::from_raw(13_493_037_705));
     assert!(pi.raw().abs_diff(FixedAngle::HALF_TURN.raw()) < 1 << 32, "pi={:#018x}", pi.raw());
 }
+
+/// Quarter-turn positions whose interpolated sine, with 62 fractional bits, is exactly half a
+/// raw Q32.32 unit above an integer `q`: `(position, q)`. They were found by a bisection over
+/// a replica of the table and the Hermite step (flyingrobots/bunny#351); the expected results
+/// follow from the documented rule alone: ties to even give `q` when `q` is even and `q + 1`
+/// when it is odd. Rounding ties away from zero gives `q + 1` for both, ties toward zero `q`
+/// for both.
+const SINE_TIES: [(u64, i64); 6] = [
+    (4_503_610_405_290_135, 6_588_410),
+    (4_503_611_772_422_295, 6_588_412),
+    (450_359_963_355_509_528, 656_258_914),
+    (4_503_609_721_724_055, 6_588_409),
+    (4_503_612_455_988_374, 6_588_413),
+    (450_359_964_047_196_895, 656_258_915),
+];
+
+#[wasm_bindgen_test(unsupported = test)]
+fn at_tp_009_an_exact_tie_in_the_last_rounding_goes_to_even() {
+    for (position, below) in SINE_TIES {
+        let expected = if below % 2 == 0 { below } else { below + 1 };
+        let sine = FixedAngle::from_raw(position).sin().raw();
+        // cos(a) reads the same quarter wave at the mirrored position.
+        let cosine = FixedAngle::from_raw(QUARTER - position).cos().raw();
+        assert_eq!((sine, cosine), (expected, expected), "position {position}");
+    }
+}

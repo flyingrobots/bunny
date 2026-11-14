@@ -13,7 +13,7 @@ workflow `.github/workflows/release.yml` runs its `verify` mode.
 | Mode | What it does |
 | --- | --- |
 | `verify` | Packages the independent root crates in full, lists the files of the others, then runs `packaged-tests`. |
-| `packaged-tests` | Builds the tests of every publishable crate from its own archive. |
+| `packaged-tests` | Checks the tests of every publishable crate from its own archive (`cargo check --tests`). |
 | `dry-run` | `cargo publish --dry-run` for crates whose siblings are visible on crates.io, file lists for the rest. |
 | `publish` | Publishes every crate in dependency order; refuses a dirty worktree. |
 

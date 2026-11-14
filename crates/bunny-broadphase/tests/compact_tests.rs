@@ -540,3 +540,47 @@ fn trace_tp_307_compact_conversion_golden_vectors() {
     assert_eq!(checksum(&seeded), checksum(&Compact::of(&scene.nodes).expect("converts")));
     assert_eq!(checksum(&seeded), 0x09a7_ad04_d4b0_833e, "golden checksum");
 }
+
+/// Three compact nodes in a cycle, `0 -> 1 -> 2 -> 0`, each with a leaf of primitive `i` as its
+/// left child and the next node as its right child, every box covering the ray. Left children
+/// go first on a tie, so each interior visit is followed by its leaf's primitive test before the
+/// next interior visit.
+fn visit_bound_cycle() -> [CompactNode; 3] {
+    [0_u32, 1, 2].map(|index| CompactNode {
+        bounds: [everything(); 2],
+        children: [
+            CompactChild { first: index, prim_count: 1 },
+            CompactChild { first: (index + 1) % 3, prim_count: 0 },
+        ],
+    })
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_421_the_compact_visit_bound_allows_exactly_one_visit_per_node() {
+    // The bound: at most `nodes.len()` interior visits, refused at the next. With three nodes
+    // the search makes three visits, tests primitives 0, 1 and 2, and is refused at the fourth;
+    // a bound one looser tests primitive 0 again, one tighter stops before primitive 2.
+    let ray = TraceRay::new(vec3([0, 0, 5 * ONE_RAW]), vec3([0, 0, -ONE_RAW])).expect("in domain");
+    let nodes = visit_bound_cycle();
+    let view = CompactView {
+        root: Some(CompactRoot { bounds: everything(), child: CompactChild::default() }),
+        nodes: &nodes,
+        prim_indices: &[0, 1, 2],
+    };
+    let tested = Cell::new(Vec::new());
+    let record = |primitive: u32| {
+        let mut seen = tested.take();
+        seen.push(primitive);
+        tested.set(seen);
+    };
+    let closest = compact_closest_hit(view, &ray, FAR, |primitive, _| {
+        record(primitive);
+        None
+    });
+    assert_eq!((closest, tested.take()), (Err(TraversalError::InvalidNodeIndex), vec![0, 1, 2]));
+    let any = compact_any_hit(view, &ray, FAR, |primitive| {
+        record(primitive);
+        false
+    });
+    assert_eq!((any, tested.take()), (Err(TraversalError::InvalidNodeIndex), vec![0, 1, 2]));
+}

@@ -75,7 +75,9 @@ Exact by construction:
 3. Between samples the value is **cubic Hermite** interpolated. The slope of `sin` is `cos`,
    which is the same table read from the other end, so the interpolation knows the exact
    slope at both ends of each segment at no extra storage cost.
-4. The result, held with 62 fractional bits, is rounded to Q32.32 (ties to even).
+4. The result, held with 62 fractional bits, is rounded to Q32.32 (ties to even). Exact
+   ties occur: AT-TP-009 pins six positions where the value is exactly half a raw unit
+   above an integer, three of each parity.
 
 The table is computed at compile time by an integer Taylor series with 62 fractional bits,
 starting from `round(π/2 × 2^62)`. No floating point is involved at build time or at run
