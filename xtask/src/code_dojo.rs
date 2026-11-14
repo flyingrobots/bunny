@@ -387,19 +387,35 @@ pub(super) fn dependency_violations(
 ) -> Vec<Violation> {
     crate::nondeterminism::dependency_findings(tree, NONDETERMINISM_CRATES)
         .into_iter()
-        .filter(|finding| !manifest_waives(&manifest(&finding.root), finding.rule))
+        .filter(|finding| {
+            crate::nondeterminism::UNWAIVABLE_DEPENDENCY_RULES.contains(&finding.rule)
+                || !manifest_waives(&manifest(&finding.root), finding.rule)
+        })
         .map(|finding| {
             Violation::new(
                 PathBuf::from("crates").join(&finding.root).join("Cargo.toml"),
                 0,
                 finding.rule,
-                format!(
-                    "dependency graph reaches `{}`, which deterministic crates must not use",
-                    finding.dependency
-                ),
+                dependency_message(finding.rule, &finding.dependency),
             )
         })
         .collect()
+}
+
+fn dependency_message(rule: &str, dependency: &str) -> String {
+    match rule {
+        "unscanned-dependency" => format!(
+            "dependency graph reaches `{dependency}`, a path crate outside the deterministic \
+             crates, whose code the gate does not scan; add it to NONDETERMINISM_CRATES or drop it"
+        ),
+        "unlisted-dependency" => format!(
+            "dependency graph reaches `{dependency}`, which is not a crates.io crate on \
+             ALLOWED_REGISTRY_CRATES; review it and add it to the list, or drop it"
+        ),
+        _ => format!(
+            "dependency graph reaches `{dependency}`, which deterministic crates must not use"
+        ),
+    }
 }
 
 /// Rule 10 of `CODE_STANDARDS.md` over the core crates (`docs/topics/lint-policy/`).
@@ -463,8 +479,60 @@ pub(super) fn dependency_rule_violations(
             }
         }
     }
+    violations.extend(manifest_rule_violations(root));
     violations.sort_by(|left, right| (&left.path, left.rule).cmp(&(&right.path, right.rule)));
     Ok(violations)
+}
+
+/// The manifest rules of `xtask/src/crate_manifests.rs`: no build script and no target
+/// outside the crate for a deterministic crate, and every workspace member classified.
+fn manifest_rule_violations(root: &Path) -> Vec<Violation> {
+    let read = |path: &Path| std::fs::read_to_string(root.join(path)).ok();
+    let mut violations = Vec::new();
+    for name in NONDETERMINISM_CRATES {
+        let manifest = PathBuf::from("crates").join(name).join("Cargo.toml");
+        let build_rs = root.join("crates").join(name).join("build.rs").is_file();
+        let text = read(&manifest).unwrap_or_default();
+        violations.extend(manifest_findings(
+            &manifest,
+            crate::crate_manifests::deterministic_manifest(&text, build_rs),
+        ));
+    }
+    let classified = [NONDETERMINISM_CRATES, GENERATOR_CRATES, TOOLING_CRATES].concat();
+    let list_dirs = |parent: &Path| {
+        let mut dirs = std::fs::read_dir(root.join(parent))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .map(|entry| parent.join(entry.file_name()))
+            .collect::<Vec<_>>();
+        dirs.sort();
+        dirs
+    };
+    let members = crate::crate_manifests::unclassified_members(
+        &read(Path::new("Cargo.toml")).unwrap_or_default(),
+        &classified,
+        &read,
+        &list_dirs,
+    );
+    violations.extend(manifest_findings(Path::new("Cargo.toml"), members));
+    violations
+}
+
+fn manifest_findings(
+    path: &Path,
+    found: Result<Vec<crate::crate_manifests::Finding>, String>,
+) -> Vec<Violation> {
+    match found {
+        Ok(found) => found
+            .into_iter()
+            .map(|finding| {
+                Violation::new(path.to_path_buf(), finding.line, finding.rule, finding.message)
+            })
+            .collect(),
+        Err(message) => vec![Violation::new(path.to_path_buf(), 0, "manifest-parse", message)],
+    }
 }
 
 fn dependency_tree(

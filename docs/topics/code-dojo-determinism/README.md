@@ -220,6 +220,37 @@ crate with `cargo tree --locked --edges normal,build --target all --no-dedupe
 | `serde-wasm-bindgen` | `wasm-serde` |
 | `tokio`, `async-std` | `thread-sleep` |
 
+Every other crate in either listing must be one the gate has reviewed
+(flyingrobots/bunny#349):
+
+- another deterministic crate, at its own `crates/<name>` directory: its code
+  is scanned;
+- a crates.io crate on `ALLOWED_REGISTRY_CRATES` in
+  `xtask/src/nondeterminism.rs`, today's whole registry graph: `sha2` and its
+  dependencies behind `bunny-mesh`'s `mesh-hash` feature (`block-buffer`,
+  `cfg-if`, `cpufeatures`, `crypto-common`, `digest`, `generic-array`,
+  `libc`, `typenum`, `version_check`).
+
+Any other path crate (a workspace member outside the deterministic set, such
+as `bunny-perf`, or a crate outside the workspace) is `unscanned-dependency`,
+and any other crate (a crates.io crate not on the list, or any crate from git
+or another registry, also with an allowed name) is `unlisted-dependency`.
+Neither has a manifest waiver: a new dependency needs a deliberate change to
+the deterministic set or the allow list. A banned crate keeps its own rule.
+
+The manifests are checked too (`xtask/src/crate_manifests.rs`). A
+deterministic crate may not have a build script (`build-script`): a
+`build.rs` that Cargo builds (no `build = false`) or any `build` key but
+`false`, inside the crate or not, since a build script runs on the host and
+can set a `cfg` or environment variable the library reads; none has one. A
+`[lib]`, `[[bin]]`, `[[test]]`, `[[bench]]` or `[[example]]` path that leaves
+the crate directory is `target-outside-crate`, because the source rules scan
+only files under `crates/<name>/`. Every workspace member must be named in
+one of the gate's lists, deterministic, generator (`bunny-wesley`) or tooling
+(`xtask`, `bunny-perf`), or it is `unclassified-crate`; `xtask`, which reads
+manifests with `toml_edit`, is tooling and outside the allow list. These
+rules have no waiver.
+
 The listing is read as a tree. Below another deterministic crate the subtree
 is skipped, because that crate's own tree reports it; a finding therefore
 names the crate whose manifest declares the path to the banned crate. The
@@ -297,7 +328,9 @@ function. A
 and a float in the next function is reported.
 
 A dependency waiver is the same clause in a whole-line TOML comment, anywhere
-in the manifest of the crate the finding names, but not on a line inside a
+in the manifest of the crate the finding names (not for `unscanned-dependency`,
+`unlisted-dependency`, `build-script`, `target-outside-crate` or
+`unclassified-crate`), but not on a line inside a
 multi-line string. There are no dependency
 waivers in the repository.
 

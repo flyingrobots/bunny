@@ -279,7 +279,16 @@ inside macro bodies. They still differ:
   `disallowed-methods` and `disallowed-macros`, which resolve paths exactly,
   re-exports included; Bunny reads syntax with `syn` and resolves through
   the file's own imports. Lumen's dependency rule is `cargo-deny` allowing no
-  registry at all; Bunny lists banned crates over `cargo tree`.
+  registry at all; Bunny allows a reviewed list of crates.io crates over
+  `cargo tree` (Bunny's core reaches `sha2`; Lumen has no crates.io crate).
+- **Crate scope (since flyingrobots/bunny#349).** Both gates refuse a build
+  script in a deterministic crate and a path crate the scan does not read.
+  Lumen (flyingrobots/lumen#166, open) derives its deterministic set from
+  `cargo metadata`, so a workspace member the library depends on becomes
+  deterministic; Bunny keeps an explicit list and fails a dependency on a
+  member outside it (`unscanned-dependency`) and any member no list names
+  (`unclassified-crate`). Lumen also refuses procedural macros; Bunny's allow
+  list holds none, so a new one fails as `unlisted-dependency`.
 - **Bunny only.** `include-source`, `include-data`, `host-input`, the
   platform modules of `std::os`, `std::path::absolute`, `std::io::pipe`, and
   doc tests.
@@ -374,11 +383,19 @@ graph: `rand`, `getrandom`, `fastrand` (`random`); `js-sys`, `wasm-bindgen`,
 `web-sys` (`host-callback`); `reqwest`, `ureq` (`network`); `hashbrown`,
 `rustc-hash` (`unordered-container`); `serde_json` (`json-serialization`);
 `serde-wasm-bindgen` (`wasm-serde`); `tokio`, `async-std` (`thread-sleep`).
-`--all-features` finds a banned crate behind an optional dependency that no
-workspace crate enables, which a downstream crate could still turn on. Build
-edges find a banned crate a build script could use; a build script's own
-source (`build.rs`) is a Rust file of the crate and is read by the source
-rules. No deterministic crate has a build script or build-dependencies today.
+Every other crate in the graph must be another deterministic crate at its own
+directory or a crates.io crate on the reviewed allow list (`sha2` and its nine
+dependencies today); any other path crate is `unscanned-dependency` and any
+other crate `unlisted-dependency`, with no waiver (flyingrobots/bunny#349,
+which replaced a 14-name blocklist as the only rule). The manifest check bans
+build scripts in deterministic crates (`build-script`), target paths outside
+the crate (`target-outside-crate`) and workspace members no list names
+(`unclassified-crate`). `--all-features` finds a banned crate behind an
+optional dependency that no workspace crate enables, which a downstream crate
+could still turn on. Build
+edges find a banned crate a build script could use. No deterministic crate
+has a build script or build-dependencies today, and a build script is now a
+finding in itself.
 A finding names the deterministic crate whose manifest declares the path to
 the banned crate and the feature set that found it first; a crate reached
 through another deterministic crate is reported against that crate only.
