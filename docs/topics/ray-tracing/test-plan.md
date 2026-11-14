@@ -1057,7 +1057,7 @@ evidence = "test"
 test = "crates/bunny-perf/src/counted.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray"
 oracle = "Retained reference: the profile replica, itself checked against closest_hit and any_hit on every ray."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-419"

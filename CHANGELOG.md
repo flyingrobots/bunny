@@ -18,7 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visits, primitive tests and the deepest stack. They make the same primitive
   calls and return the same results and errors as the uncounted functions,
   which keep their output and measured cost; `TraversalCounts` adds with
-  saturation and keeps the larger peak. Part of flyingrobots/bunny#335.
+  saturation and keeps the larger peak. `bunny-perf` gains the
+  `trace_counted` group (`trace/closest_hit_compact_counted`,
+  `trace/any_hit_compact_counted`) and a test that the counts equal the
+  profile replica's on every benchmark ray. Closes flyingrobots/bunny#335.
 
 ### Changed
 

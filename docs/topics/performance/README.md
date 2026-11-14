@@ -266,6 +266,11 @@ sibling pairs shuffled (`trace/closest_hit_shuffled`); see
 (`_builder_order`, `_near_first`, `_shuffled`). Before timing, the harness checks that every
 compact tree makes the same primitive calls and gives the same answers as the builder's tree on
 every ray, and exits with the differing ray indices if not.
+The `trace_counted` group (`crates/bunny-perf/src/counted.rs`) times the counted compact
+searches on the same tree and rays: `trace/closest_hit_compact_counted` and
+`trace/any_hit_compact_counted`, each summing the answers and the box tests so neither is
+optimized away. Its unit test (`TRACE-TP-418`) checks that their answers and counts equal the
+profile replica's on every ray.
 
 `trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
 on the scene: each camera ray that hits something against the triangle it hits first,
