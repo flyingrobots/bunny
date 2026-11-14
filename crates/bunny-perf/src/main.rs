@@ -8,6 +8,8 @@
 //! sets the number of timed batches per case (default 101).
 
 mod cases;
+#[cfg(any(feature = "scene", feature = "trace"))]
+mod scene;
 mod timing;
 
 use std::error::Error;
@@ -21,6 +23,14 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let options = Options::parse(std::env::args().skip(1))?;
+    #[cfg(all(feature = "scene", feature = "trace"))]
+    {
+        // The two closest-hit cases are comparable only if they find the same primitives.
+        let bad = scene::disagreeing_rays();
+        if !bad.is_empty() {
+            return Err(format!("closest-hit paths disagree on rays {bad:?}").into());
+        }
+    }
     for case in cases::all() {
         if options.filter.as_deref().is_some_and(|filter| !case.name.contains(filter)) {
             continue;
