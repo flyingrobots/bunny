@@ -68,7 +68,7 @@ How the comparison stays fair:
   median of each percentile across rounds and the best (lowest) p50; the speedup column and
   the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
-  `linalg`, `query`, `scene`, `trace`, `sample`, …). When the base revision cannot compile a group (an API it does not
+  `linalg`, `query`, `scene`, `trace`, `sample`, `build`, `sah`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
 
 The temporary worktree is removed after the build. Build outputs stay under `target/perf/`.
@@ -199,8 +199,13 @@ The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere o
 triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
 rays (a 32 by 32 grid). Where a case measures an old API against a new one, the harness
 also checks that both give the same answer on every input: `scene/closest_visitor` and
-`trace/closest_hit` must choose the same primitive on every ray. The harness runs that
-check before timing and exits with the differing ray indices if it fails.
+`trace/closest_hit` must choose the same primitive on every ray, and `trace/closest_hit`
+and `trace/any_hit` must give the same answers through the `build_bvh` tree as
+`trace/closest_hit_sah` and `trace/any_hit_sah` through the `build_bvh_sah` tree. The
+harness runs those checks before timing and exits with the differing ray indices if one
+fails. Both trees' traversal cases call the same functions, so they run the same machine
+code and differ only in the tree. The `build` and `sah` groups also time one whole build
+of the scene's tree per call (`build/bvh`, `build/bvh_sah`, into buffers allocated once).
 
 The `sample` group (`crates/bunny-perf/src/sample.rs`) times the `bunny-optics` sample hash
 and pixel sampler over 1 024 keys of a 32 by 32 tile, 16 samples and 4 dimensions:
@@ -901,6 +906,174 @@ this scene's does not.
 **Unmeasured.** wasm32, ARM Linux and Windows runners; local x86-64; other scenes and ray
 batches; scenes whose trees do not fit the cache; whether the gain survives a different builder (flyingrobots/bunny#213) or packets
 (flyingrobots/bunny#217).
+
+### 9. Binned SAH BVH builder (new API)
+
+**Where:** `build_bvh_sah` in `bunny-broadphase` (flyingrobots/bunny#213). The contract is in
+the [BVH construction chapter](../bvh-construction/README.md#the-binned-sah-builder).
+
+**Technique.** `build_bvh` tries three planes per axis at the quartiles of the centroid
+span, with a full pass over the node's primitives for each. `build_bvh_sah` counts
+centroids into 16 equal-width bins per axis in one pass, sweeps the bins from both ends to
+cost all 15 planes per axis, and compares the cheapest with the leaf cost, using the
+surface area heuristic with unit traversal and intersection weights. Nodes of up to four
+primitives become leaves when splitting does not pay. Costs are `u128` integers.
+
+**Fidelity: new API.** `build_bvh` keeps every output bit: its source changed only in the
+visibility of four helpers, its earlier tests pass unmodified, and a new golden fingerprint
+locks its bytes. The SAH tree is a deterministic function of the input with stated tie
+rules (lower axis, then lower plane; an equal split and leaf cost makes a leaf; a stable
+partition), locked by its own golden fingerprint on every CI platform. `closest_hit` and
+`any_hit` return the same answers on both trees, by the
+[tree-independence argument](../ray-tracing/README.md#correctness-the-answer-does-not-depend-on-the-tree);
+the harness checks it on all 1 024 benchmark rays before timing, and the broadphase tests
+against a test of every primitive on seeded scenes.
+
+**Choosing the parameters.** Exploratory sweeps, each variant a fresh build of the harness
+run three times inside one `--exclusive` container run (Apple M5 Pro, `aarch64-linux`,
+alignment flags on, not through `xtask perf`). Median of the three p50s, nanoseconds per
+ray; the quartile-tree case ran in the same process as the reference:
+
+| Leaf size | Bins | `closest_hit` quartile | `closest_hit` SAH | ratio | `any_hit` quartile | `any_hit` SAH | ratio | SAH build |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 16 | 227.50 | 230.51 | 1.013 | 211.47 | 216.23 | 1.023 | 18.1 ms |
+| 2 | 16 | 226.93 | 210.32 | 0.927 | 209.59 | 195.47 | 0.933 | 17.8 ms |
+| 4 | 16 | 225.02 | 208.45 | 0.926 | 207.97 | 194.74 | 0.936 | 17.5 ms |
+| 8 | 16 | 225.79 | 209.92 | 0.930 | 207.84 | 197.14 | 0.949 | 17.6 ms |
+| 4 | 8 | 227.95 | 212.57 | 0.933 | 208.70 | 198.45 | 0.951 | 12.7 ms |
+| 4 | 16 | 222.25 | 209.35 | 0.942 | 209.55 | 196.66 | 0.938 | 17.5 ms |
+| 4 | 32 | 225.59 | 206.46 | 0.915 | 208.46 | 193.12 | 0.926 | 26.1 ms |
+
+Weights other than 1 : 1 were no better: traversal 1 and intersection 2 gave ratios 0.955
+and 0.967, traversal 2 and intersection 1 gave 0.983 and 0.922 (leaf size 4, 16 bins).
+Leaf size 1 (always split) loses the gain; sizes 2, 4 and 8 are within the noise of each
+other, and 4 was best or tied in both runs. 32 bins traced about 1 to 2 % faster than 16,
+inside the noise, at 1.5 times the build time; 8 bins built faster and traced no better.
+Chosen: leaf size 4, 16 bins, weights 1 and 1.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), 2026-11-13, two complete runs with `--exclusive` (no other container run
+overlapped) of:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Run 1 used base `8cdbb1cb38f5` and the branch before its last merge of `origin/main`; run 2
+used base `fd69f19` (`origin/main`, the 0.7.0 release preparation, which changed versions
+and documentation only) and the final branch. The base cannot build `build_bvh_sah`, so the
+SAH cases are reported as `new`; the comparison that matters is quartile tree against SAH
+tree within one run, on the same binary, the same rays and the same traversal functions.
+After run 2, `origin/main` gained the `sample` group and the `trace/triangle_*` cases
+(flyingrobots/bunny#214 and the optics sampler), which change no function these cases
+call; the branch was merged with it and not re-timed locally.
+Best p50 (nanoseconds per ray; per build for `build/`):
+
+| Case | Run 1 base | Run 1 head | Run 2 base | Run 2 head |
+| --- | ---: | ---: | ---: | ---: |
+| `trace/closest_hit` (quartile tree) | 221.15 | 220.26 | 221.07 | 219.24 |
+| `trace/closest_hit_sah` (SAH tree) | new | 205.20 | new | 204.14 |
+| `trace/any_hit` (quartile tree) | 206.70 | 205.12 | 205.97 | 204.79 |
+| `trace/any_hit_sah` (SAH tree) | new | 188.68 | new | 188.44 |
+| `build/bvh` | 167.29 ms | 167.53 ms | 166.28 ms | 166.01 ms |
+| `build/bvh_sah` | new | 17.44 ms | new | 17.39 ms |
+| `scene/closest_visitor` (quartile tree) | 3175.99 | 3179.41 | 3162.15 | 3183.06 |
+
+Within the head side of each run, `closest_hit` costs 205.20 / 220.26 = 0.932 and
+204.14 / 219.24 = 0.931 on the SAH tree, 15.1 and 15.1 ns less per ray (6.9 %); `any_hit`
+costs 188.68 / 205.12 = 0.920 and 188.44 / 204.79 = 0.920, 16.4 and 16.4 ns less (8.0 %).
+The median p50 ratios agree (closest 210.65 / 225.18 = 0.935 and 207.97 / 223.88 = 0.929;
+any 193.31 / 207.85 = 0.930 and 192.42 / 209.02 = 0.921). Base against head on the
+unchanged cases is the noise reference: `trace/closest_hit`, `trace/any_hit`, `build/bvh`
+and `scene/closest_visitor` moved by -0.8 % to +0.7 % in best p50. The kernel cases of the
+other groups moved by at most 6.7 % in best p50 (`num/div`, run 2; its median moved
+-1.2 %), except `prepared/div`, +17.4 % in best p50 in run 1 with its median unchanged
+(4.23 ns on both sides) and -3.4 % in run 2: a lucky base round, not a change. The exception is the three `trace/kernel_tri_*` replays, which were 7 to 14 %
+slower on the head side in both runs (best p50 +13.2 %, +7.0 %, +9.2 % and +13.7 %, +8.9 %,
++8.5 %): see the note below.
+
+**The `trace/kernel_tri_*` shift.** Those cases replay the quartile tree's recorded triangle
+tests through `TraceRay::hit_triangle` in `bunny-query`, which this branch does not touch,
+and the harness source is the same on both sides. The difference between the two binaries
+is that the head harness also compiles the `build` and `sah` groups, which the base cannot
+build. To test whether that alone moves them, the head harness was built
+in the workspace twice, with and without the `build` and `sah` groups (alignment flags on),
+and the two binaries were run alternately three times with `--filter trace/kernel_tri`
+inside one `--exclusive` container run: p50s were 18.84 to 19.45, 29.01 to 32.31 and 45.49
+to 50.13 ns, with no consistent difference between the binaries. So the shift was not
+reproduced outside `xtask perf`'s standalone builds, and its cause is not established.
+Binary layout or placement (see [code-layout noise](#code-layout-noise) and
+[bimodal cases](#bimodal-cases)) is the suspect, because no code those cases run changed;
+that is a suspicion, not a finding. The cases replay the quartile tree's calls, so they do
+not bear on the SAH comparison above.
+
+**x86-64 CI reading.** The pull request's `Perf / before and after` job (GitHub's shared
+x86-64 Linux runner, 7 rounds, `--align-code`, base `cda15ecc020a`) read, best p50:
+`trace/closest_hit` 411.54 ns against `trace/closest_hit_sah` 386.45 ns (0.939),
+`trace/any_hit` 371.78 against `trace/any_hit_sah` 347.00 (0.933), and `build/bvh`
+248.5 ms against `build/bvh_sah` 30.2 ms (8.2 times faster). Base against head moved the
+unchanged trace, build and scene cases by -0.2 % to +0.5 %, and the `trace/kernel_tri_*`
+replays by -0.2 % to +1.4 %: the shift seen on aarch64 did not appear there. Shared runners
+are coarse; this is one reading.
+
+**Why the gain is small, from the traversal counters.** `bunny-perf --stats` now prints the
+profile tables for both trees (per ray, averaged over the 1 024 `closest_hit` searches):
+
+| | quartile tree | SAH tree |
+| --- | ---: | ---: |
+| nodes | 55 277 | 29 279 |
+| leaf sizes (primitives: leaves) | 1: 27 628, 2: 11 | 1: 2 473, 2: 11 388, 3: 715, 4: 64 |
+| maximum / mean leaf depth | 19 / 15.44 | 18 / 14.93 |
+| interior area / root area (SAH traversal term) | 3.13 | 2.17 |
+| leaf area times count / root area (intersection term) | 1.86 | 1.87 |
+| nodes popped | 11.37 | 10.20 |
+| `box_entry` calls | 19.76 | 17.89 |
+| interior nodes visited by sphere rays | 24.14 | 21.49 |
+| triangle tests | 1.63 | 1.91 |
+| depth of the two ground triangles' leaves | 3 | 2 |
+
+The SAH tree has 9.5 % fewer box tests and 10 % fewer pops, and 17 % more triangle tests,
+because leaves hold two primitives on average. At the profile's costs (about 6.5 ns per box
+test, about 4 ns per pop, 16 to 32 ns per triangle test) that is roughly 12 ns saved, 6 ns
+of pops saved and 5 to 9 ns of triangle tests added, close to the 14 to 16 ns measured.
+The SAH cost fell by 19 % (4.99 to 4.04 root areas), almost all of it in the traversal term,
+but the ray cost fell by 7 %: the root box is dominated by the 40-unit ground triangles, so
+the area weights describe rays spread uniformly over that box, not camera rays aimed at a
+unit sphere. On the near-uniform tessellated sphere the quartile split is already close to
+the median split SAH would choose, so the sphere rays still make 21.5 interior visits where
+one descent takes about 15. The profile's ceiling for a builder on this scene was 30 to
+35 ns; this one gets about half of it.
+
+**Build time.** `build_bvh_sah` builds the scene's tree in about 17.5 ms against 167 to
+169 ms for `build_bvh`, 9.6 times faster: one binning pass per node instead of nine full
+passes, and half as many nodes. The stable partition sorts both sides of every split in
+place, which is included.
+
+**Quality independent of timing.** SAH cost (the builder's own weights, exact areas, per
+1 000 root areas): benchmark scene 4 984 (quartile) and 4 038 (SAH); seeded test scenes
+from `bvh_tp_015`: 600 scattered boxes 16 672 and 16 175, clustered boxes 3 233 and 3 228,
+a grid on two huge ground boxes 2 935 and 2 935 (lower by less than one part in a
+thousand). The cost is the SAH builder's own objective, so a lower value is expected, not
+independent evidence that rays get faster; the timings above are the evidence for this
+scene.
+
+**Trade-offs.**
+
+- *Different trees.* `intersect_ray` and `intersect_aabb` report primitives in a different
+  order on SAH trees, and leaves hold up to four primitives, so a caller that relied on the
+  quartile tree's order or on one primitive per leaf must not switch silently.
+- *Memory.* 29 279 nodes of 56 bytes (1.6 MB) instead of 55 277 (3.1 MB); the buffers the
+  caller provides are the same size (2n - 1 nodes).
+- *More triangle tests per ray*, which a scene with a costlier primitive test would feel.
+- *Depth cap.* A node at depth 60 is a leaf of any size, a guarantee for the 64-entry
+  traversal stacks that ordinary inputs do not reach.
+
+**One scene is one scene.** These numbers are for the 27 650-triangle bumpy sphere on two
+ground triangles, one camera and 1 024 primary rays. Scenes with uneven primitive density,
+long thin primitives or secondary rays may gain more or less.
+
+**Unmeasured.** x86-64 beyond the one CI reading above, wasm32, other
+scenes, the parameter sweep on any other machine, and tuning the weights per scene.
 
 ## Profile of `closest_hit` on the benchmark scene
 

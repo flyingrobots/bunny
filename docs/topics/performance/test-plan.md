@@ -42,6 +42,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
 | PERF-REQ-007 | The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
 | PERF-REQ-008 | Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray. | `README.md#memory-share-of-a-box-test` |
+| PERF-REQ-009 | The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree. | `README.md#adding-a-case` |
 
 ```toml
 [[requirement]]
@@ -82,6 +83,11 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-008"
 summary = "Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-009"
+summary = "The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree."
 status = "active"
 ```
 
@@ -135,6 +141,8 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-044 | Memory | PERF-REQ-008 | The shuffled tree moves more than half of the nodes, and `closest_hit` on it returns the same `ClosestHit` as on the builder's tree on all 1 024 rays. | `crates/bunny-perf/src/memory.rs::tests::the_shuffled_tree_is_a_permutation_with_the_same_answers` |
 | PERF-TP-045 | Memory | PERF-REQ-008 | On all 1 024 rays, `compact_closest_hit` and `compact_any_hit` on the compact tree and on its three reordered copies call the primitive test with the same primitives and limits in the same order, and return the same answers, as `closest_hit` and `any_hit` on the builder's tree. | `crates/bunny-perf/src/compact.rs::tests::every_compact_tree_makes_the_same_calls_and_answers_as_the_builders_tree` |
 | PERF-TP-046 | Memory | PERF-REQ-008 | The scene's compact tree has one node per interior source node and an interior root. | `crates/bunny-perf/src/compact.rs::tests::the_compact_tree_has_one_node_per_interior_source_node` |
+| PERF-TP-047 | Comparability | PERF-REQ-009 | `closest_hit` returns the same hit and `any_hit` the same answer on all 1 024 camera rays through both trees. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray` |
+| PERF-TP-048 | Quality | PERF-REQ-009 | The SAH tree's exact SAH cost on the benchmark scene is below the quartile tree's; shapes and triangle-test counts are printed for the ledger. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -503,6 +511,24 @@ requirements = ["PERF-REQ-008"]
 evidence = "test"
 test = "crates/bunny-perf/src/compact.rs::tests::the_compact_tree_has_one_node_per_interior_source_node"
 oracle = "The scene's compact tree has one node per interior source node and an interior root."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-047"
+requirements = ["PERF-REQ-009"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray"
+oracle = "Both trees give the same closest_hit and any_hit answers on every benchmark ray."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-048"
+requirements = ["PERF-REQ-009"]
+evidence = "test"
+test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree"
+oracle = "The exact SAH cost of both trees over the benchmark scene."
 tier = "fast"
 status = "implemented"
 ```
