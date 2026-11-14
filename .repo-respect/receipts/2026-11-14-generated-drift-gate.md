@@ -39,10 +39,18 @@ a missing output, the schema edited without regenerating) each fail
 pass. cargo fmt --check, cargo clippy -p xtask --all-targets -D warnings, cargo test -p xtask,
 code-dojo-rust --all; code-dojo --all at the final commit (see the PR).
 
+Review round (CodeRabbit on #339): the pre-commit gate read the working tree while its other
+staged checks read the index, and every run shared target/dojo-generated. CG-TP-017 (a
+temporary repository with staged and on-disk artifacts that differ) and CG-TP-018 (nested runs)
+were red on a behaviour-preserving refactor, then green after the pre-commit path read the
+index and each run got target/dojo-generated/run-<pid>, removed afterwards.
+
 Known risks:
 The check compares only the three files the generator writes; it does not find stray files
 under generated/. It reuses the gate's build of bunny-wesley; a cold run builds wesley-core
-(5.66 s measured). The scratch directory under target/ is removed and rewritten on every run.
+(5.66 s measured). Each run's scratch directory is removed when the run returns; a run killed mid-way leaves
+its directory, which a later process with the same id replaces. In the pre-commit gate the
+generator is built from the working tree, not the index.
 
 Human reviewer:
 James Ross (maintainer); review pending.

@@ -11,6 +11,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::git_helpers::git_command;
+
 type DynError = Box<dyn Error>;
 
 /// The schema the artifacts are generated from, relative to the repository root.
@@ -26,7 +28,7 @@ pub(super) const OUTPUTS: [(&str, &str); 3] = [
 /// The command that rewrites the committed artifacts.
 pub(super) const FIX_COMMAND: &str = "cargo run --locked -p xtask -- generate";
 
-/// Where, under the workspace's `target/`, the check regenerates.
+/// The directory, under the checkout's `target/`, that holds each run's scratch directory.
 const SCRATCH: &str = "target/dojo-generated";
 
 /// The arguments of `bunny-wesley` after `--`: the schema, then each output flag and path.
@@ -79,17 +81,37 @@ pub(super) fn read_snapshot(
     path: &str,
 ) -> Result<Option<Vec<u8>>, DynError> {
     match snapshot {
-        Snapshot::WorkTree | Snapshot::Index => match fs::read(root.join(path)) {
+        Snapshot::WorkTree => match fs::read(root.join(path)) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
         },
+        Snapshot::Index => read_staged(root, path),
     }
 }
 
-/// The scratch directory of the run identified by `run`, under `root/target/`.
-pub(super) fn scratch_dir(root: &Path, _run: u32) -> PathBuf {
-    root.join(SCRATCH)
+/// The staged bytes of `path`, read with `git cat-file` (no filters), or `None` when the index
+/// has no entry for it.
+fn read_staged(root: &Path, path: &str) -> Result<Option<Vec<u8>>, DynError> {
+    let object = format!(":{path}");
+    let present = git_command(root).args(["cat-file", "-e", &object]).output()?;
+    if !present.status.success() {
+        return Ok(None);
+    }
+    let output = git_command(root).args(["cat-file", "blob", &object]).output()?;
+    if output.status.success() {
+        Ok(Some(output.stdout))
+    } else {
+        Err(format!("git cat-file blob {object}: {}", String::from_utf8_lossy(&output.stderr))
+            .into())
+    }
+}
+
+/// The scratch directory of the run identified by `run` (the process id), under
+/// `root/target/`: runs that overlap in one checkout are different processes, so they never
+/// share one. A directory left by an earlier process with the same id is replaced.
+pub(super) fn scratch_dir(root: &Path, run: u32) -> PathBuf {
+    root.join(SCRATCH).join(format!("run-{run}"))
 }
 
 /// Runs `body` with a fresh scratch directory for run `run`, then removes the directory,

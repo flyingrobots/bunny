@@ -340,8 +340,9 @@ The chapter is [`topics/lint-policy/`](topics/lint-policy/).
 ## Generated Artifacts
 
 The full gate and the pre-commit gate regenerate `bunny-wesley`'s contract
-artifacts in `target/dojo-generated/` and fail when a committed artifact
-differs, naming the file, its first differing line and
+artifacts in a per-run directory under `target/dojo-generated/` and fail when
+a committed artifact differs (the pre-commit gate compares the staged schema
+and artifacts, the full gate the working tree), naming the file, its first differing line and
 `cargo run --locked -p xtask -- generate`. Run it alone with
 `cargo run --locked -p xtask -- code-dojo-generated`. See the
 [contract-generation chapter](topics/contract-generation/README.md#regeneration-check).

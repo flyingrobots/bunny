@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (including after a schema edit that was not regenerated) fails the gate,
   naming the file, its first differing line and
   `cargo run --locked -p xtask -- generate`; before, a one-byte change passed
-  every test. `cargo run --locked -p xtask -- code-dojo-generated` runs the
+  every test. The pre-commit gate compares the staged schema and artifacts, so
+  it judges what the commit records; each run regenerates in its own scratch
+  directory. `cargo run --locked -p xtask -- code-dojo-generated` runs the
   step alone, which takes 0.03 s once the generator is built. `xtask generate`
   now runs the generator with `--locked` (flyingrobots/bunny#286).
 
