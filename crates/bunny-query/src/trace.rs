@@ -124,12 +124,7 @@ impl TraceRay {
         let direction = wide3(self.direction);
         let (edge1, edge2) = (wide3(triangle.edge1), wide3(triangle.edge2));
         let pvec = cross(direction, edge2);
-        let signed_det = dot(edge1, pvec);
-        if signed_det == 0 {
-            return None;
-        }
-        let sign = signed_det.signum();
-        let det = signed_det * sign;
+        let (det, sign) = oriented(dot(edge1, pvec))?;
         let tvec = sub3(self.origin, triangle.v0);
         let u = dot(tvec, pvec) * sign;
         if !(0..=det).contains(&u) {
@@ -291,6 +286,15 @@ fn narrow_sub3(lhs: [i64; 3], rhs: [i64; 3]) -> [i64; 3] {
 
 fn sub3(lhs: [i64; 3], rhs: [i64; 3]) -> Wide3 {
     wide3(narrow_sub3(lhs, rhs))
+}
+
+/// `(|value|, sign)` for a nonzero value, `None` for zero (a ray parallel to the plane).
+#[inline]
+const fn oriented(value: i128) -> Option<(i128, i128)> {
+    match value.signum() {
+        0 => None,
+        sign => Some((value * sign, sign)),
+    }
 }
 
 #[inline]
