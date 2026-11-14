@@ -44,7 +44,9 @@ impl SurfaceHit {
     /// Returns `None` exactly when [`Self::try_new`] returns an error.
     #[must_use]
     pub fn new(surface: &TriangleSurface, ray: &TraceRay, hit: &TriangleHit) -> Option<Self> {
-        Self::try_new(surface, ray, hit).ok()
+        let (plane, offset) = surface.facing_plane(hit.front_face);
+        let point = start_point(ray, hit.distance, plane, offset).ok()?;
+        Some(Self { point, frame: surface.facing_frame(hit.front_face), plane })
     }
 
     /// [`Self::new`], naming the refusal.
@@ -67,23 +69,8 @@ impl SurfaceHit {
         hit: &TriangleHit,
     ) -> Result<Self, SecondaryRayError> {
         let (plane, offset) = surface.facing_plane(hit.front_face);
-        let distance = hit.distance;
-        let start = point_at(ray, distance)
-            .ok_or(SecondaryRayError::HitPointUnrepresentable { distance })?;
-        // The trace domain's exclusive bound, and the bound a hit point must be under for a step
-        // to reach the domain. Under it every coordinate is below `2^41`, so with plane normal
-        // components below `2^83` the exact plane test stays below `2^126`, inside `i128`.
-        let domain = u128::from(TRACE_COORD_LIMIT_RAW.unsigned_abs());
-        if !within(wide(start), domain + MAX_STEPS.unsigned_abs()) {
-            return Err(SecondaryRayError::HitPointOutsideTraceDomain { point: start });
-        }
-        let point = arrival_side(wide(start), plane, offset)
-            .ok_or(SecondaryRayError::NotOnArrivalSide { point: start })?;
-        if !within(point, domain) {
-            return Err(SecondaryRayError::StartOutsideTraceDomain { start: narrow(point) });
-        }
-        let frame = surface.facing_frame(hit.front_face);
-        Ok(Self { point: narrow(point), frame, plane })
+        let point = start_point(ray, hit.distance, plane, offset)?;
+        Ok(Self { point, frame: surface.facing_frame(hit.front_face), plane })
     }
 
     /// The start point of every secondary ray.
@@ -105,7 +92,10 @@ impl SurfaceHit {
     /// coordinate of `sample` is outside `[0, 1)`.
     #[must_use]
     pub fn bounce_ray(&self, sample: [FixedQ32_32; 2]) -> Option<TraceRay> {
-        self.try_bounce_ray(sample).ok()
+        // The same two steps as `try_bounce_ray`, through the `Option` form of the direction:
+        // going through `try_bounce_ray` here cost about 3.5 ns of the 70 ns per-hit step,
+        // passing the larger `Result` of the bounce ray (`shade/hit_shading`).
+        TraceRay::new(self.point, self.frame.cosine_direction(sample)?)
     }
 
     /// [`Self::bounce_ray`], naming the refusal.
@@ -136,6 +126,43 @@ impl SurfaceHit {
         }
         let radiance = light.reflected_radiance(light.cosine(self.frame.normal()));
         LightSample::new(TraceRay::new(self.point, light.toward_light()), radiance)
+    }
+}
+
+/// The start point of every secondary ray for the hit at `distance` along `ray`, on the face
+/// whose exact plane is `plane . p = offset`: the one implementation of the refusals that
+/// [`SurfaceHit::new`] and [`SurfaceHit::try_new`] share.
+///
+/// The domain checks are arranged so the common case costs one comparison per coordinate: a hit
+/// point more than two raw units inside the domain stays inside after any step. Every hit point
+/// that reaches the plane test has coordinates below `2^41`, so with plane normal components
+/// below `2^83` the test stays below `2^126`, inside `i128`.
+#[inline]
+fn start_point(
+    ray: &TraceRay,
+    distance: FixedQ32_32,
+    plane: Wide,
+    offset: i128,
+) -> Result<FixedVec3, SecondaryRayError> {
+    let Some(start) = point_at(ray, distance) else {
+        return Err(SecondaryRayError::HitPointUnrepresentable { distance });
+    };
+    let not_on_arrival_side = || SecondaryRayError::NotOnArrivalSide { point: start };
+    let domain = u128::from(TRACE_COORD_LIMIT_RAW.unsigned_abs());
+    let steps = MAX_STEPS.unsigned_abs();
+    if within(wide(start), domain - steps) {
+        return arrival_side(wide(start), plane, offset)
+            .map(narrow)
+            .ok_or_else(not_on_arrival_side);
+    }
+    if !within(wide(start), domain + steps) {
+        return Err(SecondaryRayError::HitPointOutsideTraceDomain { point: start });
+    }
+    let point = arrival_side(wide(start), plane, offset).ok_or_else(not_on_arrival_side)?;
+    if within(point, domain) {
+        Ok(narrow(point))
+    } else {
+        Err(SecondaryRayError::StartOutsideTraceDomain { start: narrow(point) })
     }
 }
 
