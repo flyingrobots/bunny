@@ -161,6 +161,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo names every item of `std::thread` and `std::time` deliberately
+  instead of matching whole-segment prefixes, checked by a test against the
+  pinned toolchain's documentation: `sleep_ms`, `sleep_until`, `park`,
+  `park_timeout`, `park_timeout_ms` and `yield_now` are now `thread-sleep`
+  findings and `SystemTimeError` a `time-system` one. In core crates any name
+  ending in `_f32` or `_f64` is a `float-boundary` finding, so
+  `d.mul_f64(d.as_secs_f64())` and `Duration::from_secs_f64(..)` no longer
+  pass with no float token; six float DTO conversions in `bunny-linalg` and
+  `bunny-geom` that the gate could not see before now carry waivers. A waiver
+  between a doc comment and `fn` now covers the function. Part of
+  flyingrobots/bunny#321.
+
 * Code Dojo no longer lets code or host files into a deterministic crate
   unscanned: `include!` is banned in every spelling (`include-source`), a
   `#[path]` module must name a `.rs` file inside the crate directory, and

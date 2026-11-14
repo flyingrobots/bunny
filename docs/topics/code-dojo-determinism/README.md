@@ -17,9 +17,9 @@ The verification design is [`test-plan.md`](test-plan.md).
 
 | Rule | Bans |
 | --- | --- |
-| `time-system` | `std::time::SystemTime`, `std::time::UNIX_EPOCH` |
+| `time-system` | `std::time::SystemTime`, `SystemTimeError`, `UNIX_EPOCH` |
 | `time-instant` | `std::time::Instant` |
-| `thread-sleep` | `std::thread::sleep`, `tokio::time::sleep`, `async_std::time::sleep`, `async_std::task::sleep` |
+| `thread-sleep` | `std::thread::sleep`, `sleep_ms`, `sleep_until`, `park`, `park_timeout`, `park_timeout_ms`, `yield_now`; `tokio::time::sleep`, `async_std::time::sleep`, `async_std::task::sleep` |
 | `host-parallelism` | `std::thread::available_parallelism`, also as a bare name |
 | `random` | the `rand`, `getrandom` and `fastrand` crates, and the name `thread_rng` |
 | `host-callback` | the `js_sys`, `wasm_bindgen` and `web_sys` crates |
@@ -33,10 +33,15 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `std-process` | `std::process` |
 | `include-source` | `include!` in every spelling, and a `#[path]` module naming anything but a `.rs` file inside the crate directory |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
-| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, and any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), also inside macro bodies |
+| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies |
 
 A banned path bans everything below it: `std::fs` covers `std::fs::read` and
-`std::fs::File::open`.
+`std::fs::File::open`. `std::time` and `std::thread` are not banned as
+modules; every item in them is named one by one, banned or permitted, and a
+test checks that list against the pinned toolchain's documentation
+([keeping the lists current](../../CODE_DOJO.md#keeping-the-name-lists-current)).
+Threads themselves (`spawn`, `scope`, `Builder`) are permitted: Rule 6 lets
+parallelism in when it does not change results, which tests show.
 
 `DefaultHasher` is accepted because `DefaultHasher::new()` uses fixed SipHash
 keys; the host seeds a hasher only through `RandomState`. Its output can still
@@ -152,7 +157,10 @@ string, raw-string, byte-string or character literal, a doc comment, a
 A waiver after code covers its own line. A waiver on a line of its own covers
 that line, the comment lines below it, and the whole of the outermost item,
 statement, field, variant, match arm or struct-literal field that starts on
-the next line holding code; if none starts there, that line only. A
+the next line holding code; if none starts there, that line only. A node
+starts on its first line and again on its first line after its attributes
+and doc comments, so a waiver between a doc comment and `fn` covers the
+function. A
 `float-boundary` waiver above a function therefore covers every float in it,
 and a float in the next function is reported.
 

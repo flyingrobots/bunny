@@ -156,6 +156,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-055 | std items classified | ND-REQ-007 | The items the 1.96.0 documentation lists for `std::thread` (23) and `std::time` (6) are exactly the items the hand classification names. | `xtask/src/nondeterminism/std_api_tests.rs::every_documented_thread_and_time_item_is_classified` |
 | ND-TP-056 | std items reported | ND-REQ-007 | For each of the 29 items, as a path and as a `use`, the gate reports exactly the classified rule, or nothing for a permitted item. | `xtask/src/nondeterminism/std_api_tests.rs::each_thread_and_time_item_gets_its_classified_rule` |
 | ND-TP-057 | Duration float methods | ND-REQ-007 | Every documented `Duration` method whose name ends in `_f32` or `_f64` (14) is `float-boundary` as a method call and as a path, and no other documented method is. | `xtask/src/nondeterminism/std_api_tests.rs::every_float_method_of_duration_is_float_boundary` |
+| ND-TP-058 | waiver after doc comment | ND-REQ-002 | A waiver between a method's doc comment and attributes and its `fn` covers the whole method; the float use in the next, unwaived method (line 12) is reported. | `xtask/src/waivers/tests.rs::a_waiver_between_doc_comment_and_function_covers_the_function` |
 
 ```toml
 [[case]]
@@ -615,7 +616,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::sibling_names_in_banned_families_are_rejected"
 oracle = "`std::thread::sleep_ms` under `#[allow(deprecated)]`, `park` and `park_timeout_ms` in a group, `yield_now` and `park_timeout` through an alias are `thread-sleep`; `SystemTimeError` is `time-system`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-052"
@@ -624,7 +625,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_token_are_float_boundary"
 oracle = "`d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-053"
@@ -633,7 +634,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::an_inferred_float_with_no_float_name_is_not_seen"
 oracle = "Known gap pinned with inverted meaning: `text.parse()` into an inferred float with no float name on the way produces no `float-boundary` finding."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-054"
@@ -642,7 +643,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/std_api_tests.rs::the_std_snapshot_is_of_the_pinned_toolchain"
 oracle = "The toolchain named in `std_api_1.96.0.txt` is the channel pinned in `rust-toolchain.toml`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-055"
@@ -651,7 +652,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/std_api_tests.rs::every_documented_thread_and_time_item_is_classified"
 oracle = "The items the 1.96.0 documentation lists for `std::thread` (23) and `std::time` (6) are exactly the items the hand classification names."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-056"
@@ -660,7 +661,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/std_api_tests.rs::each_thread_and_time_item_gets_its_classified_rule"
 oracle = "For each of the 29 items, as a path and as a `use`, the gate reports exactly the classified rule, or nothing for a permitted item."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-057"
@@ -669,7 +670,16 @@ evidence = "test"
 test = "xtask/src/nondeterminism/std_api_tests.rs::every_float_method_of_duration_is_float_boundary"
 oracle = "Every documented `Duration` method whose name ends in `_f32` or `_f64` (14) is `float-boundary` as a method call and as a path, and no other documented method is."
 tier = "fast"
-status = "planned"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-058"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_between_doc_comment_and_function_covers_the_function"
+oracle = "A waiver between a method's doc comment and attributes and its `fn` covers the whole method; the float use in the next, unwaived method (line 12) is reported."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -704,6 +714,7 @@ around a banned leaf) would be the next instrument if a form slips through.
 | Gap | Blocking Work |
 | --- | --- |
 | Alias resolution is file-wide, not per module scope: an import in one module resolves a same-named path in a sibling module. This can only over-report. | Scope-aware name resolution; not needed while no false positive is reported on `main`. |
+| A float whose type is only inferred (`text.parse()` passed to a float parameter, `x.into()` to an `f64`) with no float token, float-suffixed name or float literal on the way is invisible to `float-boundary` (pinned as ND-TP-053). The defence today: no float type, float literal or float-suffixed name can be written in core without a waiver. | `-D clippy::float_arithmetic` for the seven core crates in the strict Clippy step would catch arithmetic on an inferred float; it is a restriction lint, which Rule 10 does not forbid cherry-picking. Proposed, not enforced. |
 | A banned type returned by another crate's function and never named in the file is invisible to the source rules. | Covered by the dependency rule for third-party crates; a type-aware check would need `rustc` (for example a lint driver). |
 | `float-op` is enforced through float types and literals, not method names, because Bunny's fixed-point types have `sqrt` and `sin` methods. A float admitted by a waived item can leave it (as a return value) and be operated on elsewhere where its type is only inferred. | Review of each `float-boundary` waiver; a type-aware check would close it. |
 

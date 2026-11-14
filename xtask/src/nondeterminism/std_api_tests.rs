@@ -131,10 +131,8 @@ fn each_thread_and_time_item_gets_its_classified_rule() {
 #[test]
 fn every_float_method_of_duration_is_float_boundary() {
     let methods = section("[std::time::Duration methods]");
-    let float_methods = methods
-        .iter()
-        .filter(|name| name.ends_with("_f32") || name.ends_with("_f64"))
-        .count();
+    let float_methods =
+        methods.iter().filter(|name| name.ends_with("_f32") || name.ends_with("_f64")).count();
     assert_eq!(float_methods, 14, "witness: 1.96.0 documents 14 float methods of Duration");
     let mut wrong = Vec::new();
     for name in methods {

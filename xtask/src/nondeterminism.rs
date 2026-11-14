@@ -35,6 +35,10 @@ pub(super) struct DependencyFinding {
 }
 
 /// A path that is banned together with everything below it.
+///
+/// The `std::time` and `std::thread` entries name every banned item of those modules one
+/// by one; `std_api_tests.rs` checks them against the documentation of the pinned
+/// toolchain, so a sibling such as `sleep_ms` cannot be missed by a prefix.
 struct PrefixRule {
     prefix: &'static [&'static str],
     rule: &'static str,
@@ -63,7 +67,18 @@ const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["std", "time", "SystemTime"], rule: "time-system", message: CLOCK },
     PrefixRule { prefix: &["std", "time", "UNIX_EPOCH"], rule: "time-system", message: CLOCK },
     PrefixRule { prefix: &["std", "time", "Instant"], rule: "time-instant", message: TICK },
+    PrefixRule { prefix: &["std", "time", "SystemTimeError"], rule: "time-system", message: CLOCK },
     PrefixRule { prefix: &["std", "thread", "sleep"], rule: "thread-sleep", message: SLEEP },
+    PrefixRule { prefix: &["std", "thread", "sleep_ms"], rule: "thread-sleep", message: SLEEP },
+    PrefixRule { prefix: &["std", "thread", "sleep_until"], rule: "thread-sleep", message: SLEEP },
+    PrefixRule { prefix: &["std", "thread", "park"], rule: "thread-sleep", message: SLEEP },
+    PrefixRule { prefix: &["std", "thread", "park_timeout"], rule: "thread-sleep", message: SLEEP },
+    PrefixRule {
+        prefix: &["std", "thread", "park_timeout_ms"],
+        rule: "thread-sleep",
+        message: SLEEP,
+    },
+    PrefixRule { prefix: &["std", "thread", "yield_now"], rule: "thread-sleep", message: SLEEP },
     PrefixRule { prefix: &["tokio", "time", "sleep"], rule: "thread-sleep", message: SLEEP },
     PrefixRule { prefix: &["async_std", "time", "sleep"], rule: "thread-sleep", message: SLEEP },
     PrefixRule { prefix: &["async_std", "task", "sleep"], rule: "thread-sleep", message: SLEEP },

@@ -207,3 +207,25 @@ fn a_waiver_after_code_covers_only_its_line() {
 
     assert_eq!(lines_of("std-fs", &source), vec![3]);
 }
+
+#[test]
+fn a_waiver_between_doc_comment_and_function_covers_the_function() {
+    let source = "\
+pub struct S;
+impl S {
+    /// Converts to a float.
+    #[must_use]
+    // dojo: allow float-boundary -- egress conversion from raw bits, reviewed
+    pub fn f(bits: u32) -> u32 {
+        f32::from_bits(bits).to_bits()
+    }
+
+    /// Not waived.
+    pub fn g(bits: u32) -> u32 {
+        f32::from_bits(bits).to_bits()
+    }
+}
+";
+
+    assert_eq!(lines_of("float-boundary", source), vec![12]);
+}

@@ -257,7 +257,10 @@ fn an_inferred_float_with_no_float_name_is_not_seen() {
     let source = "pub fn f(text: &str) -> Option<u64> { let x = text.parse().ok()?; Some(g(x)) }";
 
     assert_eq!(
-        reported(CORE_PATH, source).into_iter().filter(|(_, rule)| rule == "float-boundary").count(),
+        reported(CORE_PATH, source)
+            .into_iter()
+            .filter(|(_, rule)| rule == "float-boundary")
+            .count(),
         0
     );
 }

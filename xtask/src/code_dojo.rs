@@ -1057,6 +1057,23 @@ impl PolicyVisitor<'_> {
         }
     }
 
+    /// A method such as `d.mul_f64(..)` or `d.as_secs_f64()` is float arithmetic even when
+    /// no float type is written.
+    fn check_float_method(&mut self, line: usize, method: &str) {
+        if self.category == Category::Core
+            && is_float_name(method)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                format!(
+                    "`{method}` takes or returns a float; core requires a boundary/proof waiver"
+                ),
+            );
+        }
+    }
+
     fn check_type_path(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
@@ -1144,6 +1161,7 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let line = line_of(node.span());
         let method = crate::nondeterminism::ident_name(&node.method);
+        self.check_float_method(line_of(node.method.span()), &method);
         if !self.limits.panics_allowed
             && (method == "unwrap" || method == "expect")
             && !self.waived(line, "panic-path")
@@ -1298,7 +1316,14 @@ fn in_nondeterminism_scope(path: &Path) -> bool {
 }
 
 fn names_float(segments: &[String]) -> bool {
-    segments.iter().any(|segment| segment == "f32" || segment == "f64")
+    segments.iter().any(|segment| is_float_name(segment))
+}
+
+/// `f32`, `f64`, and every name ending in `_f32` or `_f64`: `Duration::mul_f64`,
+/// `as_secs_f32`, `from_secs_f64` and Bunny's own `to_f32` take or return a float without
+/// a float token appearing at the call.
+fn is_float_name(name: &str) -> bool {
+    name == "f32" || name == "f64" || name.ends_with("_f32") || name.ends_with("_f64")
 }
 
 fn path_segments(path: &SynPath) -> Vec<String> {
