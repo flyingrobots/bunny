@@ -873,6 +873,15 @@ Binary layout or placement (see [code-layout noise](#code-layout-noise) and
 that is a suspicion, not a finding. The cases replay the quartile tree's calls, so they do
 not bear on the SAH comparison above.
 
+**x86-64 CI reading.** The pull request's `Perf / before and after` job (GitHub's shared
+x86-64 Linux runner, 7 rounds, `--align-code`, base `cda15ecc020a`) read, best p50:
+`trace/closest_hit` 411.54 ns against `trace/closest_hit_sah` 386.45 ns (0.939),
+`trace/any_hit` 371.78 against `trace/any_hit_sah` 347.00 (0.933), and `build/bvh`
+248.5 ms against `build/bvh_sah` 30.2 ms (8.2 times faster). Base against head moved the
+unchanged trace, build and scene cases by -0.2 % to +0.5 %, and the `trace/kernel_tri_*`
+replays by -0.2 % to +1.4 %: the shift seen on aarch64 did not appear there. Shared runners
+are coarse; this is one reading.
+
 **Why the gain is small, from the traversal counters.** `bunny-perf --stats` now prints the
 profile tables for both trees (per ray, averaged over the 1 024 `closest_hit` searches):
 
@@ -929,7 +938,7 @@ scene.
 ground triangles, one camera and 1 024 primary rays. Scenes with uneven primitive density,
 long thin primitives or secondary rays may gain more or less.
 
-**Unmeasured.** x86-64 locally (the CI job reads it, see the pull request), wasm32, other
+**Unmeasured.** x86-64 beyond the one CI reading above, wasm32, other
 scenes, the parameter sweep on any other machine, and tuning the weights per scene.
 
 ## Profile of `closest_hit` on the benchmark scene
