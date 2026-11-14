@@ -949,7 +949,26 @@ triangle test, are the ones to trust.
   and its two box replay cases; `closest_hit` and `any_hit` have it inlined. The replays
   therefore include a call per box test and the searches do not.
 
-**Not measured here:** x86-64 (the pull request's CI perf job reads it) and wasm32.
+**x86-64 (CI).** The pull request's `Perf / before and after` job (GitHub's shared x86-64
+Linux runner, `--rounds 7 --align-code`, base `origin/main` at `0e84fff31a3c`; coarse, as
+the [CI section](#continuous-integration) says) read, best p50:
+
+| Case | Before best | After best | Best change |
+| --- | ---: | ---: | ---: |
+| `trace/closest_hit` | 412.22 | 376.83 | -8.6 % |
+| `trace/any_hit` | 371.01 | 340.95 | -8.1 % |
+| `trace/kernel_box_entry` | 275.28 | 255.86 | -7.1 % |
+| `trace/kernel_box_entry_chain` | 277.62 | 252.67 | -9.0 % |
+| `trace/box_entry` | 8.53 | 7.80 | -8.6 % |
+| `trace/kernel_tri_all_chain` | 68.03 | 68.30 | +0.4 % |
+| `trace/kernel_tri_rejected` | 20.47 | 20.70 | +1.1 % |
+| `trace/ray_prepare` | 7.72 | 7.72 | +0.0 % |
+
+Every box-test case is faster there too, by about 7 to 9 % instead of 17 to 21 %: the gain
+is smaller on x86-64 but has the same sign, so no target-specific choice is needed. The
+triangle replays are flat on x86-64 in a full-table run.
+
+**Not measured:** wasm32.
 
 ## Profile of `closest_hit` on the benchmark scene
 
