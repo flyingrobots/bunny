@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* The BVH depth contract is stated and tested; no library code changes. The
+  six searches hold at most `d + 1` of their 64 stack entries on a tree of
+  depth `d` (the root at depth 0), so every tree of depth at most 63 is searched
+  completely, and a deeper one gives the complete answer or `StackOverflow`,
+  never another answer; "equals a test of every primitive" now says so.
+  `compact_bvh`'s `TooDeep` means more than 64 interior subtrees waiting at
+  once, not depth: every tree of depth at most 64 converts. `build_bvh_sah`
+  reaches its cap of 60 inside the trace domain (70 collinear points, a capped
+  leaf of 10), and its depth tests now compare with literals, so changing
+  `SAH_MAX_DEPTH` or the build stack fails them. `build_bvh` has no cap and
+  exceeds 63 inside the trace domain (94 collinear points build a tree 90 deep;
+  94 thin triangles, 70); its documentation now says so and recommends
+  `build_bvh_sah` for ray tracing (flyingrobots/bunny#293).
+
 * Code Dojo's dependency check lists the deterministic crates' graph over
   normal and build edges, with the workspace's features and with
   `--all-features`, so a banned crate behind an optional dependency that no

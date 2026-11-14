@@ -360,7 +360,7 @@ Regenerating them is a contract change.
 | TRACE-TP-411 | Known distance | TRACE-REQ-032 | A triangle in the plane `x = 2.0` and the ray along `+x` from 0 and along `-x` from 4.0, direction `2^32 + 1`: distance `floor(2^65 / (2^32 + 1)) = 8 589 934 590` raw, back face for `+x` and front face for `-x`. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_long_direction_hit_has_the_exactly_floored_distance` |
 | TRACE-TP-412 | Traversal depth boundary | TRACE-REQ-033, TRACE-REQ-021, TRACE-REQ-025, TRACE-REQ-028 | A comb of depth 63 and one of depth 64 whose right child at every level is the next level and enters the ray before its left leaf, so every search keeps the left leaf of each level pending: at depth 63 all six traversals (the compact two on the converted tree) return what a test of every primitive returns; at depth 64 each returns StackOverflow. | `crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_412_a_comb_of_depth_63_is_searched_and_one_of_depth_64_overflows` |
 | TRACE-TP-413 | Conversion depth boundary | TRACE-REQ-034 | A spine whose right child at every level is an interior node of two leaves, which compact_bvh queues while it writes the left subtree: depth 64 (64 subtrees waiting at the deepest level) converts and writes every interior node; depth 65 is TooDeep. A right comb of depth 101, which queues at most one subtree, converts. | `crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_413_compact_conversion_queues_at_most_one_subtree_per_level` |
-| TRACE-TP-414 | Deliberate depth mutations | TRACE-REQ-033, TRACE-REQ-034 | Each stack of the six traversals and of compact_bvh enlarged by one, and the box queries' capacity check moved by one, makes TRACE-TP-412 or TRACE-TP-413 fail. | [Depth mutation checks](#depth-mutation-checks) |
+| TRACE-TP-414 | Deliberate depth mutations | TRACE-REQ-033, TRACE-REQ-034 | Each stack of the six traversals and of compact_bvh enlarged or shrunk by one makes TRACE-TP-412 or TRACE-TP-413 fail; the box queries' explicit capacity check moved by one is an equivalent mutant. | [Depth mutation checks](#depth-mutation-checks) |
 
 ```toml
 [[case]]
@@ -988,26 +988,28 @@ status = "implemented"
 id = "TRACE-TP-412"
 requirements = ["TRACE-REQ-033", "TRACE-REQ-021", "TRACE-REQ-025", "TRACE-REQ-028"]
 evidence = "test"
+test = "crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_412_a_comb_of_depth_63_is_searched_and_one_of_depth_64_overflows"
 oracle = "Constructed combs: the stack holds the d pending left leaves and the two children of the deepest interior node, d + 1 entries, so depth 63 fits 64 entries and depth 64 does not; below the bound the answers equal a test of every primitive."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-413"
 requirements = ["TRACE-REQ-034"]
 evidence = "test"
+test = "crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_413_compact_conversion_queues_at_most_one_subtree_per_level"
 oracle = "Constructed spines: the conversion queues one right subtree per level above the deepest interior node plus its two children, d entries for depth d, so 64 converts and 65 is TooDeep."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-414"
 requirements = ["TRACE-REQ-033", "TRACE-REQ-034"]
 evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#depth-mutation-checks"
-oracle = "Each stack capacity moved by one, each mutant's tests under timeout 120 with every source touched before the build."
+oracle = "Each stack capacity moved by one each way, each mutant's tests under timeout 120 with every source touched before the build; one equivalent mutant named."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1145,9 +1147,21 @@ Each stack capacity below was changed in a container copy of
 and `timeout 120 cargo test --locked -q -p bunny-broadphase --no-fail-fast`
 run per mutant.
 
+The restored source passed every test of the crate.
+
 | Mutation | Failing cases |
 | --- | --- |
-| Planned: see TRACE-TP-414. | |
+| `traversal.rs` stack of 65 entries | TRACE-TP-412 (depth 64 no longer overflows); also TRACE-TP-406 (the frozen copies keep 64) |
+| `traversal.rs` stack of 63 entries | TRACE-TP-412 (depth 63 overflows) |
+| `closest_hit.rs` stack of 65 or 63 entries | TRACE-TP-412 |
+| `compact_hit.rs` stack of 65 or 63 entries | TRACE-TP-412 |
+| `compact.rs` queue of 65 entries | TRACE-TP-413 (depth 65 converts) |
+| `compact.rs` queue of 63 entries | TRACE-TP-413 (depth 64 is `TooDeep`) |
+| Box queries' capacity check `>` for `>=` | None: an equivalent mutant. The bounded `get_mut` that follows returns `StackOverflow` at the same push. |
+
+Before TRACE-TP-412 and TRACE-TP-413, the only depth cases were a 70-level
+comb, a truncated 64-level comb (TRACE-TP-406, TRACE-TP-305) and `comb(60)`
+and `comb(70)` in TRACE-TP-304, none at either boundary.
 
 ### Edge-Oracle Mutation Checks
 

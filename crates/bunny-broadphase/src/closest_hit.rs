@@ -79,7 +79,10 @@ pub struct ClosestHit {
 /// ```
 ///
 /// # Errors
-/// Returns `TraversalError::StackOverflow` if the tree is deeper than 64 levels, and
+/// Returns `TraversalError::StackOverflow` when the search needs more than its 64 stack
+/// entries: a tree of depth `d` (the root at depth 0) needs at most `d + 1`, so this never
+/// happens below depth 64 and can happen from depth 64 on, depending on the tree and the ray.
+/// Returns
 /// `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange` if a node
 /// the search visits is malformed. A buffer that is not a tree (a child index naming an
 /// ancestor, or a subtree reached twice) is `InvalidNodeIndex` once the search has made more
