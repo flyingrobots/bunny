@@ -41,6 +41,7 @@ topic-docs`.
 | ND-REQ-003 | Deterministic look-alikes of banned forms are accepted. | `README.md#rules` |
 | ND-REQ-004 | The source rules cover the core crates, `bunny-codec` and `bunny-contract`, including their tests; `xtask`, `bunny-perf` and `bunny-wesley` are outside them; `float-boundary` stays core-only. | `README.md#scope` |
 | ND-REQ-005 | The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
+| ND-REQ-006 | No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory. | `README.md#compile-time-file-access` |
 
 ```toml
 [[requirement]]
@@ -66,6 +67,11 @@ status = "active"
 [[requirement]]
 id = "ND-REQ-005"
 summary = "The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-006"
+summary = "No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory."
 status = "active"
 ```
 
@@ -120,7 +126,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-031 | raw identifiers | ND-REQ-001 | `r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line. | `xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names` |
 | ND-TP-032 | raw float types | ND-REQ-001 | `r#f64` as a type and as a path segment is reported as `float-boundary`. | `xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary` |
 | ND-TP-033 | self in a use group | ND-REQ-001 | `use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case. | `xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself` |
-| ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include` and a binding named `env` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
+| ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include`, another crate's macro named `include` and a binding named `env` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
 | ND-TP-035 | waiver outside a comment | ND-REQ-002 | Waiver text in a string, raw string, byte string, a line of a multi-line raw string, an outer, inner or block doc comment, a doc attribute or macro tokens leaves the `std-fs` finding reported. | `xtask/src/waivers/tests.rs::waiver_text_outside_a_comment_waives_nothing` |
 | ND-TP-036 | comment waivers | ND-REQ-002 | A line comment or block comment above the finding, or a line comment on its line, suppresses it. | `xtask/src/waivers/tests.rs::line_and_block_comments_waive` |
 | ND-TP-037 | one rule per waiver | ND-REQ-002 | A comment with a `std-fs` and a `std-env` clause leaves both findings reported. | `xtask/src/waivers/tests.rs::a_comment_with_two_clauses_waives_nothing` |
@@ -133,10 +139,10 @@ real `cargo tree` output and the real manifests.
 | ND-TP-044 | exact rule name | ND-REQ-002 | A waiver for `std-fs-extra` leaves a `std-fs` finding reported. | `xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly` |
 | ND-TP-045 | manifest waiver form | ND-REQ-002, ND-REQ-005 | A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not. | `xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments` |
 | ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
-| ND-TP-047 | include of source | ND-REQ-001 | Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named` |
-| ND-TP-048 | path attributes | ND-REQ-001 | `#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file` |
-| ND-TP-049 | included data | ND-REQ-001 | `include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`. | `xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate` |
-| ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
+| ND-TP-047 | include of source | ND-REQ-006 | Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named` |
+| ND-TP-048 | path attributes | ND-REQ-006 | `#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file` |
+| ND-TP-049 | included data | ND-REQ-006 | `include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`. | `xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate` |
+| ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
 
 ```toml
 [[case]]
@@ -441,7 +447,7 @@ id = "ND-TP-034"
 requirements = ["ND-REQ-003"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted"
-oracle = "An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include` and a binding named `env` produce no finding in the rule family."
+oracle = "An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include`, another crate's macro named `include` and a binding named `env` produce no finding in the rule family."
 tier = "fast"
 status = "implemented"
 
@@ -555,39 +561,39 @@ status = "implemented"
 
 [[case]]
 id = "ND-TP-047"
-requirements = ["ND-REQ-001"]
+requirements = ["ND-REQ-006"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named"
 oracle = "Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-048"
-requirements = ["ND-REQ-001"]
+requirements = ["ND-REQ-006"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file"
 oracle = "`#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-049"
-requirements = ["ND-REQ-001"]
+requirements = ["ND-REQ-006"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate"
 oracle = "`include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-050"
 requirements = ["ND-REQ-001"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env"
-oracle = "`env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!(\"CARGO_PKG_VERSION\")` and `env!` in a macro body are each reported as `std-env`."
+oracle = "`env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence

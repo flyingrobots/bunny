@@ -52,8 +52,28 @@ cargo test --locked -p xtask nondeterminism at the failing-evidence commit with
 `assert_rejects` made to report instead of panic: 23 of the 24 new forms slip through;
 only `std::env!` is caught, through the `std::env` prefix.
 
+Mutations, each under `timeout 120`, all caught: every path inside the crate (2 tests
+fail), backslashes accepted (1), any `#[path]` extension accepted (1), `cfg_attr` not
+read (1), macro tokens not searched for calls (3), any module path counted as a standard
+macro (the look-alike test).
+cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
+cargo test --locked -p xtask: 99 passed; cargo test -p bunny-contract --test
+generated_version_tests: 2 passed.
+cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository: three new
+findings, all real and all in crates/bunny-contract/tests/generated_version_tests.rs:
+`env!("CARGO_PKG_VERSION")` (`std-env`) and two `include_str!` of the committed
+generator outputs under `generated/` (`include-data`). Each now has a waiver with its
+reason; after that the scan is clean. The five `#[path = "support/*.rs"]` test modules
+and the four `include_str!`/`include_bytes!` fixtures in bunny-codec are inside their
+crates and pass.
+cargo run --locked -p xtask -- code-dojo --all with --history origin/main..HEAD --network
+at the final commit.
+
 Known risks:
-The rules are not in this commit; their tests fail here by design.
+Paths resolve lexically: symbolic links are not followed, and inside an inline module
+the compiler resolves `#[path]` against a deeper directory, which can only make the gate
+report an inside path as outside. A user macro named `include`, `env` or `option_env`
+called by its bare name is reported as the standard one.
 
 Human reviewer:
 James Ross (maintainer); review pending.

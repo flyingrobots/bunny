@@ -28,9 +28,11 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `hand-hashed-table` | any line, comments included, that names open addressing |
 | `json-serialization` | the `serde_json` crate |
 | `wasm-serde` | the `serde_wasm_bindgen` crate |
-| `std-env` | `std::env` |
+| `std-env` | `std::env`, and the macros `env!` and `option_env!` (also under `std::` and `core::`) |
 | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` |
 | `std-process` | `std::process` |
+| `include-source` | `include!` in every spelling, and a `#[path]` module naming anything but a `.rs` file inside the crate directory |
+| `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
 | `float-boundary` | in core crates only: `f32` and `f64` types, float literals, and any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), also inside macro bodies |
 
 A banned path bans everything below it: `std::fs` covers `std::fs::read` and
@@ -67,6 +69,34 @@ bodies, method names (`x.r#unwrap()`) and macro names (`r#panic!`).
 A rule is reported at most once per line. The import map is file-wide, not
 per module, so a name imported in one module also resolves in a sibling
 module; this can only over-report.
+
+### Compile-Time File Access
+
+The gate scans every tracked `.rs` file of a crate, so code can reach a
+crate unscanned only through `include!` or a `#[path]` module that names
+another kind of file or a file outside the crate.
+
+- `include!` is banned outright (`include-source`), whatever its argument: a
+  `.rs` file inside the crate can be a `mod`, and anything else (a non-Rust
+  file, a `concat!` or `env!` path, a build-script output) is code the gate
+  never reads. Because the first `include!` is itself the finding, a second
+  level of indirection behind it changes nothing.
+- A `#[path]` module, also one set through `cfg_attr`, must name a `.rs`
+  file inside the crate directory; that file is then scanned as a file of the
+  crate. Anything else is an `include-source` finding at the attribute.
+- `include_str!` and `include_bytes!` must name one string literal that
+  resolves inside the crate directory (`include-data`): fixed data in the
+  package, not a file on the host.
+- `env!` and `option_env!` read the build environment and are `std-env`
+  findings, `CARGO_PKG_VERSION` included; a waiver says why a variable Cargo
+  sets from the manifest is safe.
+
+Macro names are resolved through imports (`use std::include_str as text;`)
+and found inside other macros' tokens. Paths resolve lexically against the
+including file's directory, as the compiler resolves `include_str!` and a
+top-level `#[path]`; inside an inline module the compiler uses a deeper
+directory, so the lexical answer can only call an inside path outside.
+Symbolic links are not followed, and a path with a backslash is rejected.
 
 ### Dependency Rules
 

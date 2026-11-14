@@ -910,7 +910,7 @@ fn check_ast(
 
 fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, file: &File) {
     if in_nondeterminism_scope(&context.path) {
-        let findings = crate::nondeterminism::source_findings(file)
+        let findings = crate::nondeterminism::source_findings(&context.path, file)
             .into_iter()
             .chain(crate::nondeterminism::text_findings(context.lines));
         for finding in findings {

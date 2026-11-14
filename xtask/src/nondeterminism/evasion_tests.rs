@@ -189,11 +189,7 @@ fn compile_time_environment_macros_are_std_env() {
             ("env", "pub fn f() -> &'static str { env!(\"HOME\") }", 1),
             ("option_env", "pub fn f() -> Option<&'static str> { option_env!(\"HOME\") }", 1),
             ("std path", "pub fn f() -> &'static str { std::env!(\"HOME\") }", 1),
-            (
-                "core path",
-                "pub fn f() -> Option<&'static str> { core::option_env!(\"HOME\") }",
-                1,
-            ),
+            ("core path", "pub fn f() -> Option<&'static str> { core::option_env!(\"HOME\") }", 1),
             ("cargo variable", "pub fn f() -> &'static str { env!(\"CARGO_PKG_VERSION\") }", 1),
             ("macro body", "pub fn f() -> String { format!(\"{}\", env!(\"HOME\")) }", 1),
         ],
@@ -223,6 +219,7 @@ const ACCEPTED: &[(&str, &str)] = &[
     ),
     ("a function named include", "fn include(x: u8) -> u8 { x }\npub fn f() -> u8 { include(1) }"),
     ("a binding named env", "pub fn f(env: u8) -> u8 { env }"),
+    ("another crate's macro named include", "pub fn f() -> u8 { local::include!(1) }"),
 ];
 
 #[test]
