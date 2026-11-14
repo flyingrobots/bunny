@@ -607,6 +607,9 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-093 | Frame-combination rounding | OPTICS-REQ-034 | On the exact `+Z` frame, `u = 2^-6` and `9 * 2^-6` (radius `2^29` and `3 * 2^29`) at 1/8 and 7/8 turn: each disk component is an exact tie, `379 625 062.5` (even truncation) and `1 138 875 187.5` (odd), positive and negative. | `crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_093_the_frame_combination_rounds_ties_to_even_in_both_signs` |
 | OPTICS-TP-094 | Frame-division rounding | OPTICS-REQ-031 | Four triangles (found by search) whose unit normals have `z = 0` and a tie in `q(x y)`, with an even and an odd truncation, each with its mirror image (a negative quotient), and a sliver whose unit normal is `(2^31, 3 719 550 787, 0)`: the whole frame; the review's tie `(2^31, 3 719 550 789, 0)`, which no triangle's normal reaches, given as it stands; and two unit normals with `z > 0` (an odd divisor, so no tie exists) whose remainder is half a unit of the divisor below and above the half. | `crates/bunny-optics/tests/shading_rounding_tests.rs::optics_tp_094_the_frame_division_rounds_ties_to_even_in_both_signs` |
 | OPTICS-TP-095 | Shading rounding mutations | OPTICS-REQ-031, OPTICS-REQ-034, OPTICS-REQ-036 | Each of the three rounding rules changed to each plausible wrong rule fails at least one case above that does not compare with the retained 0.7.1 code. | [Shading rounding mutation checks](#shading-rounding-mutation-checks) |
+| OPTICS-TP-096 | A hit point one raw unit outside steps inside | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | On each axis and sign, a hit point at `TRACE_COORD_LIMIT_RAW + 1` raw units on that axis (the case's ray along the axis from the origin, distance `TRACE_COORD_LIMIT_RAW + 1` raw, face chosen so the facing normal points inward) against the plane `2a + b = 2 TRACE_COORD_LIMIT_RAW - 1` (`a` the axis, `b` the next): the point and one step are not strictly on the arrival side and two steps are, so `new` returns `Some` and `try_new` `Ok` of the start point `TRACE_COORD_LIMIT_RAW - 1` raw units out on that axis (hand computed), with the facing frame. No comparison with the retained 0.7.1 code. | `crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_096_a_hit_point_one_raw_unit_outside_the_domain_steps_inside` |
+| OPTICS-TP-097 | A hit point two raw units outside is refused | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The scenes of OPTICS-TP-096 at distance `TRACE_COORD_LIMIT_RAW + 2` raw: two steps reach only `TRACE_COORD_LIMIT_RAW`, which is outside, so `new` returns `None` and `try_new` returns `HitPointOutsideTraceDomain` with the unstepped point (hand computed), refused before the plane test. No comparison with the retained 0.7.1 code. | `crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_097_a_hit_point_two_raw_units_outside_the_domain_is_refused_by_both_paths` |
+| OPTICS-TP-098 | Overflow-guard mutations | OPTICS-REQ-042, OPTICS-REQ-043 | The beyond-reach guard of each path moved one raw unit in each direction fails a case that does not compare with the retained 0.7.1 code, except the fast path's loosened guard, which changes no output (shown in the mutation section). | [Overflow-guard mutation checks](#overflow-guard-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1418,6 +1421,33 @@ artifact = "docs/topics/optics/test-plan.md#shading-rounding-mutation-checks"
 oracle = "round_shift and div_round with ties away from zero, toward zero, toward +inf, toward -inf and to odd, or truncated, and the cosine and combination sites floored, each fail a case that does not compare with the retained 0.7.1 code."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-096"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_096_a_hit_point_one_raw_unit_outside_the_domain_steps_inside"
+oracle = "Hand computed with exact integers: on the plane 2a + b = 2L - 1 (L = TRACE_COORD_LIMIT_RAW), the point at a = L + 1, b = 0 gives 2L + 2 and one step 2L, neither below 2L - 1, and two steps give 2L - 2, below it; the start point L - 1 is inside the domain."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-097"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_097_a_hit_point_two_raw_units_outside_the_domain_is_refused_by_both_paths"
+oracle = "Specified: a coordinate of L + 2 raw units is more than two raw units outside the domain, so both paths refuse it before the plane test and the variant carries the unstepped point."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-098"
+requirements = ["OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#overflow-guard-mutation-checks"
+oracle = "Each path's beyond-reach guard tightened and loosened by one raw unit, with each mutant's tests under timeout 120 and every source touched before the build."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1543,6 +1573,46 @@ the crate.
 | The highest axis on a tie (`>` for `>=` in `dominant_step`) | The lowest axis on a tie | OPTICS-TP-087 (the octahedron witness), OPTICS-TP-088 (every case), OPTICS-TP-089, OPTICS-TP-090 |
 | The step against the facing normal's sign | Steps go toward the arrival side | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054, OPTICS-TP-060, OPTICS-TP-061, OPTICS-TP-079, OPTICS-TP-081, OPTICS-TP-083, OPTICS-TP-085, OPTICS-TP-087 to OPTICS-TP-090; also OPTICS-TP-062, OPTICS-TP-064 |
 | A point on the plane accepted (`>= offset` for `> offset`) | Strictly on the arrival side | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054, OPTICS-TP-060, OPTICS-TP-087 to OPTICS-TP-090 |
+
+### Overflow-Guard Mutation Checks
+
+`SurfaceHit::new` and `SurfaceHit::try_new` each refuse a hit point with a
+coordinate of `TRACE_COORD_LIMIT_RAW + 2` raw units or more before the plane
+test (`within(start, domain + MAX_STEPS)` in
+`crates/bunny-optics/src/shading/hit.rs`). The bound is exact: a coordinate
+one raw unit outside can reach `TRACE_COORD_LIMIT_RAW - 1` in two steps, and
+one two raw units outside can reach only `TRACE_COORD_LIMIT_RAW`, which is
+outside. Each guard was moved one raw unit in each direction in a container
+copy of `hit.rs`, every source file touched before the build, and the crate's
+tests run (`timeout 120 cargo test --locked -q -p bunny-optics
+--no-fail-fast`).
+
+Before OPTICS-TP-096 and OPTICS-TP-097:
+
+| Mutation in `hit.rs` | Failing cases |
+| --- | --- |
+| Fast path tightened (`domain + MAX_STEPS - 1`: refuses one raw unit outside) | None |
+| Fast path loosened (`domain + MAX_STEPS + 1`: admits two raw units outside) | None |
+| Diagnostic path tightened | OPTICS-TP-062, OPTICS-TP-064 only (the comparison with the retained 0.7.1 code) |
+| Diagnostic path loosened | None |
+
+After (the restored source passed all fifteen test binaries of the crate):
+
+| Mutation in `hit.rs` | Failing cases |
+| --- | --- |
+| Fast path tightened | OPTICS-TP-096 (the fast path refuses the hit) |
+| Fast path loosened | None: an equivalent mutant (below) |
+| Diagnostic path tightened | OPTICS-TP-096 (`try_new` refuses what `new` accepts); also OPTICS-TP-062, OPTICS-TP-064 |
+| Diagnostic path loosened | OPTICS-TP-097 (`NotOnArrivalSide` for `HitPointOutsideTraceDomain`) |
+
+The fast path's loosened guard changes no output of `SurfaceHit::new`, so no
+test can catch it. A point it newly admits has a coordinate of exactly
+`TRACE_COORD_LIMIT_RAW + 2` raw units; at most two steps move only the
+dominant axis, by one raw unit each, so that coordinate ends at magnitude
+`TRACE_COORD_LIMIT_RAW` or more and the final domain check returns `None`, as
+the guard did. The plane test still fits `i128` (coordinates below `2^41`).
+The diagnostic path's loosened guard is not equivalent: it names the refusal
+`NotOnArrivalSide` or `StartOutsideTraceDomain` instead.
 
 ### Shading Rounding Mutation Checks
 

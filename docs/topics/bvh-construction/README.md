@@ -74,6 +74,34 @@ stands:
 - The partition swaps entries in place and is not stable, so a leaf's entries
   are not in any particular order.
 
+### Depth
+
+`build_bvh` has no depth cap, and adding one would change its output for the
+inputs it caps, so it has none. Its trees can be deeper than the 63 levels
+below the root that every traversal holds
+([ray-tracing chapter](../ray-tracing/README.md#depth-and-the-traversal-stack)),
+including for inputs entirely inside the trace domain (every coordinate below
+`2^40` raw in magnitude). On such a tree a traversal returns its complete
+answer or `TraversalError::StackOverflow`, never a different answer. For ray
+tracing, use `build_bvh_sah`, whose trees are at most 60 deep.
+
+What is known about inputs inside the trace domain, from a targeted search
+(BVH-TP-024):
+
+- **Collinear points split off one per level.** Point boxes on one axis at
+  `T - d_k` raw, with `d_0 = 0` and `d_(k+1) = ceil(4 (d_k + 1) / 3)`, have
+  zero area everywhere, so every plane costs the same and the first quartile
+  plane wins; the gap below the farthest point is more than a quarter of the
+  span, so that plane leaves the farthest point alone. 94 such points
+  (`T = 2^40 - 1 - 2^32`) give a tree 90 deep, the deepest found.
+- **Thin triangles come close.** Triangles in the planes `x` of those points,
+  one raw unit wide in y and z, give a tree 70 deep. The same construction
+  continued on a second axis gave 83 (201 points), and on all three 84.
+- **Ratios near 4/3 are the boundary.** At 13/10 the farthest point is no
+  longer alone and the same construction gave 52; ratios 3/2, 2 and 4 gave 63,
+  37 and 17; a progression rising from the bottom by 2 gave 18. Earlier
+  constructions in the independent review peaked at 60.
+
 ## The Binned SAH Builder
 
 `build_bvh_sah` builds a tree for the same traversals with a binned surface
@@ -141,13 +169,29 @@ The tree is a deterministic function of `primitives`:
 The build does not recurse. Pending nodes wait in a fixed array of
 `SAH_MAX_DEPTH + 1` entries on the call stack: a node at depth `d` leaves at
 most one pending sibling per level above it. The depth cap also keeps every
-tree within the traversals' fixed 64-entry stacks: a leaf at depth 60 needs at
-most 61 entries.
+tree within the traversals' fixed 64-entry stacks: a tree of depth 60 needs at
+most 61 entries
+([ray-tracing chapter](../ray-tracing/README.md#depth-and-the-traversal-stack)).
+
+A node at depth 60 is a leaf whatever its size: a **capped leaf**. It is the
+only leaf that can hold more than `SAH_MAX_LEAF_SIZE` primitives, because a
+larger node elsewhere always splits. A capped leaf is still a valid leaf: every
+traversal tests each of its primitives.
 
 The cap is a guarantee, not a tuning knob: with 16 equal-width bins every
 split narrows the chosen axis, so ordinary inputs stay far shallower (18
-levels on the 27 650-triangle benchmark scene). A unit test lowers the cap to
-reach it.
+levels on the 27 650-triangle benchmark scene). Inputs inside the trace domain
+reach it. 70 collinear point boxes at `2^40 - 1 - d_k` raw, with `d_0 = 0` and
+`d_(k+1) = ceil(16 (d_k + 1) / 15)`, put each node's lowest point alone in the
+lowest bin; with zero area everywhere the lowest plane wins, so each level
+splits off one point, and the tree is 60 deep with a capped leaf of 10
+(BVH-TP-022). The independent review's witness, point boxes at raw `17^k` for
+`k` from 0 to 14 on each axis in turn plus `2^18` identical boxes at the
+origin (262 189 boxes), gives a tree 60 deep whose 32 768 leaves at depth 60
+hold 8 primitives each (BVH-TP-023). The build's work stack fills only on a
+left spine, where every level leaves its right child waiting: the review's
+chains extended to `k` = 15, plus `2^14` identical boxes, need all 61 entries
+(BVH-TP-026).
 
 ### Cost
 

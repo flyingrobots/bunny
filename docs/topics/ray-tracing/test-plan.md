@@ -70,7 +70,7 @@ formatting.
 | TRACE-REQ-012 | When a coordinate difference or slab distance overflows, ray_intersects_aabb reports a hit exactly when an exact rational slab test does. | `README.md#general-purpose-ray-aabb-solver` |
 | TRACE-REQ-013 | Reported ray_intersects_aabb bounds are the exact slab bounds rounded to nearest (ties to even) and saturated to the Q32.32 range, with t_enter <= t_exit; coordinate differences are widened, not saturated. | `README.md#general-purpose-ray-aabb-solver` |
 | TRACE-REQ-014 | bunny_broadphase::intersect_ray visits a leaf whose box a near-axis ray passes through. | `README.md#general-purpose-ray-aabb-solver` |
-| TRACE-REQ-021 | closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-021 | On every tree whose depth the traversal stack holds (TRACE-REQ-033), closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
 | TRACE-REQ-022 | The result of closest_hit and any_hit does not depend on the tree's shape or the order its leaves list primitives in. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
 | TRACE-REQ-023 | The distance limit of closest_hit and any_hit is inclusive. | `README.md#closest-hit-traversal` |
 | TRACE-REQ-024 | The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is. | `README.md#search-order-and-pruning` |
@@ -82,6 +82,8 @@ formatting.
 | TRACE-REQ-030 | TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det. | `README.md#exact-triangle-test` |
 | TRACE-REQ-031 | intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions. | `README.md#malformed-buffers` |
 | TRACE-REQ-032 | `TraceRay::from_ray` returns `None` only for an origin outside the trace domain: it accepts every unit direction, including a component of `2^32 + 1` raw, which `FixedUnitVec3::try_from_unit` allows and `TraceRay::new` refuses; every width bound of the kernels holds for it, and `FixedUnitVec3::new` never produces a component above `2^32`. | `README.md#trace-domain` |
+| TRACE-REQ-033 | intersect_aabb, intersect_ray, closest_hit, any_hit, compact_closest_hit and compact_any_hit hold at most d + 1 entries of their 64-entry stacks on a tree of depth d (the root at depth 0), so every tree of depth at most 63 is searched completely; on a deeper tree each returns its complete answer or StackOverflow, and a comb that keeps one pending sibling per level returns StackOverflow at depth 64. | `README.md#depth-and-the-traversal-stack` |
+| TRACE-REQ-034 | compact_bvh queues at most d interior subtrees on a tree of depth d, so every tree of depth at most 64 converts unless another error applies; TooDeep means more than 64 interior subtrees waiting at once, which a tree of depth 65 can need. | `README.md#compact-layout` |
 
 ```toml
 [[requirement]]
@@ -156,7 +158,7 @@ status = "active"
 
 [[requirement]]
 id = "TRACE-REQ-021"
-summary = "closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index."
+summary = "On every tree whose depth the traversal stack holds (TRACE-REQ-033), closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index."
 status = "active"
 
 [[requirement]]
@@ -212,6 +214,16 @@ status = "active"
 [[requirement]]
 id = "TRACE-REQ-032"
 summary = "TraceRay::from_ray returns None only for an origin outside the trace domain: it accepts every unit direction, including a component of 2^32 + 1 raw, which FixedUnitVec3::try_from_unit allows and TraceRay::new refuses; every width bound of the kernels holds for it, and FixedUnitVec3::new never produces a component above 2^32."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-033"
+summary = "intersect_aabb, intersect_ray, closest_hit, any_hit, compact_closest_hit and compact_any_hit hold at most d + 1 entries of their 64-entry stacks on a tree of depth d (the root at depth 0), so every tree of depth at most 63 is searched completely; on a deeper tree each returns its complete answer or StackOverflow, and a comb that keeps one pending sibling per level returns StackOverflow at depth 64."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-034"
+summary = "compact_bvh queues at most d interior subtrees on a tree of depth d, so every tree of depth at most 64 converts unless another error applies; TooDeep means more than 64 interior subtrees waiting at once, which a tree of depth 65 can need."
 status = "active"
 ```
 
@@ -346,6 +358,9 @@ Regenerating them is a contract change.
 | TRACE-TP-409 | Normalization never exceeds 1.0 | TRACE-REQ-032 | Over 200 000 generated vectors (scales from 3 raw to `2^61`, axis-aligned, near-axis and tiny), at least 130 000 normalize and at least 50 000 are refused; no result has a component above `2^32`, at least 15 000 have one equal to it, the largest is exactly `2^32`, and `from_ray` accepts every result. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_409_normalisation_never_yields_a_component_above_one` |
 | TRACE-TP-410 | Kernels for long unit directions | TRACE-REQ-032 | 20 000 seeded rays with a component of `2^32 + 1` and 20 000 boxes: `hit_triangle` equals the signed-volume oracle (hit, floor distance, facing, exact numerators; at least 4 000 hits and 4 000 misses) and `box_entry` is never past the exact rational entry and short by at most `T / 2^31 + 2` (at least 1 000 reached and 1 000 certainly missed boxes). | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_410_kernels_agree_with_the_oracles_for_long_unit_directions` |
 | TRACE-TP-411 | Known distance | TRACE-REQ-032 | A triangle in the plane `x = 2.0` and the ray along `+x` from 0 and along `-x` from 4.0, direction `2^32 + 1`: distance `floor(2^65 / (2^32 + 1)) = 8 589 934 590` raw, back face for `+x` and front face for `-x`. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_long_direction_hit_has_the_exactly_floored_distance` |
+| TRACE-TP-412 | Traversal depth boundary | TRACE-REQ-033, TRACE-REQ-021, TRACE-REQ-025, TRACE-REQ-028 | A comb of depth 63 and one of depth 64 whose right child at every level is the next level and enters the ray before its left leaf, so every search keeps the left leaf of each level pending: at depth 63 all six traversals (the compact two on the converted tree) return what a test of every primitive returns; at depth 64 each returns StackOverflow. | `crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_412_a_comb_of_depth_63_is_searched_and_one_of_depth_64_overflows` |
+| TRACE-TP-413 | Conversion depth boundary | TRACE-REQ-034 | A spine whose right child at every level is an interior node of two leaves, which compact_bvh queues while it writes the left subtree: depth 64 (64 subtrees waiting at the deepest level) converts and writes every interior node; depth 65 is TooDeep. A right comb of depth 101, which queues at most one subtree, converts. | `crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_413_compact_conversion_queues_at_most_one_subtree_per_level` |
+| TRACE-TP-414 | Deliberate depth mutations | TRACE-REQ-033, TRACE-REQ-034 | Each stack of the six traversals and of compact_bvh enlarged or shrunk by one makes TRACE-TP-412 or TRACE-TP-413 fail; the box queries' explicit capacity check moved by one is an equivalent mutant. | [Depth mutation checks](#depth-mutation-checks) |
 
 ```toml
 [[case]]
@@ -968,6 +983,33 @@ test = "crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_l
 oracle = "Constructed: the distance is floor(2^65 / (2^32 + 1)) raw."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-412"
+requirements = ["TRACE-REQ-033", "TRACE-REQ-021", "TRACE-REQ-025", "TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_412_a_comb_of_depth_63_is_searched_and_one_of_depth_64_overflows"
+oracle = "Constructed combs: the stack holds the d pending left leaves and the two children of the deepest interior node, d + 1 entries, so depth 63 fits 64 entries and depth 64 does not; below the bound the answers equal a test of every primitive."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-413"
+requirements = ["TRACE-REQ-034"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/traversal_depth_tests.rs::trace_tp_413_compact_conversion_queues_at_most_one_subtree_per_level"
+oracle = "Constructed spines: the conversion queues one right subtree per level above the deepest interior node plus its two children, d entries for depth d, so 64 converts and 65 is TooDeep."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-414"
+requirements = ["TRACE-REQ-033", "TRACE-REQ-034"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#depth-mutation-checks"
+oracle = "Each stack capacity moved by one each way, each mutant's tests under timeout 120 with every source touched before the build; one equivalent mutant named."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1097,6 +1139,29 @@ case that existed before #258; only the equivalence corpora `TRACE-TP-309` and
 `TRACE-TP-310` catch them. The first run of the parallel-axis mutation deleted the check
 outright, which left an unused-parentheses lint that `deny(warnings)` turned into a build
 error, so no test ran; it was redone as the comparison change above.
+
+### Depth Mutation Checks
+
+Each stack capacity below was changed in a container copy of
+`crates/bunny-broadphase/src/`, every source file touched before the build,
+and `timeout 120 cargo test --locked -q -p bunny-broadphase --no-fail-fast`
+run per mutant.
+
+The restored source passed every test of the crate.
+
+| Mutation | Failing cases |
+| --- | --- |
+| `traversal.rs` stack of 65 entries | TRACE-TP-412 (depth 64 no longer overflows); also TRACE-TP-406 (the frozen copies keep 64) |
+| `traversal.rs` stack of 63 entries | TRACE-TP-412 (depth 63 overflows) |
+| `closest_hit.rs` stack of 65 or 63 entries | TRACE-TP-412 |
+| `compact_hit.rs` stack of 65 or 63 entries | TRACE-TP-412 |
+| `compact.rs` queue of 65 entries | TRACE-TP-413 (depth 65 converts) |
+| `compact.rs` queue of 63 entries | TRACE-TP-413 (depth 64 is `TooDeep`) |
+| Box queries' capacity check `>` for `>=` | None: an equivalent mutant. The bounded `get_mut` that follows returns `StackOverflow` at the same push. |
+
+Before TRACE-TP-412 and TRACE-TP-413, the only depth cases were a 70-level
+comb, a truncated 64-level comb (TRACE-TP-406, TRACE-TP-305) and `comb(60)`
+and `comb(70)` in TRACE-TP-304, none at either boundary.
 
 ### Edge-Oracle Mutation Checks
 
