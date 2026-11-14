@@ -452,7 +452,7 @@ fn trace_tp_011_degenerate_triangles_parallel_rays_and_far_hits_miss() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits() {
-    let mut seeds = Seeds(TRACE_SEED ^ 313);
+    let mut seeds = Seeds(TRACE_SEED ^ 0x0313);
     let mut checked = 0;
     for (case, (coord_bound, step_bound)) in [(8 * ONE_RAW, ONE_RAW / 256), (1 << 38, 1 << 31)]
         .into_iter()
