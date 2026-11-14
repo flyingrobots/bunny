@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+* Code Dojo closes five ways a review found to bring host access or unscanned
+  code into a deterministic crate. In a `macro_rules!` transcriber a
+  metavariable may no longer stand next to `::`, as a macro or method name,
+  or inside an attribute other than a `doc` value (`macro-metavariable`), so
+  `std::time::$t::now()`, `$m!($p)` and `#[path = $p]` fail the gate;
+  `$crate` and matchers are accepted. `include!`, `include_str!`,
+  `include_bytes!`, `env!` and `option_env!` are recognised under every path
+  rooted at `std`, `core` or `alloc`, the preludes included
+  (`std::prelude::v1::include`), and a `use` of a banned one is reported.
+  `std::backtrace`, `std::panic::Location`, `file!` and the backtrace-style
+  functions are `std-env`, `std::arch`, `core::arch` and the CPU
+  feature-detection macros a new `host-cpu` rule, `std::random` is `random`,
+  the rest of `std::os` but `std::os::raw` a new `host-platform` rule, and
+  `io::Error::last_os_error` is `std-process`. Every module and macro at the
+  roots of `std`, `core` and `alloc` in the 1.96.0 documentation is
+  classified, checked by a test against the documentation, and a path through
+  an unclassified one is a new `unclassified-std` finding. 47 seeded forms,
+  2 caught before (under other rules); nothing on main is affected. The
+  earlier entry's "`include!` is banned in every spelling" was not true of
+  the prelude spellings until now. Closes flyingrobots/bunny#347.
+
 ### Added
 
 * `bunny-broadphase`: `compact_closest_hit_counted` and
@@ -311,7 +334,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flyingrobots/bunny#321.
 
 * Code Dojo no longer lets code or host files into a deterministic crate
-  unscanned: `include!` is banned in every spelling (`include-source`), a
+  unscanned through `include!`, `#[path]` or included data: `include!` is
+  banned in every spelling (`include-source`; the prelude spellings and
+  macro-built calls only since flyingrobots/bunny#347), a
   `#[path]` module (also under a nested `cfg_attr` or emitted by a macro)
   must name a `.rs` file inside the crate directory that the gate scans, and
   `include_str!`/`include_bytes!` must name a literal path inside it

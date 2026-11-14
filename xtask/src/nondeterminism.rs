@@ -22,6 +22,8 @@ use self::includes::Origin;
 
 mod doc_tests;
 mod includes;
+mod metavariables;
+mod std_modules;
 
 /// A source finding: the 1-based line and the rule it breaks.
 pub(super) struct Finding {
@@ -67,6 +69,16 @@ const FS: &str = "filesystem access is banned; take bytes from an adapter at the
 const PROCESS: &str = "process access is banned in deterministic crates";
 const INPUT: &str = "terminal input is banned in deterministic crates; take bytes from an adapter";
 const INCLUDE: &str = "importing `include!` is banned; it brings in code the gate does not scan";
+const BACKTRACE: &str =
+    "backtraces read RUST_BACKTRACE and record the host build's paths and addresses; banned";
+const LOCATION: &str =
+    "source locations hold the host's path to the source when built as a dependency; banned";
+const CPU: &str = "CPU-specific intrinsics and feature detection are banned; core results must \
+     not depend on the host CPU";
+const PLATFORM: &str = "platform-specific `std::os` APIs are banned in deterministic crates";
+const OS_ERROR: &str = "the last OS error is host process state; banned in deterministic crates";
+const UNCLASSIFIED: &str = "this std module or macro is not classified; classify it in \
+     xtask/src/nondeterminism/std_modules.rs and the rules before using it";
 
 const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["std", "time", "SystemTime"], rule: "time-system", message: CLOCK },
@@ -154,7 +166,31 @@ const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["core", "option_env"], rule: "std-env", message: ENV },
     PrefixRule { prefix: &["std", "include"], rule: "include-source", message: INCLUDE },
     PrefixRule { prefix: &["core", "include"], rule: "include-source", message: INCLUDE },
+    // flyingrobots/bunny#347: host state no earlier rule named.
+    PrefixRule { prefix: &["std", "backtrace"], rule: "std-env", message: BACKTRACE },
+    PrefixRule { prefix: &["std", "panic", "Location"], rule: "std-env", message: LOCATION },
+    PrefixRule { prefix: &["core", "panic", "Location"], rule: "std-env", message: LOCATION },
+    PrefixRule {
+        prefix: &["std", "panic", "get_backtrace_style"],
+        rule: "std-env",
+        message: BACKTRACE,
+    },
+    PrefixRule {
+        prefix: &["std", "panic", "set_backtrace_style"],
+        rule: "std-env",
+        message: BACKTRACE,
+    },
+    PrefixRule { prefix: &["std", "arch"], rule: "host-cpu", message: CPU },
+    PrefixRule { prefix: &["core", "arch"], rule: "host-cpu", message: CPU },
+    PrefixRule { prefix: &["std", "random"], rule: "random", message: RANDOM },
+    PrefixRule { prefix: &["core", "random"], rule: "random", message: RANDOM },
+    PrefixRule { prefix: &["std", "hash_map"], rule: "unordered-container", message: UNORDERED },
+    // Every other part of `std::os` (`std::os::raw` is permitted); reported only when no
+    // more specific rule above matches.
+    PrefixRule { prefix: &["std", "os"], rule: PLATFORM_RULE, message: PLATFORM },
 ];
+
+const PLATFORM_RULE: &str = "host-platform";
 
 /// Names banned wherever they appear in a path, even unresolved. These keep the
 /// coverage of Code Dojo's earlier `ambient-state` and `nondeterministic-map` rules,
@@ -185,6 +221,14 @@ fn name_rules(segments: &[String]) -> Vec<(&'static str, &'static str)> {
     }
     if let [.., "Path" | "PathBuf", method] = names.as_slice() {
         rules.extend(method_rules(method));
+    }
+    if names.ends_with(&["Backtrace", "capture"])
+        || names.ends_with(&["Backtrace", "force_capture"])
+    {
+        rules.push(("std-env", BACKTRACE));
+    }
+    if names.last() == Some(&"last_os_error") {
+        rules.push(("std-process", OS_ERROR));
     }
     rules
 }
@@ -222,14 +266,20 @@ fn starts_with(segments: &[String], prefix: &[&str]) -> bool {
     segments.len() >= prefix.len() && segments.iter().zip(prefix).all(segment_matches)
 }
 
-/// A written segment against a pattern segment, where `*` matches any one segment.
+/// A written segment against a pattern segment, where `*` matches any one segment but the
+/// two modules of `std::os` that are not platforms, `fd` and `raw` (found in review: a glob
+/// of `std::os::fd` read as a platform gained its `net` and `process` rules).
 fn segment_matches((written, pattern): (&String, &&str)) -> bool {
-    *pattern == "*" || written == pattern
+    if *pattern == "*" {
+        return written != "fd" && written != "raw";
+    }
+    written == pattern
 }
 
 /// Items below a banned prefix that are deterministic. `DefaultHasher::new()` uses fixed
 /// `SipHash` keys; only `RandomState` seeds a hasher from the host.
-const PERMITTED: &[&[&str]] = &[&["std", "collections", "hash_map", "DefaultHasher"]];
+const PERMITTED: &[&[&str]] =
+    &[&["std", "collections", "hash_map", "DefaultHasher"], &["std", "os", "raw"]];
 
 /// Every rule a fully expanded path breaks.
 fn path_rules(expanded: &[String], written: &[String]) -> Vec<(&'static str, &'static str)> {
@@ -241,18 +291,46 @@ fn path_rules(expanded: &[String], written: &[String]) -> Vec<(&'static str, &'s
         .filter(|rule| starts_with(expanded, rule.prefix))
         .map(|rule| (rule.rule, rule.message))
         .collect::<Vec<_>>();
+    if rules.iter().any(|(rule, _)| *rule != PLATFORM_RULE) {
+        rules.retain(|(rule, _)| *rule != PLATFORM_RULE);
+    }
+    rules.extend(unclassified_rule(expanded));
     rules.extend(name_rules(written));
     rules
+}
+
+/// `unclassified-std` for a path through a name directly below `std`, `core` or `alloc`
+/// that `std_modules.rs` does not classify.
+fn unclassified_rule(expanded: &[String]) -> Option<(&'static str, &'static str)> {
+    match expanded {
+        [root, name, ..]
+            if std_modules::ROOTS.contains(&root.as_str()) && !std_modules::is_classified(name) =>
+        {
+            Some(("unclassified-std", UNCLASSIFIED))
+        }
+        _ => None,
+    }
 }
 
 /// Every rule a glob import of `module` would bring into scope: the rules of the module
 /// itself and of every banned item below it.
 fn glob_rules(module: &[String]) -> Vec<(&'static str, &'static str)> {
-    PREFIX_RULES
+    if PERMITTED.iter().any(|permitted| starts_with(module, permitted)) {
+        return Vec::new();
+    }
+    let mut rules = PREFIX_RULES
         .iter()
         .filter(|rule| starts_with(module, rule.prefix) || is_strict_prefix(module, rule.prefix))
         .map(|rule| (rule.rule, rule.message))
-        .collect()
+        .collect::<Vec<_>>();
+    let below_specific = PREFIX_RULES
+        .iter()
+        .any(|rule| rule.rule != PLATFORM_RULE && starts_with(module, rule.prefix));
+    if below_specific {
+        rules.retain(|(rule, _)| *rule != PLATFORM_RULE);
+    }
+    rules.extend(unclassified_rule(module));
+    rules
 }
 
 fn is_strict_prefix(module: &[String], banned: &[&str]) -> bool {
@@ -384,6 +462,21 @@ impl Scanner {
         expanded
     }
 
+    /// The rules a macro call breaks. Macros and functions have separate namespaces, so a
+    /// bare name is judged as the standard macro too: `use local::file;` imports a
+    /// function and leaves `file!()` the standard macro.
+    fn macro_call_rules(
+        &self,
+        written: &[String],
+        args: &TokenStream,
+    ) -> Vec<(&'static str, &'static str)> {
+        let mut rules = includes::macro_rules(&self.expand(written), args, &self.origin);
+        if written.len() == 1 {
+            rules.extend(includes::macro_rules(written, args, &self.origin));
+        }
+        rules
+    }
+
     fn check_path(&mut self, line: usize, written: &[String]) {
         let expanded = self.expand(written);
         let rules = path_rules(&expanded, written);
@@ -392,8 +485,11 @@ impl Scanner {
 
     fn check_use_leaf(&mut self, leaf: &UseLeaf) {
         let expanded = self.expand(&leaf.path);
-        let rules =
+        let mut rules =
             if leaf.glob { glob_rules(&expanded) } else { path_rules(&expanded, &leaf.path) };
+        if !leaf.glob {
+            rules.extend(includes::imported_macro_rules(&expanded));
+        }
         self.report(leaf.line, rules);
     }
 }
@@ -407,12 +503,14 @@ impl<'ast> Visit<'ast> for Scanner {
     fn visit_macro(&mut self, node: &'ast Macro) {
         for path in token_paths(&node.tokens) {
             self.check_path(path.line, &path.segments);
+            // A `use` of a standard macro inside a macro body binds a name the file's
+            // import map does not hold, so the path is judged where it is written.
+            self.report(path.line, includes::imported_macro_rules(&self.expand(&path.segments)));
         }
-        let invoked = self.expand(&path_names(&node.path));
-        let rules = includes::macro_rules(&invoked, &node.tokens, &self.origin);
+        let rules = self.macro_call_rules(&path_names(&node.path), &node.tokens);
         self.report(path_line(&node.path), rules);
         for call in includes::macro_calls(&node.tokens) {
-            let rules = includes::macro_rules(&self.expand(&call.path), &call.args, &self.origin);
+            let rules = self.macro_call_rules(&call.path, &call.args);
             self.report(call.line, rules);
         }
         for (line, method) in token_method_calls(&node.tokens) {
@@ -420,6 +518,9 @@ impl<'ast> Visit<'ast> for Scanner {
         }
         for (line, rule) in includes::token_module_path_findings(&node.tokens, &self.origin) {
             self.report(line, vec![rule]);
+        }
+        for line in metavariables::lines(node) {
+            self.report(line, vec![(metavariables::RULE, metavariables::MESSAGE)]);
         }
         visit::visit_macro(self, node);
     }
@@ -642,6 +743,10 @@ mod evasion_tests;
 #[cfg(test)]
 mod host_access_tests;
 #[cfg(test)]
+mod macro_tests;
+#[cfg(test)]
 mod std_api_tests;
+#[cfg(test)]
+mod std_modules_tests;
 #[cfg(test)]
 mod tests;

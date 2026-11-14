@@ -30,6 +30,11 @@ const INCLUDE_SOURCE: &str =
 const INCLUDE_DATA: &str =
     "included data must be one string literal naming a file inside the crate directory";
 const ENV_MACRO: &str = "compile-time environment access is banned; pass configuration explicitly";
+const FILE_MACRO: &str =
+    "`file!` is the host's path to the source when the crate is built as a dependency; banned";
+const HASH_MAP_MACRO: &str = "`hash_map!` builds a HashMap; use BTreeMap, BTreeSet or a sorted Vec";
+const FEATURE_MACRO: &str =
+    "host CPU feature detection is banned; core results must not depend on the host CPU";
 
 /// Where a source file sits: the directory its relative paths resolve against, and the
 /// directory of its crate (`crates/<name>`).
@@ -95,28 +100,54 @@ impl Origin {
 }
 
 /// The rules a macro invocation breaks, from its import-expanded path and its arguments.
-/// Only the standard macros count: a bare name, or one directly under `std` or `core`.
+/// Only the standard macros count, recognised by name: a bare name, or a path at any depth
+/// below `std`, `core` or `alloc`, so `std::prelude::v1::include` and
+/// `core::prelude::rust_2021::env` are the macros themselves. A macro of another crate
+/// with the same name is not.
 pub(super) fn macro_rules(
     expanded: &[String],
     args: &TokenStream,
     origin: &Origin,
 ) -> Vec<(&'static str, &'static str)> {
-    let Some((name, module)) = expanded.split_last() else {
+    let Some(name) = standard_macro_name(expanded) else {
         return Vec::new();
     };
-    let standard = match module {
-        [] => true,
-        [root] => root == "std" || root == "core",
-        _ => false,
-    };
-    if !standard {
-        return Vec::new();
-    }
-    match name.as_str() {
-        "include" => vec![("include-source", INCLUDE_SOURCE)],
-        "env" | "option_env" => vec![("std-env", ENV_MACRO)],
+    match name {
         "include_str" | "include_bytes" if !literal_inside(args, origin) => {
             vec![("include-data", INCLUDE_DATA)]
+        }
+        name => named_macro_rules(name),
+    }
+}
+
+/// The rules a `use` of a standard macro breaks where it is imported: the macros that are
+/// banned whatever their arguments. `include_str!` and `include_bytes!` are judged at the
+/// call, by their argument.
+pub(super) fn imported_macro_rules(expanded: &[String]) -> Vec<(&'static str, &'static str)> {
+    match expanded {
+        [_, _, ..] => standard_macro_name(expanded).map(named_macro_rules).unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+/// The macro name of a bare name or of a path rooted at `std`, `core` or `alloc`.
+fn standard_macro_name(expanded: &[String]) -> Option<&str> {
+    let (name, module) = expanded.split_last()?;
+    let standard = match module.first() {
+        None => true,
+        Some(root) => matches!(root.as_str(), "std" | "core" | "alloc"),
+    };
+    standard.then_some(name.as_str())
+}
+
+fn named_macro_rules(name: &str) -> Vec<(&'static str, &'static str)> {
+    match name {
+        "include" => vec![("include-source", INCLUDE_SOURCE)],
+        "env" | "option_env" => vec![("std-env", ENV_MACRO)],
+        "file" => vec![("std-env", FILE_MACRO)],
+        "hash_map" => vec![("unordered-container", HASH_MAP_MACRO)],
+        name if name.starts_with("is_") && name.ends_with("_feature_detected") => {
+            vec![("host-cpu", FEATURE_MACRO)]
         }
         _ => Vec::new(),
     }
