@@ -466,6 +466,7 @@ pub(super) const FAMILY: &[&str] = &[
     "std-process",
     "include-source",
     "include-data",
+    "host-input",
 ];
 
 #[test]

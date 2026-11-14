@@ -542,6 +542,8 @@ fn line_of(span: Span) -> usize {
 #[cfg(test)]
 mod evasion_tests;
 #[cfg(test)]
+mod host_access_tests;
+#[cfg(test)]
 mod std_api_tests;
 #[cfg(test)]
 mod tests;

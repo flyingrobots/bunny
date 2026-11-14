@@ -43,6 +43,7 @@ topic-docs`.
 | ND-REQ-005 | The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
 | ND-REQ-006 | No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory. | `README.md#compile-time-file-access` |
 | ND-REQ-007 | The time and thread rules name every documented item of `std::thread` and `std::time` deliberately, banned or permitted, from a snapshot of the pinned toolchain's documentation that a test ties to `rust-toolchain.toml`; every documented float method of `Duration` is `float-boundary` in core. | `docs/CODE_DOJO.md#keeping-the-name-lists-current` |
+| ND-REQ-008 | Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code. | `README.md#host-access-beyond-echo` |
 
 ```toml
 [[requirement]]
@@ -78,6 +79,11 @@ status = "active"
 [[requirement]]
 id = "ND-REQ-007"
 summary = "The time and thread rules name every documented item of `std::thread` and `std::time` deliberately, banned or permitted, from a snapshot of the pinned toolchain's documentation that a test ties to `rust-toolchain.toml`; every documented float method of `Duration` is `float-boundary` in core."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-008"
+summary = "Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code."
 status = "active"
 ```
 
@@ -157,6 +163,11 @@ real `cargo tree` output and the real manifests.
 | ND-TP-056 | std items reported | ND-REQ-007 | For each of the 29 items, as a path and as a `use`, the gate reports exactly the classified rule, or nothing for a permitted item. | `xtask/src/nondeterminism/std_api_tests.rs::each_thread_and_time_item_gets_its_classified_rule` |
 | ND-TP-057 | Duration float methods | ND-REQ-007 | Every documented `Duration` method whose name ends in `_f32` or `_f64` (14) is `float-boundary` as a method call and as a path, and no other documented method is. | `xtask/src/nondeterminism/std_api_tests.rs::every_float_method_of_duration_is_float_boundary` |
 | ND-TP-058 | waiver after doc comment | ND-REQ-002 | A waiver between a method's doc comment and attributes and its `fn` covers the whole method; the float use in the next, unwaived method (line 12) is reported. | `xtask/src/waivers/tests.rs::a_waiver_between_doc_comment_and_function_covers_the_function` |
+| ND-TP-059 | filesystem Path methods | ND-REQ-008 | `exists`, `try_exists`, `is_file`, `is_dir`, `metadata`, `canonicalize`, `read_dir` as zero-argument method calls, `Path::exists` and `PathBuf::is_symlink` as paths, and `exists` inside `format!` are `std-fs`. | `xtask/src/nondeterminism/host_access_tests.rs::path_methods_that_read_the_filesystem_are_std_fs` |
+| ND-TP-060 | platform modules | ND-REQ-008 | `std::os::<platform>::fs` (unix, windows, linux), `std::os::fd` and a platform `prelude` glob are `std-fs`; `std::os::unix::net` is `network`; `std::os::unix::process` and `std::io::pipe` are `std-process`; `std::path::absolute` and `p.absolute()` are `std-env`. | `xtask/src/nondeterminism/host_access_tests.rs::platform_filesystem_modules_are_banned` |
+| ND-TP-061 | terminal input | ND-REQ-008 | `std::io::stdin`, `Stdin` in a group, `IsTerminal`, an `is_terminal()` call, `stdin` through a module alias and inside `format!` are `host-input`. | `xtask/src/nondeterminism/host_access_tests.rs::terminal_input_is_host_input` |
+| ND-TP-062 | doc tests | ND-REQ-008 | Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it. | `xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned` |
+| ND-TP-063 | host-access look-alikes | ND-REQ-003 | A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family. | `xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted` |
 
 ```toml
 [[case]]
@@ -680,6 +691,51 @@ test = "xtask/src/waivers/tests.rs::a_waiver_between_doc_comment_and_function_co
 oracle = "A waiver between a method's doc comment and attributes and its `fn` covers the whole method; the float use in the next, unwaived method (line 12) is reported."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "ND-TP-059"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::path_methods_that_read_the_filesystem_are_std_fs"
+oracle = "`exists`, `try_exists`, `is_file`, `is_dir`, `metadata`, `canonicalize`, `read_dir` as zero-argument method calls, `Path::exists` and `PathBuf::is_symlink` as paths, and `exists` inside `format!` are `std-fs`."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-060"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::platform_filesystem_modules_are_banned"
+oracle = "`std::os::<platform>::fs` (unix, windows, linux), `std::os::fd` and a platform `prelude` glob are `std-fs`; `std::os::unix::net` is `network`; `std::os::unix::process` and `std::io::pipe` are `std-process`; `std::path::absolute` and `p.absolute()` are `std-env`."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-061"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::terminal_input_is_host_input"
+oracle = "`std::io::stdin`, `Stdin` in a group, `IsTerminal`, an `is_terminal()` call, `stdin` through a module alias and inside `format!` are `host-input`."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-062"
+requirements = ["ND-REQ-008"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned"
+oracle = "Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-063"
+requirements = ["ND-REQ-003"]
+evidence = "test"
+test = "xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted"
+oracle = "A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family."
+tier = "fast"
+status = "planned"
 ```
 
 ## Determinism Obligations And Evidence
