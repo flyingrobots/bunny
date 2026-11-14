@@ -10,8 +10,13 @@
 mod closest;
 #[allow(clippy::module_name_repetitions)]
 mod ray;
+#[allow(clippy::module_name_repetitions)]
+mod trace;
 
 pub use closest::{
     aabb_intersects_sphere, closest_point_aabb, closest_point_triangle, closest_points_segments,
 };
 pub use ray::{ray_intersects_aabb, ray_intersects_sphere, ray_intersects_triangle};
+pub use trace::{
+    TraceRay, TraceTriangle, TriangleHit, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
+};
