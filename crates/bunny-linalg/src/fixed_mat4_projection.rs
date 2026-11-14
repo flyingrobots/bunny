@@ -112,7 +112,7 @@ impl FixedMat4 {
     }
 }
 
-fn from_diagonal_and_depth(
+const fn from_diagonal_and_depth(
     m00: FixedQ32_32,
     m11: FixedQ32_32,
     depth: (FixedQ32_32, FixedQ32_32),
