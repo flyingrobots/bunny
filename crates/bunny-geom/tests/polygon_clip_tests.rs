@@ -194,10 +194,7 @@ fn pc_tp_019_golden_inexact_cut() {
     // Edge a-b runs x = 0 to 3 across x = 1: t = 1/3 rounds to raw 1431655765.
     let (a, b, c) = (pt(0, 0, 0), pt(3 * UNIT, 3 * UNIT, 3 * UNIT), pt(3 * UNIT, 0, 0));
     let third = 4_294_967_295;
-    assert_eq!(
-        clip(plane_x1(), &[a, b, c]),
-        vec![b, c, pt(third, 0, 0), pt(third, third, third)]
-    );
+    assert_eq!(clip(plane_x1(), &[a, b, c]), vec![b, c, pt(third, 0, 0), pt(third, third, third)]);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
