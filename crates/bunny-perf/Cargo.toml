@@ -14,7 +14,7 @@ path = "src/main.rs"
 workspace = true
 
 [features]
-default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "pixel", "trace_compact", "build", "sah", "shade"]
+default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "pixel", "trace_compact", "build", "sah", "shade", "normals"]
 # Each group compiles only against the APIs it times, so `cargo xtask perf --base <rev>` can
 # build the same harness against an older Bunny that lacks a newer group.
 num = []
@@ -38,6 +38,8 @@ build = []
 sah = []
 # The diffuse shading steps of `bunny-optics` (`bunny-diffuse-shading/1`).
 shade = []
+# The area-weighted vertex normals of `bunny-optics` (`bunny-vertex-normals/1`).
+normals = []
 
 [dependencies]
 bunny-broadphase = { path = "../bunny-broadphase", version = "0.7.1" }

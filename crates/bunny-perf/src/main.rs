@@ -17,6 +17,8 @@ mod cases;
 mod compact;
 #[cfg(feature = "trace")]
 mod memory;
+#[cfg(feature = "normals")]
+mod normals;
 #[cfg(feature = "trace")]
 mod profile;
 #[cfg(feature = "sample")]
