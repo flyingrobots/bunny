@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics` computes area-weighted vertex normals for an indexed triangle
+  mesh: `VertexNormals::new(&positions, &triangles)` (`bunny-vertex-normals/1`,
+  `VERTEX_NORMALS_ID`) sums the exact `i128` cross products of each vertex's
+  faces and normalizes once, as `TriangleSurface::new` does, so each component is
+  within one raw unit of the exact unit vector and the result does not depend on
+  face order, a cyclic rotation of a face's corners or vertex labels (reversing a
+  face's winding negates its contribution). A vertex with no face or a zero sum
+  has `None`; positions outside the trace domain, an out-of-range index or more
+  than `MAX_NORMAL_TRIANGLES` (`2^32`) triangles return a `VertexNormalError`.
+  No existing output changes. The `bunny-perf` group `normals` times a build
+  (`shade/vertex_normals`). Part of flyingrobots/bunny#289; see
+  `docs/topics/optics/README.md#vertex-normals`.
+
 * `bunny-mesh` and `bunny-codec` have a `mesh-hash` feature, on by default.
   In `bunny-mesh` it provides `compute_mesh_hash`, the only item that uses
   `sha2`; `bunny-codec` uses none of it and forwards the feature. With default
