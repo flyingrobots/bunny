@@ -82,7 +82,8 @@ fn at_tp_004_error_is_within_one_raw_unit() {
     // Hermite error peaks inside a segment: probe every segment at a quarter, half and
     // three quarters of its width, plus the units next to each boundary.
     for k in 0..1_u64 << 12 {
-        angles.extend([1, 1 << 50, 1 << 51, 3 << 50, (1 << 52) - 1].map(|offset| (k << 52) + offset));
+        angles
+            .extend([1, 1 << 50, 1 << 51, 3 << 50, (1 << 52) - 1].map(|offset| (k << 52) + offset));
     }
     for raw in angles {
         let (sin, cos) = FixedAngle::from_raw(raw).sin_cos();
