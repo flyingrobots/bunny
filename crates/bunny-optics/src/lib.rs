@@ -4,7 +4,7 @@
 #![deny(clippy::nursery)]
 #![deny(missing_docs)]
 
-//! Deterministic camera and ray-generation math for Bunny.
+//! Deterministic camera, ray-generation, sampling and diffuse shading math for Bunny.
 //!
 //! A [`PinholeCamera`] turns a position, a look direction, an up hint, the tangent of half the
 //! vertical field of view and an image size into one [`bunny_query::TraceRay`] per pixel
@@ -18,6 +18,13 @@
 //! [`PixelSampler`] (`bunny-sobol-owen/1`) gives stratified points in the unit square per
 //! (seed, pixel, sample, dimension pair). [`Xoroshiro128Plus`] is a sequential generator for
 //! code that draws in one fixed order.
+//!
+//! The diffuse shading steps of a path tracer with at most one bounce (`bunny-diffuse-shading/1`)
+//! turn trace hits into radiance samples: a [`TriangleSurface`] holds a triangle's unit normal
+//! and [`ShadingFrame`], a [`SurfaceHit`] applies the facing rule and starts secondary rays
+//! strictly on the arrival side of the surface, [`ShadingFrame::cosine_direction`] maps a sampler
+//! point to a cosine-weighted bounce direction, a [`DirectionalLight`] gives the direct term and
+//! its shadow ray, and [`Albedo::reflect`] combines the direct and indirect radiance.
 
 // The internal modules mark crate-private items `pub`, as `clippy::redundant_pub_crate`
 // asks; the workspace's `unreachable_pub` lint disagrees, and is allowed on those modules.
@@ -33,6 +40,8 @@ mod hash;
 mod plane;
 mod point;
 mod sampler;
+#[allow(unreachable_pub)]
+mod shading;
 mod xoroshiro;
 
 pub use camera::{
@@ -42,4 +51,8 @@ pub use error::CameraError;
 pub use hash::{fraction_from_bits, PixelStream, SAMPLE_HASH_ID};
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
+pub use shading::{
+    Albedo, DirectionalLight, LightSample, ShadingError, ShadingFrame, SkyLight, SurfaceHit,
+    TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX,
+};
 pub use xoroshiro::Xoroshiro128Plus;

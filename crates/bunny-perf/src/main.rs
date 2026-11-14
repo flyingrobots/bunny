@@ -15,6 +15,8 @@ mod profile;
 mod sample;
 #[cfg(any(feature = "scene", feature = "trace"))]
 mod scene;
+#[cfg(feature = "shade")]
+mod shade;
 mod timing;
 
 use std::error::Error;
