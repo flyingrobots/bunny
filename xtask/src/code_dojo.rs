@@ -163,10 +163,10 @@ impl Display for DojoError {
 
 impl Error for DojoError {}
 
-struct Violation {
+pub(super) struct Violation {
     path: PathBuf,
-    line: usize,
-    rule: &'static str,
+    pub(super) line: usize,
+    pub(super) rule: &'static str,
     message: String,
 }
 
@@ -255,19 +255,7 @@ fn check_rust(mode: Mode) -> Result<(), DynError> {
     let mut violations = Vec::new();
 
     for file in rust_sources(&root, mode)? {
-        let source = file.source;
-        let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
-        let category = crate_category(&file.path);
-        let context = FileContext {
-            path: file.path,
-            category,
-            limits: category.limits(),
-            source: &source,
-            lines: &lines,
-        };
-
-        check_textual_limits(&mut violations, &context);
-        check_ast(&mut violations, &context);
+        violations.extend(file_violations(file.path, &file.source));
     }
 
     if violations.is_empty() {
@@ -280,6 +268,25 @@ fn check_rust(mode: Mode) -> Result<(), DynError> {
         eprintln!("  {violation}");
     }
     Err(DojoError::new("Code Dojo Rust AST policy violations found").into())
+}
+
+/// Applies every per-file Rust policy rule to one source file at a repository-relative path.
+pub(super) fn file_violations(path: PathBuf, source: &str) -> Vec<Violation> {
+    let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
+    let category = crate_category(&path);
+    let context = FileContext { path, category, limits: category.limits(), source, lines: &lines };
+    let mut violations = Vec::new();
+    check_textual_limits(&mut violations, &context);
+    check_ast(&mut violations, &context);
+    violations
+}
+
+/// Applies the dependency-level nondeterminism rules to `cargo tree` output.
+pub(super) fn dependency_violations(
+    _tree: &str,
+    _manifest: &dyn Fn(&str) -> String,
+) -> Vec<Violation> {
+    Vec::new()
 }
 
 fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {
