@@ -64,12 +64,12 @@ formatting.
 | TRACE-REQ-008 | front_face is true when the ray arrives on the side from which the vertices appear counter-clockwise. | `README.md#facing` |
 | TRACE-REQ-009 | No intermediate overflows for any input inside the trace domain. | `README.md#trace-domain` |
 | TRACE-REQ-010 | Parallel rays (including rays in the triangle's plane), zero-area triangles and crossings whose distance does not fit i64 are misses. | `README.md#exact-triangle-test` |
-| TRACE-REQ-011 | closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
-| TRACE-REQ-012 | The result of closest_hit and any_hit does not depend on the tree's shape or the order its leaves list primitives in. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
-| TRACE-REQ-013 | The distance limit of closest_hit and any_hit is inclusive. | `README.md#closest-hit-traversal` |
-| TRACE-REQ-014 | The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is. | `README.md#search-order-and-pruning` |
-| TRACE-REQ-015 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
-| TRACE-REQ-016 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
+| TRACE-REQ-021 | closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-022 | The result of closest_hit and any_hit does not depend on the tree's shape or the order its leaves list primitives in. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-023 | The distance limit of closest_hit and any_hit is inclusive. | `README.md#closest-hit-traversal` |
+| TRACE-REQ-024 | The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is. | `README.md#search-order-and-pruning` |
+| TRACE-REQ-025 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-026 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
 
 ```toml
 [[requirement]]
@@ -123,32 +123,32 @@ summary = "Parallel rays (including rays in the triangle's plane), zero-area tri
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-011"
+id = "TRACE-REQ-021"
 summary = "closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index."
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-012"
+id = "TRACE-REQ-022"
 summary = "The result of closest_hit and any_hit does not depend on the tree's shape or the order its leaves list primitives in."
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-013"
+id = "TRACE-REQ-023"
 summary = "The distance limit of closest_hit and any_hit is inclusive."
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-014"
+id = "TRACE-REQ-024"
 summary = "The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is."
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-015"
+id = "TRACE-REQ-025"
 summary = "any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit."
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-016"
+id = "TRACE-REQ-026"
 summary = "Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored."
 status = "active"
 ```
@@ -196,16 +196,16 @@ Regenerating them is a contract change.
 | TRACE-TP-010 | Golden box entries | TRACE-REQ-002, TRACE-REQ-003 | Hand-computed raw bounds for seven cases, including an inexact reciprocal, an edge graze, a corner graze whose exact exit equals its exact entry, a near miss and a face contact. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_010_golden_box_entries_lock_raw_outputs` |
 | TRACE-TP-011 | Degenerate and far cases | TRACE-REQ-010 | Collinear and duplicate-vertex triangles, a ray in the plane, and a crossing 2^71 raw away all miss; control hits at the same places are reported. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_011_degenerate_triangles_parallel_rays_and_far_hits_miss` |
 | TRACE-TP-012 | Deliberate mutations | TRACE-REQ-002, TRACE-REQ-003, TRACE-REQ-005 | Each rounding or edge rule, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
-| TRACE-TP-101 | Brute-force agreement | TRACE-REQ-011, TRACE-REQ-015 | Over about 3 000 seeded rays and 600 triangles, closest_hit equals a test of every triangle (minimum by distance, then index) and any_hit equals whether that test found a hit; the corpus has over 500 hits and 500 misses. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_101_closest_hit_equals_a_test_of_every_primitive` |
-| TRACE-TP-102 | Inclusive limit | TRACE-REQ-013 | For each hit ray, t_max equal to the nearest distance returns that hit and any_hit is true; t_max one raw unit shorter returns no hit and any_hit is false. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_102_the_distance_limit_is_inclusive_and_agrees_with_every_primitive` |
-| TRACE-TP-103 | Ties | TRACE-REQ-011 | Every triangle appears twice, so every hit is a tie; the result equals the full test and always names the first copy. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_103_equal_distances_choose_the_lowest_primitive_index` |
-| TRACE-TP-104 | Malformed and empty trees | TRACE-REQ-016 | An empty tree misses for both searches; a child index past the buffer and a leaf range past the primitive buffer return the stated errors. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_104_malformed_trees_are_errors_and_empty_trees_miss` |
-| TRACE-TP-105 | Out-of-range reports | TRACE-REQ-016 | A primitive test that reports a distance beyond the limit, or a negative one, for every primitive yields no hit. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_105_distances_outside_the_limit_from_the_primitive_test_are_ignored` |
-| TRACE-TP-106 | Tree shape | TRACE-REQ-011, TRACE-REQ-012, TRACE-REQ-015 | The same triangles (a third duplicated, to make ties) built in reversed, interleaved and shuffled order, with leaf entries mapped back to the original indices, and under one leaf listing them in reverse, give identical closest_hit and any_hit answers to the original tree and the full test over 1 500 rays. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_106_differently_shaped_trees_give_the_same_answers` |
-| TRACE-TP-107 | Front-to-back order | TRACE-REQ-014 | Two triangles 5.0 and 8.0 away, the far one in the left leaf: the near one is returned and it is the only primitive tested. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_107_the_nearer_child_is_searched_first_and_the_farther_one_is_skipped` |
-| TRACE-TP-108 | Equal bound kept | TRACE-REQ-011, TRACE-REQ-014 | Two coincident triangles whose leaf bounds equal the hit distance 5.0 exactly; the leaf searched first holds index 1. Both are tested and index 0 is returned, and the same holds when one leaf lists them as 1, 0. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_108_a_subtree_that_starts_at_the_best_distance_is_still_searched` |
-| TRACE-TP-109 | Early stop | TRACE-REQ-015 | Four stacked triangles that the ray hits: any_hit is true after exactly one primitive test; with t_max 4.0, below every box, it is false after none. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_109_any_hit_stops_at_the_first_hit` |
-| TRACE-TP-110 | Deliberate traversal mutations | TRACE-REQ-011, TRACE-REQ-014, TRACE-REQ-015 | Each pruning, ordering or stop rule, broken on purpose, makes at least one traversal case fail. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-101 | Brute-force agreement | TRACE-REQ-021, TRACE-REQ-025 | Over about 3 000 seeded rays and 600 triangles, closest_hit equals a test of every triangle (minimum by distance, then index) and any_hit equals whether that test found a hit; the corpus has over 500 hits and 500 misses. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_101_closest_hit_equals_a_test_of_every_primitive` |
+| TRACE-TP-102 | Inclusive limit | TRACE-REQ-023 | For each hit ray, t_max equal to the nearest distance returns that hit and any_hit is true; t_max one raw unit shorter returns no hit and any_hit is false. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_102_the_distance_limit_is_inclusive_and_agrees_with_every_primitive` |
+| TRACE-TP-103 | Ties | TRACE-REQ-021 | Every triangle appears twice, so every hit is a tie; the result equals the full test and always names the first copy. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_103_equal_distances_choose_the_lowest_primitive_index` |
+| TRACE-TP-104 | Malformed and empty trees | TRACE-REQ-026 | An empty tree misses for both searches; a child index past the buffer and a leaf range past the primitive buffer return the stated errors. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_104_malformed_trees_are_errors_and_empty_trees_miss` |
+| TRACE-TP-105 | Out-of-range reports | TRACE-REQ-026 | A primitive test that reports a distance beyond the limit, or a negative one, for every primitive yields no hit. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_105_distances_outside_the_limit_from_the_primitive_test_are_ignored` |
+| TRACE-TP-106 | Tree shape | TRACE-REQ-021, TRACE-REQ-022, TRACE-REQ-025 | The same triangles (a third duplicated, to make ties) built in reversed, interleaved and shuffled order, with leaf entries mapped back to the original indices, and under one leaf listing them in reverse, give identical closest_hit and any_hit answers to the original tree and the full test over 1 500 rays. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_106_differently_shaped_trees_give_the_same_answers` |
+| TRACE-TP-107 | Front-to-back order | TRACE-REQ-024 | Two triangles 5.0 and 8.0 away, the far one in the left leaf: the near one is returned and it is the only primitive tested. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_107_the_nearer_child_is_searched_first_and_the_farther_one_is_skipped` |
+| TRACE-TP-108 | Equal bound kept | TRACE-REQ-021, TRACE-REQ-024 | Two coincident triangles whose leaf bounds equal the hit distance 5.0 exactly; the leaf searched first holds index 1. Both are tested and index 0 is returned, and the same holds when one leaf lists them as 1, 0. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_108_a_subtree_that_starts_at_the_best_distance_is_still_searched` |
+| TRACE-TP-109 | Early stop | TRACE-REQ-025 | Four stacked triangles that the ray hits: any_hit is true after exactly one primitive test; with t_max 4.0, below every box, it is false after none. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_109_any_hit_stops_at_the_first_hit` |
+| TRACE-TP-110 | Deliberate traversal mutations | TRACE-REQ-021, TRACE-REQ-024, TRACE-REQ-025 | Each pruning, ordering or stop rule, broken on purpose, makes at least one traversal case fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -318,7 +318,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-101"
-requirements = ["TRACE-REQ-011", "TRACE-REQ-015"]
+requirements = ["TRACE-REQ-021", "TRACE-REQ-025"]
 evidence = "property"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_101_closest_hit_equals_a_test_of_every_primitive"
 oracle = "Over about 3 000 seeded rays and 600 triangles, closest_hit equals a test of every triangle (minimum by distance, then index) and any_hit equals whether that test found a hit; the corpus has over 500 hits and 500 misses."
@@ -327,7 +327,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-102"
-requirements = ["TRACE-REQ-013"]
+requirements = ["TRACE-REQ-023"]
 evidence = "property"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_102_the_distance_limit_is_inclusive_and_agrees_with_every_primitive"
 oracle = "For each hit ray, t_max equal to the nearest distance returns that hit and any_hit is true; t_max one raw unit shorter returns no hit and any_hit is false."
@@ -336,7 +336,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-103"
-requirements = ["TRACE-REQ-011"]
+requirements = ["TRACE-REQ-021"]
 evidence = "property"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_103_equal_distances_choose_the_lowest_primitive_index"
 oracle = "Every triangle appears twice, so every hit is a tie; the result equals the full test and always names the first copy."
@@ -345,7 +345,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-104"
-requirements = ["TRACE-REQ-016"]
+requirements = ["TRACE-REQ-026"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_104_malformed_trees_are_errors_and_empty_trees_miss"
 oracle = "An empty tree misses for both searches; a child index past the buffer and a leaf range past the primitive buffer return the stated errors."
@@ -354,7 +354,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-105"
-requirements = ["TRACE-REQ-016"]
+requirements = ["TRACE-REQ-026"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_105_distances_outside_the_limit_from_the_primitive_test_are_ignored"
 oracle = "A primitive test that reports a distance beyond the limit, or a negative one, for every primitive yields no hit."
@@ -363,7 +363,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-106"
-requirements = ["TRACE-REQ-011", "TRACE-REQ-012", "TRACE-REQ-015"]
+requirements = ["TRACE-REQ-021", "TRACE-REQ-022", "TRACE-REQ-025"]
 evidence = "property"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_106_differently_shaped_trees_give_the_same_answers"
 oracle = "The same triangles (a third duplicated, to make ties) built in reversed, interleaved and shuffled order, with leaf entries mapped back to the original indices, and under one leaf listing them in reverse, give identical closest_hit and any_hit answers to the original tree and the full test over 1 500 rays."
@@ -372,7 +372,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-107"
-requirements = ["TRACE-REQ-014"]
+requirements = ["TRACE-REQ-024"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_107_the_nearer_child_is_searched_first_and_the_farther_one_is_skipped"
 oracle = "Two triangles 5.0 and 8.0 away, the far one in the left leaf: the near one is returned and it is the only primitive tested."
@@ -381,7 +381,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-108"
-requirements = ["TRACE-REQ-011", "TRACE-REQ-014"]
+requirements = ["TRACE-REQ-021", "TRACE-REQ-024"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_108_a_subtree_that_starts_at_the_best_distance_is_still_searched"
 oracle = "Two coincident triangles whose leaf bounds equal the hit distance 5.0 exactly; the leaf searched first holds index 1. Both are tested and index 0 is returned, and the same holds when one leaf lists them as 1, 0."
@@ -390,7 +390,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-109"
-requirements = ["TRACE-REQ-015"]
+requirements = ["TRACE-REQ-025"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_109_any_hit_stops_at_the_first_hit"
 oracle = "Four stacked triangles that the ray hits: any_hit is true after exactly one primitive test; with t_max 4.0, below every box, it is false after none."
@@ -399,7 +399,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-110"
-requirements = ["TRACE-REQ-011", "TRACE-REQ-014", "TRACE-REQ-015"]
+requirements = ["TRACE-REQ-021", "TRACE-REQ-024", "TRACE-REQ-025"]
 evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Each pruning, ordering or stop rule, broken on purpose, makes at least one implemented traversal case fail."

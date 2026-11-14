@@ -43,7 +43,7 @@ CHANGELOG.md
 Topic docs:
 docs/topics/ray-tracing/README.md (new Closest-Hit Traversal section: API, search order and
 pruning, the tree-independence argument and what the caller must guarantee)
-docs/topics/ray-tracing/test-plan.md (TRACE-REQ-011..016, TRACE-TP-101..110, traversal
+docs/topics/ray-tracing/test-plan.md (TRACE-REQ-021..016, TRACE-TP-101..110, traversal
 mutation checks)
 
 Generated artifacts:
