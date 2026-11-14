@@ -500,15 +500,22 @@ see it: a version is defined by its bits, not by its accuracy.
 `pixel/resolve_srgb_rgba8` in `crates/bunny-perf` (feature group `pixel`)
 resolves 1 024 seeded pixels of 16 samples each (linear radiance up to 2.0 per
 channel), applies `SrgbV1` and writes each pixel's RGBA8 bytes; every result
-passes through `black_box`. Run it with
+passes through `black_box`. Until a base revision has the pixel functions,
+`cargo xtask perf` cannot compare it (with `--filter pixel/` it reports that no
+case was measured on both sides), so run the harness directly:
 
 ```sh
-cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter pixel/
+cargo run --locked --release -p bunny-perf -- --filter pixel/
 ```
 
-The base revision has no pixel functions, so the case reports as `new`. It is
-a reading for future comparisons, not a speed claim, so it has no ledger entry
-in the [performance chapter](../performance/README.md).
+Once a revision with this case is the base, the usual comparison applies:
+
+```sh
+cargo run --locked -p xtask -- perf --base <rev> --rounds 11 --align-code --filter pixel/
+```
+
+The readings are for future comparisons, not a speed claim, so the case has no
+ledger entry in the [performance chapter](../performance/README.md).
 
 ## Determinism Obligations And Evidence
 
