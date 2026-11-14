@@ -136,8 +136,9 @@ and counted with the forms above:
 
 | `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park`, `park_timeout_ms`, `yield_now`, `park_timeout` by alias; `SystemTimeError` | `thread-sleep`, `time-system` | 0 of 5 | `sibling_names_in_banned_families_are_rejected` |
 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64(text.parse().ok()?)`, `div_duration_f32`, `as_secs_f32` in `format!`, `x.to_f32()` | `float-boundary` | 0 of 5 | `float_methods_with_no_float_token_are_float_boundary` |
+| `use core::f64::consts::PI as P`, a renamed `to_f32`, the same in a group, a `core::f32::consts` glob (found in review) | `float-boundary` | 0 of 4 | `float_names_in_use_declarations_are_float_boundary` |
 
-With these the rule tests seed 145 forms; the gate before #321 caught 93.
+With these the rule tests seed 149 forms; the gate before #321 caught 93.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14

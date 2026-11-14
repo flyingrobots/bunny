@@ -675,7 +675,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::float_names_in_use_declarations_are_float_boundary"
 oracle = "`use core::f64::consts::PI as P`, `use crate::boundary::to_f32 as convert`, the same in a group, and a glob of `core::f32::consts` are each `float-boundary` at the `use` line in core, so a rename cannot hide a float name."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-053"

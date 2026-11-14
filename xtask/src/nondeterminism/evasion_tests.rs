@@ -275,7 +275,11 @@ fn float_names_in_use_declarations_are_float_boundary() {
     assert_rejects(
         "float-boundary",
         &[
-            ("renamed float constant", "use core::f64::consts::PI as P;\npub fn f() -> u64 { P.to_bits() }", 1),
+            (
+                "renamed float constant",
+                "use core::f64::consts::PI as P;\npub fn f() -> u64 { P.to_bits() }",
+                1,
+            ),
             ("renamed float function", "use crate::boundary::to_f32 as convert;", 1),
             ("float function in a group", "use crate::boundary::{to_f32 as convert, Other};", 1),
             ("float module glob", "use core::f32::consts::*;", 1),

@@ -193,7 +193,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinned toolchain's documentation: `sleep_ms`, `sleep_until`, `park`,
   `park_timeout`, `park_timeout_ms` and `yield_now` are now `thread-sleep`
   findings and `SystemTimeError` a `time-system` one. In core crates any name
-  ending in `_f32` or `_f64` is a `float-boundary` finding, so
+  ending in `_f32` or `_f64`, also in a `use` declaration, is a
+  `float-boundary` finding, so
   `d.mul_f64(d.as_secs_f64())` and `Duration::from_secs_f64(..)` no longer
   pass with no float token; six float DTO conversions in `bunny-linalg` and
   `bunny-geom` that the gate could not see before now carry waivers. A waiver

@@ -33,7 +33,7 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `std-process` | `std::process` |
 | `include-source` | `include!` in every spelling, and a `#[path]` module (also under nested `cfg_attr` or emitted by a macro) naming anything but a `.rs` file the gate scans inside the crate directory |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
-| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies |
+| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
 
 A banned path bans everything below it: `std::fs` covers `std::fs::read` and
 `std::fs::File::open`. `std::time` and `std::thread` are not banned as
