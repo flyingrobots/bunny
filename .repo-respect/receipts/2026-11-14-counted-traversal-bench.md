@@ -10,6 +10,7 @@ crates/bunny-perf/src/profile.rs
 crates/bunny-perf/src/compact.rs
 crates/bunny-perf/src/cases.rs
 crates/bunny-perf/src/main.rs
+crates/bunny-perf/src/profile.rs
 crates/bunny-perf/src/scene.rs
 xtask/src/perf.rs
 docs/topics/performance/README.md
@@ -20,6 +21,7 @@ crates/bunny-perf/Cargo.toml
 crates/bunny-perf/src/cases.rs
 crates/bunny-perf/src/counted.rs
 crates/bunny-perf/src/main.rs
+crates/bunny-perf/src/profile.rs
 crates/bunny-perf/src/scene.rs
 docs/topics/performance/README.md
 docs/topics/ray-tracing/README.md

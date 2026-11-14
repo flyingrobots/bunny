@@ -269,8 +269,8 @@ every ray, and exits with the differing ray indices if not.
 The `trace_counted` group (`crates/bunny-perf/src/counted.rs`) times the counted compact
 searches on the same tree and rays: `trace/closest_hit_compact_counted` and
 `trace/any_hit_compact_counted`, each summing the answers and the box tests so neither is
-optimized away. Its unit test (`TRACE-TP-418`) checks that their answers and counts equal the
-profile replica's on every ray.
+optimized away. A unit test in `profile.rs` (`TRACE-TP-418`) checks that their answers and
+counts equal the profile replica's on every ray.
 
 `trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
 on the scene: each camera ray that hits something against the triangle it hits first,

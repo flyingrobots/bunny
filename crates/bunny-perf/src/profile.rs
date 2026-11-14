@@ -766,6 +766,79 @@ mod tests {
         assert!(compared > 30_000 && reached > 10_000, "{compared} tests, {reached} reached");
     }
 
+    fn counted(counts: bunny_broadphase::TraversalCounts) -> [u64; 7] {
+        [
+            counts.box_tests,
+            counts.box_entries,
+            counts.popped_skipped,
+            counts.interior_visits,
+            counts.leaf_visits,
+            counts.primitive_tests,
+            counts.peak_stack,
+        ]
+    }
+
+    fn replica(counts: Counts) -> [u64; 7] {
+        [
+            counts.box_calls,
+            counts.box_some,
+            counts.skipped_at_pop,
+            counts.interior_visited,
+            counts.leaf_visited,
+            counts.tri_tests,
+            counts.stack_peak,
+        ]
+    }
+
+    /// TRACE-TP-418: on every benchmark ray, both counted searches on the compact copy of the
+    /// scene's tree give the replica's answer and counters.
+    #[test]
+    fn the_counted_compact_search_matches_the_replica_on_every_ray() {
+        use bunny_broadphase::{
+            compact_any_hit_counted, compact_bvh, compact_closest_hit_counted, CompactChild,
+            CompactNode, CompactView,
+        };
+        let rig = Rig::new();
+        let bounds = rig.scene.nodes[0].bounds;
+        let blank = CompactNode { bounds: [bounds; 2], children: [CompactChild::default(); 2] };
+        let mut nodes = vec![blank; rig.scene.nodes.len() / 2];
+        let (root, used) =
+            compact_bvh(&rig.scene.nodes, &mut nodes).ok().flatten().expect("a tree");
+        let view = CompactView {
+            root: Some(root),
+            nodes: &nodes[..used],
+            prim_indices: &rig.scene.prim_indices,
+        };
+        let (mut bad, mut box_tests) = (Vec::new(), 0);
+        for (index, ray) in rig.rays.iter().enumerate() {
+            let closest = compact_closest_hit_counted(view, ray, FAR, |primitive, limit| {
+                let triangle = rig.triangles.get(primitive as usize)?;
+                ray.hit_triangle(triangle, FixedQ32_32::ZERO, limit).map(|h| h.distance)
+            });
+            let any = compact_any_hit_counted(view, ray, FAR, |primitive| {
+                rig.triangles
+                    .get(primitive as usize)
+                    .is_some_and(|t| ray.hit_triangle(t, FixedQ32_32::ZERO, FAR).is_some())
+            });
+            let (Ok(closest), Ok(any)) = (closest, any) else {
+                bad.push(index);
+                continue;
+            };
+            let (want, want_any) = (walk(&rig, ray, Mode::Closest), walk(&rig, ray, Mode::Any));
+            let found = (closest.0.map(|h| (h.primitive, h.distance)), counted(closest.1));
+            let found_any = (any.0, counted(any.1));
+            if found != (want.hit, replica(want.counts))
+                || found_any != (want_any.hit.is_some(), replica(want_any.counts))
+            {
+                bad.push(index);
+            }
+            box_tests += closest.1.box_tests;
+        }
+        assert_eq!(bad, Vec::<usize>::new());
+        // Change detector: the profile table's total, 19.76 box tests per ray over 1 024 rays.
+        assert_eq!(box_tests, 20_238);
+    }
+
     #[test]
     fn counters_obey_their_identities() {
         let rig = Rig::new();
