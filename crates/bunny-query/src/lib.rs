@@ -24,4 +24,5 @@ pub use ray::{
 };
 pub use trace::{
     TraceRay, TraceTriangle, TriangleHit, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
+    TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };

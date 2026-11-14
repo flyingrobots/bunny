@@ -86,8 +86,9 @@ another kind of file or a file outside the crate.
   file, a `concat!` or `env!` path, a build-script output) is code the gate
   never reads. Because the first `include!` is itself the finding, a second
   level of indirection behind it changes nothing.
-- A `#[path]` module, also one set through `cfg_attr` at any depth or
-  emitted by a macro, must name a `.rs` file inside the crate directory and
+- A `#[path]` module, also one set through `cfg_attr` at any depth (every
+  `path` in it, since the gate cannot tell which configuration the compiler
+  keeps) or emitted by a macro, must name a `.rs` file inside the crate directory and
   outside the `target`, `vendor` and `third_party` directories, which the gate
   does not list; that file is then scanned as a file of the crate. Anything
   else is an `include-source` finding at the attribute.

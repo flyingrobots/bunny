@@ -130,7 +130,7 @@ and counted with the forms above:
 
 | `include!` in every spelling: a non-Rust file, a `.rs` file, a `concat!` path, `std::`/`core::`, renamed, in a macro | `include-source` (Bunny's own) | 0 of 8 | `include_of_source_is_rejected_however_it_is_named` |
 | `#[path]` to a non-`.rs` file, outside the crate, absolute, with backslashes, through `cfg_attr` | `include-source` | 0 of 5 | `path_attributes_must_name_a_scanned_file` |
-| `#[path]` emitted by a macro, under nested `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 5 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
+| `#[path]` emitted by a macro, under nested `cfg_attr`, second in a `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 6 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
 | `include_str!`/`include_bytes!` outside the crate, absolute, computed, renamed, in a macro | `include-data` (Bunny's own) | 0 of 5 | `included_data_must_come_from_inside_the_crate` |
 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")`, in a macro | `std-env` | 1 of 6 (`std::env!`, through the `std::env` prefix) | `compile_time_environment_macros_are_std_env` |
 
@@ -138,7 +138,7 @@ and counted with the forms above:
 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64(text.parse().ok()?)`, `div_duration_f32`, `as_secs_f32` in `format!`, `x.to_f32()` | `float-boundary` | 0 of 5 | `float_methods_with_no_float_token_are_float_boundary` |
 | `use core::f64::consts::PI as P`, a renamed `to_f32`, the same in a group, a `core::f32::consts` glob (found in review) | `float-boundary` | 0 of 4 | `float_names_in_use_declarations_are_float_boundary` |
 
-With these the rule tests seed 149 forms; the gate before #321 caught 93.
+With these the rule tests seed 150 forms; the gate before #321 caught 93.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14

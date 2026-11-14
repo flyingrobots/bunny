@@ -166,6 +166,11 @@ fn path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejec
                 "#[cfg_attr(all(), cfg_attr(all(), path = \"payload.inc\"))]\nmod hidden;",
                 1,
             ),
+            (
+                "second path in a cfg_attr",
+                "#[cfg_attr(all(), cfg_attr(any(), path = \"safe.rs\"), path = \"payload.inc\")]\nmod hidden;",
+                1,
+            ),
             ("vendor directory", "#[path = \"vendor/payload.rs\"]\nmod hidden;", 1),
             ("third_party directory", "#[path = \"third_party/payload.rs\"]\nmod hidden;", 1),
             ("target directory", "#[path = \"../target/payload.rs\"]\nmod hidden;", 1),
