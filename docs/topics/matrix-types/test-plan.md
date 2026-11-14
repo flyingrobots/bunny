@@ -22,7 +22,8 @@ This plan covers `FixedMat2`, `FixedMat3`, `FixedMat4`, `FixedAffine2`, and
 - determinant and inverse behavior;
 - singular and overflowing input handling.
 
-Normal, bounds, unprojection, and viewport semantics are out of scope until later
+Normal, bounds, and unprojection semantics are out of scope (viewport mapping
+is covered by the coordinate-law test plan) until later
 roadmap slices expose those APIs. The projection builders (`try_orthographic`,
 `try_perspective`, `ProjectionError`) and the look-at builder
 (`try_look_at`, `LookAtError`) are in scope.
@@ -527,5 +528,5 @@ case with a stable test name.
 | Gap | Blocking API |
 | --- | --- |
 | Transform-aware bounds propagation. | Slice 2.3 bounds propagation APIs. |
-| Unprojection and viewport mapping. | Slice 2.4 unprojection and viewport APIs. |
+| Unprojection. | Slice 2.4 unprojection API. |
 | Quaternion-to-matrix conversion. | Follow-on orientation APIs. |

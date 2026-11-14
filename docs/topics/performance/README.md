@@ -180,7 +180,10 @@ others, Bunny may ship it per target. The rules:
 4. **Measure each claim on its target** with the platform job or `--target`, and record
    the per-target numbers in the ledger entry. No target gets a special path on a guess.
 
-No target-specific implementation exists yet.
+One target-specific choice exists: the integer square root (ledger entry 3). It is a
+choice of **core's implementation on every target**, because the alternative measured
+slower on aarch64 for `normalize` and is unmeasured elsewhere. Until a target is measured
+as a net win, an unmeasured target gets the implementation already shipped.
 
 
 
@@ -333,3 +336,158 @@ each of the 4 096 segments (where Hermite error peaks). A float-free check
 deliberate mutation of the Hermite basis (`h11 = t3 + t2`) fails the golden, error and
 identity tests. The earlier claim of a 0.5001 raw-unit maximum over 4 196 611 angles has no
 test or tool in the repository and is withdrawn until it can be reproduced.
+
+### 3. Bunny's own square root, without 128-bit division (retained, not selected)
+
+**Where:** `isqrt_u128_two_divides` in `crates/bunny-num/src/lib.rs`. `FixedQ32_32::sqrt_u128`
+calls `isqrt_u128`, which returns core's `u128::isqrt` on every target (entry 1).
+
+**Technique.** Rust 1.96's `u128::isqrt` (`core/src/num/imp/int_sqrt.rs`) runs Karatsuba
+square-root stages from a byte lookup table up to 64 bits, then a last stage that divides
+`u128 / u128`. aarch64 and wasm32 have no 128-bit divide instruction, so that one division
+goes to compiler-rt's software routine, although its divisor is below `2^33`.
+`isqrt_u128_two_divides`:
+
+1. hands inputs up to `u64::MAX` to `u64::isqrt`, whose stages divide in hardware;
+2. otherwise normalizes by an even shift, takes `u64::isqrt` of the top 64 bits and its
+   remainder, and does the same last Karatsuba step as core;
+3. performs that step's division as long division in two 31-bit digits, so each step is
+   one hardware `u64` divide and no intermediate reaches `2^64`;
+4. applies core's correction (`candidate^2 > n` means subtract one).
+
+**Fidelity: exact replacement.** The result is the floor of the square root, identical to
+`u128::isqrt`. Unit tests in `crates/bunny-num/src/lib.rs` call it directly on every
+target and compare it with core's `isqrt` on 200 000 seeded inputs plus the 64-bit split
+and the squares around the quotient-correction points; a third test compares the
+dispatched function with it. Core's `isqrt` is in turn compared with the retained
+bit-by-bit loop in `crates/bunny-num/tests/sqrt_equivalence_tests.rs`. Replacing the
+correction step's `candidate - 1` with `candidate` makes all three unit tests fail.
+
+**Decision: not selected on any target.** `normalize` is slower with this implementation
+on aarch64 in every run, beyond the controls' spread, so it is not the default there. No
+other target is measured in this PR (x86-64 and wasm32 included), so each keeps core's
+implementation, which is what `main` ships. The function stays as an ordinary, tested
+function so a later per-target measurement can select it with one `cfg(target_arch)` arm
+(rules: [Target-specific implementations](#target-specific-implementations)).
+
+**Measured.** All numbers below are new; they supersede earlier host measurements, none
+of which is retained. Machine: Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0`
+container (aarch64 Linux), 2026-11-13. Base: `origin/main` at `91ed71fc7a5e` (core's
+`isqrt`, entry 1). Command, run through `devrun`:
+
+```text
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Run 1 (11 rounds):
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 16.52 | 12.94 | -21.7% | 15.87 | 12.37 | -22.1% | 1.28× | 16.97 | 13.18 |
+| `linalg/normalize` | 42.64 | 44.27 | +3.8% | 41.42 | 43.29 | +4.5% | 0.96× | 45.00 | 47.57 |
+| `num/div` | 6.79 | 6.80 | +0.1% | 6.63 | 6.51 | -1.8% | 1.02× | 7.08 | 7.04 |
+| `num/mul` | 1.46 | 1.42 | -2.7% | 1.42 | 1.42 | +0.0% | 1.00× | 1.46 | 1.46 |
+| `num/sqrt` | 14.04 | 10.54 | -24.9% | 13.55 | 10.21 | -24.6% | 1.33× | 14.44 | 10.62 |
+| `query/ray_aabb` | 45.25 | 52.78 | +16.6% | 41.30 | 43.54 | +5.4% | 0.95× | 58.80 | 56.03 |
+| `query/ray_build` | 54.00 | 56.52 | +4.7% | 51.27 | 54.73 | +6.7% | 0.94× | 56.32 | 60.18 |
+| `query/ray_sphere_hit` | 71.17 | 74.02 | +4.0% | 66.85 | 66.94 | +0.1% | 1.00× | 73.85 | 77.03 |
+| `query/ray_sphere_miss` | 21.20 | 21.20 | +0.0% | 21.00 | 21.00 | +0.0% | 1.00× | 21.36 | 21.44 |
+| `query/ray_triangle` | 52.17 | 52.69 | +1.0% | 51.80 | 52.00 | +0.4% | 1.00× | 55.05 | 54.97 |
+
+Run 2 (11 rounds):
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 16.56 | 12.90 | -22.1% | 15.91 | 12.37 | -22.3% | 1.29× | 16.93 | 13.26 |
+| `linalg/normalize` | 41.83 | 44.31 | +5.9% | 41.10 | 42.52 | +3.5% | 0.97× | 44.15 | 46.18 |
+| `num/div` | 6.84 | 6.71 | -1.9% | 6.31 | 6.51 | +3.2% | 0.97× | 6.96 | 6.96 |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.42 | +0.0% | 1.00× | 1.46 | 1.46 |
+| `num/sqrt` | 14.20 | 10.50 | -26.1% | 13.51 | 10.09 | -25.3% | 1.34× | 14.45 | 10.54 |
+| `query/ray_aabb` | 53.43 | 52.90 | -1.0% | 39.47 | 43.58 | +10.4% | 0.91× | 59.57 | 56.64 |
+| `query/ray_build` | 53.96 | 56.15 | +4.1% | 53.02 | 54.61 | +3.0% | 0.97× | 56.23 | 59.20 |
+| `query/ray_sphere_hit` | 71.33 | 72.02 | +1.0% | 66.00 | 68.20 | +3.3% | 0.97× | 73.85 | 76.17 |
+| `query/ray_sphere_miss` | 21.12 | 21.08 | -0.2% | 21.08 | 21.04 | -0.2% | 1.00× | 21.24 | 21.16 |
+| `query/ray_triangle` | 52.45 | 52.49 | +0.1% | 51.64 | 51.88 | +0.5% | 1.00× | 54.53 | 54.77 |
+
+Run 3 (21 rounds, `--filter linalg/`):
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `linalg/length` | 16.60 | 13.02 | -21.6% | 16.24 | 12.86 | -20.8% | 1.26× | 17.13 | 13.71 |
+| `linalg/normalize` | 42.48 | 44.35 | +4.4% | 40.77 | 43.01 | +5.5% | 0.95× | 45.12 | 47.16 |
+
+**Reading.** The kernel gain is repeatable: `num/sqrt` 1.33x and 1.34x, `linalg/length`
+1.28x, 1.29x and 1.26x (best p50). `linalg/normalize` was slower in all three runs: best
+p50 +4.5 %, +3.5 % and +5.5 %, median +3.8 %, +5.9 % and +4.4 %. The controls that take no
+square root (`num/mul`, `num/div`, `query/ray_triangle`) moved by at most 3.2 % at best
+p50 and 2.7 % at the median, so a 4-5 % loss that repeats in the same direction is
+treated as real, though small. `query/ray_build` was also slower in all three runs
+(best p50 +6.7 % and +3.0 %; not in run 3's filter). `query/ray_sphere_hit` flipped sign
+(+0.1 %, +3.3 %) and `query/ray_aabb`, the [bimodal case](#bimodal-cases), moved +5.4 % and
++10.4 % on unchanged code, so neither is claimed. The cause of the `normalize` loss is
+still not established and no experiment here isolated it; a candidate explanation, that
+`normalize`'s three software 128-bit divides share code the old square root used to keep
+warm, is untested. A table-wide effect (code layout) is not excluded; `--align-code`
+reduces it but does not remove it.
+
+**The dispatched build, and an x86-64 regression it first caused.** The first version of
+the dispatch (`FixedQ32_32::sqrt_u128` calling `isqrt_u128`, which called `u128::isqrt`)
+was claimed to equal `main` but was not measured. The x86-64 Linux CI runner then read
+`num/sqrt` **71 % slower** than `main` (best p50 26.13 ns to 44.71 ns, 7 rounds; the other
+cases within 3.2 %). The cause is a code-shape difference, not the algorithm: `main`'s
+`sqrt_u128` is a plain function that calls `u128::isqrt`, while the branch had marked
+`sqrt_u128` itself `#[inline]`, which lets the caller in the benchmark crate inline core's
+`isqrt` body and optimize it differently. I did not disassemble the x86-64 output, so the
+exact codegen difference is unconfirmed; the evidence is the CI before and after. The fix
+removes `#[inline]` from `sqrt_u128` (as on `main`) and leaves a plain `#[inline]` wrapper,
+folded into `sqrt_u128` inside the crate.
+
+CI-runner readings (shared GitHub x86-64 runners, 7 rounds, coarse; absolute times differ
+between runs because the runners differ), best p50:
+
+| Build | `num/sqrt` | `linalg/length` | `linalg/normalize` |
+| --- | ---: | ---: | ---: |
+| Before the fix | 26.13 to 44.71 ns (+71.1 %) | +3.2 % | +0.6 % |
+| After the fix | 17.74 to 17.75 ns (+0.1 %) | +0.0 % | -0.0 % |
+
+Local confirmation of the final build, `perf --base origin/main --rounds 11 --align-code`
+(Apple M5 Pro, container, base `origin/main`): best p50 `num/sqrt` -0.4 %,
+`linalg/length` -0.5 %, `linalg/normalize` -0.5 %, `query/ray_build` +0.5 %, controls
+within 3.3 %: neutral. The aarch64 build never showed the x86 effect, so it was only visible
+on the CI runner; lesson: measure the final dispatched build on each target before claiming
+it matches `main`.
+
+**Not measured:** wasm32, and local x86-64.
+
+## Contract Change Cost Checks
+
+A declared contract change is not an optimization and does not enter the ledger above, but
+when it must leave the common path's cost alone, the measurement that shows it is recorded
+here.
+
+### `ray_intersects_aabb` overflow handling (flyingrobots/bunny#211)
+
+**Change.** When a coordinate difference or slab distance overflows, `ray_intersects_aabb`
+now falls through to an exact `i128` slab test (`crates/bunny-query/src/ray/aabb_wide.rs`,
+marked `#[cold]`) instead of returning `None`. The rounded slab test, which answers every
+input without overflow, still does the same checked subtractions, divisions and comparisons;
+it now reports which of the two stops (zero-component miss or overflow) it hit. See the
+[ray-tracing chapter](../ray-tracing/README.md#general-purpose-ray-aabb-solver).
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), two complete runs through the guarded container runner with the
+branch's commits as history, base revision `2e92ce2748be` (`origin/main`):
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter query/
+```
+
+| Case | Run 1 p50 before | Run 1 p50 after | Run 1 best change | Run 2 p50 before | Run 2 p50 after | Run 2 best change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `query/ray_aabb` | 53.47 | 52.90 | +0.2% | 51.15 | 52.49 | -2.7% |
+| `query/ray_triangle` (control) | 51.96 | 52.53 | +0.4% | 51.51 | 51.92 | -0.2% |
+
+`query/ray_aabb` moved by +0.2 % and -2.7 % in best p50 and by -1.1 % and +2.6 % in median
+p50: inside the noise band, with no consistent direction. Its rays all reach the unit box
+without overflow, so the cases time the common path only; the exact path's cost is not
+measured and is paid only by inputs that used to return a false miss.
