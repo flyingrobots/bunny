@@ -41,6 +41,17 @@ and exported as:
   search;
 - `ClosestHit` (`primitive`, `distance`).
 
+A second node layout for the same searches is implemented in
+`crates/bunny-broadphase/src/compact.rs` and `compact_hit.rs` and exported as:
+
+- `compact_bvh`, which converts a built tree into it, and `CompactError`;
+- `CompactNode` (`bounds`, `children`), `CompactChild` (`first`, `prim_count`,
+  `is_leaf`) and `CompactRoot` (`bounds`, `child`);
+- `compact_closest_hit`, `compact_any_hit` and `CompactView` (`root`, `nodes`,
+  `prim_indices`).
+
+See [Compact Layout](#compact-layout).
+
 Evidence is listed in the [test plan](test-plan.md). Benchmarks of the kernels
 and the traversals are not part of this chapter yet.
 
@@ -346,6 +357,65 @@ before the limit drops below the subtree's bound, so the answer can depend on
 the tree's shape and differ from the full test. It is still a primitive the
 closure reported within `0..=t_max`, and the traversal remains deterministic
 for a fixed tree.
+
+### Compact Layout
+
+`compact_bvh(nodes, out)` converts a tree that `build_bvh` filled into a second
+layout in which each interior node holds both of its children's boxes, so a
+search step reads one node and tests two boxes from one place:
+
+- **`CompactNode`** is `bounds: [FixedAabb3; 2]` and
+  `children: [CompactChild; 2]`, left then right: 112 bytes, 8-byte aligned.
+- **`CompactChild`** is `first` and `prim_count`. A leaf (`prim_count > 0`)
+  stores its primitive range in the parent, so leaves have no node of their
+  own and a leaf visit reads no node. An interior child's `first` is the index
+  of its `CompactNode`.
+- **`CompactRoot`** is the root's box and the root itself as a `CompactChild`:
+  compact node 0 for an interior root, or a leaf for a one-leaf tree, which
+  then has no compact node at all. An empty tree converts to `None`.
+
+A tree of `n` nodes has `(n - 1) / 2` interior nodes and needs that many
+compact nodes; the scene's 55 277 nodes of 56 bytes (3.10 MB) become 27 638
+compact nodes of 112 bytes (3.10 MB), because each box is still stored once
+(in its parent) and the leaves' ranges move into their parents. The nodes are
+written to the front of `out` in depth-first order, each node followed by its
+left subtree and then its right subtree. The conversion is integer-only,
+copies bounds and ranges without arithmetic, and writes the same bytes on
+every target. It returns the root and the number of nodes written, or a
+`CompactError`: `InvalidNodeIndex` when a child index is outside the node
+slice, `OutputTooSmall` when `out` is shorter than the tree needs, `NotATree`
+when more interior nodes are reached than a tree of that size has (a node
+reached twice), and `TooDeep` when more than 64 right subtrees wait at once,
+which needs a tree deeper than 64 levels. Leaf primitive ranges are copied
+unchecked and are checked by the search when it reaches them, as
+`closest_hit` checks them.
+
+`compact_closest_hit` and `compact_any_hit` take a `CompactView` (the root,
+the compact nodes and the source tree's primitive-index buffer) and run the
+[search above](#search-order-and-pruning) step for step: the same box tests
+in the same order, the nearer child first with ties to the left, the same
+pop-time skip, the same leaf order and the same acceptance rule. A stack
+entry carries the child's reference with its entry bound. On the tree
+`compact_bvh` made from a source tree, both therefore call the primitive test
+with the same primitives and limits in the same order as `closest_hit` and
+`any_hit` on the source tree, and return the same result; the correctness
+argument above applies unchanged, because every node box is the source box.
+Errors are the same `TraversalError` values: `InvalidNodeIndex` for a
+reference to a missing compact node, `InvalidPrimitiveRange` for a leaf range
+past the buffer, `StackOverflow` past 64 entries. Because `CompactView`'s
+fields are public, a hand-built compact tree can contain a reference cycle
+(a child that names an ancestor); a search that pushes only one child per
+visit would then loop forever without filling the stack. A tree visits each
+node at most once, so the search counts interior visits and returns
+`InvalidNodeIndex` once they exceed the number of compact nodes. (`closest_hit`
+on a malformed `BvhNode` buffer whose child index names an ancestor has the
+same exposure; it is unchanged here and noted as an open gap in the test
+plan.)
+
+The layout is a second representation to keep in step with the first: a
+change to the search order or pruning rule must be made in both
+`closest_hit.rs` and `compact_hit.rs`. Its speed is recorded in the
+performance chapter's ledger.
 
 ### Example
 

@@ -41,6 +41,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
 | PERF-REQ-007 | The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
+| PERF-REQ-008 | Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray. | `README.md#memory-share-of-a-box-test` |
 
 ```toml
 [[requirement]]
@@ -76,6 +77,11 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-007"
 summary = "The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as closest_hit and any_hit on every benchmark ray; the core crates carry no counters."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-008"
+summary = "Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray."
 status = "active"
 ```
 
@@ -124,6 +130,11 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-039 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes` |
 | PERF-TP-040 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb, bit for bit, on an overflow-heavy seeded corpus (coordinates near the i64 extremes, direction components of a few raw units) that hits, misses and saturates bounds. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_the_overflow_corpus` |
 | PERF-TP-041 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases` |
+| PERF-TP-042 | Memory | PERF-REQ-008 | The harness replica of `box_entry` (one box, and two boxes at once) returns `box_entry`'s exact result on every box test of the 1 024 benchmark searches, and the recorded calls split into one root test plus sibling pairs. | `crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_returns_box_entry_bits_on_every_recorded_call` |
+| PERF-TP-043 | Memory | PERF-REQ-008 | The replica returns `box_entry`'s exact result on hand-built axis-parallel, diagonal, inside-the-box and behind-the-origin rays with zero, negative, small and unbounded limits. | `crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_matches_box_entry_on_axis_parallel_and_edge_rays` |
+| PERF-TP-044 | Memory | PERF-REQ-008 | The shuffled tree moves more than half of the nodes, and `closest_hit` on it returns the same `ClosestHit` as on the builder's tree on all 1 024 rays. | `crates/bunny-perf/src/memory.rs::tests::the_shuffled_tree_is_a_permutation_with_the_same_answers` |
+| PERF-TP-045 | Memory | PERF-REQ-008 | On all 1 024 rays, `compact_closest_hit` and `compact_any_hit` on the compact tree and on its three reordered copies call the primitive test with the same primitives and limits in the same order, and return the same answers, as `closest_hit` and `any_hit` on the builder's tree. | `crates/bunny-perf/src/compact.rs::tests::every_compact_tree_makes_the_same_calls_and_answers_as_the_builders_tree` |
+| PERF-TP-046 | Memory | PERF-REQ-008 | The scene's compact tree has one node per interior source node and an interior root. | `crates/bunny-perf/src/compact.rs::tests::the_compact_tree_has_one_node_per_interior_source_node` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -447,6 +458,51 @@ requirements = ["PERF-REQ-001"]
 evidence = "test"
 test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases"
 oracle = "Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-042"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_returns_box_entry_bits_on_every_recorded_call"
+oracle = "The replica box test (one box and two boxes at once) returns box_entry's exact result on every recorded box test of the 1 024 benchmark searches."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-043"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_matches_box_entry_on_axis_parallel_and_edge_rays"
+oracle = "The replica returns box_entry's exact result on hand-built axis-parallel, diagonal, inside and behind-the-origin rays over zero, negative, small and unbounded limits."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-044"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/memory.rs::tests::the_shuffled_tree_is_a_permutation_with_the_same_answers"
+oracle = "closest_hit on the shuffled tree returns the same ClosestHit as on the builder's tree on all 1 024 rays; more than half the nodes moved."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-045"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/compact.rs::tests::every_compact_tree_makes_the_same_calls_and_answers_as_the_builders_tree"
+oracle = "On all 1 024 rays, the compact searches on the compact tree and its three reordered copies make the same primitive calls in the same order and return the same answers as closest_hit and any_hit on the builder's tree."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-046"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/compact.rs::tests::the_compact_tree_has_one_node_per_interior_source_node"
+oracle = "The scene's compact tree has one node per interior source node and an interior root."
 tier = "fast"
 status = "implemented"
 ```

@@ -76,6 +76,7 @@ formatting.
 | TRACE-REQ-025 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
 | TRACE-REQ-026 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
 | TRACE-REQ-027 | hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit. | `README.md#exact-triangle-test` |
+| TRACE-REQ-028 | compact_bvh converts a built tree into the compact layout deterministically (the same bytes on every target) and reports malformed input as a typed error; compact_closest_hit and compact_any_hit on the result make the same primitive calls in the same order and return the same answers as closest_hit and any_hit on the source tree. | `README.md#compact-layout` |
 | TRACE-REQ-029 | box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included. | `README.md#conservative-box-test` |
 
 ```toml
@@ -185,6 +186,11 @@ summary = "hit_triangle returns exactly what a frozen reference copy of its arit
 status = "active"
 
 [[requirement]]
+id = "TRACE-REQ-028"
+summary = "compact_bvh converts a built tree into the compact layout deterministically and reports malformed input as a typed error; compact_closest_hit and compact_any_hit on the result make the same primitive calls in the same order and return the same answers as closest_hit and any_hit on the source tree."
+status = "active"
+
+[[requirement]]
 id = "TRACE-REQ-029"
 summary = "box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included."
 status = "active"
@@ -279,6 +285,13 @@ Regenerating them is a contract change.
 | TRACE-TP-203 | Extreme domain values against the reference | TRACE-REQ-027 | The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree` |
 | TRACE-TP-204 | det at and just past multiples of 2^32 | TRACE-REQ-027 | Raw-unit triangles hit at a corner with det exactly 2^32, 3 * 2^32, 2^32 + 1 (641 * 6 700 417) and 1 equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_204_determinants_at_multiples_of_2_pow_32_agree` |
 | TRACE-TP-205 | The benchmark scene's triangle tests | TRACE-REQ-027 | Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance. | `crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal` |
+| TRACE-TP-301 | Brute-force and source agreement | TRACE-REQ-028, TRACE-REQ-021, TRACE-REQ-025 | On seeded scenes of 2, 3, 5, 17, 64 and 600 triangles (3 500 rays in all), compact_closest_hit and compact_any_hit make the same primitive calls with the same limits in the same order, and return the same results, as closest_hit and any_hit on the source tree, which equal a test of every triangle; each scene has hits and misses. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_301_compact_searches_equal_the_source_tree_and_every_primitive` |
+| TRACE-TP-302 | Ties, limits and shapes | TRACE-REQ-028, TRACE-REQ-022, TRACE-REQ-023 | With a third of 150 triangles duplicated (ties), on the built tree, two reshaped trees and a single leaf listing every triangle, the compact searches agree with the source searches and the full test at no limit, at the nearest distance and one raw unit below it. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_302_compact_searches_agree_on_ties_limits_and_other_tree_shapes` |
+| TRACE-TP-303 | Empty, one-primitive and one-leaf trees | TRACE-REQ-028 | An empty tree converts to no root and both searches miss; a one-primitive tree converts to a leaf root with no compact node; a single leaf of three primitives converts to a leaf root; both agree with the source searches. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_303_empty_single_primitive_and_single_leaf_trees` |
+| TRACE-TP-304 | Malformed conversion input | TRACE-REQ-028 | A child index past the slice (including u32::MAX) is InvalidNodeIndex, a too-small output is OutputTooSmall (and the exact size succeeds), a node reached twice is NotATree, and a comb tree needing more than 64 pending subtrees is TooDeep while 60 levels convert. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_304_malformed_input_is_a_typed_error` |
+| TRACE-TP-305 | Malformed compact trees | TRACE-REQ-028, TRACE-REQ-026 | A root that names a missing compact node is InvalidNodeIndex, a leaf range past the primitive buffer is InvalidPrimitiveRange, and a chain that keeps a leaf on the stack per level is StackOverflow. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_305_malformed_compact_trees_are_traversal_errors` |
+| TRACE-TP-306 | Order, equal-bound pruning and early stop | TRACE-REQ-028, TRACE-REQ-024, TRACE-REQ-025 | The constructed cases of TRACE-TP-107 to TRACE-TP-109 on the compact tree: the nearer leaf is the only one tested, a leaf starting at the best distance is still tested (calls 1 then 0, index 0 returned), and compact_any_hit stops after one test and makes none below every box. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_306_the_compact_search_keeps_the_order_pruning_and_early_stop` |
+| TRACE-TP-307 | Conversion golden vectors | TRACE-REQ-028 | A hand-built nine-node tree converts to four exactly stated compact nodes in depth-first, left-first order; a seeded 300-triangle tree converts to bytes whose FNV-1a checksum is the stated constant, the same on every target that runs the tests. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_307_compact_conversion_golden_vectors` |
 | TRACE-TP-308 | Reference on the golden and oracle corpora | TRACE-REQ-029 | The inputs of TRACE-TP-010 (and an origin-inside case) and the 40 000 seeded cases of TRACE-TP-007, drawn with the same seed, return the same Option as the retained reference at every limit class; over 2 000 cases each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_308_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora` |
 | TRACE-TP-309 | Reference on seeded trace-domain cases | TRACE-REQ-029 | 300 000 seeded rays (origins across the whole trace domain, within 4 units and within 2^20 raw; general, near-axis and axis-parallel directions with zero, tiny, unit and maximum components) against boxes around, ahead of, behind and far from the origin, with faces through the origin, inverted axes and full-range axes, return the same Option as the retained reference at every limit class; over a tenth of them each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_309_box_entry_matches_the_reference_on_seeded_trace_domain_cases` |
 | TRACE-TP-310 | Reference at the ends of i64 | TRACE-REQ-029 | Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range` |
@@ -665,6 +678,69 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "TRACE-TP-301"
+requirements = ["TRACE-REQ-028", "TRACE-REQ-021", "TRACE-REQ-025"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_301_compact_searches_equal_the_source_tree_and_every_primitive"
+oracle = "On seeded scenes of 2, 3, 5, 17, 64 and 600 triangles (3 500 rays in all), compact_closest_hit and compact_any_hit make the same primitive calls with the same limits in the same order, and return the same results, as closest_hit and any_hit on the source tree, which equal a test of every triangle; each scene has hits and misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-302"
+requirements = ["TRACE-REQ-028", "TRACE-REQ-022", "TRACE-REQ-023"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_302_compact_searches_agree_on_ties_limits_and_other_tree_shapes"
+oracle = "With a third of 150 triangles duplicated (ties), on the built tree, two reshaped trees and a single leaf listing every triangle, the compact searches agree with the source searches and the full test at no limit, at the nearest distance and one raw unit below it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-303"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_303_empty_single_primitive_and_single_leaf_trees"
+oracle = "An empty tree converts to no root and both searches miss; a one-primitive tree converts to a leaf root with no compact node; a single leaf of three primitives converts to a leaf root; both agree with the source searches."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-304"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_304_malformed_input_is_a_typed_error"
+oracle = "A child index past the slice (including u32::MAX) is InvalidNodeIndex, a too-small output is OutputTooSmall (and the exact size succeeds), a node reached twice is NotATree, and a comb tree needing more than 64 pending subtrees is TooDeep while 60 levels convert."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-305"
+requirements = ["TRACE-REQ-028", "TRACE-REQ-026"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_305_malformed_compact_trees_are_traversal_errors"
+oracle = "A root that names a missing compact node is InvalidNodeIndex, a leaf range past the primitive buffer is InvalidPrimitiveRange, and a chain that keeps a leaf on the stack per level is StackOverflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-306"
+requirements = ["TRACE-REQ-028", "TRACE-REQ-024", "TRACE-REQ-025"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_306_the_compact_search_keeps_the_order_pruning_and_early_stop"
+oracle = "The constructed cases of TRACE-TP-107 to TRACE-TP-109 on the compact tree: the nearer leaf is the only one tested, a leaf starting at the best distance is still tested (calls 1 then 0, index 0 returned), and compact_any_hit stops after one test and makes none below every box."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-307"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_307_compact_conversion_golden_vectors"
+oracle = "A hand-built nine-node tree converts to four exactly stated compact nodes in depth-first, left-first order; a seeded 300-triangle tree converts to bytes whose FNV-1a checksum is the stated constant, the same on every target that runs the tests."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "TRACE-TP-308"
 requirements = ["TRACE-REQ-029"]
 evidence = "test"
@@ -770,6 +846,29 @@ the floor of `det / 2^32` for its ceiling, `t + 1 >= bound`, and the ceiling com
 `2^32 - 2`. Each made at least one of `TRACE-TP-201` to `TRACE-TP-205` fail; the last two
 survived until `TRACE-TP-204` was added. The table is in the performance chapter's entry 6.
 
+The compact layout (`compact.rs`, `compact_hit.rs`) was mutated the same way,
+running `cargo test --locked -p bunny-broadphase --test compact_tests`, each
+mutant under a 30-second wall-clock limit so a search that never ends counts
+as caught instead of holding the machine. Every mutant was caught; the
+restored source passed all seven cases.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Nearer child pushed first, farther child on top | The nearer child is searched first | TRACE-TP-301, TRACE-TP-302, TRACE-TP-305, TRACE-TP-306 |
+| `enter <= self.limit` made `enter < self.limit` in `pop` | A subtree whose bound equals the best distance is searched | TRACE-TP-306 |
+| Tie sends the right child first (`r <= l`) | Ties go to the left child, as in `closest_hit` | TRACE-TP-301, TRACE-TP-302, TRACE-TP-305, TRACE-TP-306 |
+| The stop at the first accepted hit removed | `compact_any_hit` stops at the first hit | TRACE-TP-301, TRACE-TP-302, TRACE-TP-303, TRACE-TP-306 |
+| The farther child dropped instead of pushed | A reachable subtree is never pruned without a bound | TRACE-TP-301, TRACE-TP-302, TRACE-TP-305, TRACE-TP-306 |
+| The interior-visit bound removed | A reference cycle is an error, not an endless loop | TRACE-TP-305 (did not terminate) |
+| Conversion writes the right subtree first | Depth-first, left-first order | TRACE-TP-304, TRACE-TP-307 |
+| Conversion links the wrong child slot | Each reference names its own child | TRACE-TP-301, TRACE-TP-302, TRACE-TP-307 |
+
+The first run of this table had no wall-clock limit: the wrong-slot mutant
+produced a cyclic compact tree, the search looped, and the run had to be
+killed. That exposed the missing guard, now the interior-visit bound, and the
+dropped-child mutant first failed to compile rather than run; TRACE-TP-306
+gained a case where the nearer leaf's box is entered but its triangle missed.
+
 The rewritten box test (flyingrobots/bunny#258) was checked the same way in a container
 copy of the final source, running `box_entry_equivalence_tests`, `trace_tests`,
 `closest_hit_tests` and the `bunny-perf` scene test `TRACE-TP-311`. Every mutation made at
@@ -874,3 +973,4 @@ case with a stable test name.
 | A tree builder tuned for ray tracing; the traversals run on `build_bvh` trees today. | flyingrobots/bunny#213. |
 | Closest-point-to-mesh queries and committed mesh fixture data. | Remaining scope of flyingrobots/bunny#123. |
 | Canonical hit record, plane, segment, capsule and OBB intersections. | Remaining scope of flyingrobots/bunny#159. |
+| `closest_hit`, `any_hit` and `intersect_ray` on a malformed `BvhNode` buffer whose child index names an ancestor can loop without filling the stack (the compact searches bound their visits; these do not). | A guard in the existing traversals; not in scope of flyingrobots/bunny#215. |
