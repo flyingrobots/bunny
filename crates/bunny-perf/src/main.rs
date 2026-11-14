@@ -11,6 +11,8 @@
 mod cases;
 #[cfg(feature = "trace")]
 mod profile;
+#[cfg(feature = "sample")]
+mod sample;
 #[cfg(any(feature = "scene", feature = "trace"))]
 mod scene;
 mod timing;

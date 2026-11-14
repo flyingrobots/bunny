@@ -171,6 +171,7 @@ dependencies = [
  "bunny-geom",
  "bunny-linalg",
  "bunny-num",
+ "bunny-optics",
  "bunny-query",
 ]
 
