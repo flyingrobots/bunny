@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
+  hits on the benchmark sphere: `shade/smooth_normal` (the shipped
+  interpolation from exact numerators), `shade/smooth_normal_divided` (a
+  replica of the rejected alternative with two floored `barycentrics`
+  weights), and `shade/smooth_hit_shading` beside `shade/flat_hit_shading_mesh`
+  on the same hits. A test checks that the replica and `smooth_normal` agree
+  within both bounds. Ledger entry 13 records the cost; closes
+  flyingrobots/bunny#289.
+
 * `bunny-optics`'s `SmoothHit::bounce` samples the bounce around the shading
   normal and returns a `SmoothBounce`: `Ray` when the direction is strictly
   above the exact geometric plane (`SmoothHit::is_above_surface`, an exact

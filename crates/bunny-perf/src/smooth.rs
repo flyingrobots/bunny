@@ -235,17 +235,6 @@ mod tests {
         hit.barycentric_numerators().det().ilog2().saturating_sub(61)
     }
 
-    #[test]
-    fn the_batch_is_1024_distinct_hits_spread_over_the_image() {
-        let shots = shots();
-        let rays: std::collections::BTreeSet<[i64; 3]> = shots
-            .iter()
-            .map(|s| s.ray.direction())
-            .map(|d| [d.x.raw(), d.y.raw(), d.z.raw()])
-            .collect();
-        assert_eq!((shots.len(), rays.len()), (BATCH, BATCH));
-    }
-
     /// Option (a) is within `1 + 2^-26 / rho` raw units of the exact interpolation and option (b)
     /// within `1 + 8 (1 + 2^-32) / rho`, so they differ by at most the sum. `rho` is bounded
     /// below by `(max |m_b| - FLOOR_ERROR) / 2^64` from (b)'s exact sum `m_b`.
@@ -275,10 +264,17 @@ mod tests {
         );
     }
 
-    /// A regression lock on the inputs the ledger describes: shifts and shared normals.
+    /// The batch is what the ledger describes: 1 024 distinct camera rays, and (a regression
+    /// lock) the weight shifts of `smooth_normal` and no hit with three equal vertex normals.
     #[test]
-    fn the_batch_shifts_its_weights_by_the_recorded_amounts() {
+    fn the_batch_is_1024_distinct_sphere_hits_with_the_recorded_shifts() {
         let shots = shots();
+        let rays: std::collections::BTreeSet<[i64; 3]> = shots
+            .iter()
+            .map(|s| s.ray.direction())
+            .map(|d| [d.x.raw(), d.y.raw(), d.z.raw()])
+            .collect();
+        assert_eq!((shots.len(), rays.len()), (BATCH, BATCH), "hits, then distinct rays");
         let mut shifts = BTreeMap::new();
         for shot in &shots {
             *shifts.entry(shift(&shot.hit)).or_insert(0_usize) += 1;

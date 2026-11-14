@@ -238,7 +238,13 @@ ray, reflection). Traversal is not included; the readings are in the optics chap
 [Accuracy And Cost](../optics/README.md#accuracy-and-cost). The `normals` group
 (`crates/bunny-perf/src/normals.rs`) adds `shade/vertex_normals`: one whole `VertexNormals::new`
 of a seeded 32 by 32 height-field grid (1 024 vertices, 1 922 triangles) per batch, so a call is
-one vertex (entry 12).
+one vertex (entry 12). The `smooth` group (`crates/bunny-perf/src/smooth.rs`, which needs `trace`
+and `shade`) times the smooth path on 1 024 closest hits on this scene's sphere (camera rays on a
+96 by 96 grid through the same window, every `n`-th sphere hit), with the scene welded by
+position into an indexed mesh and its vertex normals from `VertexNormals::new`:
+`shade/smooth_normal`, `shade/smooth_normal_divided` (a replica of the alternative that was not
+selected), and `shade/smooth_hit_shading` beside `shade/flat_hit_shading_mesh` on the same hits
+(entry 13). A test checks that the replica agrees with `smooth_normal` within both bounds.
 
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
@@ -1417,6 +1423,91 @@ includes its share of the cross products and of two allocations.
 weighting here; angle weighting would need an angle per corner, which has no exact integer form.
 The sums take 48 bytes per vertex while the build runs.
 
+### 13. Smooth normal from exact barycentric numerators (new API)
+
+**Where:** `crates/bunny-optics/src/shading/smooth_normal.rs` and `smooth_hit.rs`, with
+`TriangleHit::barycentric_numerators` in `bunny-query` (flyingrobots/bunny#289).
+
+**Technique.** `smooth_normal` interpolates the vertex normals with the exact numerators the
+triangle test decided the hit with: one shared shift `k` of the three weights, an exact `i128`
+combination and one normalization, with no division by `det`. See the
+[optics chapter](../optics/README.md#smooth-normal). The alternative was the floored Q32.32
+weights `TriangleHit::barycentrics` already returned (two long divisions of `i128` numerators by
+`det`), `w0 = 2^32 - b1 - b2`, and the same shared-normal step, combination and normalization;
+it is recorded under [Tried And Rejected](#floored-barycentric-weights-for-the-smooth-normal).
+
+**Fidelity.** New APIs with their own identities (`bunny-smooth-normal/1`,
+`bunny-smooth-shading/1`): stated bounds, exact big-integer oracles, golden vectors and a
+mutation per rule (optics test plan, OPTICS-TP-074 to -085). No existing function changed.
+
+**Inputs.** The `smooth` group's 1 024 closest hits on the benchmark sphere (see
+[Adding a case](#adding-a-case)). Their weight shifts `k` are 17 (1 hit), 20 (1), 21 (3),
+22 (15), 23 (86), 24 (191), 25 (600) and 26 (127), so every hit takes the shift; no hit has three
+equal vertex normals, so none takes the shared-normal step. A test locks both counts.
+
+**Measured.** Apple M5 Pro, `aarch64-linux`, `rust-dev:1.96.0` container, `--exclusive`, base
+`e7a4fabf55bb` (`origin/main`), head `3b4972e` (this harness, no production change), three runs
+of
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter shade/
+```
+
+The base has the smooth APIs, so it builds every case and each run compares identical library
+code: the base column is a same-code reading of every case, not a "before". Head side,
+nanoseconds per call, median p50 / best p50 across the 11 rounds:
+
+| Case | Run 1 | Run 2 | Run 3 |
+| --- | ---: | ---: | ---: |
+| `shade/smooth_normal` (a, shipped) | 72.43 / 70.35 | 72.06 / 70.15 | 73.45 / 70.76 |
+| `shade/smooth_normal_divided` (b) | 83.17 / 80.61 | 85.33 / 81.30 | 83.54 / 79.63 |
+| `shade/smooth_hit_shading` | 171.18 / 168.05 | 170.90 / 168.42 | 171.26 / 167.32 |
+| `shade/flat_hit_shading_mesh` (same hits) | 67.50 / 66.65 | 67.14 / 66.85 | 67.38 / 66.73 |
+| `shade/hit_shading` (control) | 67.46 / 66.53 | 67.50 / 66.85 | 67.38 / 66.49 |
+
+Base against head, change in median p50 / best p50; the A/A column is one more run with
+`--base HEAD`, the noise floor the method asks for:
+
+| Case | Run 1 | Run 2 | Run 3 | A/A |
+| --- | ---: | ---: | ---: | ---: |
+| `shade/smooth_normal` | +0.1 % / -0.9 % | -0.3 % / +0.1 % | +1.5 % / +0.2 % | +0.4 % / +0.1 % |
+| `shade/smooth_normal_divided` | -1.1 % / -0.8 % | +2.6 % / +0.3 % | -0.6 % / -2.5 % | +4.3 % / +0.2 % |
+| `shade/smooth_hit_shading` | -0.4 % / +0.2 % | +0.1 % / +0.3 % | +0.5 % / -0.8 % | -0.2 % / -0.4 % |
+| `shade/flat_hit_shading_mesh` | +0.2 % / +0.2 % | +0.0 % / +0.2 % | +0.3 % / +0.1 % | -0.5 % / +0.1 % |
+| `shade/hit_shading` | -0.1 % / -0.7 % | +0.2 % / -0.3 % | -0.1 % / -0.1 % | +0.1 % / -0.5 % |
+| `shade/bounce_direction` | +0.1 % / -0.8 % | +0.0 % / +0.5 % | +0.0 % / +1.1 % | +0.0 % / +0.2 % |
+| `shade/surface_new` | +0.4 % / -0.3 % | +0.7 % / -0.5 % | +0.2 % / -0.8 % | -1.1 % / -1.0 % |
+| `shade/vertex_normals` | -0.3 % / -0.7 % | +0.8 % / +0.3 % | -1.2 % / +0.9 % | -0.4 % / +0.9 % |
+
+Every same-code change is within -1.2 % and +4.3 % (median) and -2.5 % and +1.1 % (best); the
+largest median swings are `shade/smooth_normal_divided` (+4.3 %, +2.6 %), whose best p50 stays
+within 2.5 %, the [bimodal](#bimodal-cases) pattern.
+
+**What is established.** On this machine, (b) is slower than (a) in every run, by 14 % to 18 % in
+median p50 and 12 % to 16 % in best p50, well outside the band of the same-code readings. A whole
+smooth-shaded hit (`SurfaceHit::new`, `SmoothHit::new`, `light_sample`, `bounce`, reflection)
+costs about 171 ns against 67 ns for the flat step on the same hits: about 104 ns more
+per hit, 2.5 times the flat cost. The flat step on these hits costs the same as
+`shade/hit_shading` on its seeded triangles. The existing `shade/` cases did not move.
+
+**What is not.** Where the extra time of a smooth hit goes was not timed step by step: besides
+`smooth_normal` (about 72 ns), `SmoothHit::new` builds a frame around the interpolated normal
+(three rounded `i128` divisions, which the flat step takes from the prepared `TriangleSurface`),
+and the smooth step takes two exact plane tests (the frame's side and the bounce's). Other targets were not measured here, and x86-64,
+where a 128-by-64 divide is native, may narrow the gap between (a) and (b). A traced image's cost
+per sample also includes traversal (`trace/closest_hit` is about 227 ns per ray).
+
+**Readings and the test plan.** The optics test plan treats the readings of a case that no base
+can compare as readings for later comparisons, not speed claims, and gives them no ledger entry.
+Entry 12 recorded the cost of a new API anyway, as the issue asked, with controls beside it. This
+entry does the same and adds one claim, (a) against (b), which compares two cases within each run
+on the same inputs and the same build; the base comparison only shows the controls and the
+same-code noise.
+
+**Trade-offs.** (a) needs the exact numerators, so `TriangleHit` carries them (three `i128`
+fields it already held); its bound is tighter (`1 + 2^-26 / rho` raw units against
+`1 + 8 (1 + 2^-32) / rho`).
+
 ## Profile of `closest_hit` on the benchmark scene
 
 This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
@@ -1781,6 +1872,33 @@ The rejected versions are recorded under [Tried And Rejected](#shared-core-for-t
 
 Experiments that kept exact results but did not pay off. They are recorded so the same idea
 is not retried without new evidence (a different target, or a changed design).
+
+### Floored barycentric weights for the smooth normal
+
+**Where tried:** `shade/smooth_normal_divided` in `crates/bunny-perf/src/smooth.rs`
+(flyingrobots/bunny#289), a replica built from public APIs; no library code has it.
+
+**Idea.** Interpolate the vertex normals with the two floored weights of
+`TriangleHit::barycentrics` (`b1`, `b2`, each `floor(2^32 u / det)` by long division) and
+`w0 = 2^32 - b1 - b2`, then take `smooth_normal`'s shared-normal step, exact combination and
+normalization. Each weight fits 33 bits, so no shift is needed.
+
+**Fidelity: other bits, a looser bound.** Not an exact replacement and not the same rule: the two
+floors move the combination by less than `4 (2^32 + 1)`, so each component is within
+`1 + 8 (1 + 2^-32) / rho` raw units of the exact interpolation, against `1 + 2^-26 / rho` for
+`smooth_normal`. On the benchmark's 1 024 sphere hits the two agree on 573, differ by one raw unit
+in a component on 447 and by two on 4 (OPTICS-TP-086, which checks every hit against the sum of
+both bounds).
+
+**Result.** Slower in every run of [entry 13](#13-smooth-normal-from-exact-barycentric-numerators-new-api):
+83.2 to 85.3 ns median p50 (79.6 to 81.3 best) against 72.1 to 73.5 (70.2 to
+70.8 best) for `shade/smooth_normal`, so 14 % to 18 % slower in median p50 and 12 % to 16 % in
+best p50. The base side of the same runs, the same code, gives 15 % to
+16 %.
+
+**Why it lost.** Two long divisions of `i128` numerators cost more than the shift `smooth_normal`
+does instead, and the floors cost accuracy. Targets with a different division cost were not
+measured.
 
 ### Shared core for typed shading refusals
 

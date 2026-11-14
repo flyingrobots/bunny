@@ -588,6 +588,7 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-083 | The plane test's boundary | OPTICS-REQ-051 | On the ground, directions one raw unit of `y` above, on and below the plane; on a sloped triangle with exact normal `(-2^32, 0, 2^64)`, the direction `(2^32, 0, 1)` with `d . N = 0` exactly and one raw unit of `z` either side, from the front and from the back (the sides swap, the zero stays rejected). | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_083_bounces_are_above_the_exact_plane_or_rejected` |
 | OPTICS-TP-084 | Grazing bounce | OPTICS-REQ-051 | The triangle of OPTICS-TP-080: the direction `n` is below by the exact plane although `n . g > 0` with the rounded unit normal, and `-n` is above although `-n . g < 0`. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_084_a_grazing_bounce_is_sided_by_the_exact_plane` |
 | OPTICS-TP-085 | Bounce rejection | OPTICS-REQ-051 | A 16 by 16 grid of sampler points on the ground with the shading normal 53 degrees off: each accepted bounce starts at the start point along the frame's direction and is above, each rejected one is not, and the counts are locked (207 rays, 49 below); with the shading normal along the geometric one, 256 rays; a sample of 1.0 gives `None`. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_085_bounces_below_the_surface_are_rejected_without_a_ray` |
+| OPTICS-TP-086 | Floored weights against exact numerators | OPTICS-REQ-047 | On the 1 024 sphere hits of the `smooth` benchmark group (shifts `k` of 17 to 26), the replica of the rejected alternative (two floored `barycentrics` weights, `w0 = 2^32 - b1 - b2`, then the same steps) and `smooth_normal` give a normal on every hit and differ by at most the sum of their bounds, `2 + (8 (1 + 2^-32) + 2^-26) / rho`, with `rho` bounded below from the replica's exact sum; the counts are locked: 573 equal, 447 one raw unit apart and 4 two apart. | `crates/bunny-perf/src/smooth.rs::tests::the_divided_replica_agrees_with_smooth_normal_within_both_bounds` |
 
 ```toml
 [[case]]
@@ -1309,6 +1310,15 @@ test = "crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_085_bounces_bel
 oracle = "Specified per sample (the exact plane test and the frame's direction); the counts are a regression lock."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-086"
+requirements = ["OPTICS-REQ-047"]
+evidence = "test"
+test = "crates/bunny-perf/src/smooth.rs::tests::the_divided_replica_agrees_with_smooth_normal_within_both_bounds"
+oracle = "Stated bounds: smooth_normal's (README.md#smooth-normal) plus the replica's 1 + 8 (1 + 2^-32) / rho from its two floors; the difference counts are a regression lock."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1522,6 +1532,20 @@ height-field grid (1 024 vertices, 1 922 triangles) per batch, reported per
 vertex, allocations included. Its reading is in the
 [chapter](README.md#accuracy-and-cost) and the
 [performance ledger](../performance/README.md#12-area-weighted-vertex-normals-new-api).
+
+The `smooth` group (`crates/bunny-perf/src/smooth.rs`) times the smooth path
+on 1 024 closest hits on the benchmark scene's sphere (camera rays on a 96 by
+96 grid, every `n`-th sphere hit), with the scene welded by position into an
+indexed mesh and its vertex normals from `VertexNormals::new`:
+`shade/smooth_normal` (`barycentric_numerators` then `smooth_normal`),
+`shade/smooth_normal_divided` (the alternative of OPTICS-TP-086, replicated
+from public APIs), and `shade/smooth_hit_shading` beside
+`shade/flat_hit_shading_mesh` (the step of `shade/hit_shading`, with and
+without `SmoothHit`, on the same hits). Base revisions that have the smooth
+APIs build the group, so a comparison against them is also a same-code reading
+of these cases. The readings are in the
+[chapter](README.md#accuracy-and-cost) and the
+[performance ledger](../performance/README.md#13-smooth-normal-from-exact-barycentric-numerators-new-api).
 
 ## Determinism Obligations And Evidence
 
