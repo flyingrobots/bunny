@@ -152,6 +152,28 @@ fn path_attributes_must_name_a_scanned_file() {
 }
 
 #[test]
+fn path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected() {
+    assert_rejects(
+        "include-source",
+        &[
+            (
+                "emitted by a macro",
+                "macro_rules! load { () => { #[path = \"payload.inc\"] mod hidden; } }\nload!();",
+                1,
+            ),
+            (
+                "nested cfg_attr",
+                "#[cfg_attr(all(), cfg_attr(all(), path = \"payload.inc\"))]\nmod hidden;",
+                1,
+            ),
+            ("vendor directory", "#[path = \"vendor/payload.rs\"]\nmod hidden;", 1),
+            ("third_party directory", "#[path = \"third_party/payload.rs\"]\nmod hidden;", 1),
+            ("target directory", "#[path = \"../target/payload.rs\"]\nmod hidden;", 1),
+        ],
+    );
+}
+
+#[test]
 fn included_data_must_come_from_inside_the_crate() {
     assert_rejects(
         "include-data",
