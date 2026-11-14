@@ -8,9 +8,9 @@
 /// [`crate::TriangleHit::barycentric_numerators`] returns the values the exact triangle test
 /// compared to decide the hit (`0 <= u`, `0 <= v`, `u + v <= det`, `det > 0`), with no
 /// rounding. For a ray and triangle in the trace domain each is below `2^117`: `det` is
-/// `e1 . (d x e2)` with direction components at most `2^32` and edge components below `2^41`,
-/// so `|d x e2|` is below `2^74` per component and `det` below `3 * 2^115`; `u` and `v` are at
-/// most `det`. See `docs/topics/ray-tracing/README.md#exact-triangle-test`.
+/// `e1 . (d x e2)` with direction components at most `2^32 + 1` and edge components below
+/// `2^41`, so `|d x e2|` is below `2^75` per component and `det` below
+/// `3 * (2^32 + 1) * 2^83`; `u` and `v` are at most `det`. See `docs/topics/ray-tracing/README.md#exact-triangle-test`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BarycentricNumerators {
     u: i128,

@@ -9,7 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* `TraceRay::from_ray` now accepts a unit direction with a component of `2^32 + 1`
+  raw (`FixedUnitVec3::try_from_unit` allows the length to be one raw unit off, so
+  `(2^32 + 1, 0, 0)` is a unit vector), and so returns `None` only for an origin
+  outside the trace domain, as its documentation said. Before, it returned `None`
+  for that vector and its negation on every axis. This is additive: a `None` becomes
+  a `Some`; no `TraceRay` that was prepared before changes, and `TraceRay::new` keeps
+  its bound of 1.0. The width argument in `docs/topics/ray-tracing/README.md` was
+  redone for the larger component and holds with at least nine bits to spare. A test
+  also counts that `FixedUnitVec3::new` never produces a component above `2^32`
+  (flyingrobots/bunny#292).
+
 ### Added
+
+* `TRACE_UNIT_DIRECTION_LIMIT_RAW` (`2^32 + 1`) in `bunny-query`: the bound on
+  direction components that `TraceRay::from_ray` applies.
 
 * `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
   hits on the benchmark sphere: `shade/smooth_normal` (the shipped

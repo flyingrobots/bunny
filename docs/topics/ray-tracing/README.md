@@ -34,7 +34,8 @@ as:
   `barycentric_numerators`);
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
-- `TRACE_COORD_LIMIT_RAW` and `TRACE_DIRECTION_LIMIT_RAW`.
+- `TRACE_COORD_LIMIT_RAW`, `TRACE_DIRECTION_LIMIT_RAW` and
+  `TRACE_UNIT_DIRECTION_LIMIT_RAW`.
 
 The traversals are implemented in `crates/bunny-broadphase/src/closest_hit.rs`
 and exported as:
@@ -69,14 +70,39 @@ The kernels accept only values inside a fixed trace domain:
 | Value | Bound | Constant |
 | --- | --- | --- |
 | Ray origin and triangle vertex coordinates | `abs(raw) < 2^40` (below 256.0) | `TRACE_COORD_LIMIT_RAW` |
-| Ray direction components | `abs(raw) <= 2^32` (at most 1.0) | `TRACE_DIRECTION_LIMIT_RAW` |
+| Ray direction components, `TraceRay::new` | `abs(raw) <= 2^32` (at most 1.0) | `TRACE_DIRECTION_LIMIT_RAW` |
+| Ray direction components, `TraceRay::from_ray` | `abs(raw) <= 2^32 + 1` | `TRACE_UNIT_DIRECTION_LIMIT_RAW` |
 
 `TraceRay::new` returns `None` when an origin coordinate or a direction
 component is outside the domain, or when the direction is zero.
 `TraceTriangle::new` returns `None` when any vertex coordinate is outside the
-domain. `TraceRay::from_ray` accepts a `FixedRay3`, whose unit direction is
-always inside the direction bound, and so returns `None` only for an origin
-outside the domain.
+domain. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
+an origin outside the domain: `FixedUnitVec3::try_from_unit` allows the length
+to be off by one raw unit, so a unit direction can have one component of
+magnitude `2^32 + 1` (the other two then have squares summing to at most
+`2^33 + 2`, since the sum of all three must be less than `(2^32 + 2)^2`), and `from_ray` accepts it although `new`
+refuses it. `FixedUnitVec3::new` (normalization) never produces a component
+above `2^32`: the floored root is at least the largest component, so the
+quotient is at most 1.0 (TRACE-TP-409 counts this over generated inputs).
+
+**Widths with direction components up to `2^32 + 1`.** Each line of the argument
+was redone for this bound; none is tight:
+
+- The reciprocal `floor(2^63 / abs(d))` is `2^31 - 1` for `abs(d) = 2^32 + 1`
+  (`(2^32 + 1)(2^31 - 1) = 2^63 - 2^31 - 1`, remainder `2^31 + 1 < 2^32 + 1`).
+  The box test's products are `near * r` and `far * (r + 1)`, with `r` below
+  `2^63` and `near`, `far` below `2^64`: below `2^127` whatever `d` is.
+- Edge and origin-offset components are below `2^41` (at most `2^41 - 2`).
+  Each component of `p = d x e2` is at most `2 (2^32 + 1)(2^41 - 2)`, below
+  `2^75` (below `2^74` when `abs(d) <= 2^32`).
+- `det = e1 . p = d . (e2 x e1)`; each component of `e2 x e1` is below `2^83`, so
+  `abs(det)` is below `3 (2^32 + 1) 2^83 = 3 * 2^115 + 3 * 2^83`, below `2^117`.
+- `u = s . p` is below `3 * 2^41 * 2^75`, and `v = d . q` is below
+  `3 (2^32 + 1) 2^83`, with `q = s x e1` below `2^83` per component: both below
+  `2^117` before the comparisons with `det`.
+- `t = e2 . q` does not involve `d`: below `3 * 2^41 * 2^83 = 3 * 2^124`, below `2^126`.
+- `u + v` is below `2^118`; all of these fit `i128` (below `2^127`) with at least
+  nine bits to spare.
 
 The bounds exist so that every intermediate of the triangle test fits `i128`
 exactly: edges and origin offsets are below `2^41`, cross products below
@@ -123,8 +149,10 @@ value and each upper bound is above its exact value. Therefore:
   entry `T`.** That is the stated contract. The per-axis derivation gives a
   tighter figure: the reciprocal loses less than one unit of `2^63 / abs(d)`,
   so a slab lower bound falls short by less than `near / 2^31 + 1` raw units,
-  and `near <= T` because `abs(d) <= 2^32`. The test checks both the contract
-  and the tighter `T / 2^31 + 2`.
+  and `near <= T` because `abs(d) <= 2^32`. For a `from_ray` direction
+  component of `2^32 + 1`, `near <= T + T / 2^32`, so the shortfall is below
+  `T / 2^31 + 1 + T / 2^63`, which is below `T / 2^31 + 2` for `T < 2^63`. The
+  test checks both the contract and the tighter `T / 2^31 + 2`.
 
 The box test needs no division at query time: one multiplication and one shift
 per slab plane.
@@ -193,9 +221,10 @@ Only after a crossing is established does the test divide, once:
 - **Exact numerators.** `TriangleHit::barycentric_numerators` returns the
   `u`, `v` and `det` the test compared, unrounded, as a
   `BarycentricNumerators`. Each is below `2^117` for a ray and triangle in the
-  trace domain: direction components are at most `2^32` and edge components
-  below `2^41`, so each component of `p = d x e2` is below `2^74` and
-  `det = e1 . p` is below `3 * 2^115`; `u` and `v` are at most `det`.
+  trace domain: direction components are at most `2^32 + 1` and edge components
+  below `2^41`, so each component of `p = d x e2` is below `2^75` and
+  `det = e1 . p` is below `3 (2^32 + 1) 2^83`, below `2^117`; `u` and `v` are at
+  most `det`.
   `BarycentricNumerators::new(u, v, det)` builds the same type from any values
   that describe a point on a triangle (`det > 0`, `u >= 0`, `v >= 0`,
   `u + v <= det`) and returns `None` otherwise, so a caller can state weights
