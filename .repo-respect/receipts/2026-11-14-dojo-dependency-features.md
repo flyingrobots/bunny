@@ -49,9 +49,9 @@ fails; the unchanged check reports nothing for `rand` behind an unused feature o
 Mutations, each under `timeout 120`, all caught by the fixture test: default features
 only, normal edges only, findings of both feature sets kept twice.
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
-cargo test --locked -p xtask: 79 passed on the branch from main; 114 after merging the
-flyingrobots/bunny#321 stack (#333), on which this pull request is stacked so the two do
-not conflict in the test plan and the test-module list.
+cargo test --locked -p xtask: 79 passed on the branch from main. This pull request is
+stacked on the flyingrobots/bunny#321 stack (#333) so the two do not conflict in the test
+plan and the test-module list; after merging it, 119 passed.
 cargo run --locked -p xtask -- code-dojo --all with --history origin/main..HEAD --network
 at the final commit; its dependency step runs the new listings on the real workspace.
 
