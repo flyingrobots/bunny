@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates below 256.0 and direction components at most 1.0. Existing
   `bunny-query` functions are unchanged. See the new
   `docs/topics/ray-tracing/` chapter and test plan.
+* Added `FixedPlane3`, `PlaneSide`, `FixedSegment3` and `SegmentClip` to
+  `bunny-geom`: checked signed distance, three-way point classification, and
+  segment clipping to the closed front half-space (a point exactly on the plane
+  is kept). The clipped endpoint uses one checked division and rounds
+  ties-to-even. See `docs/topics/plane-clipping/`.
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same
