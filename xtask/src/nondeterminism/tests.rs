@@ -563,18 +563,27 @@ const TREE: &str = "\
 
 #[test]
 fn banned_dependencies_are_attributed_to_the_crate_that_declares_them() {
-    let findings = dependency_findings(TREE, &no_manifest);
+    let manifest = |name: &str| PathBuf::from("crates").join(name).join("Cargo.toml");
 
-    let summary = findings.iter().map(|(rule, text)| format!("{rule}: {text}")).collect::<Vec<_>>();
-    assert_eq!(findings.len(), 3, "{summary:#?}");
-    assert!(summary.iter().any(|line| line.starts_with("random:")
-        && line.contains("crates/bunny-num/Cargo.toml")
-        && line.contains("`rand`")));
-    assert!(summary.iter().any(|line| line.starts_with("random:")
-        && line.contains("crates/bunny-num/Cargo.toml")
-        && line.contains("`getrandom`")));
-    assert!(summary.iter().any(|line| line.starts_with("json-serialization:")
-        && line.contains("crates/bunny-geom/Cargo.toml")));
+    let found = dependency_violations(TREE, &no_manifest)
+        .iter()
+        .map(|violation| {
+            let named = ["rand", "getrandom", "serde_json"]
+                .into_iter()
+                .find(|crate_name| violation.to_string().contains(&format!("`{crate_name}`")));
+            (violation.rule, violation.path.clone(), named)
+        })
+        .collect::<Vec<_>>();
+
+    // Compared as paths, not rendered text, so the separator is the platform's own.
+    assert_eq!(
+        found,
+        vec![
+            ("random", manifest("bunny-num"), Some("rand")),
+            ("random", manifest("bunny-num"), Some("getrandom")),
+            ("json-serialization", manifest("bunny-geom"), Some("serde_json")),
+        ]
+    );
 }
 
 #[test]

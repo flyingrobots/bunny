@@ -69,7 +69,7 @@ All inside the rust-dev container through devrun; nothing on the host.
 cargo test --locked -p xtask nondeterminism at the failing-evidence commit (pinned with
 --commit): 25 of 29 fail; the messages record form by form what the earlier gate reported,
 which is the "Before" column of the mapping table.
-cargo test --locked -p xtask after the rules: 76 passed.
+cargo test --locked -p xtask after the rules: 76 passed. The Windows determinism job then failed one dependency test that compared a rendered path with `/`; it now compares `PathBuf` values.
 cargo run --locked -p xtask -- code-dojo-rust --all on main's code with the new rules:
 5 findings. 3 real: `f32::from_bits` in `bunny_num::fixed_q32_32::to_f32`, the documented
 float egress, more than two lines below the function's existing waiver; given waivers

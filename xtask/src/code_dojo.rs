@@ -178,7 +178,7 @@ impl Display for DojoError {
 impl Error for DojoError {}
 
 pub(super) struct Violation {
-    path: PathBuf,
+    pub(super) path: PathBuf,
     pub(super) line: usize,
     pub(super) rule: &'static str,
     message: String,
