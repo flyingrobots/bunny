@@ -1066,8 +1066,33 @@ run with `--filter trace/kernel_tri` against `origin/main` (best p50 39.27 to 39
 22.42 to 22.54 ns, 16.24 to 16.24 ns), they are unchanged, and the two standalone triangle
 cases (`trace/triangle_hit`, `trace/triangle_beyond_limit`) are unchanged in every run. So
 the effect depends on which cases ran before in the same process, not on the triangle
-code; its mechanism is not established. The whole-search cases, which include every
+code; its mechanism is not established. A second, unrelated change (the SAH builder,
+flyingrobots/bunny#264, which changes no triangle code either) saw the same reading on its
+branch, and the run on current main above did not show it, so it is very likely a harness or
+placement effect; it is left to its own issue. The whole-search cases, which include every
 triangle test, are the ones to trust.
+
+**On current main, with the compact layout.** The compact search of ledger entry 8
+(`compact_closest_hit`, `compact_any_hit`) calls the same `box_entry`, so it gains too. One
+full-table run, `perf --base origin/main --rounds 11 --align-code`, `--exclusive`, base
+`origin/main` at `069bd8dd3c6f` (entry 8 merged, old box test), head this branch merged
+with it. Best p50, nanoseconds per ray:
+
+| Case | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| `trace/closest_hit` | 221.72 | 184.33 | -16.9 % |
+| `trace/any_hit` | 205.61 | 179.89 | -12.5 % |
+| `trace/closest_hit_compact` | 198.81 | 164.18 | -17.4 % |
+| `trace/any_hit_compact` | 184.61 | 149.58 | -19.0 % |
+| `trace/kernel_box_entry` | 131.88 | 104.00 | -21.1 % |
+| `trace/kernel_tri_all_chain` | 39.35 | 39.23 | -0.3 % |
+| `trace/ray_prepare` | 1.99 | 1.99 | +0.0 % |
+
+With both changes the compact closest-hit search is at 164 ns per ray on this scene, from
+222 ns for `trace/closest_hit` before either. The compact layout's other variants
+(`_builder_order`, `_near_first`, `_shuffled`) moved by -15.6 % to -15.9 %; the harness's
+`kernel_box_single`, `kernel_box_pair` and `kernel_box_load*` cases, which do not call
+`box_entry`, moved by at most 1.0 %. In this run the triangle replays were flat.
 
 **Trade-offs.**
 
