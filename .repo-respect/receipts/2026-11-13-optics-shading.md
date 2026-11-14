@@ -75,7 +75,28 @@ Generated artifacts:
 None.
 
 Checks run:
-Recorded in the final commit of this receipt.
+All inside flyingrobots/rust-dev:1.96.0 through devrun; nothing on the host except the
+Python reference model that produced the model golden vectors and the composed paths.
+cargo test --locked -p bunny-optics --test shading_tests --test shading_property_tests at
+the test-only commit e58aca2: does not compile (E0432, the API is missing).
+cargo fmt --all --check; cargo clippy --locked --workspace --all-targets --all-features
+-- -D warnings; cargo test --locked -p bunny-optics -p bunny-perf; xtask topic-docs
+(contract graph clean), after merging origin/main (7fdd2e4, with the pixel values).
+A container-only measurement over 200 000 seeded normals (not committed): frame residuals
+at most 4.3 (dot), 3.9 (squared length), 4.4 (cross) raw units; bounce direction length
+within 3 raw units, deviation from the ideal map at most 2.1 raw units; light cosine
+within 1.2 raw units. The committed bounds are 8, 8, 8, 8, 4 and 3.
+Deliberate mutations (seven, listed in the test plan's Shading Mutation Checks), each
+run with timeout 120: every one made at least one case fail; the restored source passed.
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+--filter shade/ (--exclusive), Apple M5 Pro in rust-dev:1.96.0, base 7fdd2e4: all three
+cases are new (p50 84.11 ns surface_new, 26.90 ns bounce_direction, 73.73 ns
+hit_shading); xtask reports that no case exists on both sides. In the same exclusive run,
+bunny-perf --filter gave p50 19.65 ns for sample/sampler_point and 226.77 ns for
+trace/closest_hit. A reading, not a speed claim.
+code-dojo --all (history origin/main..HEAD) at 2ade1a1: full gate clean.
+cargo test --locked --workspace and code-dojo --all at the final commit.
+Not run locally: the headless WebAssembly tests (wasm-pack); CI runs them.
 
 Known risks:
 The contract choices (unit normals per triangle; the step-off-the-plane start rule instead
