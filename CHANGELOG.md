@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
+  `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
+  test that never rejects a box the ray reaches and returns an entry bound
+  within `2^11 + 2` raw units plus `distance / 2^30`; `TraceRay::hit_triangle`
+  is an exact integer ray-triangle test (two-sided, inclusive edges, floored
+  distance, barycentrics on demand). Inputs are limited to a trace domain of
+  coordinates below 256.0 and direction components at most 1.0. Existing
+  `bunny-query` functions are unchanged. See the new
+  `docs/topics/ray-tracing/` chapter and test plan.
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same
@@ -28,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added the `docs/topics/performance/` chapter: the fidelity rule every
   optimization must satisfy, how measurements are made and read, and the
   optimization ledger.
+* Added `FixedAngle`, Bunny's canonical angle (#110): a binary angle with
+  `2^64` units per turn, wrapping arithmetic, and exact or symmetric-rounding
+  conversions from turns, degrees and radians.
+* Added deterministic `sin`, `cos` and `sin_cos` on `FixedAngle`: a
+  quarter-wave table built at compile time by an integer Taylor series, cubic
+  Hermite interpolation, and quadrant symmetry. Results are within one raw
+  Q32.32 unit of the exact value, exact at quarter turns and
+  bit-exact under negation, with golden vectors and the
+  `docs/topics/angle-trigonometry/` chapter.
 
 ### Changed
 
@@ -36,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `u128::isqrt`. Re-measured on the corrected harness it makes `sqrt` 1.33 times and
   `length` 1.28 times faster but `normalize` about 4 % slower on aarch64, so every
   target keeps core's implementation; `sqrt_u128` output and speed are unchanged (see
-  the performance ledger, entry 2).
+  the performance ledger, entry 3).
 * `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
   and the ray queries) now uses the table-seeded integer square root from the
   core library: the same exact bits as before, 4.9 times faster for `sqrt`,

@@ -22,12 +22,12 @@ CHANGELOG.md
 crates/bunny-num/src/lib.rs (dispatch, `isqrt_u128_two_divides`, unit tests)
 crates/bunny-num/src/fixed_q32_32.rs (doc comment, call through the dispatch)
 crates/bunny-num/tests/sqrt_equivalence_tests.rs (core-comparison tests moved to lib.rs)
-docs/topics/performance/README.md (ledger entry 2, target-specific section)
+docs/topics/performance/README.md (ledger entry 3, target-specific section)
 docs/topics/performance/test-plan.md (PERF-TP-012 to PERF-TP-014)
 .repo-respect/receipts/2026-11-13-own-isqrt-u64-divides.md
 
 Topic docs:
-docs/topics/performance/README.md (ledger entry 2)
+docs/topics/performance/README.md (ledger entry 3)
 docs/topics/performance/test-plan.md
 
 Generated artifacts:
