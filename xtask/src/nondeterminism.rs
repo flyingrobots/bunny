@@ -22,6 +22,8 @@ use self::includes::Origin;
 
 mod doc_tests;
 mod includes;
+mod metavariables;
+mod std_modules;
 
 /// A source finding: the 1-based line and the rule it breaks.
 pub(super) struct Finding {
@@ -67,6 +69,16 @@ const FS: &str = "filesystem access is banned; take bytes from an adapter at the
 const PROCESS: &str = "process access is banned in deterministic crates";
 const INPUT: &str = "terminal input is banned in deterministic crates; take bytes from an adapter";
 const INCLUDE: &str = "importing `include!` is banned; it brings in code the gate does not scan";
+const BACKTRACE: &str =
+    "backtraces read RUST_BACKTRACE and record the host build's paths and addresses; banned";
+const LOCATION: &str =
+    "source locations hold the host's path to the source when built as a dependency; banned";
+const CPU: &str = "CPU-specific intrinsics and feature detection are banned; core results must \
+     not depend on the host CPU";
+const PLATFORM: &str = "platform-specific `std::os` APIs are banned in deterministic crates";
+const OS_ERROR: &str = "the last OS error is host process state; banned in deterministic crates";
+const UNCLASSIFIED: &str = "this std module or macro is not classified; classify it in \
+     xtask/src/nondeterminism/std_modules.rs and the rules before using it";
 
 const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["std", "time", "SystemTime"], rule: "time-system", message: CLOCK },
@@ -154,7 +166,31 @@ const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["core", "option_env"], rule: "std-env", message: ENV },
     PrefixRule { prefix: &["std", "include"], rule: "include-source", message: INCLUDE },
     PrefixRule { prefix: &["core", "include"], rule: "include-source", message: INCLUDE },
+    // flyingrobots/bunny#347: host state no earlier rule named.
+    PrefixRule { prefix: &["std", "backtrace"], rule: "std-env", message: BACKTRACE },
+    PrefixRule { prefix: &["std", "panic", "Location"], rule: "std-env", message: LOCATION },
+    PrefixRule { prefix: &["core", "panic", "Location"], rule: "std-env", message: LOCATION },
+    PrefixRule {
+        prefix: &["std", "panic", "get_backtrace_style"],
+        rule: "std-env",
+        message: BACKTRACE,
+    },
+    PrefixRule {
+        prefix: &["std", "panic", "set_backtrace_style"],
+        rule: "std-env",
+        message: BACKTRACE,
+    },
+    PrefixRule { prefix: &["std", "arch"], rule: "host-cpu", message: CPU },
+    PrefixRule { prefix: &["core", "arch"], rule: "host-cpu", message: CPU },
+    PrefixRule { prefix: &["std", "random"], rule: "random", message: RANDOM },
+    PrefixRule { prefix: &["core", "random"], rule: "random", message: RANDOM },
+    PrefixRule { prefix: &["std", "hash_map"], rule: "unordered-container", message: UNORDERED },
+    // Every other part of `std::os` (`std::os::raw` is permitted); reported only when no
+    // more specific rule above matches.
+    PrefixRule { prefix: &["std", "os"], rule: PLATFORM_RULE, message: PLATFORM },
 ];
+
+const PLATFORM_RULE: &str = "host-platform";
 
 /// Names banned wherever they appear in a path, even unresolved. These keep the
 /// coverage of Code Dojo's earlier `ambient-state` and `nondeterministic-map` rules,
@@ -185,6 +221,14 @@ fn name_rules(segments: &[String]) -> Vec<(&'static str, &'static str)> {
     }
     if let [.., "Path" | "PathBuf", method] = names.as_slice() {
         rules.extend(method_rules(method));
+    }
+    if names.ends_with(&["Backtrace", "capture"])
+        || names.ends_with(&["Backtrace", "force_capture"])
+    {
+        rules.push(("std-env", BACKTRACE));
+    }
+    if names.last() == Some(&"last_os_error") {
+        rules.push(("std-process", OS_ERROR));
     }
     rules
 }
@@ -229,7 +273,8 @@ fn segment_matches((written, pattern): (&String, &&str)) -> bool {
 
 /// Items below a banned prefix that are deterministic. `DefaultHasher::new()` uses fixed
 /// `SipHash` keys; only `RandomState` seeds a hasher from the host.
-const PERMITTED: &[&[&str]] = &[&["std", "collections", "hash_map", "DefaultHasher"]];
+const PERMITTED: &[&[&str]] =
+    &[&["std", "collections", "hash_map", "DefaultHasher"], &["std", "os", "raw"]];
 
 /// Every rule a fully expanded path breaks.
 fn path_rules(expanded: &[String], written: &[String]) -> Vec<(&'static str, &'static str)> {
@@ -241,18 +286,40 @@ fn path_rules(expanded: &[String], written: &[String]) -> Vec<(&'static str, &'s
         .filter(|rule| starts_with(expanded, rule.prefix))
         .map(|rule| (rule.rule, rule.message))
         .collect::<Vec<_>>();
+    if rules.iter().any(|(rule, _)| *rule != PLATFORM_RULE) {
+        rules.retain(|(rule, _)| *rule != PLATFORM_RULE);
+    }
+    rules.extend(unclassified_rule(expanded));
     rules.extend(name_rules(written));
     rules
+}
+
+/// `unclassified-std` for a path through a name directly below `std`, `core` or `alloc`
+/// that `std_modules.rs` does not classify.
+fn unclassified_rule(expanded: &[String]) -> Option<(&'static str, &'static str)> {
+    match expanded {
+        [root, name, ..]
+            if std_modules::ROOTS.contains(&root.as_str()) && !std_modules::is_classified(name) =>
+        {
+            Some(("unclassified-std", UNCLASSIFIED))
+        }
+        _ => None,
+    }
 }
 
 /// Every rule a glob import of `module` would bring into scope: the rules of the module
 /// itself and of every banned item below it.
 fn glob_rules(module: &[String]) -> Vec<(&'static str, &'static str)> {
-    PREFIX_RULES
+    if PERMITTED.iter().any(|permitted| starts_with(module, permitted)) {
+        return Vec::new();
+    }
+    let mut rules = PREFIX_RULES
         .iter()
         .filter(|rule| starts_with(module, rule.prefix) || is_strict_prefix(module, rule.prefix))
         .map(|rule| (rule.rule, rule.message))
-        .collect()
+        .collect::<Vec<_>>();
+    rules.extend(unclassified_rule(module));
+    rules
 }
 
 fn is_strict_prefix(module: &[String], banned: &[&str]) -> bool {
@@ -392,8 +459,11 @@ impl Scanner {
 
     fn check_use_leaf(&mut self, leaf: &UseLeaf) {
         let expanded = self.expand(&leaf.path);
-        let rules =
+        let mut rules =
             if leaf.glob { glob_rules(&expanded) } else { path_rules(&expanded, &leaf.path) };
+        if !leaf.glob {
+            rules.extend(includes::imported_macro_rules(&expanded));
+        }
         self.report(leaf.line, rules);
     }
 }
@@ -420,6 +490,9 @@ impl<'ast> Visit<'ast> for Scanner {
         }
         for (line, rule) in includes::token_module_path_findings(&node.tokens, &self.origin) {
             self.report(line, vec![rule]);
+        }
+        for line in metavariables::lines(node) {
+            self.report(line, vec![(metavariables::RULE, metavariables::MESSAGE)]);
         }
         visit::visit_macro(self, node);
     }
@@ -645,5 +718,7 @@ mod host_access_tests;
 mod macro_tests;
 #[cfg(test)]
 mod std_api_tests;
+#[cfg(test)]
+mod std_modules_tests;
 #[cfg(test)]
 mod tests;

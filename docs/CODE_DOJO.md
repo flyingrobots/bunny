@@ -145,6 +145,23 @@ and counted with the forms above:
 | banned code in `///` and `//!` doc tests, behind a hidden `# ` line, in `rust,no_run`, in `/** */` | `std-fs`, `time-instant`, `unordered-container`, `thread-sleep`, `std-env` | 0 of 5 | `doc_tests_are_scanned` |
 
 With these the rule tests seed 180 forms; the gate before #321 caught 93.
+
+flyingrobots/bunny#347 adds the constructions a second review found, seeded in
+`xtask/src/nondeterminism/macro_tests.rs`:
+
+| Construction | Rules seeded | Caught before #347 | Test |
+| --- | --- | --- | --- |
+| a metavariable next to `::` (`std::time::$t::now()`, `std::$m::read`, `$root::time`, a `::` repetition, in a `use`, in a nested `format!`), as a macro name (`$m!($p)`, `$m![..]`), as a method name, in an attribute (`#[path = $p]`, `#[$a]`, `#![$a]`, `cfg_attr(.., path = $p)`) | `macro-metavariable` (Bunny's own) | 2 of 15 (`$root::time::Instant::now()` as `time-instant`, the `cfg_attr` form as `include-source`) | `metavariables_in_unresolvable_positions_are_rejected` |
+| `include!`, `env!`, `option_env!`, `include_str!` through `std::prelude::v1`, `core::prelude::*` and a prelude alias, with and without an import; `file!` bare, under `core`, renamed; `is_x86_feature_detected!`, `is_aarch64_feature_detected!` | `include-source`, `std-env`, `include-data`, `host-cpu` | 0 of 13 | `banned_macros_are_found_through_every_std_path` |
+| `Backtrace::capture`, `force_capture`, `use std::backtrace::Backtrace`, `std::panic::Location`, `core::panic::Location`, `get_backtrace_style`; `std::arch`, `core::arch`; `std::random`; `std::os::unix::thread`, `std::os::windows::ffi`, `use std::os;`; `io::Error::last_os_error` | `std-env`, `host-cpu`, `random`, `host-platform`, `std-process` | 0 of 13 | `host_state_beyond_the_earlier_lists_is_rejected` |
+| a module or macro directly below `std`, `core` or `alloc` that no toolchain documents | `unclassified-std` (Bunny's own) | 0 of 4 | `an_unclassified_std_module_is_reported` |
+
+That is 45 more forms, of which the gate before #347 caught 2, both under
+another rule. Every module and macro at the roots of `std`, `core` and
+`alloc` is now classified ([the std
+classification](topics/code-dojo-determinism/README.md#the-std-classification));
+`std_modules_tests.rs` probes the 245 documented names and the eight platform
+modules of `std::os` against the gate.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14
@@ -188,6 +205,15 @@ flyingrobots/bunny#321 these remain outside them:
   procedural macro generates.
 - Symbolic links behind an `include_str!`, `include_bytes!` or `#[path]`
   target, and doc text brought in with `#[doc = include_str!(..)]`.
+- What a macro of another crate expands to: a dependency's `macro_rules!`
+  that builds a banned path from its arguments is read only where it is
+  invoked, from the invocation's tokens. Inside the deterministic crates a
+  metavariable cannot build a path, a macro or method name or an attribute
+  (`macro-metavariable`), so this concerns dependencies, which the dependency
+  check restricts.
+- A standard macro reached through a re-export in another crate (`pub use
+  std::include as inc;` in a dependency): the `use` is reported in the crate
+  that writes it, if that crate is scanned.
 - Writing to standard output or standard error, and threads: both permitted on
   purpose (see Lumen below for the difference on threads).
 - Dev-dependencies, in the dependency check.
@@ -195,7 +221,8 @@ flyingrobots/bunny#321 these remain outside them:
 Known over-reports, each resolvable with a waiver: a zero-argument method of
 Bunny's own named `exists`, `metadata`, `absolute`, `is_terminal` or like the
 other filesystem `Path` methods; a user macro called by the bare name
-`include`, `env` or `option_env`; a `#[path]` inside an inline module, which
+`include`, `env`, `option_env` or `file`; a metavariable that a macro uses
+safely next to `::` (`$t::MAX`; `<$t>::MAX` is accepted); a `#[path]` inside an inline module, which
 the compiler resolves against a deeper directory; any name ending in `_f32`
 or `_f64` that involves no float.
 
@@ -225,6 +252,18 @@ inside macro bodies. They still differ:
 - **Bunny only.** `include-source`, `include-data`, `host-input`, the
   platform modules of `std::os`, `std::path::absolute`, `std::io::pipe`, and
   doc tests.
+- **Macros (since flyingrobots/bunny#347).** Bunny bans metavariables where
+  they would build a path, a macro or method name or an attribute
+  (`macro-metavariable`), recognises `include!`, `env!`, `option_env!` and
+  `file!` under every `std`, `core` and `alloc` path including the preludes,
+  and classifies every root module and macro of the three crates
+  (`unclassified-std`). Lumen's main branch (9ae9d84) has none of these in
+  its syntax scan; its Clippy layer lints code after macro expansion, which a
+  syntax scan cannot, for the items its disallowed lists name.
+  flyingrobots/lumen#155 to #158 (open) cover the same ground there:
+  `std::os` items and CPU features, `c_double`, aliases, and code outside the
+  scanned crates. `std::backtrace`, `Location` and `file!` are banned in
+  Bunny; whether Lumen bans them is for its #155.
 - **Waivers.** Lumen's waiver covers its line or the line below, and a waiver
   that waives nothing fails; Bunny's covers the item or statement below it,
   and an unused waiver is not reported.
@@ -232,7 +271,10 @@ inside macro bodies. They still differ:
 ### Keeping The Name Lists Current
 
 `std::time` and `std::thread` are banned item by item, not as modules, so a
-sibling such as the deprecated `sleep_ms` cannot slip past a prefix. The item
+sibling such as the deprecated `sleep_ms` cannot slip past a prefix. Every
+module and macro at the roots of `std`, `core` and `alloc`, and every module
+of `std::os`, is classified the same way, and a path through an unclassified
+root name is an `unclassified-std` finding. The item
 lists of the pinned toolchain's documentation are committed as
 `xtask/src/nondeterminism/std_api_<version>.txt`; `std_api_tests.rs` fails
 when the documentation lists an item its classification table does not name,
@@ -255,14 +297,24 @@ python3 ~/git/devcontainers/bin/devrun bunny <worktree> --worktree --network -- 
     curl -fsSL https://doc.rust-lang.org/$V/std/${page%/*}/struct.${page#*/}.html |
       grep -oE "id=\"method\.[a-z0-9_]+\"" | sed -E "s/id=\"method\.(.*)\"/\1/" | LC_ALL=C sort -u
     echo
+  done
+  for root in std core alloc std/os; do
+    page=$(curl -fsSL https://doc.rust-lang.org/$V/$root/index.html)
+    if [ "$root" = std/os ]; then echo "[std::os]"; else echo "[$root modules]"; fi
+    echo "$page" | grep -oE "class=\"mod\" href=\"[a-z0-9_]+/index.html\"" |
+      sed -E "s/class=\"mod\" href=\"([a-z0-9_]+)\/index.html\"/mod \1/"
+    [ "$root" = std/os ] && break; echo; echo "[$root macros]"
+    echo "$page" | grep -oE "class=\"macro\" href=\"macro\.[a-z0-9_]+\.html\"" |
+      sed -E "s/class=\"macro\" href=\"macro\.([a-z0-9_]+)\.html\"/macro \1/"
+    echo
   done'
 ```
 
 prefix its three comment lines and save the output as the new
-`std_api_<version>.txt` (the first run reproduced the 1.96.0 file
-exactly), classify each new item in
-the test's table and in the rules, and read the release notes for renamed
-items.
+`std_api_<version>.txt` (it reproduces the 1.96.0 file exactly), classify
+each new item in the test's table, each new root module or macro in
+`std_modules.rs`, and both in the rules, and read the release notes for
+renamed items.
 
 ### How the source rules read code
 

@@ -21,18 +21,22 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `time-instant` | `std::time::Instant` |
 | `thread-sleep` | `std::thread::sleep`, `sleep_ms`, `sleep_until`, `park`, `park_timeout`, `park_timeout_ms`, `yield_now`; `tokio::time::sleep`, `async_std::time::sleep`, `async_std::task::sleep` |
 | `host-parallelism` | `std::thread::available_parallelism`, also as a bare name |
-| `random` | the `rand`, `getrandom` and `fastrand` crates, and the name `thread_rng` |
+| `random` | the `rand`, `getrandom` and `fastrand` crates, `std::random` and `core::random`, and the name `thread_rng` |
 | `host-callback` | the `js_sys`, `wasm_bindgen` and `web_sys` crates |
 | `network` | `std::net`, `std::os::<platform>::net`, the `reqwest` and `ureq` crates, and the names `TcpStream::connect` and `UdpSocket::bind` |
-| `unordered-container` | the names `HashMap`, `HashSet`, `FxHashMap`, `FxHashSet`; `std::collections::hash_map` and `hash_set` except `hash_map::DefaultHasher`; `std::hash::RandomState`; the `hashbrown` and `rustc_hash` crates |
+| `unordered-container` | the names `HashMap`, `HashSet`, `FxHashMap`, `FxHashSet`; `std::collections::hash_map` and `hash_set` except `hash_map::DefaultHasher`; `std::hash::RandomState`; the `hash_map!` macro; the `hashbrown` and `rustc_hash` crates |
 | `hand-hashed-table` | any line, comments included, that names open addressing |
 | `json-serialization` | the `serde_json` crate |
 | `wasm-serde` | the `serde_wasm_bindgen` crate |
-| `std-env` | `std::env`, `std::path::absolute` and a zero-argument `.absolute()` call (they read the current directory), and the macros `env!` and `option_env!` (also under `std::` and `core::`) |
+| `std-env` | `std::env`, `std::path::absolute` and a zero-argument `.absolute()` call (they read the current directory); the macros `env!`, `option_env!` and `file!` under any path rooted at `std`, `core` or `alloc` ([macro names](#macro-names-and-metavariables)); `std::backtrace` and the names `Backtrace::capture` and `force_capture` (they read `RUST_BACKTRACE` and record the host build's paths); `std::panic::Location`, `core::panic::Location`, `std::panic::get_backtrace_style` and `set_backtrace_style` |
 | `std-fs` | `std::fs`, `std::os::<platform>::fs`, `io` and `prelude`, `std::os::fd`; the names `fs::…` and `File::open`; the `Path`/`PathBuf` methods that read the filesystem (`canonicalize`, `exists`, `is_dir`, `is_file`, `is_symlink`, `metadata`, `read_dir`, `read_link`, `symlink_metadata`, `try_exists`) as zero-argument calls or `Path::` paths |
-| `std-process` | `std::process`, `std::os::<platform>::process`, `std::io::pipe`, `PipeReader`, `PipeWriter` |
+| `std-process` | `std::process`, `std::os::<platform>::process`, `std::io::pipe`, `PipeReader`, `PipeWriter`, and the name `last_os_error` |
 | `host-input` | terminal input: `std::io::stdin`, `Stdin`, `StdinLock`, `IsTerminal` and a zero-argument `.is_terminal()` call |
-| `include-source` | `include!` in every spelling, and a `#[path]` module (also under nested `cfg_attr` or emitted by a macro) naming anything but a `.rs` file the gate scans inside the crate directory |
+| `include-source` | `include!` under any path rooted at `std`, `core` or `alloc` (`std::prelude::v1::include` included) and through any import of it, and a `#[path]` module (also under nested `cfg_attr` or emitted by a macro) naming anything but a `.rs` file the gate scans inside the crate directory |
+| `macro-metavariable` | in a `macro_rules!` transcriber, a metavariable next to `::` (`std::time::$t`, `$root::fs`), as a macro name (`$m!(..)`), as a method name (`.$m(..)`), or inside an attribute other than as the value of `doc = ..` (`#[path = $p]`, `#[$meta]`); `$crate` is accepted |
+| `host-cpu` | `std::arch` and `core::arch`, and the feature-detection macros (`is_x86_feature_detected!`, `std::arch::is_aarch64_feature_detected!`, any `is_*_feature_detected!`) |
+| `host-platform` | every other part of `std::os` (`std::os::unix::thread`, `std::os::windows::ffi`, `use std::os;`); `std::os::raw` is permitted |
+| `unclassified-std` | a path through a module or macro directly below `std`, `core` or `alloc` that the [classification](#the-std-classification) does not name |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
 | `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
 
@@ -65,7 +69,9 @@ The source rules read `syn` syntax trees, not text:
    against the banned prefixes; the path as written is matched against the
    banned names.
 4. Macro bodies are token streams that `syn` does not parse. Every
-   `::`-separated identifier sequence inside them is checked as a path.
+   `::`-separated identifier sequence inside them is checked as a path, and
+   the positions where a metavariable would build a path, a macro name, a
+   method name or an attribute are [banned](#macro-names-and-metavariables).
 
 Identifiers are compared as the compiler compares them, with any `r#` prefix
 removed: `r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`
@@ -98,7 +104,9 @@ another kind of file or a file outside the crate.
   package, not a file on the host.
 - `env!` and `option_env!` read the build environment and are `std-env`
   findings, `CARGO_PKG_VERSION` included; a waiver says why a variable Cargo
-  sets from the manifest is safe.
+  sets from the manifest is safe. `file!` is `std-env` too: when a crate is
+  built as a dependency its source path is the host's path into the Cargo
+  registry, so the text differs between machines.
 
 Macro names are resolved through imports (`use std::include_str as text;`)
 and found inside other macros' tokens. Paths resolve lexically against the
@@ -106,6 +114,66 @@ including file's directory, as the compiler resolves `include_str!` and a
 top-level `#[path]`; inside an inline module the compiler uses a deeper
 directory, so the lexical answer can only call an inside path outside.
 Symbolic links are not followed, and a path with a backslash is rejected.
+
+### Macro Names And Metavariables
+
+The standard macros that read files or the build (`include!`,
+`include_str!`, `include_bytes!`, `env!`, `option_env!`, `file!`, and the
+CPU feature-detection macros) are recognised by name: as a bare name, or as
+the last segment of a path at any depth below `std`, `core` or `alloc` after
+imports are resolved. So `std::prelude::v1::include!`,
+`core::prelude::rust_2021::env!` and a `use` that renames either are the
+macros themselves, and the `use` is reported where it is written. A macro of
+another crate with the same name is not.
+
+A lexical gate cannot know what a `macro_rules!` metavariable will be at an
+invocation, and the invocation's own tokens hold only an identifier or a
+literal (`clock!(Instant)`, `call!(include_str, "/etc/hostname")`). So in a
+transcriber these positions are `macro-metavariable` findings at the `$`:
+
+- next to a path separator, on either side: `std::time::$t::now()`,
+  `$root::fs::read`, `std::$($s)::*`, and a repetition whose separator is
+  `::`;
+- a macro name: `$m!(..)`, `$m![..]`, `$m! {..}`;
+- a method name: `$x.$m()`, `$x.$m::<T>()`;
+- anything inside an attribute but the value of `doc = ..`: `#[path = $p]`,
+  `#[$meta]`, `#![$meta]`, `#[cfg_attr(.., path = $p)]`.
+
+`$crate` names the defining crate and is accepted. Matchers are patterns and
+are not read, so `($($s:ident)::+)` is accepted on the matcher side. The
+rule bans the positions, not particular paths: no deterministic crate
+defines a macro today, so nothing on main needed a waiver, and a macro that
+needs one writes the full path (`<$t>::MAX` instead of `$t::MAX`) or names
+the metavariable's value in a match arm.
+
+### The Std Classification
+
+Every module and macro the pinned toolchain documents directly below `std`,
+`core` and `alloc` is classified in `xtask/src/nondeterminism/std_modules.rs`:
+
+| Handling | Names |
+| --- | --- |
+| Banned whole | `std::backtrace`, `std::env` (`std-env`); `std::fs` (`std-fs`); `std::net` (`network`; `core::net` holds only address values and is permitted); `std::process` (`std-process`); `std::os` (`host-platform`, except `std::os::raw`, and with the specific `fs`, `io`, `prelude`, `net`, `process` and `fd` rules above); `std::arch`, `core::arch` (`host-cpu`); `std::random`, `core::random` (`random`); the macros `include!` (`include-source`), `env!`, `option_env!`, `file!` (`std-env`), `is_x86_feature_detected!` (`host-cpu`) and `hash_map!` (`unordered-container`) |
+| Banned item by item | `collections`, `hash`, `io`, `panic`, `path`, `thread`, `time`, and the macros `include_str!` and `include_bytes!`, judged by their argument |
+| Permitted | every other module and macro: values, traits, algorithms, formatting, output to standard output or error, panics (which are `panic-path` in library code), `line!`, `column!` and `module_path!`; the float modules are `float-boundary` in core |
+
+A path through a name the table does not list is an `unclassified-std`
+finding, so a module a new toolchain adds cannot be used before someone
+decides what it reaches. `std_modules_tests.rs` checks the table against the
+documentation snapshot in both directions and checks that the gate reports
+exactly the classified rule for every documented name under every root, and
+for each platform module of `std::os`. Of the std items that read host state,
+`std::process`, `std::net`, `std::io::stdin`, `available_parallelism` and
+`std::hash::RandomState` were banned before flyingrobots/bunny#347;
+`std::backtrace`, `Location`, the rest of `std::os`, `std::arch`,
+`std::random`, `file!` and `last_os_error` are banned since. `DefaultHasher`
+stays permitted (fixed keys).
+
+`std::panic::Location` is banned because `Location::file()` is the same
+host path as `file!`; `line()` and `column()` are not host state, but the
+type is the only way to reach them at run time. `catch_unwind` and the panic
+hooks are permitted: they cannot read the host, and core library code cannot
+panic.
 
 ### Host Access Beyond Echo
 
