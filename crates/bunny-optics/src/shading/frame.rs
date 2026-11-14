@@ -84,7 +84,9 @@ impl ShadingFrame {
     /// [`super::MIN_BOUNCE_COSINE_RAW`] raw units.
     ///
     /// Returns `None` when a coordinate is outside `[0, 1)`, exactly when
-    /// [`Self::try_cosine_direction`] returns an error.
+    /// [`Self::try_cosine_direction`] returns an error. This is the fast path (the 0.7.1
+    /// code); `try_cosine_direction` is the diagnostic path, for a caller that needs the reason
+    /// after a `None`.
     #[must_use]
     pub fn cosine_direction(&self, sample: [FixedQ32_32; 2]) -> Option<FixedVec3> {
         let [u, v] = sample;
@@ -100,7 +102,8 @@ impl ShadingFrame {
         Some(narrow(self.combine(weights)))
     }
 
-    /// [`Self::cosine_direction`], naming the refusal. Its only refusal is a sample outside the
+    /// The diagnostic path of [`Self::cosine_direction`]: call it when `cosine_direction`
+    /// returns `None`. Its only refusal is a sample outside the
     /// unit square (`FixedQ32_32::sqrt` refuses only a negative value, and both square roots
     /// are of non-negative values for a sample inside it), so this is that function with the
     /// sample attached to its `None`.

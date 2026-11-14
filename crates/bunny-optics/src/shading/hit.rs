@@ -41,15 +41,56 @@ impl SurfaceHit {
     /// or on the plane, and rounding moves each coordinate by at most half a raw unit, so two
     /// steps always suffice.
     ///
-    /// Returns `None` exactly when [`Self::try_new`] returns an error.
+    /// Returns `None` when the point is not representable, is more than two raw units outside
+    /// the trace domain, cannot reach the arrival side in two steps, or ends outside the trace
+    /// domain: exactly when [`Self::try_new`] returns an error.
+    ///
+    /// **Fast path and diagnostic path.** This is the fast path, the 0.7.1 code plus one check
+    /// that keeps the exact plane test inside `i128`. It says only whether the hit was refused.
+    /// [`Self::try_new`] is the diagnostic path that says why: a renderer calls this function
+    /// per hit and calls `try_new` only when it returns `None`.
+    ///
+    /// ```
+    /// # use bunny_linalg::FixedVec3;
+    /// # use bunny_num::FixedQ32_32;
+    /// # use bunny_optics::{SecondaryRayError, SurfaceHit, TriangleSurface};
+    /// # use bunny_query::{TraceRay, TraceTriangle};
+    /// # let unit = |x: i64| FixedQ32_32::from_raw(x << 32);
+    /// # let v = |x, y, z| FixedVec3::new(unit(x), unit(y), unit(z));
+    /// # let triangle = TraceTriangle::new(v(-8, 0, 8), v(8, 0, 8), v(0, 0, -8)).ok_or("tri")?;
+    /// # let surface = TriangleSurface::new(&triangle).ok_or("surface")?;
+    /// # let ray = TraceRay::new(v(0, 2, 0), v(0, -1, 0)).ok_or("ray")?;
+    /// # let far = FixedQ32_32::from_raw(i64::MAX);
+    /// # let mut hit = ray.hit_triangle(&triangle, FixedQ32_32::ZERO, far).ok_or("hit")?;
+    /// hit.front_face = !hit.front_face; // a hit that does not belong to this ray and face
+    /// let Some(start) = SurfaceHit::new(&surface, &ray, &hit) else {
+    ///     // Only now pay for the reason.
+    ///     let why = SurfaceHit::try_new(&surface, &ray, &hit).err();
+    ///     assert!(matches!(why, Some(SecondaryRayError::NotOnArrivalSide { .. })));
+    ///     return Ok(());
+    /// };
+    /// # let _ = start;
+    /// # Ok::<(), &str>(())
+    /// ```
     #[must_use]
     pub fn new(surface: &TriangleSurface, ray: &TraceRay, hit: &TriangleHit) -> Option<Self> {
         let (plane, offset) = surface.facing_plane(hit.front_face);
-        let point = start_point(ray, hit.distance, plane, offset).ok()?;
-        Some(Self { point, frame: surface.facing_frame(hit.front_face), plane })
+        let start = wide(point_at(ray, hit.distance)?);
+        // Under this bound every coordinate is below 2^41, so with plane normal components
+        // below 2^83 the plane test stays below 2^126; no point outside it can step inside.
+        let domain = u128::from(TRACE_COORD_LIMIT_RAW.unsigned_abs());
+        if !within(start, domain + MAX_STEPS.unsigned_abs()) {
+            return None;
+        }
+        let point = arrival_side(start, plane, offset)?;
+        let inside = within(point, domain);
+        let frame = surface.facing_frame(hit.front_face);
+        inside.then(|| Self { point: narrow(point), frame, plane })
     }
 
-    /// [`Self::new`], naming the refusal.
+    /// The diagnostic path of [`Self::new`]: the same hit, with the reason for a refusal. Call
+    /// it when `new` returns `None`; `new` is the fast path. `OPTICS-TP-062` checks over
+    /// generated inputs that `new` returns `Some(h)` exactly when this returns `Ok(h)`.
     ///
     /// # Errors
     ///
@@ -62,17 +103,17 @@ impl SurfaceHit {
     /// `ray` on this triangle and face); [`SecondaryRayError::StartOutsideTraceDomain`] when
     /// the stepped start point is outside the trace domain. The trace kernel's hits on a ray
     /// and triangle inside the domain reach only the last of these, on the domain's boundary.
-    #[inline]
     pub fn try_new(
         surface: &TriangleSurface,
         ray: &TraceRay,
         hit: &TriangleHit,
     ) -> Result<Self, SecondaryRayError> {
         let (plane, offset) = surface.facing_plane(hit.front_face);
-        match start_point(ray, hit.distance, plane, offset) {
-            Ok(point) => Ok(Self { point, frame: surface.facing_frame(hit.front_face), plane }),
-            Err(refusal) => Err(explain(refusal, ray, hit.distance, (plane, offset))),
-        }
+        let distance = hit.distance;
+        let start = point_at(ray, distance)
+            .ok_or(SecondaryRayError::HitPointUnrepresentable { distance })?;
+        let point = diagnosed_start(start, plane, offset)?;
+        Ok(Self { point: narrow(point), frame: surface.facing_frame(hit.front_face), plane })
     }
 
     /// The start point of every secondary ray.
@@ -90,24 +131,23 @@ impl SurfaceHit {
     /// The bounce ray for the unit-square point `sample`: from [`Self::point`] along
     /// [`ShadingFrame::cosine_direction`]. Query it with a minimum distance of zero.
     ///
-    /// Returns `None` exactly when [`Self::try_bounce_ray`] returns an error: when a
-    /// coordinate of `sample` is outside `[0, 1)`.
+    /// Returns `None` when a coordinate of `sample` is outside `[0, 1)`, exactly when
+    /// [`Self::try_bounce_ray`] returns an error. This is the fast path (the 0.7.1 code);
+    /// `try_bounce_ray` is the diagnostic path, for a caller that needs the reason after a
+    /// `None`.
     #[must_use]
     pub fn bounce_ray(&self, sample: [FixedQ32_32; 2]) -> Option<TraceRay> {
-        // The same two steps as `try_bounce_ray`, through the `Option` form of the direction:
-        // going through `try_bounce_ray` here cost about 3.5 ns of the 70 ns per-hit step,
-        // passing the larger `Result` of the bounce ray (`shade/hit_shading`).
         TraceRay::new(self.point, self.frame.cosine_direction(sample)?)
     }
 
-    /// [`Self::bounce_ray`], naming the refusal.
+    /// The diagnostic path of [`Self::bounce_ray`]: the same ray, with the reason for a refusal.
+    /// Call it when `bounce_ray` returns `None`.
     ///
     /// # Errors
     ///
     /// [`SecondaryRayError::SampleOutsideUnitInterval`] when a coordinate of `sample` is
     /// outside `[0, 1)`; the defensive [`SecondaryRayError::BounceRayRefused`] if
     /// `TraceRay::new` refuses the ray, which no input is known to reach.
-    #[inline]
     pub fn try_bounce_ray(&self, sample: [FixedQ32_32; 2]) -> Result<TraceRay, SecondaryRayError> {
         let direction = self.frame.try_cosine_direction(sample)?;
         TraceRay::new(self.point, direction)
@@ -131,80 +171,20 @@ impl SurfaceHit {
     }
 }
 
-/// Which check of [`start_point`] refused a hit: one byte, so the shared core returns nothing
-/// wider than `Option<FixedVec3>` on the success path. [`explain`] rebuilds the observed values.
-#[derive(Clone, Copy)]
-enum Refusal {
-    Unrepresentable,
-    BeyondReach,
-    NotOnArrivalSide,
-    StepLeavesDomain,
-}
-
-/// The start point of every secondary ray for the hit at `distance` along `ray`, on the face
-/// whose exact plane is `plane . p = offset`: the one implementation of the checks that
-/// [`SurfaceHit::new`] and [`SurfaceHit::try_new`] share.
-///
-/// The domain checks are arranged so the common case costs one comparison per coordinate: a hit
-/// point more than two raw units inside the domain stays inside after any step; the rest go to
-/// [`near_boundary`]. Every hit point that reaches the plane test has coordinates below `2^41`,
-/// so with plane normal components below `2^83` the test stays below `2^126`, inside `i128`.
-#[inline]
-fn start_point(
-    ray: &TraceRay,
-    distance: FixedQ32_32,
-    plane: Wide,
-    offset: i128,
-) -> Result<FixedVec3, Refusal> {
-    let start = wide(point_at(ray, distance).ok_or(Refusal::Unrepresentable)?);
+/// The stepped start point of [`SurfaceHit::try_new`] from the hit point `start`, or the reason
+/// it is refused, checked in the order its documentation gives. A hit point beyond reach of the
+/// domain is refused before the plane test, which keeps that test inside `i128`.
+fn diagnosed_start(start: FixedVec3, plane: Wide, offset: i128) -> Result<Wide, SecondaryRayError> {
     let domain = u128::from(TRACE_COORD_LIMIT_RAW.unsigned_abs());
-    if within(start, domain - MAX_STEPS.unsigned_abs()) {
-        return arrival_side(start, plane, offset).map(narrow).ok_or(Refusal::NotOnArrivalSide);
+    if !within(wide(start), domain + MAX_STEPS.unsigned_abs()) {
+        return Err(SecondaryRayError::HitPointOutsideTraceDomain { point: start });
     }
-    near_boundary(start, plane, offset, domain)
-}
-
-/// [`start_point`] for a hit point within two raw units of the domain's boundary or outside it:
-/// it is refused when no step can bring it inside, and its stepped start point is checked.
-#[cold]
-fn near_boundary(
-    start: Wide,
-    plane: Wide,
-    offset: i128,
-    domain: u128,
-) -> Result<FixedVec3, Refusal> {
-    if !within(start, domain + MAX_STEPS.unsigned_abs()) {
-        return Err(Refusal::BeyondReach);
-    }
-    let point = arrival_side(start, plane, offset).ok_or(Refusal::NotOnArrivalSide)?;
+    let point = arrival_side(wide(start), plane, offset)
+        .ok_or(SecondaryRayError::NotOnArrivalSide { point: start })?;
     if within(point, domain) {
-        Ok(narrow(point))
+        Ok(point)
     } else {
-        Err(Refusal::StepLeavesDomain)
-    }
-}
-
-/// The [`SecondaryRayError`] for a refusal of [`start_point`], with the values it saw rebuilt
-/// from the same inputs (only on this error path).
-#[cold]
-fn explain(
-    refusal: Refusal,
-    ray: &TraceRay,
-    distance: FixedQ32_32,
-    (plane, offset): (Wide, i128),
-) -> SecondaryRayError {
-    // Every refusal after the first had a representable hit point.
-    let Some(point) = point_at(ray, distance) else {
-        return SecondaryRayError::HitPointUnrepresentable { distance };
-    };
-    match refusal {
-        Refusal::Unrepresentable => SecondaryRayError::HitPointUnrepresentable { distance },
-        Refusal::BeyondReach => SecondaryRayError::HitPointOutsideTraceDomain { point },
-        Refusal::NotOnArrivalSide => SecondaryRayError::NotOnArrivalSide { point },
-        Refusal::StepLeavesDomain => {
-            let stepped = arrival_side(wide(point), plane, offset).unwrap_or(wide(point));
-            SecondaryRayError::StartOutsideTraceDomain { start: narrow(stepped) }
-        }
+        Err(SecondaryRayError::StartOutsideTraceDomain { start: narrow(point) })
     }
 }
 
