@@ -44,12 +44,13 @@ cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code,
 and once with --rounds 21 --filter linalg/ (base 91ed71fc7a5e, Apple M5 Pro, 2026-11-13).
 Best p50: num/sqrt 1.33x, 1.34x; linalg/length 1.28x, 1.29x, 1.26x; linalg/normalize +4.5 %,
 +3.5 %, +5.5 %; controls num/mul, num/div, query/ray_triangle within 3.2 %.
+x86-64 CI perf job: num/sqrt +71.1 % before the fix, +0.1 % after (removed #[inline] from sqrt_u128)
+final build local perf (11 rounds): num/sqrt, length, normalize, ray_build within 0.5 %
 code-dojo --all --history origin/main..HEAD: clean after the final commit
 
 Known risks:
 x86-64 and wasm32 are unmeasured in this PR; both keep core's implementation. The cause of
-the `normalize` loss is not established. The dispatched build was not re-measured; it is
-`main`'s code path.
+the `normalize` loss is not established. 
 
 Human reviewer:
 James Ross approved the researched exact speedups on 2026-11-13; review pending.

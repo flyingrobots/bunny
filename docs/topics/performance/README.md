@@ -430,5 +430,31 @@ still not established and no experiment here isolated it; a candidate explanatio
 warm, is untested. A table-wide effect (code layout) is not excluded; `--align-code`
 reduces it but does not remove it.
 
-**Not measured:** x86-64, wasm32, and the dispatched build after this change (it is
-`main`'s code path again, so it should read as no change; that was not re-run).
+**The dispatched build, and an x86-64 regression it first caused.** The first version of
+the dispatch (`FixedQ32_32::sqrt_u128` calling `isqrt_u128`, which called `u128::isqrt`)
+was claimed to equal `main` but was not measured. The x86-64 Linux CI runner then read
+`num/sqrt` **71 % slower** than `main` (best p50 26.13 ns to 44.71 ns, 7 rounds; the other
+cases within 3.2 %). The cause is a code-shape difference, not the algorithm: `main`'s
+`sqrt_u128` is a plain function that calls `u128::isqrt`, while the branch had marked
+`sqrt_u128` itself `#[inline]`, which lets the caller in the benchmark crate inline core's
+`isqrt` body and optimize it differently. I did not disassemble the x86-64 output, so the
+exact codegen difference is unconfirmed; the evidence is the CI before and after. The fix
+removes `#[inline]` from `sqrt_u128` (as on `main`) and leaves a plain `#[inline]` wrapper,
+folded into `sqrt_u128` inside the crate.
+
+CI-runner readings (shared GitHub x86-64 runners, 7 rounds, coarse; absolute times differ
+between runs because the runners differ), best p50:
+
+| Build | `num/sqrt` | `linalg/length` | `linalg/normalize` |
+| --- | ---: | ---: | ---: |
+| Before the fix | 26.13 to 44.71 ns (+71.1 %) | +3.2 % | +0.6 % |
+| After the fix | 17.74 to 17.75 ns (+0.1 %) | +0.0 % | -0.0 % |
+
+Local confirmation of the final build, `perf --base origin/main --rounds 11 --align-code`
+(Apple M5 Pro, container, base `origin/main`): best p50 `num/sqrt` -0.4 %,
+`linalg/length` -0.5 %, `linalg/normalize` -0.5 %, `query/ray_build` +0.5 %, controls
+within 3.3 %: neutral. The aarch64 build never showed the x86 effect, so it was only visible
+on the CI runner; lesson: measure the final dispatched build on each target before claiming
+it matches `main`.
+
+**Not measured:** wasm32, and local x86-64.
