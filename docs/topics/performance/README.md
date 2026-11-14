@@ -943,7 +943,11 @@ triangle test, are the ones to trust.
 - *Isolated replay against search.* The straight-line form gives up about 6 % in a replay
   of box tests alone to win in the search.
 - *No new state.* `TraceRay` is unchanged in size; `trace/ray_prepare` is unchanged.
-- *Inlining.* `box_entry` stays `#[inline]`, as on `main`; no inlining attribute changed.
+- *Inlining.* `box_entry` stays `#[inline]`, as on `main`; no inlining attribute changed. In
+  the release `bunny-perf` binary of the final code (aarch64, no `--align-code`),
+  `objdump` finds calls to an out-of-line `box_entry` only from the harness's replica walk
+  and its two box replay cases; `closest_hit` and `any_hit` have it inlined. The replays
+  therefore include a call per box test and the searches do not.
 
 **Not measured here:** x86-64 (the pull request's CI perf job reads it) and wasm32.
 
