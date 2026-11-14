@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinate law now defines the canonical NDC depth range `[0, 1]` (near to
   `0`, far to `1`) and a `-Z` camera, with golden vectors that run natively and
   under WebAssembly.
+* Added closest-hit and any-hit BVH ray traversal to `bunny-broadphase`:
+  `closest_hit`, `any_hit`, `ClosestHit` and `BvhView` (the borrowed node and
+  primitive-index buffers). The search is front to back over existing
+  `BvhNode` trees, uses `TraceRay::box_entry` for nodes and a caller closure
+  for primitives, skips subtrees whose entry bound is beyond the best hit, and
+  gives ties to the lowest primitive index. Its answer equals a test of every
+  primitive whatever the tree's shape, under the caller conditions stated in
+  the `docs/topics/ray-tracing/` chapter, which now documents the traversal
+  and its correctness argument. `intersect_ray` and the other existing
+  functions are unchanged.
 * Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
   `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
   test that never rejects a box the ray reaches and returns an entry bound

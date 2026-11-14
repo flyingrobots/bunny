@@ -11,6 +11,10 @@ buffer is large enough for the requested operation.
 
 * Flat array-backed BVH construction into caller-owned buffers.
 * Stack-bounded BVH traversal for AABB and ray queries.
+* Front-to-back closest-hit and any-hit ray traversal (`closest_hit`,
+  `any_hit`) over the same trees, with a caller-supplied primitive test.
+  Ties go to the lowest primitive index, and the answer does not depend on
+  the tree's shape; see `docs/topics/ray-tracing/` in the repository.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 

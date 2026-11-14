@@ -1,11 +1,11 @@
-# Ray Tracing Kernels Test Plan
+# Ray Tracing Test Plan
 
-This document defines how Bunny verifies the ray-tracing kernel contract.
+This document defines how Bunny verifies the ray-tracing contract: the kernels
+and the closest-hit and any-hit traversals built on them.
 
 The current topic chapter is [`README.md`](README.md). This test plan is a
 living verification design. It records active requirements, executable
-evidence, and open gaps for the traversal and benchmarks that will build on
-these kernels.
+evidence, and open gaps for the benchmarks that will build on this work.
 
 ## Scope
 
@@ -20,9 +20,18 @@ This plan covers `TraceRay`, `TraceTriangle` and `TriangleHit` in
 - the overflow behaviour of the general-purpose `ray_intersects_aabb` and its
   effect on `bunny_broadphase::intersect_ray` (flyingrobots/bunny#211).
 
+It also covers `closest_hit`, `any_hit`, `BvhView` and `ClosestHit` in
+`bunny-broadphase`:
+
+- agreement with a test of every primitive, including the tie rule;
+- independence from the tree's shape and leaf order;
+- the inclusive distance limit;
+- the search order and each pruning rule;
+- the early stop of `any_hit`;
+- malformed and empty trees.
+
 The other solvers in `crates/bunny-query/src/ray.rs` keep their own evidence
-and are out of scope. BVH closest-hit traversal and timing are out of scope
-until those APIs exist.
+and are out of scope. Timing is out of scope until the benchmark cases exist.
 
 ## Test Goals
 
@@ -30,8 +39,10 @@ until those APIs exist.
   rounding: constructed exact cases, an exact rational slab test, and
   hand-computed golden vectors.
 - Assert exact raw Q32.32 outputs, never approximate ones.
-- Show that each rounding direction and each inclusive comparison is load
-  bearing by breaking it on purpose.
+- Show that each rounding direction, each inclusive comparison and each
+  pruning rule is load bearing by breaking it on purpose.
+- Check traversal results against a test of every primitive, which shares the
+  primitive test but none of the tree logic.
 - Keep the evidence native and WASM-compatible: every case is a
   `wasm_bindgen_test` that also runs as a native test.
 
@@ -58,6 +69,12 @@ formatting.
 | TRACE-REQ-012 | When a coordinate difference or slab distance overflows, ray_intersects_aabb reports a hit exactly when an exact rational slab test does. | `README.md#general-purpose-ray-aabb-solver` |
 | TRACE-REQ-013 | Reported ray_intersects_aabb bounds are the exact slab bounds rounded to nearest (ties to even) and saturated to the Q32.32 range, with t_enter <= t_exit; coordinate differences are widened, not saturated. | `README.md#general-purpose-ray-aabb-solver` |
 | TRACE-REQ-014 | bunny_broadphase::intersect_ray visits a leaf whose box a near-axis ray passes through. | `README.md#general-purpose-ray-aabb-solver` |
+| TRACE-REQ-021 | closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-022 | The result of closest_hit and any_hit does not depend on the tree's shape or the order its leaves list primitives in. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-023 | The distance limit of closest_hit and any_hit is inclusive. | `README.md#closest-hit-traversal` |
+| TRACE-REQ-024 | The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is. | `README.md#search-order-and-pruning` |
+| TRACE-REQ-025 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
+| TRACE-REQ-026 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
 
 ```toml
 [[requirement]]
@@ -129,6 +146,36 @@ status = "active"
 id = "TRACE-REQ-014"
 summary = "bunny_broadphase::intersect_ray visits a leaf whose box a near-axis ray passes through."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-021"
+summary = "closest_hit returns the hit a test of every primitive chooses: the smallest reported distance in 0..=t_max, then the lowest primitive index."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-022"
+summary = "The result of closest_hit and any_hit does not depend on the tree's shape or the order its leaves list primitives in."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-023"
+summary = "The distance limit of closest_hit and any_hit is inclusive."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-024"
+summary = "The nearer child is searched first; a subtree whose entry bound is greater than the best distance is not searched, and one whose bound equals it is."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-025"
+summary = "any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-026"
+summary = "Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored."
+status = "active"
 ```
 
 ## Fixtures
@@ -144,6 +191,15 @@ Constructed triangles have edges that are multiples of 64 raw-unit steps, so a
 point with barycentric weights `(b, c) / 64` is a lattice point, and a ray is
 started a whole number of direction lengths before it. The exact distance and
 weights are therefore known without computing them.
+
+Traversal cases use `CLOSEST_SEED` (`0xB002_C105_0000_0001`), varied the
+same way, to scatter 40 to 600 small triangles (one in forty spans the scene)
+through a cube 12 units wide, build them with `build_bvh`, and cast rays from
+anywhere near the scene toward points inside it; one direction component in
+five is zero or a few raw units. Constructed traversal cases stack flat
+triangles under a ray falling with direction exactly -1.0, so every box bound
+and hit distance is a whole number of units, and build the two-leaf trees by
+hand so the search order is known.
 
 The golden vectors in `TRACE-TP-009` and `TRACE-TP-010` are hand computed; the
 comments beside each case give the exact value the floor is taken of.
@@ -180,6 +236,16 @@ Regenerating them is a contract change.
 | TRACE-TP-025 | Face contact at the edge of the range | TRACE-REQ-012, TRACE-REQ-013 | An origin at i64::MAX raw on the box's +x face returns (i64::MIN raw, 0). | `crates/bunny-query/tests/query_tests.rs::ray_aabb_saturates_an_overflowing_slab_distance_instead_of_missing` |
 | TRACE-TP-026 | Broadphase leaf visit | TRACE-REQ-014 | A one-leaf BVH walked by intersect_ray with direction (1, 2^-32, 0) visits primitive 0. | `crates/bunny-broadphase/tests/bvh_tests.rs::issue_211_intersect_ray_visits_a_leaf_a_near_axis_ray_passes_through` |
 | TRACE-TP-027 | Deliberate mutations of the overflow path | TRACE-REQ-012, TRACE-REQ-013 | Each rule of the overflow path, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-101 | Brute-force agreement | TRACE-REQ-021, TRACE-REQ-025 | Over about 3 000 seeded rays and 600 triangles, closest_hit equals a test of every triangle (minimum by distance, then index) and any_hit equals whether that test found a hit; the corpus has over 500 hits and 500 misses. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_101_closest_hit_equals_a_test_of_every_primitive` |
+| TRACE-TP-102 | Inclusive limit | TRACE-REQ-023 | For each hit ray, t_max equal to the nearest distance returns that hit and any_hit is true; t_max one raw unit shorter returns no hit and any_hit is false. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_102_the_distance_limit_is_inclusive_and_agrees_with_every_primitive` |
+| TRACE-TP-103 | Ties | TRACE-REQ-021 | Every triangle appears twice, so every hit is a tie; the result equals the full test and always names the first copy. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_103_equal_distances_choose_the_lowest_primitive_index` |
+| TRACE-TP-104 | Malformed and empty trees | TRACE-REQ-026 | An empty tree misses for both searches; a child index past the buffer and a leaf range past the primitive buffer return the stated errors. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_104_malformed_trees_are_errors_and_empty_trees_miss` |
+| TRACE-TP-105 | Out-of-range reports | TRACE-REQ-026 | A primitive test that reports a distance beyond the limit, or a negative one, for every primitive yields no hit. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_105_distances_outside_the_limit_from_the_primitive_test_are_ignored` |
+| TRACE-TP-106 | Tree shape | TRACE-REQ-021, TRACE-REQ-022, TRACE-REQ-025 | The same triangles (a third duplicated, to make ties) built in reversed, interleaved and shuffled order, with leaf entries mapped back to the original indices, and under one leaf listing them in reverse, give identical closest_hit and any_hit answers to the original tree and the full test over 1 500 rays. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_106_differently_shaped_trees_give_the_same_answers` |
+| TRACE-TP-107 | Front-to-back order | TRACE-REQ-024 | Two triangles 5.0 and 8.0 away, the far one in the left leaf: the near one is returned and it is the only primitive tested. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_107_the_nearer_child_is_searched_first_and_the_farther_one_is_skipped` |
+| TRACE-TP-108 | Equal bound kept | TRACE-REQ-021, TRACE-REQ-024 | Two coincident triangles whose leaf bounds equal the hit distance 5.0 exactly; the leaf searched first holds index 1. Both are tested and index 0 is returned, and the same holds when one leaf lists them as 1, 0. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_108_a_subtree_that_starts_at_the_best_distance_is_still_searched` |
+| TRACE-TP-109 | Early stop | TRACE-REQ-025 | Four stacked triangles that the ray hits: any_hit is true after exactly one primitive test; with t_max 4.0, below every box, it is false after none. | `crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_109_any_hit_stops_at_the_first_hit` |
+| TRACE-TP-110 | Deliberate traversal mutations | TRACE-REQ-021, TRACE-REQ-024, TRACE-REQ-025 | Each pruning, ordering or stop rule, broken on purpose, makes at least one traversal case fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -424,6 +490,96 @@ artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Each rule of the ray_intersects_aabb overflow path, broken on purpose, makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-101"
+requirements = ["TRACE-REQ-021", "TRACE-REQ-025"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_101_closest_hit_equals_a_test_of_every_primitive"
+oracle = "Over about 3 000 seeded rays and 600 triangles, closest_hit equals a test of every triangle (minimum by distance, then index) and any_hit equals whether that test found a hit; the corpus has over 500 hits and 500 misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-102"
+requirements = ["TRACE-REQ-023"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_102_the_distance_limit_is_inclusive_and_agrees_with_every_primitive"
+oracle = "For each hit ray, t_max equal to the nearest distance returns that hit and any_hit is true; t_max one raw unit shorter returns no hit and any_hit is false."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-103"
+requirements = ["TRACE-REQ-021"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_103_equal_distances_choose_the_lowest_primitive_index"
+oracle = "Every triangle appears twice, so every hit is a tie; the result equals the full test and always names the first copy."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-104"
+requirements = ["TRACE-REQ-026"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_104_malformed_trees_are_errors_and_empty_trees_miss"
+oracle = "An empty tree misses for both searches; a child index past the buffer and a leaf range past the primitive buffer return the stated errors."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-105"
+requirements = ["TRACE-REQ-026"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_105_distances_outside_the_limit_from_the_primitive_test_are_ignored"
+oracle = "A primitive test that reports a distance beyond the limit, or a negative one, for every primitive yields no hit."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-106"
+requirements = ["TRACE-REQ-021", "TRACE-REQ-022", "TRACE-REQ-025"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_106_differently_shaped_trees_give_the_same_answers"
+oracle = "The same triangles (a third duplicated, to make ties) built in reversed, interleaved and shuffled order, with leaf entries mapped back to the original indices, and under one leaf listing them in reverse, give identical closest_hit and any_hit answers to the original tree and the full test over 1 500 rays."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-107"
+requirements = ["TRACE-REQ-024"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_107_the_nearer_child_is_searched_first_and_the_farther_one_is_skipped"
+oracle = "Two triangles 5.0 and 8.0 away, the far one in the left leaf: the near one is returned and it is the only primitive tested."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-108"
+requirements = ["TRACE-REQ-021", "TRACE-REQ-024"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_108_a_subtree_that_starts_at_the_best_distance_is_still_searched"
+oracle = "Two coincident triangles whose leaf bounds equal the hit distance 5.0 exactly; the leaf searched first holds index 1. Both are tested and index 0 is returned, and the same holds when one leaf lists them as 1, 0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-109"
+requirements = ["TRACE-REQ-025"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/closest_hit_tests.rs::trace_tp_109_any_hit_stops_at_the_first_hit"
+oracle = "Four stacked triangles that the ray hits: any_hit is true after exactly one primitive test; with t_max 4.0, below every box, it is false after none."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-110"
+requirements = ["TRACE-REQ-021", "TRACE-REQ-024", "TRACE-REQ-025"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
+oracle = "Each pruning, ordering or stop rule, broken on purpose, makes at least one implemented traversal case fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -449,23 +605,39 @@ exact exit. That case was added for this reason.
 The overflow path of `ray_intersects_aabb` (`crates/bunny-query/src/ray/aabb_wide.rs`)
 was checked the same way, running `ray_aabb_overflow_tests`, `ray_aabb_oracle_tests`
 and `query_tests`:
-
 | Mutation in `ray/aabb_wide.rs` | Rule broken | Failing cases |
 | --- | --- | --- |
 | Magnitude truncated instead of rounded to nearest | Bounds are correctly rounded | TRACE-TP-013, TRACE-TP-014 |
 | Hit decided from the rounded, saturated bounds instead of exactly | Saturation never creates a hit | TRACE-TP-013, TRACE-TP-014, TRACE-TP-022 |
 | Coordinate difference saturated to `i64` before the division | Differences are widened | TRACE-TP-014, TRACE-TP-021 |
 | `t_exit >= 0` check dropped | Boxes behind the origin miss | TRACE-TP-013, TRACE-TP-014 |
-
 Ties to even versus ties away from zero is not observable through the public
 API: a quotient `diff * 2^32 / d` is an exact half only when `d` is a multiple
 of `2^33`, and a unit direction component is at most `2^32 + 1` raw. Replacing
 the tie rule therefore passes every case; `TRACE-TP-015` pins the oracle's tie
-rule to `checked_div` directly instead.
+rule to `checked_div` directly instead;
+tests were run (`cargo test --locked -p bunny-broadphase --test
+closest_hit_tests`). Every mutation made at least one case fail; the restored
+source passed all nine.
+
+| Mutation in `closest_hit.rs` | Rule broken | Failing cases |
+| --- | --- | --- |
+| `enter <= self.limit` made `enter < self.limit` in `pop` | A subtree whose bound equals the best distance is searched | TRACE-TP-108 |
+| `candidate < (best.distance, best.primitive)` made `candidate.0 < best.distance` | Ties go to the lowest index | TRACE-TP-103, TRACE-TP-106, TRACE-TP-108 |
+| Nearer child pushed first, farther child on top | The nearer child is searched first | TRACE-TP-107, TRACE-TP-108 |
+| The stop at the first accepted hit removed from `any_hit` | `any_hit` stops at the first hit | TRACE-TP-109 |
+
+The non-strict skip changes an answer only when a tie sits exactly on a
+subtree's entry bound, the wrong push order changes no answer at all (pruning
+stays sound in either order; the search only does more work), and without the
+stop `any_hit` still returns the right value. All three survived the
+brute-force cases `TRACE-TP-101` to `TRACE-TP-105`. `TRACE-TP-107`,
+`TRACE-TP-108` and `TRACE-TP-109` were added to catch them, by checking which
+primitives the search tests as well as what it returns.
 
 ## Determinism Obligations And Evidence
 
-The kernels and their tests use only integer arithmetic: `i64`, `u64`, `i128`
+The kernels, the traversals and their tests use only integer arithmetic: `i64`, `u64`, `i128`
 and `u128` additions, multiplications, shifts and divisions with defined
 results. There is no floating point, randomness from the host, time,
 filesystem access, locale-sensitive formatting, parallel scheduling, map
@@ -494,6 +666,12 @@ Current tests cover:
 - collinear and duplicate-vertex (zero-area) triangles;
 - a ray lying in the triangle's plane;
 - a crossing whose distance does not fit `i64`;
+- equal-distance hits in one leaf and in sibling subtrees, including a sibling
+  whose entry bound equals the best distance exactly;
+- trees of different shapes over the same primitives, including a single leaf;
+- empty trees, dangling child indices and leaf ranges past the primitive
+  buffer;
+- primitive tests that report distances beyond the limit or below zero.
 - for `ray_intersects_aabb`: direction components of 1 to 4 000 raw units,
   coordinate differences past `i64`, slab distances past Q32.32 on one or both
   sides, two saturated entries, an origin on a face at the edge of the range,
@@ -509,6 +687,9 @@ and `TRACE-TP-007` are seeded property cases over 4 000 to 40 000 inputs each.
 `TRACE-TP-013` and `TRACE-TP-014` are seeded property cases over 200 000 inputs
 each (SplitMix64, seeds `0xB002_0211_0000_0001` and `0xB002_0211_0000_0002`);
 their failure messages name the seed and the case index.
+and `TRACE-TP-007` are seeded property cases over 4 000 to 40 000 inputs each;
+`TRACE-TP-101`, `TRACE-TP-102`, `TRACE-TP-103` and `TRACE-TP-106` are seeded
+traversal cases over 1 500 to 3 000 rays each.
 
 Every minimized fuzz failure must become a committed deterministic regression
 case with a stable test name.
@@ -517,6 +698,7 @@ case with a stable test name.
 
 | Gap | Blocking API |
 | --- | --- |
-| Closest-hit BVH traversal over `TraceTriangle` records and its tie-breaking. | Traversal API (flyingrobots/bunny#123). |
-| Before/after timing of the kernels. | Benchmark cases (flyingrobots/bunny#210). |
+| Before/after timing of the kernels and the traversals. | Benchmark cases (flyingrobots/bunny#210). |
+| A tree builder tuned for ray tracing; the traversals run on `build_bvh` trees today. | flyingrobots/bunny#213. |
+| Closest-point-to-mesh queries and committed mesh fixture data. | Remaining scope of flyingrobots/bunny#123. |
 | Canonical hit record, plane, segment, capsule and OBB intersections. | Remaining scope of flyingrobots/bunny#159. |
