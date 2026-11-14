@@ -21,6 +21,10 @@ math for graphics pipelines.
 * **Affine Transforms (`FixedAffine2`, `FixedAffine3`)**: Checked transform
   wrappers that translate points, preserve vector translation-invariance, and
   compose right-to-left.
+* **Projection Matrices**: `FixedMat4::try_orthographic` and
+  `try_perspective` build `clip_from_view` matrices (NDC depth `[0, 1]`, camera
+  looks down `-Z`) from a tangent, with no trigonometry and typed
+  `ProjectionError`s.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix

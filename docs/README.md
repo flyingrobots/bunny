@@ -16,7 +16,7 @@ evidence exist.
 | Chapter | Owns |
 | --- | --- |
 | [`topics/contract-generation/`](topics/contract-generation/) | Schema-to-artifact generation, generated Rust/TypeScript DTO shape, manifest witnesses, and Bunny-owned object boundaries. |
-| [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection reservations. |
+| [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection and NDC conventions. |
 | [`topics/deterministic-contract-profile/`](topics/deterministic-contract-profile/) | Bunny-owned scalar profile vocabulary, generated witnesses, and wire-profile boundaries for future codecs. |
 | [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, affine point/vector transforms, determinants, inverses, and transform-boundary reservations. |
 | [`topics/performance/`](topics/performance/) | The fidelity rule for optimizations, the `bunny-perf` harness, `cargo xtask perf` before/after comparisons, CI regression gating, and the ledger of landed speedups. |
