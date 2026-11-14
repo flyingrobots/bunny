@@ -1918,6 +1918,55 @@ On x86-64, the pull request's CI perf job (GitHub `ubuntu-latest`, run `43581831
 selected form) read `trace/closest_hit` -0.1 % / -0.0 %, `trace/any_hit` -0.9 % / -1.1 %,
 `trace/closest_hit_sah` -0.0 % / +0.2 % and `scene/closest_visitor` -0.3 % / -0.9 %.
 
+### Counting compact traversals (flyingrobots/bunny#335)
+
+**Change.** `compact_closest_hit_counted` and `compact_any_hit_counted` share the search loop of
+`compact_closest_hit` and `compact_any_hit`: the loop is generic over a private tally, and the
+uncounted functions instantiate it with a zero-sized tally whose methods are empty. Their source
+otherwise keeps every step, and their output is unchanged (the compact tests, and the
+differential `TRACE-TP-417`). See the
+[ray-tracing chapter](../ray-tracing/README.md#counting-traversals).
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), through the guarded container runner with `--exclusive` and the branch's
+commits as history, one command per filter (`trace/`, `scene/`), base `83c94b5d9a10`
+(`origin/main`) unless stated:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter <filter>
+```
+
+Change in p50 / best p50. "A/A" is the branch with only its test plan committed, so both sides
+build the same code. "Shared loop" is the selected design (`3e97fb6`). "Separate copy" is design
+(b), one reading on a throwaway commit (`3c0f258`, never pushed) whose `compact_hit.rs` is main's
+file unchanged and whose counted forms are a second copy of the loop, against base
+`b163e9d71340`:
+
+| Reading | `trace/closest_hit_compact` | `trace/any_hit_compact` | `trace/closest_hit` (untouched) | `trace/any_hit` (untouched) | `trace/closest_hit_sah` (untouched) | `scene/closest_visitor` (untouched) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A/A | +1.2 % / +2.2 % | +1.2 % / +0.3 % | -1.1 % / -0.7 % | +0.4 % / +0.6 % | -0.4 % / -1.3 % | +1.2 % / -0.2 % |
+| shared loop, run 1 | +0.2 % / +0.7 % | -7.0 % / -7.1 % | -5.9 % / -4.7 % | -2.9 % / -2.3 % | -6.1 % / -6.3 % | -0.2 % / -0.4 % |
+| shared loop, run 2 | +0.8 % / -0.1 % | -6.8 % / -6.6 % | -6.3 % / -5.0 % | -2.9 % / -4.1 % | -5.3 % / -4.8 % | +0.4 % / -0.3 % |
+| shared loop, run 3 | +0.9 % / +0.7 % | -6.4 % / -6.9 % | -5.5 % / -4.7 % | -2.5 % / -2.5 % | -5.4 % / -4.7 % | -0.0 % / -0.4 % |
+| shared loop, one codegen unit | +1.9 % / +2.0 % | -2.2 % / -2.6 % | -5.6 % / -4.8 % | -5.3 % / -5.7 % | -5.5 % / -5.1 % | not run |
+| separate copy | +1.4 % / +1.3 % | -2.2 % / -1.5 % | -6.1 % / -5.7 % | -3.0 % / -2.2 % | -6.2 % / -7.0 % | not run |
+
+`trace/closest_hit_compact` moved between -0.1 % and +0.7 % in best p50 over the three runs,
+inside the A/A reading's +2.2 %, so the shared loop's cost on the changed function is not
+measurable here. The surprise is elsewhere: `trace/closest_hit`, `trace/any_hit` and
+`trace/closest_hit_sah`, which run `closest_hit.rs` and `any_hit` (code this change does not
+touch), read 2 % to 7 % faster in every reading, and so did `trace/any_hit_compact`. The same
+shift appears with one codegen unit and with the separate copy, whose uncounted source is main's
+file byte for byte, so it is not caused by the shared loop: adding code to `bunny-broadphase`
+moved the placement of unrelated hot code, the [code-layout](#code-layout-noise) and
+[bimodal](#bimodal-cases) effects described above, here in the favourable direction. It was not
+checked in the assembly. The x86-64 reading comes from the pull request's CI perf job.
+
+The separate copy was not selected: it measured the same on the changed function and on the
+untouched ones, and it would leave two search loops to keep in step by a test instead of one
+source. The counted forms' own cost is measured with their benchmark cases in the follow-up that
+adds them to the harness.
+
 ## Tried And Rejected
 
 Experiments that kept exact results but did not pay off. They are recorded so the same idea
