@@ -321,7 +321,7 @@ cut.
 | Release | Cut Trigger | Scope |
 | --- | --- | --- |
 | `v0.6.0` | Frame-commons and contract-profile release cut. | Coordinate law, numeric preconditions, deterministic property corpora, matrices, affine transforms, and deterministic contract-profile witnesses. |
-| `v0.7.0` | Early cut on 2026-11-13; the `v0.7.0 Geometry Law and Primitive Coverage` milestone continues as additive `0.7.x` releases. | Remaining frame math, projection and viewport mapping, quaternion orientation, angle policy, interpolation, curves, degeneracy law, robust predicates, shape expansion, clipping, bounds, topology, and mass properties. |
+| `v0.7.0` | Early cut: tagged `v0.7.0` on 2026-11-13 but not published; first published as `0.7.1` on 2026-11-14. The `v0.7.0 Geometry Law and Primitive Coverage` milestone continues as additive `0.7.x` releases. | Remaining frame math, projection and viewport mapping, quaternion orientation, angle policy, interpolation, curves, degeneracy law, robust predicates, shape expansion, clipping, bounds, topology, and mass properties. |
 | `v0.8.0` | `v0.8.0 Collision and Contact` milestone complete. | Narrowphase, support mapping, GJK/EPA, collision architecture, manifolds, and swept queries. |
 | `v0.9.0` | `v0.9.0 Acceleration, Visibility, and Ray Tracing` milestone complete. | Dynamic broadphase, spatial hashing, mesh BVHs, visibility, occlusion, and ray-tracing hit suites. |
 | `v0.10.0` | `v0.10.0 Optics, SIMD, and Codec Completion` milestone complete. | Optics, deterministic SIMD exploration, benchmarks, no-std audit, codec encoder, external mesh profiles, and fuzzing. |
@@ -404,8 +404,10 @@ cut.
 
 ## Release v0.7.0: Geometry Law and Primitive Coverage
 
-* **Status**: Cut early on 2026-11-13 (`0.7.0`); the remaining goalposts
-  continue in the `0.7` line and ship as additive `0.7.x` releases.
+* **Status**: Cut early. `0.7.0` was tagged on 2026-11-13 but never published to
+  crates.io (the upload was refused with an authentication error); `0.7.1`
+  (2026-11-14) is the first 0.7 release on crates.io and includes it. The remaining
+  goalposts continue in the `0.7` line and ship as additive `0.7.x` releases.
 * **Early Cut**: `0.7.0` was cut before this milestone was complete because
   downstream repositories needed the new APIs, and because `main` carries a
   declared behaviour change (`ray_intersects_aabb` no longer reports a miss on
@@ -414,7 +416,9 @@ cut.
   camera (an early start on work this roadmap places in `v0.10.0`), `FixedAngle`
   with `sin_cos`, projection matrices, the look-at view matrix, viewport mapping,
   plane classification with segment and polygon clipping, the ray-box overflow
-  fix, a faster exact square root, and the perf harness. It does not ship
+  fix, a faster exact square root, and the perf harness; `0.7.1` adds the compact BVH node layout and
+  SAH builder, a faster `box_entry`, the `bunny-optics` sampler, pixel-value math and diffuse shading,
+  and the look-at correction (#273). It does not ship
   quaternions, interpolation and curves, degeneracy policy, robust predicates,
   the shape library, 2D coverage, frustum primitives, bounds utilities, topology
   validation, or mass properties; those goalposts are unchanged below. Releases

@@ -40,13 +40,17 @@ produce the same observable output on every supported target.
 
 ## Latest Release
 
-`v0.7.0` is an early cut of the 0.7 line, made so downstream repositories can
-use the new view, projection, ray-tracing and clipping APIs now: ray-tracing
-kernels and closest-hit/any-hit BVH traversal, the new `bunny-optics` pinhole
-camera, `FixedAngle` with deterministic `sin_cos`, projection and look-at
-matrices, viewport mapping, and plane, segment and polygon clipping. It also
-carries a behaviour change: `ray_intersects_aabb` (and so
-`bunny_broadphase::intersect_ray`) no longer reports a miss when a slab
+`v0.7.1` is the first 0.7 release on crates.io and an early cut of the 0.7 line,
+made so downstream repositories can use the new view, projection, ray-tracing
+and clipping APIs now. (`v0.7.0` was tagged but never published to crates.io;
+`0.7.1` includes it.) Over `0.6.0` it adds ray-tracing kernels, closest-hit and
+any-hit BVH traversal with a compact node layout and a binned SAH builder
+(`build_bvh_sah`), the new `bunny-optics` crate (pinhole camera, sample hash and
+pixel sampler, pixel-value math with tone curves and quantization, and the
+`bunny-diffuse-shading/1` model), `FixedAngle` with deterministic `sin_cos`,
+projection and look-at matrices, viewport mapping, and plane, segment and
+polygon clipping. It also carries a behaviour change: `ray_intersects_aabb` (and
+so `bunny_broadphase::intersect_ray`) no longer reports a miss when a slab
 distance overflows; every previously reported hit is bit-identical. The rest of
 the 0.7 milestone (quaternions, interpolation and curves, robust predicates,
 shapes, topology, mass properties) ships in later `0.7.x` releases.
@@ -62,7 +66,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and
 | `bunny-linalg` | Fixed-point 2D/3D vectors, unit-vector invariants, checked matrices, affine transforms, projection and look-at matrices, and viewport mapping. |
 | `bunny-geom` | Validated rays, AABBs, spheres, and fixed/float conversion boundaries. |
 | `bunny-query` | Deterministic ray intersections, closest-point solvers, and ray-tracing kernels. |
-| `bunny-broadphase` | BVH construction, ray traversal (including closest-hit and any-hit), and sweep-and-prune broadphase pairs. |
+| `bunny-broadphase` | BVH construction (quartile and binned SAH builders), ray traversal (including closest-hit and any-hit, and a compact node layout), and sweep-and-prune broadphase pairs. |
 | `bunny-mesh` | Quantized vertex layouts, triangle buffers, and stable mesh hashes. |
 | `bunny-optics` | Deterministic pinhole camera that generates trace rays per pixel sample, a counter-based sample hash and stratified pixel sampler, diffuse shading for a one-bounce path tracer (normals, facing, secondary-ray starts, cosine-weighted bounces, a directional light and sky), and pixel-value math: exact sample accumulation, sRGB and linear tone curves, 8-bit and 16-bit codes. |
 | `bunny-codec` | Zero-copy OBJ/PLY parsers and Bunny compressed mesh decoding. |

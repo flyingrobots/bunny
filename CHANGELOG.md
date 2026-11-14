@@ -9,12 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.7.1] - 2026-11-14
 
-* The pixel path in `bunny-optics` no longer slows down when unrelated code is added to the
-  crate (flyingrobots/bunny#271): the small per-channel helpers and the public entry points
-  are marked `#[inline]`, so their inlining no longer depends on how the release profile
-  splits the crate into codegen units. No output bit changes.
+This is the first 0.7 release on crates.io. `0.7.0` was tagged and has a GitHub release,
+but nothing was published to crates.io (the upload of the first crate was refused with an
+authentication error), so every Bunny crate on crates.io was still at `0.6.0` and
+`bunny-optics` had never been published. `0.7.1` is built from `main` and includes
+everything listed under `0.7.0` below plus the changes listed here. For a reader coming
+from `0.6.0` both lists apply, and the first entry below is the breaking change.
+
+### Changed (behaviour)
+
+* `bunny_query::ray_intersects_aabb`, and so
+  `bunny_broadphase::intersect_ray`, no longer report a miss when a slab
+  distance or a coordinate difference overflows. The inputs that change are
+  exactly those for which the old function stopped on an overflowing
+  `bound - origin` subtraction or `(bound - origin) / direction` division:
+  a direction component of a few raw units (for a slab of half-width `k`
+  centred on the origin, any component of at most `2k` raw units), or a bound
+  2^31 units or more from the origin. For them the function now returns
+  `Some((t_enter, t_exit))` when the ray reaches the box ahead of its origin
+  and `None` when it truly misses, decided exactly with `i128` rationals; a
+  slab distance that does not fit Q32.32 saturates to the minimum or maximum
+  by sign, and coordinate differences are widened to `i128` instead of
+  saturated. Every hit the function reported before is reported with the same
+  bits, and every miss not caused by overflow is still a miss; a differential
+  test against the retained old implementation and an exact rational oracle
+  check both. Per the Fidelity Rule this contract change needs a version that signals it,
+  which is why the version moved from `0.6.0` to the `0.7` line and this is not a patch
+  release (flyingrobots/bunny#211, PR #236).
+
+* `FixedMat4::try_look_at` is corrected from its 0.7.0 form (flyingrobots/bunny#273).
+  It is new relative to 0.6.0, so a reader upgrading from 0.6.0 sees only the
+  corrected behaviour described here; the two input classes below are the ones on which
+  it differs from the tagged 0.7.0 code, and every other input that returned `Ok` keeps
+  every output bit, checked against the 0.7.0 implementation on 60 000 seeded
+  inputs. First, an `up` vector that is exactly parallel or antiparallel to
+  `target - eye` (their exact integer cross product is zero), or zero, now
+  returns `LookAtError::ParallelUp`; before, rounding of the normalized view
+  direction made some such inputs return `Ok` with a roll made of rounding
+  error (for example `eye = (0, 0, 0)` and `target = up = (1, 2, 3)`). Nearly
+  parallel inputs are still accepted. Second, a translation entry whose finished
+  value `-(row . eye)` is representable no longer returns `Overflow` because an
+  intermediate term or sum was out of range (for example `eye.x = i64::MIN` raw,
+  `target = (0, 0, 0)`, `up = (0, 1, 0)`, where the entry is `-2^31` units);
+  each entry is now summed in a wider integer and only the finished entry is
+  checked. The seeded orthonormality test now draws the 2^38 range it states;
+  the documented bounds hold over it.
 
 ### Added
 
@@ -24,9 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CompactChild`, `CompactRoot`, `CompactError`), and `compact_closest_hit` and
   `compact_any_hit` search it over a `CompactView`. They make the same primitive
   calls and return the same results as `closest_hit` and `any_hit` on the source
-  tree; malformed input is a typed error, including reference cycles. On the
-  benchmark scene both searches are 10 to 12 % faster on an Apple M5 Pro (ledger
-  entry 8). Existing functions are unchanged.
+  tree; malformed input is a typed error, including reference cycles. On one
+  benchmark scene both searches are about 10 % faster than `closest_hit` and
+  `any_hit` (9.6 to 10.2 % in two runs of the final code, best p50, Apple M5 Pro in
+  the rust-dev:1.96.0 container; ledger entry 8). Existing functions are unchanged.
 * Added `bunny-perf` cases that estimate the memory share of a box test
   (`trace/kernel_box_load`, `trace/kernel_box_load_chain`,
   `trace/kernel_box_entry_addr_chain`), a two-box replica of the box test
@@ -138,33 +180,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (flyingrobots/bunny#258): slab differences in `i64` (bitwise not turns a
   negative direction into a forward one) instead of `i128`, parallel axes in
   the same path, and no data-dependent branch of its own. `TraceRay` is
-  unchanged (72 bytes, same fields). On the benchmark scene (Apple M5 Pro,
-  container) `trace/closest_hit` is about 17 % faster and the replayed box tests
-  of a ray about 20 %, and the compact-layout search `trace/closest_hit_compact`
-  about 17 %; see ledger entry 10 in the performance chapter. The pre-#258 box test
+  unchanged (72 bytes, same fields). On one benchmark scene (Apple M5 Pro in the rust-dev:1.96.0
+  container, one full-table run, best p50) `trace/closest_hit` is 16.9 % faster
+  (221.72 to 184.33 ns per ray), `trace/kernel_box_entry` 21.1 % and the compact-layout
+  search `trace/closest_hit_compact` 17.4 %. With the compact layout of ledger entry 8
+  as well, `trace/closest_hit_compact` takes 164 ns per ray against 222 ns for
+  `trace/closest_hit` before either change. On x86-64 (GitHub's shared runner, coarse)
+  `trace/closest_hit` is 8.0 % faster. See ledger entry 10 in the performance chapter. The pre-#258 box test
   is kept as a reference oracle (`crates/bunny-query/tests/support/box_entry_reference.rs`)
   with equivalence tests over seeded, extreme-coordinate and benchmark-scene
   corpora (`TRACE-TP-308` to `TRACE-TP-312`).
 
-### Changed (behaviour)
+### Fixed
 
-* `FixedMat4::try_look_at` (shipped in 0.7.0) changes its result for two input
-  classes (flyingrobots/bunny#273); every other input that returned `Ok` keeps
-  every output bit, checked against the 0.7.0 implementation on 60 000 seeded
-  inputs. First, an `up` vector that is exactly parallel or antiparallel to
-  `target - eye` (their exact integer cross product is zero), or zero, now
-  returns `LookAtError::ParallelUp`; before, rounding of the normalized view
-  direction made some such inputs return `Ok` with a roll made of rounding
-  error (for example `eye = (0, 0, 0)` and `target = up = (1, 2, 3)`). Nearly
-  parallel inputs are still accepted. Second, a translation entry whose finished
-  value `-(row . eye)` is representable no longer returns `Overflow` because an
-  intermediate term or sum was out of range (for example `eye.x = i64::MIN` raw,
-  `target = (0, 0, 0)`, `up = (0, 1, 0)`, where the entry is `-2^31` units);
-  each entry is now summed in a wider integer and only the finished entry is
-  checked. The seeded orthonormality test now draws the 2^38 range it states;
-  the documented bounds hold over it.
+* The pixel path in `bunny-optics` no longer slows down when unrelated code is added to the
+  crate (flyingrobots/bunny#271): the small per-channel helpers and the public entry points
+  are marked `#[inline]`, so their inlining no longer depends on how the release profile
+  splits the crate into codegen units. No output bit changes.
 
 ## [0.7.0] - 2026-11-13
+
+This release was tagged but not published to crates.io; it is superseded by 0.7.1.
 
 This is an early cut of the 0.7 line. It exists so downstream repositories can
 use the view, projection, ray-tracing and clipping APIs now; the rest of the
