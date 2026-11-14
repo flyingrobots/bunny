@@ -35,7 +35,7 @@ CHANGELOG.md
 
 Topic docs:
 docs/topics/ray-tracing/README.md (malformed buffers, the visit bound and its argument);
-docs/topics/ray-tracing/test-plan.md (TRACE-REQ-030, TRACE-TP-401 to TRACE-TP-407, mutation
+docs/topics/ray-tracing/test-plan.md (TRACE-REQ-031, TRACE-TP-401 to TRACE-TP-407, mutation
 checks); docs/topics/performance/README.md (contract change cost check).
 
 Generated artifacts:
