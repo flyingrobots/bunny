@@ -9,9 +9,13 @@
 //! counters and tree shape of the benchmark scene as Markdown instead of timing anything.
 
 mod cases;
+#[cfg(feature = "packet")]
+mod packet;
+#[cfg(feature = "packet")]
+mod packet_profile;
 #[cfg(feature = "trace")]
 mod profile;
-#[cfg(any(feature = "scene", feature = "trace"))]
+#[cfg(any(feature = "scene", feature = "trace", feature = "packet"))]
 mod scene;
 mod timing;
 
@@ -34,10 +38,20 @@ fn run() -> Result<(), Box<dyn Error>> {
             return Err(format!("closest-hit paths disagree on rays {bad:?}").into());
         }
     }
+    #[cfg(feature = "packet")]
+    {
+        // Packets are comparable with `closest_hit` only if every ray gets the same hit.
+        let bad = crate::packet::disagreements();
+        if !bad.is_empty() {
+            return Err(format!("packets disagree with closest_hit: {bad:?}").into());
+        }
+    }
     if options.stats {
         #[cfg(feature = "trace")]
         {
             print!("{}", profile::report());
+            #[cfg(feature = "packet")]
+            print!("\n## Packets\n\n{}", packet_profile::report(&packet::Rig::new()));
             return Ok(());
         }
         #[cfg(not(feature = "trace"))]
