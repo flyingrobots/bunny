@@ -69,8 +69,10 @@ impl SurfaceHit {
         hit: &TriangleHit,
     ) -> Result<Self, SecondaryRayError> {
         let (plane, offset) = surface.facing_plane(hit.front_face);
-        let point = start_point(ray, hit.distance, plane, offset)?;
-        Ok(Self { point, frame: surface.facing_frame(hit.front_face), plane })
+        match start_point(ray, hit.distance, plane, offset) {
+            Ok(point) => Ok(Self { point, frame: surface.facing_frame(hit.front_face), plane }),
+            Err(refusal) => Err(explain(refusal, ray, hit.distance, (plane, offset))),
+        }
     }
 
     /// The start point of every secondary ray.
@@ -129,30 +131,35 @@ impl SurfaceHit {
     }
 }
 
+/// Which check of [`start_point`] refused a hit: one byte, so the shared core returns nothing
+/// wider than `Option<FixedVec3>` on the success path. [`explain`] rebuilds the observed values.
+#[derive(Clone, Copy)]
+enum Refusal {
+    Unrepresentable,
+    BeyondReach,
+    NotOnArrivalSide,
+    StepLeavesDomain,
+}
+
 /// The start point of every secondary ray for the hit at `distance` along `ray`, on the face
-/// whose exact plane is `plane . p = offset`: the one implementation of the refusals that
+/// whose exact plane is `plane . p = offset`: the one implementation of the checks that
 /// [`SurfaceHit::new`] and [`SurfaceHit::try_new`] share.
 ///
 /// The domain checks are arranged so the common case costs one comparison per coordinate: a hit
 /// point more than two raw units inside the domain stays inside after any step; the rest go to
-/// [`near_boundary`]. Every hit point
-/// that reaches the plane test has coordinates below `2^41`, so with plane normal components
-/// below `2^83` the test stays below `2^126`, inside `i128`.
+/// [`near_boundary`]. Every hit point that reaches the plane test has coordinates below `2^41`,
+/// so with plane normal components below `2^83` the test stays below `2^126`, inside `i128`.
 #[inline]
 fn start_point(
     ray: &TraceRay,
     distance: FixedQ32_32,
     plane: Wide,
     offset: i128,
-) -> Result<FixedVec3, SecondaryRayError> {
-    let Some(start) = point_at(ray, distance) else {
-        return Err(SecondaryRayError::HitPointUnrepresentable { distance });
-    };
+) -> Result<FixedVec3, Refusal> {
+    let start = wide(point_at(ray, distance).ok_or(Refusal::Unrepresentable)?);
     let domain = u128::from(TRACE_COORD_LIMIT_RAW.unsigned_abs());
-    if within(wide(start), domain - MAX_STEPS.unsigned_abs()) {
-        return arrival_side(wide(start), plane, offset)
-            .map(narrow)
-            .ok_or(SecondaryRayError::NotOnArrivalSide { point: start });
+    if within(start, domain - MAX_STEPS.unsigned_abs()) {
+        return arrival_side(start, plane, offset).map(narrow).ok_or(Refusal::NotOnArrivalSide);
     }
     near_boundary(start, plane, offset, domain)
 }
@@ -161,20 +168,43 @@ fn start_point(
 /// it is refused when no step can bring it inside, and its stepped start point is checked.
 #[cold]
 fn near_boundary(
-    start: FixedVec3,
+    start: Wide,
     plane: Wide,
     offset: i128,
     domain: u128,
-) -> Result<FixedVec3, SecondaryRayError> {
-    if !within(wide(start), domain + MAX_STEPS.unsigned_abs()) {
-        return Err(SecondaryRayError::HitPointOutsideTraceDomain { point: start });
+) -> Result<FixedVec3, Refusal> {
+    if !within(start, domain + MAX_STEPS.unsigned_abs()) {
+        return Err(Refusal::BeyondReach);
     }
-    let point = arrival_side(wide(start), plane, offset)
-        .ok_or(SecondaryRayError::NotOnArrivalSide { point: start })?;
+    let point = arrival_side(start, plane, offset).ok_or(Refusal::NotOnArrivalSide)?;
     if within(point, domain) {
         Ok(narrow(point))
     } else {
-        Err(SecondaryRayError::StartOutsideTraceDomain { start: narrow(point) })
+        Err(Refusal::StepLeavesDomain)
+    }
+}
+
+/// The [`SecondaryRayError`] for a refusal of [`start_point`], with the values it saw rebuilt
+/// from the same inputs (only on this error path).
+#[cold]
+fn explain(
+    refusal: Refusal,
+    ray: &TraceRay,
+    distance: FixedQ32_32,
+    (plane, offset): (Wide, i128),
+) -> SecondaryRayError {
+    // Every refusal after the first had a representable hit point.
+    let Some(point) = point_at(ray, distance) else {
+        return SecondaryRayError::HitPointUnrepresentable { distance };
+    };
+    match refusal {
+        Refusal::Unrepresentable => SecondaryRayError::HitPointUnrepresentable { distance },
+        Refusal::BeyondReach => SecondaryRayError::HitPointOutsideTraceDomain { point },
+        Refusal::NotOnArrivalSide => SecondaryRayError::NotOnArrivalSide { point },
+        Refusal::StepLeavesDomain => {
+            let stepped = arrival_side(wide(point), plane, offset).unwrap_or(wide(point));
+            SecondaryRayError::StartOutsideTraceDomain { start: narrow(stepped) }
+        }
     }
 }
 

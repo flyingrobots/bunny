@@ -83,14 +83,27 @@ impl ShadingFrame {
     /// ideal map on this frame, and the dot product with the normal is at least
     /// [`super::MIN_BOUNCE_COSINE_RAW`] raw units.
     ///
-    /// Returns `None` exactly when [`Self::try_cosine_direction`] returns an error: when a
-    /// coordinate is outside `[0, 1)`.
+    /// Returns `None` when a coordinate is outside `[0, 1)`, exactly when
+    /// [`Self::try_cosine_direction`] returns an error.
     #[must_use]
     pub fn cosine_direction(&self, sample: [FixedQ32_32; 2]) -> Option<FixedVec3> {
-        self.try_cosine_direction(sample).ok()
+        let [u, v] = sample;
+        if !in_unit_interval(u) || !in_unit_interval(v) {
+            return None;
+        }
+        // sqrt(u) is in [0, 1); sqrt(1 - u) is at least sqrt(2^-32) = 2^-16, raw 2^16.
+        let radius = i128::from(u.sqrt()?.raw());
+        let height = i128::from(FixedQ32_32::from_raw(ONE_RAW - u.raw()).sqrt()?.raw());
+        let (sin, cos) = FixedAngle::from_turns(v).sin_cos();
+        let weights =
+            [radius * i128::from(cos.raw()), radius * i128::from(sin.raw()), height * ONE];
+        Some(narrow(self.combine(weights)))
     }
 
-    /// [`Self::cosine_direction`], naming the refusal.
+    /// [`Self::cosine_direction`], naming the refusal. Its only refusal is a sample outside the
+    /// unit square (`FixedQ32_32::sqrt` refuses only a negative value, and both square roots
+    /// are of non-negative values for a sample inside it), so this is that function with the
+    /// sample attached to its `None`.
     ///
     /// # Errors
     ///
@@ -101,21 +114,7 @@ impl ShadingFrame {
         &self,
         sample: [FixedQ32_32; 2],
     ) -> Result<FixedVec3, SecondaryRayError> {
-        let [u, v] = sample;
-        let outside = SecondaryRayError::SampleOutsideUnitInterval { sample };
-        if !in_unit_interval(u) || !in_unit_interval(v) {
-            return Err(outside);
-        }
-        // sqrt(u) is in [0, 1); sqrt(1 - u) is at least sqrt(2^-32) = 2^-16, raw 2^16.
-        // `FixedQ32_32::sqrt` refuses only a negative value, and both values are non-negative
-        // for a sample inside the unit square, so these refusals are never taken.
-        let radius = i128::from(u.sqrt().ok_or(outside)?.raw());
-        let height = FixedQ32_32::from_raw(ONE_RAW - u.raw()).sqrt().ok_or(outside)?;
-        let height = i128::from(height.raw());
-        let (sin, cos) = FixedAngle::from_turns(v).sin_cos();
-        let weights =
-            [radius * i128::from(cos.raw()), radius * i128::from(sin.raw()), height * ONE];
-        Ok(narrow(self.combine(weights)))
+        self.cosine_direction(sample).ok_or(SecondaryRayError::SampleOutsideUnitInterval { sample })
     }
 
     /// `weights . (tangent_i, bitangent_i, normal_i)` for each axis `i`, in units of `2^-96`
