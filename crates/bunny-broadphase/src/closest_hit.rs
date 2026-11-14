@@ -159,7 +159,12 @@ impl<'a> Search<'a> {
             let root = self.entry(0)?;
             self.push((0, root))?;
         }
+        let mut interior_visits_left = self.interior_visits_left;
         while let Some(node) = self.pop()? {
+            if node.prim_count == 0 {
+                interior_visits_left =
+                    interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
+            }
             if self.visit(node, &mut hit)? {
                 break;
             }
@@ -211,9 +216,6 @@ impl<'a> Search<'a> {
         // The farther child goes underneath, so the nearer one is visited first.
         self.push(far)?;
         self.push(near)?;
-        // Spent after the children's checks, so a tree's own errors always come first.
-        self.interior_visits_left =
-            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
         Ok(false)
     }
 
