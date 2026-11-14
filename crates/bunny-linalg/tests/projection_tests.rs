@@ -38,9 +38,8 @@ fn dot(row: (FixedQ32_32, FixedQ32_32, FixedQ32_32, FixedQ32_32), p: [FixedQ32_3
 /// Applies `matrix` to the point `(x, y, z, 1)` and divides by `w`.
 fn ndc(matrix: FixedMat4, point: [FixedQ32_32; 3]) -> [i64; 3] {
     let w = raw(dot(matrix.row3(), point));
-    let divide = |row| {
-        raw(dot(row, point)).checked_div(w).expect("w is nonzero for points in front").raw()
-    };
+    let divide =
+        |row| raw(dot(row, point)).checked_div(w).expect("w is nonzero for points in front").raw();
     [divide(matrix.row0()), divide(matrix.row1()), divide(matrix.row2())]
 }
 
@@ -58,12 +57,7 @@ fn mt_tp_015_orthographic_matrix_has_exact_golden_rows() {
     let matrix = ortho(2, 1, 1, 3);
     assert_eq!(
         rows_raw(matrix),
-        [
-            [HALF_RAW, 0, 0, 0],
-            [0, ONE_RAW, 0, 0],
-            [0, 0, -HALF_RAW, -HALF_RAW],
-            [0, 0, 0, ONE_RAW],
-        ]
+        [[HALF_RAW, 0, 0, 0], [0, ONE_RAW, 0, 0], [0, 0, -HALF_RAW, -HALF_RAW], [0, 0, 0, ONE_RAW],]
     );
     // near 0 is allowed for an orthographic volume: m23 is zero.
     let flush = ortho(1, 1, 0, 4);
