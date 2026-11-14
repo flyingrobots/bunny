@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
+  hits on the benchmark sphere: `shade/smooth_normal` (the shipped
+  interpolation from exact numerators), `shade/smooth_normal_divided` (a
+  replica of the rejected alternative with two floored `barycentrics`
+  weights), and `shade/smooth_hit_shading` beside `shade/flat_hit_shading_mesh`
+  on the same hits. A test checks that the replica and `smooth_normal` agree
+  within both bounds. Ledger entry 13 records the cost; closes
+  flyingrobots/bunny#289.
+
 * `bunny-query` tests check `TraceRay::hit_triangle` against an independent
   signed-volume oracle in 256-bit integers (TRACE-TP-315): 40 000 generated
   cases on and within three numerator units of every edge and vertex, with

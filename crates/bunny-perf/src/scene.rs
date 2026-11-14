@@ -129,12 +129,17 @@ pub(crate) fn sah_scene() -> Scene {
 
 /// Camera position and one direction per ray, not normalized, every component within 1.0.
 fn camera() -> (FixedVec3, Vec<FixedVec3>) {
+    camera_grid(RAYS_PER_SIDE)
+}
+
+/// The camera of [`camera`] with `side` by `side` rays through the same window, row by row.
+pub(crate) fn camera_grid(side: i64) -> (FixedVec3, Vec<FixedVec3>) {
     let origin = point(0, ONE_RAW * 4 / 5, 4 * ONE_RAW);
     let mut directions = Vec::new();
-    for row in 0..RAYS_PER_SIDE {
-        for column in 0..RAYS_PER_SIDE {
+    for row in 0..side {
+        for column in 0..side {
             // A 1.0-wide window one unit ahead, tilted down toward the sphere.
-            let across = |i: i64| (2 * i + 1) * ONE_RAW / (2 * RAYS_PER_SIDE) - ONE_RAW / 2;
+            let across = |i: i64| (2 * i + 1) * ONE_RAW / (2 * side) - ONE_RAW / 2;
             directions.push(point(across(column), -across(row) - ONE_RAW / 5, -ONE_RAW));
         }
     }
