@@ -14,6 +14,7 @@ readonly -a CRATES=(
   bunny-query
   bunny-broadphase
   bunny-mesh
+  bunny-optics
   bunny-codec
 )
 

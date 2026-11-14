@@ -28,6 +28,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check that both trees give the same `closest_hit` and `any_hit` answers on
   every ray. Ledger entry 5 in `docs/topics/performance/` records the
   measurement.
+* Added the `bunny-optics` crate with a deterministic pinhole camera.
+  `PinholeCamera::new` takes a position, a look direction, an up hint, the
+  tangent of half the vertical field of view (no trigonometry) and an integer
+  image size, derives a right-handed basis (`right = forward x up`) and refuses
+  degenerate input with a typed `CameraError`. `PinholeCamera::ray` returns a
+  `bunny_query::TraceRay` for a `PixelSample` (pixel plus sub-pixel offset in
+  `[0, 1)`; pixel `(0, 0)` is top-left and rows grow downward, as in the
+  viewport conversion) with no square
+  root or division per ray: directions are not normalized but scaled by
+  `2^-scale_shift`, chosen at construction from the image corners so every
+  component is at most 1.0. Each component is within one raw unit plus
+  `(width + height) / 2^33` of the exact image-plane point. `point_at` gives the
+  point at a hit distance. Images up to 32768 pixels per side and tangents up
+  to 256.0 are accepted. See the new `docs/topics/optics/` chapter and test plan.
+* Added `bunny-perf --stats` and the `trace/kernel_*` cases: per-ray counters
+  for `closest_hit` and `any_hit` (nodes, box tests, triangle-test stages,
+  divisions, tree shape, shared nodes between neighbouring rays) from a harness
+  replica of the search loop that a test checks against the shipped functions on
+  every benchmark ray, and timed replays of the box and triangle tests the
+  search makes. The performance chapter's new profile section says where the
+  time of `trace/closest_hit` goes and ranks the stage 2 options. No library
+  function changed and the core crates carry no counters.
+* Added `FixedDivisor`, a Q32.32 divisor prepared for repeated exact division
+  (Möller–Granlund division by an invariant integer): `divisor.checked_div(a)`
+  returns exactly `a.checked_div(divisor)`, `None` included. Best p50 on an
+  Apple M5 Pro: 3.5 to 4.0 ns against 6.4 to 6.5 ns for
+  `FixedQ32_32::checked_div` (two runs, ledger entry 5).
+* Added `PreparedRay3` and `ray_intersects_aabb_prepared`: the same
+  `(enter, exit)` bits as `ray_intersects_aabb` on every input, including the
+  overflow inputs that `ray_intersects_aabb` now decides exactly
+  (flyingrobots/bunny#211), with no division per box. Best p50: 21.5 to 21.7 ns
+  against 51.5 to 52.3 ns in the same runs, after a 26 ns preparation. For ray
+  traversal that does not need exact distances, `TraceRay::box_entry` (6.0 ns
+  after a 1.8 ns preparation) is faster, and on an x86-64 CI runner the
+  prepared box test is only 1.11 times faster; see the ledger entry.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
@@ -47,6 +82,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same primitive on every ray, and added `bunny-broadphase` to the `xtask perf`
   base crates. Ledger entry 4 in `docs/topics/performance/` records the
   measurement.
+* Added `FixedPlane3::clip_polygon`, `PolygonClip` and `PolygonClipError` to
+  `bunny-geom`: Sutherland-Hodgman clipping of a convex polygon to the closed
+  front half-space, written into a caller-provided buffer (`n + 1` slots always
+  suffice; a smaller one returns `OutputTooSmall`). Winding is preserved and
+  output starts at the first kept input vertex; a vertex on the plane is kept
+  without a duplicate cut; a result with fewer than three vertices is
+  `Outside`. Cut points are computed in a canonical edge direction (ascending
+  raw `(x, y, z)`) so polygons sharing an edge get identical points, because
+  `clip_segment` can differ by direction at a rounding tie. Existing functions
+  are unchanged. See `docs/topics/plane-clipping/`.
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
   a tangent (no trigonometry) and return the new `ProjectionError`. The
@@ -123,6 +168,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Fixed `bunny-perf` so every feature group builds on its own: the `case` helper
+  compiled only with the `scene` or `trace` group, which made `cargo xtask perf`
+  report the `num`, `linalg`, `query` and `angle` cases as new instead of
+  comparing them against a base revision.
 * **Behaviour change (contract change, flyingrobots/bunny#211):**
   `bunny_query::ray_intersects_aabb`, and so
   `bunny_broadphase::intersect_ray`, no longer report a miss when a slab

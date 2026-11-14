@@ -13,8 +13,9 @@ queries, collision detection, and ray-casting.
   and maximum bounds through `Aabb3::try_new`.
 * **Sphere3**: Represents spheres with finite centers and finite non-negative
   radii through `Sphere3::try_new`.
-* **FixedPlane3 / FixedSegment3**: Checked plane classification and segment
-  clipping to the closed front half-space; see
+* **FixedPlane3 / FixedSegment3**: Checked plane classification, segment
+  clipping and convex polygon clipping (`clip_polygon`, into a caller buffer)
+  to the closed front half-space; see
   `docs/topics/plane-clipping/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float

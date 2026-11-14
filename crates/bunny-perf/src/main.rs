@@ -5,9 +5,12 @@
 //! `docs/topics/performance/README.md`.
 //!
 //! Options: `--filter <text>` keeps cases whose name contains the text; `--samples <n>`
-//! sets the number of timed batches per case (default 101).
+//! sets the number of timed batches per case (default 101); `--stats` prints the traversal
+//! counters and tree shape of the benchmark scene as Markdown instead of timing anything.
 
 mod cases;
+#[cfg(feature = "trace")]
+mod profile;
 #[cfg(any(feature = "scene", feature = "trace", feature = "build", feature = "sah"))]
 mod scene;
 mod timing;
@@ -30,6 +33,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         if !bad.is_empty() {
             return Err(format!("closest-hit paths disagree on rays {bad:?}").into());
         }
+    }
+    if options.stats {
+        #[cfg(feature = "trace")]
+        {
+            print!("{}", profile::report());
+            return Ok(());
+        }
+        #[cfg(not(feature = "trace"))]
+        return Err("--stats needs the `trace` feature".into());
     }
     #[cfg(all(feature = "trace", feature = "sah"))]
     {
@@ -55,12 +67,17 @@ fn run() -> Result<(), Box<dyn Error>> {
 struct Options {
     filter: Option<String>,
     samples: usize,
+    stats: bool,
 }
 
 impl Options {
     fn parse(mut args: impl Iterator<Item = String>) -> Result<Self, Box<dyn Error>> {
-        let mut options = Self { filter: None, samples: timing::DEFAULT_SAMPLES };
+        let mut options = Self { filter: None, samples: timing::DEFAULT_SAMPLES, stats: false };
         while let Some(arg) = args.next() {
+            if arg == "--stats" {
+                options.stats = true;
+                continue;
+            }
             let value = args.next().ok_or_else(|| format!("{arg} needs a value"))?;
             match arg.as_str() {
                 "--filter" => options.filter = Some(value),
