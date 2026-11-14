@@ -1,5 +1,5 @@
-//! Exact comparisons for the unit-vector oracles: an unsigned big integer and the test
-//! `|r - s 2^32 / |S|| <= bound` decided by comparing squares, with no square root.
+//! Exact comparisons for the unit-vector oracles: unsigned and signed big integers and the test
+//! `|r - s 2^32 / |S|| <= bound (+ slack / |S|)` decided by comparing squares, with no square root.
 
 // Limbs are below 2^32 by construction, so the `as u32` conversions keep every bit.
 #![allow(clippy::cast_possible_truncation)]
@@ -49,36 +49,96 @@ impl Big {
         Self(out).trim()
     }
 
+    /// `self - other`, for `other <= self`.
+    fn sub(&self, other: &Self) -> Self {
+        let mut out = Vec::new();
+        let mut borrow = 0_i64;
+        for (k, &a) in self.0.iter().enumerate() {
+            let t = i64::from(a) - i64::from(other.0.get(k).copied().unwrap_or(0)) - borrow;
+            borrow = i64::from(t < 0);
+            out.push(u32::try_from(t + (borrow << 32)).expect("a limb"));
+        }
+        Self(out).trim()
+    }
+
     pub(crate) fn compare(&self, other: &Self) -> Ordering {
         self.0.len().cmp(&other.0.len()).then_with(|| self.0.iter().rev().cmp(other.0.iter().rev()))
     }
 }
 
-/// Whether `a * sqrt(q) <= s * 2^32`, exactly.
-pub(crate) fn at_most(a: i128, s: i128, q: &Big) -> bool {
+/// A signed integer of any size.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Signed {
+    negative: bool,
+    magnitude: Big,
+}
+
+impl Signed {
+    pub(crate) fn new(value: i128) -> Self {
+        Self { negative: value < 0, magnitude: Big::new(value.unsigned_abs()) }
+    }
+
+    /// `a * b * 2^shift`, exactly.
+    pub(crate) fn product(a: i128, b: i128, shift: u32) -> Self {
+        let scale = Big::new(1 << shift);
+        let magnitude = Big::new(a.unsigned_abs()).mul(&Big::new(b.unsigned_abs())).mul(&scale);
+        Self { negative: (a < 0) != (b < 0) && magnitude != Big::new(0), magnitude }
+    }
+
+    pub(crate) fn add(&self, other: &Self) -> Self {
+        if self.negative == other.negative {
+            return Self {
+                negative: self.negative,
+                magnitude: self.magnitude.add(&other.magnitude),
+            };
+        }
+        let (big, small) = match self.magnitude.compare(&other.magnitude) {
+            Ordering::Less => (other, self),
+            _ => (self, other),
+        };
+        let magnitude = big.magnitude.sub(&small.magnitude);
+        Self { negative: big.negative && magnitude != Big::new(0), magnitude }
+    }
+
+    pub(crate) fn negated(&self) -> Self {
+        Self {
+            negative: !self.negative && self.magnitude != Big::new(0),
+            magnitude: self.magnitude.clone(),
+        }
+    }
+
+    pub(crate) fn square(&self) -> Big {
+        self.magnitude.mul(&self.magnitude)
+    }
+}
+
+/// Whether `a * sqrt(q) <= t`, exactly.
+fn at_most(a: i128, t: &Signed, q: &Big) -> bool {
     let a_magnitude = Big::new(a.unsigned_abs());
     let lhs = a_magnitude.mul(&a_magnitude).mul(q);
-    let s_scaled = Big::new(s.unsigned_abs()).mul(&Big::new(1 << 32));
-    let rhs = s_scaled.mul(&s_scaled);
-    if s >= 0 {
-        a <= 0 || lhs.compare(&rhs) != Ordering::Greater
-    } else {
+    let rhs = t.square();
+    if t.negative {
         a < 0 && lhs.compare(&rhs) != Ordering::Less
+    } else {
+        a <= 0 || lhs.compare(&rhs) != Ordering::Greater
     }
 }
 
 /// `|S|^2` for an exact vector `S`.
-pub(crate) fn squared_length(sum: [i128; 3]) -> Big {
-    let square = |s: i128| Big::new(s.unsigned_abs()).mul(&Big::new(s.unsigned_abs()));
-    sum.iter().fold(Big::new(0), |q, &s| q.add(&square(s)))
+pub(crate) fn squared_length(sum: &[Signed; 3]) -> Big {
+    sum.iter().fold(Big::new(0), |q, s| q.add(&s.square()))
 }
 
-/// Whether every raw component `r` of `raw` is within `bound` raw units of `s 2^32 / |S|`, the
-/// exact unit vector along the nonzero `sum`.
-pub(crate) fn within_unit(raw: [i64; 3], sum: [i128; 3], bound: i128) -> bool {
+/// Whether every raw component `r` of `raw` satisfies `|r |S| - s 2^32| <= bound |S| + slack`
+/// for the nonzero exact vector `S = sum`: within `bound + slack / |S|` raw units of the exact
+/// unit vector.
+pub(crate) fn within(raw: [i64; 3], sum: &[Signed; 3], bound: i128, slack: &Signed) -> bool {
     let q = squared_length(sum);
     raw.iter().zip(sum).all(|(component, s)| {
         let r = i128::from(*component);
-        at_most(r - bound, s, &q) && at_most(-(r + bound), -s, &q)
+        let scaled = Signed::product(1, 1, 32).magnitude.mul(&s.magnitude);
+        let scaled = Signed { negative: s.negative, magnitude: scaled };
+        at_most(r - bound, &scaled.add(slack), &q)
+            && at_most(-(r + bound), &scaled.negated().add(slack), &q)
     })
 }
