@@ -63,31 +63,27 @@ pub enum SecondaryRayError {
 impl fmt::Display for SecondaryRayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::HitPointUnrepresentable { distance } => write!(
-                f,
-                "hit point at distance raw {} is not representable in Q32.32",
-                distance.raw()
-            ),
-            Self::HitPointOutsideTraceDomain { point } => {
-                write!(f, "hit point raw {} is outside the trace domain", Raw(*point))
-            }
-            Self::NotOnArrivalSide { point } => write!(
-                f,
-                "hit point raw {} is not within two raw-unit steps of the arrival side",
-                Raw(*point)
-            ),
-            Self::StartOutsideTraceDomain { start } => {
-                write!(f, "start point raw {} is outside the trace domain", Raw(*start))
+            Self::HitPointUnrepresentable { distance } => {
+                let distance = distance.raw();
+                write!(f, "hit point at distance raw {distance} is not representable in Q32.32")
             }
             Self::SampleOutsideUnitInterval { sample: [u, v] } => {
                 write!(f, "sample raw ({}, {}) is outside [0, 1)", u.raw(), v.raw())
             }
-            Self::BounceRayRefused { origin, direction } => write!(
-                f,
-                "bounce ray from raw {} along raw {} is not a valid trace ray",
-                Raw(*origin),
-                Raw(*direction)
-            ),
+            Self::BounceRayRefused { origin, direction } => {
+                let (origin, direction) = (Raw(*origin), Raw(*direction));
+                write!(f, "bounce ray from raw {origin} along raw {direction} is not a trace ray")
+            }
+            Self::HitPointOutsideTraceDomain { point } => {
+                write!(f, "hit point raw {} is outside the trace domain", Raw(*point))
+            }
+            Self::NotOnArrivalSide { point } => {
+                let point = Raw(*point);
+                write!(f, "hit point raw {point} is not within two steps of the arrival side")
+            }
+            Self::StartOutsideTraceDomain { start } => {
+                write!(f, "start point raw {} is outside the trace domain", Raw(*start))
+            }
         }
     }
 }

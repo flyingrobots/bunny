@@ -134,7 +134,8 @@ impl SurfaceHit {
 /// [`SurfaceHit::new`] and [`SurfaceHit::try_new`] share.
 ///
 /// The domain checks are arranged so the common case costs one comparison per coordinate: a hit
-/// point more than two raw units inside the domain stays inside after any step. Every hit point
+/// point more than two raw units inside the domain stays inside after any step; the rest go to
+/// [`near_boundary`]. Every hit point
 /// that reaches the plane test has coordinates below `2^41`, so with plane normal components
 /// below `2^83` the test stays below `2^126`, inside `i128`.
 #[inline]
@@ -147,18 +148,29 @@ fn start_point(
     let Some(start) = point_at(ray, distance) else {
         return Err(SecondaryRayError::HitPointUnrepresentable { distance });
     };
-    let not_on_arrival_side = || SecondaryRayError::NotOnArrivalSide { point: start };
     let domain = u128::from(TRACE_COORD_LIMIT_RAW.unsigned_abs());
-    let steps = MAX_STEPS.unsigned_abs();
-    if within(wide(start), domain - steps) {
+    if within(wide(start), domain - MAX_STEPS.unsigned_abs()) {
         return arrival_side(wide(start), plane, offset)
             .map(narrow)
-            .ok_or_else(not_on_arrival_side);
+            .ok_or(SecondaryRayError::NotOnArrivalSide { point: start });
     }
-    if !within(wide(start), domain + steps) {
+    near_boundary(start, plane, offset, domain)
+}
+
+/// [`start_point`] for a hit point within two raw units of the domain's boundary or outside it:
+/// it is refused when no step can bring it inside, and its stepped start point is checked.
+#[cold]
+fn near_boundary(
+    start: FixedVec3,
+    plane: Wide,
+    offset: i128,
+    domain: u128,
+) -> Result<FixedVec3, SecondaryRayError> {
+    if !within(wide(start), domain + MAX_STEPS.unsigned_abs()) {
         return Err(SecondaryRayError::HitPointOutsideTraceDomain { point: start });
     }
-    let point = arrival_side(wide(start), plane, offset).ok_or_else(not_on_arrival_side)?;
+    let point = arrival_side(wide(start), plane, offset)
+        .ok_or(SecondaryRayError::NotOnArrivalSide { point: start })?;
     if within(point, domain) {
         Ok(narrow(point))
     } else {

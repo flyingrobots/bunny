@@ -98,7 +98,7 @@ fn optics_tp_059_a_hit_off_the_arrival_side_names_its_point() {
     assert_eq!(refusal, Some(SecondaryRayError::NotOnArrivalSide { point }));
     assert_eq!(
         SecondaryRayError::NotOnArrivalSide { point }.to_string(),
-        "hit point raw (0, 8589934592, 0) is not within two raw-unit steps of the arrival side"
+        "hit point raw (0, 8589934592, 0) is not within two steps of the arrival side"
     );
     assert_eq!(SurfaceHit::new(&surface, &ray, &hit), None);
 }
