@@ -202,7 +202,7 @@ fn next(state: &mut u64) -> u64 {
 fn spread(state: &mut u64) -> i64 {
     let bits = next(state) % 38;
     let magnitude = i64::try_from(next(state) & ((1 << (bits + 1)) - 1)).expect("fits");
-    if next(state) % 2 == 0 {
+    if next(state).is_multiple_of(2) {
         magnitude
     } else {
         -magnitude
