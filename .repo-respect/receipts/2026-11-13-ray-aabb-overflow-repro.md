@@ -73,9 +73,11 @@ corpora, the query_tests face case and the broadphase leaf test fail; the contro
 GREEN: cargo test --locked -p bunny-query and -p bunny-broadphase pass in the dev container.
 Mutations of ray/aabb_wide.rs (truncated rounding, rounded hit decision, saturated difference,
 dropped exit >= 0 check) each fail at least one case; see the ray-tracing test plan.
-Final: cargo test --locked --workspace and code-dojo --all in the dev container at the final
-commit; xtask perf --filter query/ against origin/main (results in the PR and the performance
-chapter).
+Perf: cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+--filter query/, two runs against 2e92ce2748be: query/ray_aabb best p50 +0.2 % and -2.7 %,
+inside noise (docs/topics/performance/README.md#contract-change-cost-checks).
+Final: cargo test --locked --workspace and code-dojo --all (with --history origin/main..HEAD)
+in the dev container at the final commit.
 
 Known risks:
 This is a declared contract change: outputs change from None to Some for the overflow inputs. A
