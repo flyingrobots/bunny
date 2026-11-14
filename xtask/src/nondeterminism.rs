@@ -417,6 +417,9 @@ impl<'ast> Visit<'ast> for Scanner {
         for (line, method) in token_method_calls(&node.tokens) {
             self.report(line, method_rules(&method));
         }
+        for (line, rule) in includes::token_module_path_findings(&node.tokens, &self.origin) {
+            self.report(line, vec![rule]);
+        }
         visit::visit_macro(self, node);
     }
 

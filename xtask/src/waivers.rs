@@ -47,13 +47,14 @@ impl Waivers {
         mark_tokens(&tokens, &mut code);
         let has_code = code.iter().map(|line| line.contains(&true)).collect::<Vec<_>>();
         let nodes = file.map(|file| node_ends(file, &code)).unwrap_or_default();
-        let mut entries = Vec::new();
-        for (index, line) in lines.iter().enumerate() {
-            for rule in comment_segments(line, &code[index]).filter_map(|text| clause_rule(&text)) {
+        let entries = comments(&lines, &code)
+            .into_iter()
+            .filter_map(|(index, text)| {
+                let rule = clause_rule(&text)?;
                 let (first, last) = coverage(index, &has_code, &nodes);
-                entries.push(Waiver { rule, first, last });
-            }
-        }
+                Some(Waiver { rule, first, last })
+            })
+            .collect();
         Self { entries }
     }
 
@@ -65,12 +66,28 @@ impl Waivers {
     }
 }
 
-/// Whether a manifest waives `rule`: a whole-line TOML comment holding one clause.
+/// Whether a manifest waives `rule`: a whole-line TOML comment holding one clause. Lines
+/// inside a multi-line basic (`"""`) or literal (`'''`) string are string content.
 pub(super) fn manifest_waives(manifest: &str, rule: &str) -> bool {
-    manifest
-        .lines()
-        .filter_map(|line| line.trim_start().strip_prefix('#'))
-        .any(|text| clause_body_rule(text).is_some_and(|named| named == rule))
+    let mut open = None::<&str>;
+    for line in manifest.lines() {
+        if let Some(delimiter) = open {
+            if line.matches(delimiter).count() % 2 == 1 {
+                open = None;
+            }
+            continue;
+        }
+        if let Some(text) = line.trim_start().strip_prefix('#') {
+            if clause_body_rule(text).is_some_and(|named| named == rule) {
+                return true;
+            }
+            continue;
+        }
+        open = ["\"\"\"", "'''"]
+            .into_iter()
+            .find(|delimiter| line.matches(delimiter).count() % 2 == 1);
+    }
+    false
 }
 
 /// The lines a waiver on the 0-based line `index` covers, 1-based and inclusive.
@@ -113,19 +130,76 @@ fn clause_body_rule(body: &str) -> Option<&str> {
         .then_some(rule)
 }
 
-/// The maximal runs of a line that no token covers, which are whitespace and comments.
-fn comment_segments<'a>(line: &'a [char], code: &'a [bool]) -> impl Iterator<Item = String> + 'a {
-    let mut segments = Vec::new();
-    let mut current = String::new();
-    for (character, is_code) in line.iter().zip(code) {
-        if *is_code {
-            segments.push(std::mem::take(&mut current));
-        } else {
-            current.push(*character);
+/// Every comment of the source with the 0-based line it starts on, each whole: a block
+/// comment over several lines is one comment. Text no token covers is whitespace and
+/// comments, so the runs of it between tokens are split into comments.
+fn comments(lines: &[Vec<char>], code: &[Vec<bool>]) -> Vec<(usize, String)> {
+    let mut runs = Vec::<(usize, String)>::new();
+    let mut current = None::<(usize, String)>;
+    for (index, (line, mask)) in lines.iter().zip(code).enumerate() {
+        for (character, is_code) in line.iter().zip(mask) {
+            if *is_code {
+                runs.extend(current.take());
+            } else {
+                current.get_or_insert_with(|| (index, String::new())).1.push(*character);
+            }
+        }
+        current.get_or_insert_with(|| (index, String::new())).1.push('\n');
+    }
+    runs.extend(current);
+    runs.iter().flat_map(|(line, text)| split_comments(*line, text)).collect()
+}
+
+/// Splits a run of whitespace and comments into its line and block comments, nested block
+/// comments included.
+fn split_comments(first_line: usize, run: &str) -> Vec<(usize, String)> {
+    let chars = run.chars().collect::<Vec<_>>();
+    let mut found = Vec::new();
+    let (mut line, mut at) = (first_line, 0);
+    while let Some(character) = chars.get(at) {
+        let end = match (character, chars.get(at + 1)) {
+            ('/', Some('/')) => {
+                chars.iter().skip(at).position(|c| *c == '\n').map_or(chars.len(), |n| at + n)
+            }
+            ('/', Some('*')) => block_comment_end(&chars, at),
+            ('\n', _) => {
+                line += 1;
+                at += 1;
+                continue;
+            }
+            _ => {
+                at += 1;
+                continue;
+            }
+        };
+        let comment = chars.get(at..end).unwrap_or_default();
+        found.push((line, comment.iter().collect::<String>()));
+        line += comment.iter().filter(|c| **c == '\n').count();
+        at = end;
+    }
+    found
+}
+
+/// The index just past the `*/` that closes the block comment opening at `start`.
+fn block_comment_end(chars: &[char], start: usize) -> usize {
+    let (mut depth, mut at) = (0_usize, start);
+    while let Some(first) = chars.get(at) {
+        match (first, chars.get(at + 1)) {
+            ('/', Some('*')) => {
+                depth += 1;
+                at += 2;
+            }
+            ('*', Some('/')) => {
+                depth = depth.saturating_sub(1);
+                at += 2;
+                if depth == 0 {
+                    return at;
+                }
+            }
+            _ => at += 1,
         }
     }
-    segments.push(current);
-    segments.into_iter().filter(|segment| !segment.trim().is_empty())
+    chars.len()
 }
 
 /// Marks the characters each token covers. A group contributes its delimiters, not its

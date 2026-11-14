@@ -32,9 +32,9 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `std-fs` | `std::fs`, `std::os::<platform>::fs`, `io` and `prelude`, `std::os::fd`; the names `fs::…` and `File::open`; the `Path`/`PathBuf` methods that read the filesystem (`canonicalize`, `exists`, `is_dir`, `is_file`, `is_symlink`, `metadata`, `read_dir`, `read_link`, `symlink_metadata`, `try_exists`) as zero-argument calls or `Path::` paths |
 | `std-process` | `std::process`, `std::os::<platform>::process`, `std::io::pipe`, `PipeReader`, `PipeWriter` |
 | `host-input` | terminal input: `std::io::stdin`, `Stdin`, `StdinLock`, `IsTerminal` and a zero-argument `.is_terminal()` call |
-| `include-source` | `include!` in every spelling, and a `#[path]` module naming anything but a `.rs` file inside the crate directory |
+| `include-source` | `include!` in every spelling, and a `#[path]` module (also under nested `cfg_attr` or emitted by a macro) naming anything but a `.rs` file the gate scans inside the crate directory |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
-| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies |
+| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
 
 A banned path bans everything below it: `std::fs` covers `std::fs::read` and
 `std::fs::File::open`. `std::time` and `std::thread` are not banned as
@@ -87,9 +87,11 @@ another kind of file or a file outside the crate.
   file, a `concat!` or `env!` path, a build-script output) is code the gate
   never reads. Because the first `include!` is itself the finding, a second
   level of indirection behind it changes nothing.
-- A `#[path]` module, also one set through `cfg_attr`, must name a `.rs`
-  file inside the crate directory; that file is then scanned as a file of the
-  crate. Anything else is an `include-source` finding at the attribute.
+- A `#[path]` module, also one set through `cfg_attr` at any depth or
+  emitted by a macro, must name a `.rs` file inside the crate directory and
+  outside the `target`, `vendor` and `third_party` directories, which the gate
+  does not list; that file is then scanned as a file of the crate. Anything
+  else is an `include-source` finding at the attribute.
 - `include_str!` and `include_bytes!` must name one string literal that
   resolves inside the crate directory (`include-data`): fixed data in the
   package, not a file on the host.
@@ -179,7 +181,9 @@ finding reported; it does not hide a valid waiver for the same finding.
 
 Comments are what the token stream does not cover, so the same text inside a
 string, raw-string, byte-string or character literal, a doc comment, a
-`#[doc]` attribute or a macro's tokens is not a waiver.
+`#[doc]` attribute or a macro's tokens is not a waiver. Each comment is read
+whole: a block comment over several lines holding two clauses waives
+neither.
 
 A waiver after code covers its own line. A waiver on a line of its own covers
 that line, the comment lines below it, and the whole of the outermost item,
@@ -192,7 +196,8 @@ function. A
 and a float in the next function is reported.
 
 A dependency waiver is the same clause in a whole-line TOML comment, anywhere
-in the manifest of the crate the finding names. There are no dependency
+in the manifest of the crate the finding names, but not on a line inside a
+multi-line string. There are no dependency
 waivers in the repository.
 
 ## Where The Rules Run

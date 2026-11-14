@@ -36,6 +36,7 @@ xtask/src/waivers/tests.rs
 crates/bunny-geom/src/conversions.rs (two waiver comments, no code)
 crates/bunny-linalg/src/fixed_vec2.rs (two waiver comments, no code)
 crates/bunny-linalg/src/fixed_vec3.rs (two waiver comments, no code)
+crates/bunny-num/src/fixed_q32_32.rs (one waiver comment, no code)
 docs/CODE_DOJO.md
 docs/topics/code-dojo-determinism/README.md
 docs/topics/code-dojo-determinism/test-plan.md
@@ -65,8 +66,15 @@ tests fail), no float suffixes (2), float method names not checked (2), a node s
 only on its first line (1).
 The documented regeneration command in docs/CODE_DOJO.md, run in the container with
 --network, reproduces std_api_1.96.0.txt byte for byte below its three comment lines.
+Review finding (CodeRabbit on #332, verified here): the float rule never read `use`
+declarations, so `use core::f64::consts::PI as P` or a renamed `to_f32` hid a float name.
+ND-TP-070 seeds four forms; all four slipped through on the unfixed code. `use` leaves
+are now checked; the mutation that skips them fails ND-TP-070. On main this finds one
+real use, `pub use conversions::{from_f32, to_f32, try_from_f32, ..}` in
+`crates/bunny-num/src/fixed_q32_32.rs`, now waived (comment only).
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
-cargo test --locked -p xtask: 107 passed.
+cargo test --locked -p xtask: 112 passed (after merging the review fixes below this
+pull request).
 cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository: 20 new
 findings, all `float-boundary`. 8 were inside functions that already had a waiver placed
 between their doc comment and `fn`, which the waiver scope did not reach: a waiver bug,

@@ -16,11 +16,12 @@
 //! report a path as outside when it is inside, never the reverse. Symbolic links are not
 //! followed.
 
-use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
-use proc_macro2::{Spacing, TokenStream, TokenTree};
-use syn::{Attribute, Expr, ExprLit, Lit, LitStr, Meta};
+use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
+use syn::parse::Parser;
+use syn::punctuated::Punctuated;
+use syn::{Attribute, Expr, ExprLit, Lit, LitStr, Meta, Token};
 
 use super::{ident_name, line_of};
 
@@ -55,11 +56,27 @@ impl Origin {
 
     /// Whether a path written in this file names a place inside its crate directory.
     fn inside_crate(&self, written: &str) -> bool {
-        let Some(crate_dir) = &self.crate_dir else {
-            return false;
-        };
+        self.resolve(written).is_some()
+    }
+
+    /// Whether a module path names a file the gate scans as part of this crate: a `.rs`
+    /// file inside the crate directory and outside the directories the gate does not list
+    /// (`target`, `vendor`, `third_party`).
+    fn scans(&self, path: &ModulePath) -> bool {
+        match path {
+            ModulePath::Literal(written) => self
+                .resolve(written)
+                .is_some_and(|resolved| crate::code_dojo::is_rust_source(&resolved)),
+            ModulePath::NotLiteral => false,
+        }
+    }
+
+    /// The repository-relative path that a path written in this file names, when it lies
+    /// inside the crate directory.
+    fn resolve(&self, written: &str) -> Option<PathBuf> {
+        let crate_dir = self.crate_dir.as_ref()?;
         if written.contains('\\') {
-            return false;
+            return None;
         }
         let mut resolved = Vec::new();
         for component in self.dir.components().chain(Path::new(written).components()) {
@@ -67,14 +84,13 @@ impl Origin {
                 Component::Normal(part) => resolved.push(part),
                 Component::CurDir => {}
                 Component::ParentDir => {
-                    if resolved.pop().is_none() {
-                        return false;
-                    }
+                    resolved.pop()?;
                 }
-                Component::RootDir | Component::Prefix(_) => return false,
+                Component::RootDir | Component::Prefix(_) => return None,
             }
         }
-        resolved.iter().collect::<PathBuf>().starts_with(crate_dir)
+        let resolved = resolved.iter().collect::<PathBuf>();
+        resolved.starts_with(crate_dir).then_some(resolved)
     }
 }
 
@@ -110,22 +126,47 @@ fn literal_inside(args: &TokenStream, origin: &Origin) -> bool {
     syn::parse2::<LitStr>(args.clone()).is_ok_and(|literal| origin.inside_crate(&literal.value()))
 }
 
-/// The line of a `#[path]` attribute on a module that names anything but a `.rs` file
-/// inside the crate directory, including one set through `cfg_attr`.
+/// The line of a `#[path]` attribute on a module that names anything but a file the gate
+/// scans as part of this crate, including one set through `cfg_attr`, nested or not.
 pub(super) fn module_path_finding(
     attrs: &[Attribute],
     origin: &Origin,
 ) -> Option<(usize, (&'static str, &'static str))> {
     attrs.iter().find_map(|attr| {
-        let scanned = match module_path(attr)? {
-            ModulePath::Literal(path) => {
-                Path::new(&path).extension() == Some(OsStr::new("rs")) && origin.inside_crate(&path)
-            }
-            ModulePath::NotLiteral => false,
-        };
-        (!scanned).then(|| (line_of(attr.pound_token.span), ("include-source", INCLUDE_SOURCE)))
+        let path = module_path(&attr.meta)?;
+        (!origin.scans(&path)).then(|| (line_of(attr.pound_token.span), INCLUDE_SOURCE_RULE))
     })
 }
+
+/// The `#[path]` attributes inside a macro's tokens, which `syn` does not parse into items:
+/// the line of each that names anything but a file the gate scans as part of this crate.
+pub(super) fn token_module_path_findings(
+    tokens: &TokenStream,
+    origin: &Origin,
+) -> Vec<(usize, (&'static str, &'static str))> {
+    let tokens = tokens.clone().into_iter().collect::<Vec<_>>();
+    let mut found = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if let TokenTree::Group(group) = token {
+            found.extend(token_module_path_findings(&group.stream(), origin));
+        }
+        if let (TokenTree::Punct(pound), Some(TokenTree::Group(body))) =
+            (token, tokens.get(index + 1))
+        {
+            let attribute = (pound.as_char() == '#' && body.delimiter() == Delimiter::Bracket)
+                .then(|| syn::parse2::<Meta>(body.stream()).ok())
+                .flatten();
+            if let Some(path) = attribute.as_ref().and_then(module_path) {
+                if !origin.scans(&path) {
+                    found.push((line_of(pound.span()), INCLUDE_SOURCE_RULE));
+                }
+            }
+        }
+    }
+    found
+}
+
+const INCLUDE_SOURCE_RULE: (&str, &str) = ("include-source", INCLUDE_SOURCE);
 
 /// The value of a module's `path` attribute.
 enum ModulePath {
@@ -133,35 +174,29 @@ enum ModulePath {
     NotLiteral,
 }
 
-/// The value of `#[path = ..]` or `#[cfg_attr(.., path = ..)]`; `None` for any other
-/// attribute.
-fn module_path(attr: &Attribute) -> Option<ModulePath> {
-    let literal = |value: Option<String>| value.map_or(ModulePath::NotLiteral, ModulePath::Literal);
-    if attr.path().is_ident("path") {
-        return Some(literal(match &attr.meta {
+/// The value of `path = ..`, or of a `path` inside `cfg_attr(..)` at any depth; `None` for
+/// any other attribute.
+fn module_path(meta: &Meta) -> Option<ModulePath> {
+    if meta.path().is_ident("path") {
+        return Some(match meta {
             Meta::NameValue(pair) => match &pair.value {
-                Expr::Lit(ExprLit { lit: Lit::Str(text), .. }) => Some(text.value()),
-                _ => None,
+                Expr::Lit(ExprLit { lit: Lit::Str(text), .. }) => ModulePath::Literal(text.value()),
+                _ => ModulePath::NotLiteral,
             },
-            Meta::Path(_) | Meta::List(_) => None,
-        }));
+            Meta::Path(_) | Meta::List(_) => ModulePath::NotLiteral,
+        });
     }
-    if !attr.path().is_ident("cfg_attr") {
-        return None;
-    }
-    let Meta::List(list) = &attr.meta else {
+    let Meta::List(list) = meta else {
         return None;
     };
-    let tokens = list.tokens.clone().into_iter().collect::<Vec<_>>();
-    tokens.windows(3).find_map(|window| match window {
-        [TokenTree::Ident(name), TokenTree::Punct(equals), value]
-            if ident_name(name) == "path" && equals.as_char() == '=' =>
-        {
-            let text = syn::parse2::<LitStr>(value.clone().into()).ok().map(|text| text.value());
-            Some(literal(text))
-        }
-        _ => None,
-    })
+    if !list.path.is_ident("cfg_attr") {
+        return None;
+    }
+    let Ok(nested) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(list.tokens.clone())
+    else {
+        return Some(ModulePath::NotLiteral);
+    };
+    nested.iter().skip(1).find_map(module_path)
 }
 
 /// A macro invocation found inside another macro's tokens.

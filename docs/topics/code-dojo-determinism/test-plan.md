@@ -149,14 +149,19 @@ real `cargo tree` output and the real manifests.
 | ND-TP-042 | comment lines below a waiver | ND-REQ-002 | A `hand-hashed-table` finding on a comment line between the waiver and the item is suppressed. | `xtask/src/waivers/tests.rs::a_waiver_covers_the_comment_lines_below_it` |
 | ND-TP-043 | stacked waivers | ND-REQ-002 | Two waiver comments for two rules above one item suppress both findings. | `xtask/src/waivers/tests.rs::stacked_waivers_each_cover_the_item` |
 | ND-TP-044 | exact rule name | ND-REQ-002 | A waiver for `std-fs-extra` leaves a `std-fs` finding reported. | `xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly` |
+| ND-TP-066 | block comment over lines | ND-REQ-002 | A `/* */` comment whose two lines hold a `std-fs` and a `std-env` clause waives neither: both findings (lines 4 and 5) are reported. | `xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_two_clauses_waives_nothing` |
+| ND-TP-067 | block comment with one clause | ND-REQ-002 | A `/* */` comment over two lines with one clause, its reason running onto the second line, waives the item below it. | `xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_one_clause_waives_the_item_below` |
+| ND-TP-068 | manifest multi-line strings | ND-REQ-002, ND-REQ-005 | A waiver line inside a multi-line basic or literal TOML string waives nothing; a whole-line comment after a multi-line string closed on its own line waives. | `xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment` |
 | ND-TP-045 | manifest waiver form | ND-REQ-002, ND-REQ-005 | A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not. | `xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments` |
 | ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
 | ND-TP-047 | include of source | ND-REQ-006 | Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named` |
 | ND-TP-048 | path attributes | ND-REQ-006 | `#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file` |
+| ND-TP-069 | path attributes the review found | ND-REQ-006 | `#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
 | ND-TP-049 | included data | ND-REQ-006 | `include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`. | `xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate` |
 | ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
 | ND-TP-051 | sibling names | ND-REQ-001 | `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park` and `park_timeout_ms` in a group, `yield_now` and `park_timeout` through an alias are `thread-sleep`; `SystemTimeError` is `time-system`. | `xtask/src/nondeterminism/evasion_tests.rs::sibling_names_in_banned_families_are_rejected` |
 | ND-TP-052 | float methods | ND-REQ-001 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line. | `xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_token_are_float_boundary` |
+| ND-TP-070 | float names in use declarations | ND-REQ-001 | `use core::f64::consts::PI as P`, `use crate::boundary::to_f32 as convert`, the same in a group, and a glob of `core::f32::consts` are each `float-boundary` at the `use` line in core, so a rename cannot hide a float name. | `xtask/src/nondeterminism/evasion_tests.rs::float_names_in_use_declarations_are_float_boundary` |
 | ND-TP-053 | inferred float (known gap) | ND-REQ-001 | Known gap pinned with inverted meaning: `text.parse()` into an inferred float with no float name on the way produces no `float-boundary` finding. | `xtask/src/nondeterminism/evasion_tests.rs::an_inferred_float_with_no_float_name_is_not_seen` |
 | ND-TP-054 | std snapshot toolchain | ND-REQ-007 | The toolchain named in `std_api_1.96.0.txt` is the channel pinned in `rust-toolchain.toml`. | `xtask/src/nondeterminism/std_api_tests.rs::the_std_snapshot_is_of_the_pinned_toolchain` |
 | ND-TP-055 | std items classified | ND-REQ-007 | The items the 1.96.0 documentation lists for `std::thread` (23) and `std::time` (6) are exactly the items the hand classification names. | `xtask/src/nondeterminism/std_api_tests.rs::every_documented_thread_and_time_item_is_classified` |
@@ -568,6 +573,33 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "ND-TP-066"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_two_clauses_waives_nothing"
+oracle = "A `/* */` comment whose two lines hold a `std-fs` and a `std-env` clause waives neither: both findings (lines 4 and 5) are reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-067"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_one_clause_waives_the_item_below"
+oracle = "A `/* */` comment over two lines with one clause, its reason running onto the second line, waives the item below it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-068"
+requirements = ["ND-REQ-002", "ND-REQ-005"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment"
+oracle = "A waiver line inside a multi-line basic or literal TOML string waives nothing; a whole-line comment after a multi-line string closed on its own line waives."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "ND-TP-045"
 requirements = ["ND-REQ-002", "ND-REQ-005"]
 evidence = "test"
@@ -604,6 +636,15 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "ND-TP-069"
+requirements = ["ND-REQ-006"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected"
+oracle = "`#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "ND-TP-049"
 requirements = ["ND-REQ-006"]
 evidence = "test"
@@ -636,6 +677,15 @@ requirements = ["ND-REQ-001"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::float_methods_with_no_float_token_are_float_boundary"
 oracle = "`d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64` of an inferred parse, `div_duration_f32`, `as_secs_f32` inside `format!` and a call of Bunny's `to_f32` are `float-boundary` in core with no float token on the line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-070"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::float_names_in_use_declarations_are_float_boundary"
+oracle = "`use core::f64::consts::PI as P`, `use crate::boundary::to_f32 as convert`, the same in a group, and a glob of `core::f32::consts` are each `float-boundary` at the `use` line in core, so a rename cannot hide a float name."
 tier = "fast"
 status = "implemented"
 
