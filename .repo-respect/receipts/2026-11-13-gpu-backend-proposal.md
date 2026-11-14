@@ -11,6 +11,7 @@ CODE_STANDARDS.md
 README.md
 docs/README.md
 docs/design/0001-bunny-graphics-commons.md
+W3C WGSL CRD 2026-11-06, Metal Shading Language spec 4.1, wgpu docs and source (commit bceb82b), rust-gpu source (commit 60d1e25), wgpu CI workflow, GitHub runner image list (all accessed 2026-11-13)
 
 Files edited:
 docs/design/0005-gpu-compute-backend.md
@@ -26,9 +27,9 @@ Checks run:
 cargo run --locked -p xtask -- code-dojo --all
 
 Known risks:
-Statements about WGSL 64-bit support, wgpu's SHADER_INT64 feature, rust-gpu capabilities
-and software adapters on hosted CI runners are from memory and are marked "verify first"
-in the document. Effort and speedup figures are estimates.
+Toolchain claims were verified by reading primary sources on 2026-11-13; no shader was
+compiled or run and no CI job selected a software adapter. The document lists what remains
+unverified. Effort and speedup figures are estimates.
 
 Human reviewer:
 James Ross asked for this write-up on 2026-11-13; review pending.
