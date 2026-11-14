@@ -8,6 +8,7 @@ mod perf;
 mod perf_report;
 mod repo_respect;
 mod topic_docs;
+mod waivers;
 
 use std::error::Error;
 use std::process::Command;
