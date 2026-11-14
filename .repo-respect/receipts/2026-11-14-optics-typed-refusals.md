@@ -3,8 +3,8 @@
 Task:
 Implement flyingrobots/bunny#280. Add `try_` forms of `SurfaceHit::new`, `SurfaceHit::bounce_ray`
 and `ShadingFrame::cosine_direction` that return a typed `SecondaryRayError` (one variant per
-refusal cause, carrying the observed values); keep the `Option` functions as thin wrappers with
-every 0.7.1 output. Replace the blanket `clippy::nursery` deny with named lints, give every
+refusal cause, carrying the observed values); keep the `Option` functions as the fast path with
+their 0.7.1 bodies and cost; the `try_` forms are the diagnostic path. Replace the blanket `clippy::nursery` deny with named lints, give every
 allowance a reason, and list `bunny-optics` among the core crates in `CODE_STANDARDS.md`.
 `CameraError` values were not added: changing its unit variants is not additive.
 
@@ -32,7 +32,8 @@ crates/bunny-optics/tests/shading_refusal_tests.rs (new)
 crates/bunny-optics/tests/shading_reference/mod.rs (new, 0.7.1 code over the public API)
 crates/bunny-optics/README.md
 docs/topics/optics/README.md
-docs/topics/optics/test-plan.md (OPTICS-REQ-041, -042; OPTICS-TP-057 to -063)
+docs/topics/optics/test-plan.md (OPTICS-REQ-041 to -043; OPTICS-TP-057 to -064)
+docs/topics/performance/README.md (contract change cost check, Tried And Rejected)
 CODE_STANDARDS.md (Rule 9 core list)
 CHANGELOG.md (Unreleased)
 .repo-respect/receipts/2026-11-14-optics-typed-refusals.md
@@ -51,21 +52,27 @@ Red first: the new tests fail to build on the unmodified crate (no `try_new`, `t
 the plane test) and returns `None` in a release build.
 cargo fmt, clippy -D warnings and the bunny-optics tests in one command.
 Mutations (test plan, Shading Mutation Checks): each of three fails a case.
-Shading timing, `cargo run --locked -p xtask -- perf --base origin/main --rounds 11
+Shading timing: `cargo run --locked -p xtask -- perf --base origin/main --rounds 11
 --align-code --filter shade/` through devrun with --exclusive (Apple M5 Pro, rust-dev:1.96.0,
-base 8e3d2079e78d), best p50: at 1f82e42 shade/hit_shading +9.1 %; at 4a8e243 (#[inline])
-+6.9 %; at f340827 (shared start-point core, lazy errors, bounce_ray on the Option direction)
-+3.7 % (65.55 -> 67.95 ns), with shade/surface_new, whose code is unchanged, at -0.1 % in the
-same run and shade/bounce_direction at +0.6 %; at the commit that split the start point to the
-function limit, +4.1 % (66.12 -> 68.81 ns), surface_new -0.9 %, bounce_direction +0.4 %. The
-subject of f340827 states its aim; the residual of about 4 % is a measured slowdown, reported
-to the maintainer rather than claimed away.
+base 8e3d2079e78d). Every version and its numbers are in the performance chapter under
+"Typed shading refusals (flyingrobots/bunny#280)", and the shared-core versions under
+"Tried And Rejected". Selected fast-path version, three runs: shade/hit_shading best p50
+-0.2 %, +0.7 %, +0.4 %; median p50 +0.9 %, +1.5 %, +1.8 %; the unchanged control
+shade/surface_new moved -2.6 % to +2.2 % in the same runs.
+Inaccurate commit subject: f340827 ("bunny-optics: keep the per-hit shading step at its 0.7.1
+cost") states its aim, not its result. Measured at that commit, shade/hit_shading was 3.5 %
+(median) and 3.7 % (best) slower than 0.7.1; the cost was recovered only by 8d081e8. Commits
+cannot be amended, so the record is corrected here and in the PR body.
+Mutations (test plan, Shading Mutation Checks): six, four of them breaking one side of the
+fast/diagnostic pair alone; each fails a case. 30 consecutive fresh-seed runs of OPTICS-TP-064
+passed.
 code-dojo --all at the final commit (see the PR).
 
 Known risks:
 The one behaviour change is the debug-build panic above becoming `None`; release-build outputs
-are unchanged. `BounceRayRefused` is defensive and has no constructed case. The per-hit shading
-step measures about 2.7 ns (4 %) slower than 0.7.1; see Checks run.
+are unchanged. `BounceRayRefused` is defensive and has no constructed case. The fast and
+diagnostic paths are separate code; OPTICS-REQ-043 and its differential cases keep them in
+agreement. The overflow guard's cost is inside the noise band, not shown to be zero.
 
 Human reviewer:
 James Ross (maintainer); review pending.
