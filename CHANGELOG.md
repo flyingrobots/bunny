@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`'s `SmoothHit::bounce` samples the bounce around the shading
+  normal and returns a `SmoothBounce`: `Ray` when the direction is strictly
+  above the exact geometric plane (`SmoothHit::is_above_surface`, an exact
+  integer sign), `BelowSurface` otherwise, with no ray traced and a zero
+  contribution. This loses energy at strongly tilted shading normals, by design
+  of `bunny-smooth-shading/1`. The `smooth_normal` oracle now sums exactly with
+  big integers, so determinants up to `2^117` and every `rho` are checked
+  against the stated bound. Part of flyingrobots/bunny#289.
+
 * `bunny-optics`'s `SmoothHit` (`bunny-smooth-shading/1`, `SMOOTH_SHADING_ID`)
   shades a `SurfaceHit` with the `smooth_normal` of its triangle's vertex
   normals at the hit's exact weights. The frame faces the arrival side by the
