@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The basis is orthonormal within 2 raw units in length and pairwise dot
   product; eye equal to target, a zero or parallel `up`, and overflow return
   typed errors. Golden vectors run natively and under WebAssembly.
+* Added the `scene` and `trace` feature groups to `bunny-perf`: a whole-scene
+  ray benchmark (27 650 triangles, 1 024 camera rays) timing closest hit through
+  the visitor API and through `closest_hit`, with a check that both choose the
+  same primitive on every ray, and added `bunny-broadphase` to the `xtask perf`
+  base crates. Ledger entry 4 in `docs/topics/performance/` records the
+  measurement.
+* Added `FixedPlane3::clip_polygon`, `PolygonClip` and `PolygonClipError` to
+  `bunny-geom`: Sutherland-Hodgman clipping of a convex polygon to the closed
+  front half-space, written into a caller-provided buffer (`n + 1` slots always
+  suffice; a smaller one returns `OutputTooSmall`). Winding is preserved and
+  output starts at the first kept input vertex; a vertex on the plane is kept
+  without a duplicate cut; a result with fewer than three vertices is
+  `Outside`. Cut points are computed in a canonical edge direction (ascending
+  raw `(x, y, z)`) so polygons sharing an edge get identical points, because
+  `clip_segment` can differ by direction at a rounding tie. Existing functions
+  are unchanged. See `docs/topics/plane-clipping/`.
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
   a tangent (no trigonometry) and return the new `ProjectionError`. The

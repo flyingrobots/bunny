@@ -42,10 +42,15 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(trace_cases());
     #[cfg(feature = "angle")]
     cases.extend(angle_cases());
+    #[cfg(feature = "scene")]
+    cases.extend(crate::scene::visitor_cases());
+    #[cfg(feature = "trace")]
+    cases.extend(crate::scene::trace_cases());
     cases
 }
 
-fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
+#[cfg(any(feature = "scene", feature = "trace"))]
+pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }
 }
 
@@ -307,7 +312,7 @@ fn trace_cases() -> Vec<Case> {
         rays.iter().map(|r| r.as_ref().and_then(TraceRay::from_ray)).collect();
     let t_max = FixedQ32_32::from_raw(100 << 32);
     vec![
-        case("trace/ray_prepare", move || {
+        case("trace/box_ray_prepare", move || {
             rays.iter()
                 .flatten()
                 .map(|r| {
