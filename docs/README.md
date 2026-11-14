@@ -15,6 +15,7 @@ evidence exist.
 
 | Chapter | Owns |
 | --- | --- |
+| [`topics/angle-trigonometry/`](topics/angle-trigonometry/) | Binary angles (`FixedAngle`), conversions from turns, degrees and radians, and table-based deterministic sine and cosine with error bounds. |
 | [`topics/contract-generation/`](topics/contract-generation/) | Schema-to-artifact generation, generated Rust/TypeScript DTO shape, manifest witnesses, and Bunny-owned object boundaries. |
 | [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection and NDC conventions. |
 | [`topics/deterministic-contract-profile/`](topics/deterministic-contract-profile/) | Bunny-owned scalar profile vocabulary, generated witnesses, and wire-profile boundaries for future codecs. |

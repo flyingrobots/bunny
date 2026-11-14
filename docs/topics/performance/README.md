@@ -278,3 +278,58 @@ and -1.0 %, and their median p50 by +2.5 %, +5.8 %, +0.5 % and -5.2 %, all insid
 roughly 10 % noise band. `query/ray_aabb`, the [bimodal case](#bimodal-cases), did not
 show a layout or placement effect in this run. That does not mean it cannot. This is one
 run on one machine under a Linux VM, not an x86-64 or WASM measurement.
+
+### 2. Table-based sine and cosine (new approximate API)
+
+**Where:** `FixedAngle::sin`, `cos` and `sin_cos` in `bunny-num`, new with #110. The full
+contract is in the [angle and trigonometry chapter](../angle-trigonometry/README.md).
+
+**Technique.** Angles are binary angles (`2^64` units per turn), so range reduction is a
+bit mask. A 1 025-sample quarter-wave sine table with 62 fractional bits is computed at
+compile time by an integer Taylor series. Values between samples are cubic Hermite
+interpolated, using `cos` (the same table read backwards) as the exact slope, and quadrant
+symmetry rebuilds the full wave. This reproduces the structure of Echo's `warp-math`
+trigonometry (`f32` table, linear interpolation) with integers only.
+
+**Fidelity: new approximate API.** There was no previous result to preserve. Error bound:
+at most one raw Q32.32 unit; see the accuracy evidence below. Quarter turns are exact and
+negation symmetry is bit-exact. Twenty golden vectors lock the output bits.
+
+**Trade-offs.** 8.2 KB of read-only table; a little extra compile time for the const
+evaluation; four more multiplications per call than linear interpolation, in exchange for
+an error about 1 000 times smaller; radians and degrees round once on the way in.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container (the
+harness reports `aarch64-linux`), 2026-11-13, with the harness on `main` (every result goes
+through `black_box`), base `origin/main` (`be55424fef16`), command:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+The base has no trigonometry, so the angle cases report as `new`. Nanoseconds per call
+from two complete runs of that command (p50 and best p50 of 11 rounds each):
+
+| Case | Run 1 p50 | Run 1 best | Run 2 p50 | Run 2 best |
+| --- | ---: | ---: | ---: | ---: |
+| `angle/sin_cos` | 11.15 | 11.07 | 11.07 | 10.42 |
+| `angle/from_radians` | 0.94 | 0.94 | 0.94 | 0.90 |
+| `angle/f64_sin_cos_reference` | 4.27 | 4.15 | 4.19 | 4.15 |
+
+`angle/f64_sin_cos_reference` times Rust's `f64::sin_cos` on the same angles in the same
+harness and container, as a reference point only (float trigonometry is not canonical).
+On these runs `sin_cos` costs about 2.6 times the float routine. Cases unchanged by this
+branch (`num/*`, `linalg/*`, `query/*`) moved by up to about 10 percent between the two
+sides in the same runs, which is the noise floor of this setup; read the angle figures to
+that precision. The numbers recorded here before the harness passed every result through
+`black_box` (10.21 ns and 2.81 ns) are superseded and not comparable.
+
+**Accuracy evidence.** The error test (`at_tp_004_error_is_within_one_raw_unit`) compares
+against `f64` trigonometry in test code only (Rule 2 bans float methods in canonical math,
+not in test oracles; `f64` error is about `4e-7` raw units, far inside the bound) at 20 000
+seeded angles, the 4 097 segment-aligned angles of the first quadrant, and five probes in
+each of the 4 096 segments (where Hermite error peaks). A float-free check
+(`at_tp_004b_pythagorean_identity_holds_within_the_bound`) bounds `sin^2 + cos^2`. A
+deliberate mutation of the Hermite basis (`h11 = t3 + t2`) fails the golden, error and
+identity tests. The earlier claim of a 0.5001 raw-unit maximum over 4 196 611 angles has no
+test or tool in the repository and is withdrawn until it can be reproduced.
