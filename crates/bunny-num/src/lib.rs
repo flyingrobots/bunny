@@ -126,6 +126,7 @@ mod tests {
         let mut state = 0xB002_5051_0000_0001_u64 ^ 0x0C0E_0000_0000_0001;
         for case in 0..200_000 {
             let value = spread_u128(&mut state);
+            // dojo: allow panic-path -- test assertion against the oracle
             assert_eq!(isqrt_u128_two_divides(value), value.isqrt(), "case={case}; value={value}");
         }
     }
@@ -149,6 +150,7 @@ mod tests {
             }
         }
         for value in cases {
+            // dojo: allow panic-path -- test assertion against the oracle
             assert_eq!(isqrt_u128_two_divides(value), value.isqrt(), "value={value}");
         }
     }
@@ -158,6 +160,7 @@ mod tests {
         let mut state = 0x5E1E_C7ED_0000_0001_u64;
         for case in 0..20_000 {
             let value = spread_u128(&mut state);
+            // dojo: allow panic-path -- test assertion against the oracle
             assert_eq!(isqrt_u128(value), isqrt_u128_two_divides(value), "case={case}");
         }
     }
