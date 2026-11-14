@@ -72,6 +72,16 @@ banned; `std::os::raw` not permitted (18 mutants).
 The full gate, `code-dojo --all` with `--history origin/main..HEAD --network`, at the
 head commit: see the pull request.
 
+Review follow-up (CodeRabbit on flyingrobots/bunny#352, each verified against the code and
+reproduced as a failing test before the fix): a function imported as `file` made a bare
+`file!()` expand to that function's path and pass; a `use` of `option_env` under another
+name inside a macro body passed; a glob of `std::os::fd` got `host-platform` (and, through
+the `*` platform pattern, the `net` and `process` rules) beside `std-fs`. Bare macro calls
+are now judged as the standard macro too, token paths in macro bodies get the imported-macro
+check, `*` no longer matches `fd` or `raw`, and a glob below a specific rule drops
+`host-platform`. 4 more mutants (one per fix), all caught; `cargo test -p xtask` 135 passed;
+`code-dojo-rust --all` clean.
+
 Known risks:
 The metavariable rule bans positions, not paths, so a macro that uses `$t::MAX` safely
 needs `<$t>::MAX` or a waiver; no deterministic crate has a macro today. A dependency's

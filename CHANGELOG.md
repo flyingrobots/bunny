@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `io::Error::last_os_error` is `std-process`. Every module and macro at the
   roots of `std`, `core` and `alloc` in the 1.96.0 documentation is
   classified, checked by a test against the documentation, and a path through
-  an unclassified one is a new `unclassified-std` finding. 45 seeded forms,
+  an unclassified one is a new `unclassified-std` finding. 47 seeded forms,
   2 caught before (under other rules); nothing on main is affected. The
   earlier entry's "`include!` is banned in every spelling" was not true of
   the prelude spellings until now. Closes flyingrobots/bunny#347.

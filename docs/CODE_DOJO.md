@@ -152,12 +152,13 @@ flyingrobots/bunny#347 adds the constructions a second review found, seeded in
 | Construction | Rules seeded | Caught before #347 | Test |
 | --- | --- | --- | --- |
 | a metavariable next to `::` (`std::time::$t::now()`, `std::$m::read`, `$root::time`, a `::` repetition, in a `use`, in a nested `format!`), as a macro name (`$m!($p)`, `$m![..]`), as a method name, in an attribute (`#[path = $p]`, `#[$a]`, `#![$a]`, `cfg_attr(.., path = $p)`) | `macro-metavariable` (Bunny's own) | 2 of 15 (`$root::time::Instant::now()` as `time-instant`, the `cfg_attr` form as `include-source`) | `metavariables_in_unresolvable_positions_are_rejected` |
-| `include!`, `env!`, `option_env!`, `include_str!` through `std::prelude::v1`, `core::prelude::*` and a prelude alias, with and without an import; `file!` bare, under `core`, renamed; `is_x86_feature_detected!`, `is_aarch64_feature_detected!` | `include-source`, `std-env`, `include-data`, `host-cpu` | 0 of 13 | `banned_macros_are_found_through_every_std_path` |
+| `include!`, `env!`, `option_env!`, `include_str!` through `std::prelude::v1`, `core::prelude::*` and a prelude alias, with and without an import, and imported inside a macro body; `file!` bare, beside a function imported as `file`, under `core`, renamed; `is_x86_feature_detected!`, `is_aarch64_feature_detected!` | `include-source`, `std-env`, `include-data`, `host-cpu` | 0 of 15 | `banned_macros_are_found_through_every_std_path` |
 | `Backtrace::capture`, `force_capture`, `use std::backtrace::Backtrace`, `std::panic::Location`, `core::panic::Location`, `get_backtrace_style`; `std::arch`, `core::arch`; `std::random`; `std::os::unix::thread`, `std::os::windows::ffi`, `use std::os;`; `io::Error::last_os_error` | `std-env`, `host-cpu`, `random`, `host-platform`, `std-process` | 0 of 13 | `host_state_beyond_the_earlier_lists_is_rejected` |
 | a module or macro directly below `std`, `core` or `alloc` that no toolchain documents | `unclassified-std` (Bunny's own) | 0 of 4 | `an_unclassified_std_module_is_reported` |
 
-That is 45 more forms, of which the gate before #347 caught 2, both under
-another rule. Every module and macro at the roots of `std`, `core` and
+That is 47 more forms, of which the gate before #347 caught 2, both under
+another rule. Two of them, and the exact rules of a glob of each `std::os`
+module, came from the automated review of the pull request. Every module and macro at the roots of `std`, `core` and
 `alloc` is now classified ([the std
 classification](topics/code-dojo-determinism/README.md#the-std-classification));
 `std_modules_tests.rs` probes the 245 documented names and the eight platform
