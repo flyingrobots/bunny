@@ -25,20 +25,38 @@ CONTRIBUTING.md
 docs/PROCESS.md
 
 Files edited:
+crates/bunny-broadphase/src/compact_hit.rs
+crates/bunny-broadphase/src/counts.rs
+crates/bunny-broadphase/src/lib.rs
+crates/bunny-broadphase/tests/counted_traversal_tests.rs
+crates/bunny-broadphase/README.md
+docs/topics/ray-tracing/README.md
 docs/topics/ray-tracing/test-plan.md
+docs/topics/performance/README.md
+CHANGELOG.md
 .repo-respect/receipts/2026-11-14-counting-traversals.md
 
 Topic docs:
-docs/topics/ray-tracing/test-plan.md (TRACE-REQ-033, TRACE-TP-412 to TRACE-TP-417, planned).
+docs/topics/ray-tracing/README.md (Counting Traversals: functions, counter definitions,
+identities, sums, overflow argument, errors, which to call); docs/topics/ray-tracing/test-plan.md
+(TRACE-REQ-033, TRACE-TP-412 to TRACE-TP-417, counting mutation checks; TRACE-TP-415 planned for
+the follow-up that adds the bunny-perf group); docs/topics/performance/README.md (contract change
+cost check, and the shared-loop design's readings).
 
 Generated artifacts:
 None.
 
 Checks run:
-Planning commit only; checks are recorded with the implementation.
+The new tests against a stub whose counting tally records nothing (TRACE-TP-412 and 413 fail),
+then against the implementation; the broadphase and bunny-perf tests; fmt and workspace Clippy;
+the mutation runs under `timeout 120`; an A/A perf reading and the perf runs with `--exclusive`;
+the full Code Dojo gate. Results are in the pull request.
 
 Known risks:
-None yet: no code has changed.
+The uncounted compact functions now run a loop generic over a zero-sized tally; their output is
+unchanged by construction and their cost was measured, but a later compiler could inline the
+shared loop differently. The counted forms are slower (measured in the follow-up). Only the
+compact layout has counted forms.
 
 Human reviewer:
 James Ross (maintainer); review pending.

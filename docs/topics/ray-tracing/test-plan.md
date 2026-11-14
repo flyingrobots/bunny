@@ -352,8 +352,8 @@ Regenerating them is a contract change.
 | TRACE-TP-409 | Normalization never exceeds 1.0 | TRACE-REQ-032 | Over 200 000 generated vectors (scales from 3 raw to `2^61`, axis-aligned, near-axis and tiny), at least 130 000 normalize and at least 50 000 are refused; no result has a component above `2^32`, at least 15 000 have one equal to it, the largest is exactly `2^32`, and `from_ray` accepts every result. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_409_normalisation_never_yields_a_component_above_one` |
 | TRACE-TP-410 | Kernels for long unit directions | TRACE-REQ-032 | 20 000 seeded rays with a component of `2^32 + 1` and 20 000 boxes: `hit_triangle` equals the signed-volume oracle (hit, floor distance, facing, exact numerators; at least 4 000 hits and 4 000 misses) and `box_entry` is never past the exact rational entry and short by at most `T / 2^31 + 2` (at least 1 000 reached and 1 000 certainly missed boxes). | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_410_kernels_agree_with_the_oracles_for_long_unit_directions` |
 | TRACE-TP-411 | Known distance | TRACE-REQ-032 | A triangle in the plane `x = 2.0` and the ray along `+x` from 0 and along `-x` from 4.0, direction `2^32 + 1`: distance `floor(2^65 / (2^32 + 1)) = 8 589 934 590` raw, back face for `+x` and front face for `-x`. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_long_direction_hit_has_the_exactly_floored_distance` |
-| TRACE-TP-412 | Hand-counted trees | TRACE-REQ-033 | Hand-derived counts, written out in the test, on an empty tree (all zero), a one-leaf root of three primitives, a ray missing the root box, a root over two leaves where the nearer hit prunes the farther (one popped_skipped), where the nearer leaf is entered but missed (both leaves visited), where the ray enters the root but neither child, a three-level tree whose nearer subtree's hit skips the farther interior subtree at its pop, and compact_any_hit stopping at its first primitive test. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values` |
-| TRACE-TP-413 | Counts against a recursive reference | TRACE-REQ-033 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah and seeded rays (t_max unbounded and at the nearest hit), the counts and the primitive calls of both counted searches equal those of a recursive search written in the test that shares no code with the loop (it tracks the stack depth as pending siblings); failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_413_counts_equal_a_recursive_reference_search` |
+| TRACE-TP-412 | Hand-counted trees | TRACE-REQ-033 | Hand-derived counts, written out in the test, on an empty tree (all zero), a one-leaf root of three primitives, a ray missing the root box, a root over two leaves where the nearer hit prunes the farther (one popped_skipped), where the nearer leaf is entered but missed (both leaves visited), where both leaves start at the hit distance (a bound equal to the limit is searched), where the ray enters the root but neither child, a three-level tree whose nearer subtree's hit skips the farther interior subtree at its pop, and compact_any_hit stopping at its first primitive test. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values` |
+| TRACE-TP-413 | Counts against a recursive reference | TRACE-REQ-033 | On seeded scenes of 1 to 300 triangles, with a copy of every third one for ties, built by build_bvh and build_bvh_sah, and seeded rays (t_max unbounded and at the nearest hit), the counts and the primitive calls of both counted searches equal those of a recursive search written in the test that shares no code with the loop (it tracks the stack depth as pending siblings); failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_413_counts_equal_a_recursive_reference_search` |
 | TRACE-TP-414 | Counted and uncounted searches agree | TRACE-REQ-033 | On the trees of TRACE-TP-413 and on seeded corruptions of them (a child reference out of range or naming an ancestor, a leaf range past the buffer), and on a 70-level chain past the stack, both counted searches return the uncounted search's result or error and make the same primitive calls (closest: primitive and limit) in the same order; failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_414_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees` |
 | TRACE-TP-415 | The benchmark scene's profile | TRACE-REQ-033 | On all 1 024 benchmark rays, the counts of both counted searches on the compact copy of the scene's tree equal the profile replica's box_calls, box_some, skipped_at_pop, interior_visited, leaf_visited, tri_tests and stack_peak for the same ray. | `crates/bunny-perf/src/counted.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray` |
 | TRACE-TP-416 | Adding counts | TRACE-REQ-033 | Adding two TraversalCounts sums each counter, saturating at u64::MAX, and keeps the larger peak_stack; += agrees with +. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_416_adding_counts_sums_saturates_and_keeps_the_peak` |
@@ -1033,7 +1033,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#counting-mutation-checks"
 oracle = "Each counting rule broken on purpose makes a case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1187,10 +1187,29 @@ case).
 
 ### Counting Mutation Checks
 
-Planned (flyingrobots/bunny#335). Each counting rule will be broken in a container
-checkout of the final source, the sources touched, and
-`timeout 120 cargo test --locked -p bunny-broadphase --test counted_traversal_tests` and the
-`bunny-perf` profile test run, recording the failing cases here.
+Each counting rule (flyingrobots/bunny#335) was broken in a container copy of the source, the
+sources were touched, the tests built once, and
+`timeout 120 cargo test --locked -q -p bunny-broadphase --test counted_traversal_tests` and
+`--test compact_tests` run. The restored source passes every `bunny-broadphase` and `bunny-perf`
+test.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `box_tests` not incremented in the tally | Every box test is counted | TRACE-TP-412, 413 |
+| `box_entries` incremented for a rejected box | A culled box is not an entry | TRACE-TP-412, 413 |
+| A skipped pop counted as an interior visit | A culled entry is not a visit | TRACE-TP-412, 413 |
+| `leaf()` called twice per leaf | A leaf is counted once | TRACE-TP-412, 413 |
+| The last primitive test of each leaf not counted | Every call of `hit` is counted | TRACE-TP-412, 413 |
+| `peak_stack` never updated | The deepest stack is recorded | TRACE-TP-412, 413 |
+| `enter <= limit` made `enter < limit` for the counting tally only | The counted form prunes exactly as the uncounted one | TRACE-TP-412 (the tie tree) |
+
+The last mutation changes only the counted form, so `compact_tests` (which runs the uncounted
+functions) passes it. An entry bound equal to the limit at its pop needs a box bound exactly at
+a hit distance, which the generated corpora of TRACE-TP-413 and 414 did not produce even with
+duplicated triangles; the constructed tie tree in TRACE-TP-412 catches it. Its first run had no
+tie tree and the mutant survived; the tie tree was added for that reason. Two mutants were first
+written by deleting a tally call, which left a method unused and failed to compile under
+`deny(warnings)`; they were redone as the changed bodies above.
 
 ## Determinism Obligations And Evidence
 

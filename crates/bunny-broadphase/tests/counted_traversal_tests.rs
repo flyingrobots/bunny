@@ -106,6 +106,11 @@ fn trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values() {
     assert_eq!(found[1].1, counts([3, 3, 0, 1, 1, 1, 2]), "any stops, nothing popped");
     let found = both(root, &pair, &[0, 1], &[Some(8), None]);
     assert_eq!(found[0], (Some(0), counts([3, 3, 0, 1, 2, 2, 2])), "nearer entered, missed");
+    // Both leaves start at 5.0, where both primitives are hit; the left one, searched first
+    // on the tie, holds the higher index, so the right one is still searched (bound = limit).
+    let tie = [CompactNode { bounds: [slab(0, 0), slab(0, 0)], children: [leaf(0), leaf(1)] }];
+    let found = both(root, &tie, &[1, 0], &[Some(5), Some(5)]);
+    assert_eq!(found[0], (Some(0), counts([3, 3, 0, 1, 2, 2, 2])), "a bound equal to the limit");
     let neither = [CompactNode { bounds: [away(), away()], children: [leaf(0), leaf(1)] }];
     let found = both(root, &neither, &[0, 1], &[Some(8), Some(5)]);
     assert_eq!(found[0], (None, counts([3, 1, 0, 1, 0, 0, 1])), "root entered, no child");
@@ -167,12 +172,15 @@ type Builder = fn(&mut [BvhNode], &mut [u32], &[FixedAabb3]) -> Option<usize>;
 
 impl Scene {
     fn seeded(seeds: &mut Seeds, count: usize, build: Builder) -> Self {
-        let triangles: Vec<TraceTriangle> = (0..count)
+        let mut triangles: Vec<TraceTriangle> = (0..count)
             .filter_map(|_| {
                 let v0 = seeds.point(6 * ONE_RAW);
                 TraceTriangle::new(v0, v0 + seeds.point(ONE_RAW), v0 + seeds.point(ONE_RAW))
             })
             .collect();
+        // Copies of every third triangle make ties: equal distances and equal box bounds.
+        let copies: Vec<TraceTriangle> = triangles.iter().step_by(3).copied().collect();
+        triangles.extend(copies);
         let boxes: Vec<FixedAabb3> = triangles.iter().map(TraceTriangle::bounds).collect();
         let blank = BvhNode { bounds: away(), first_child_or_prim_idx: 0, prim_count: 0 };
         let (mut tree, mut prims) = (vec![blank; 2 * boxes.len()], vec![0; boxes.len()]);
