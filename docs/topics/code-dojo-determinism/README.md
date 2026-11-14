@@ -63,9 +63,10 @@ module; this can only over-report.
 
 ### Dependency Rules
 
-The full gate also lists the normal dependency graph of every deterministic
-library crate with `cargo tree --locked --edges normal --target all
---no-dedupe --prefix depth --format {p}` and rejects these crates:
+The full gate also lists the dependency graph of every deterministic library
+crate with `cargo tree --locked --edges normal,build --target all --no-dedupe
+--prefix depth --format {p}`, once with the workspace's features and once with
+`--all-features`, and rejects these crates in either listing:
 
 | Crate | Rule |
 | --- | --- |
@@ -79,8 +80,11 @@ library crate with `cargo tree --locked --edges normal --target all
 
 The listing is read as a tree. Below another deterministic crate the subtree
 is skipped, because that crate's own tree reports it; a finding therefore
-names the crate whose manifest declares the path to the banned crate. Dev and
-build dependencies are outside the check: core tests depend on
+names the crate whose manifest declares the path to the banned crate. The
+all-features listing finds a banned crate behind an optional dependency that
+nothing in the workspace enables; the build edges find one a build script
+could use. A finding found by both listings is reported once.
+Dev-dependencies are outside the check: core tests depend on
 `wasm-bindgen-test`, which brings `wasm-bindgen` and `js-sys` into test
 builds only.
 

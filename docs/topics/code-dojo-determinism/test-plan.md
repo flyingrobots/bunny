@@ -25,7 +25,8 @@ rule exists for that reason.
 - Prove that waivers need a reason and are scoped to one rule.
 - Prove that deterministic look-alikes are not rejected.
 - Prove which crates are in scope and which are not.
-- Prove that banned crates in the normal dependency graph are found and
+- Prove that banned crates in the dependency graph (normal and build edges,
+  default and all features) are found and
   attributed to the crate that declares the path.
 
 ## Requirements
@@ -40,7 +41,7 @@ topic-docs`.
 | ND-REQ-002 | Waivers are local and rule-scoped and must carry a reason of at least eight characters; a waiver without a reason, with a too-short reason or naming another rule does not suppress a finding. | `README.md#waivers` |
 | ND-REQ-003 | Deterministic look-alikes of banned forms are accepted. | `README.md#rules` |
 | ND-REQ-004 | The source rules cover the core crates, `bunny-codec` and `bunny-contract`, including their tests; `xtask`, `bunny-perf` and `bunny-wesley` are outside them; `float-boundary` stays core-only. | `README.md#scope` |
-| ND-REQ-005 | The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
+| ND-REQ-005 | The dependency graph of each deterministic library crate, over normal and build edges and with both the workspace's features and all features, contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
 
 ```toml
 [[requirement]]
@@ -65,7 +66,7 @@ status = "active"
 
 [[requirement]]
 id = "ND-REQ-005"
-summary = "The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason."
+summary = "The dependency graph of each deterministic library crate, over normal and build edges and with both the workspace's features and all features, contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason."
 status = "active"
 ```
 
@@ -78,7 +79,12 @@ Each rejecting form states the rule ID and the line that must be reported; the
 failure message lists every form that slipped through together with what the
 gate did report, so a red run records the exact gap.
 
-Dependency cases pass a hand-written `cargo tree --prefix depth --format {p}
+ND-TP-065 builds a fixture workspace in a temporary directory (nine crates
+named like the deterministic ones, and two path crates named `rand` and
+`serde_json`) and runs the gate's own `code_dojo::dependency_rule_violations`
+on it, with `cargo` offline and its own `CARGO_HOME`, so the feature sets and
+edge kinds the gate asks Cargo for are tested end to end. The other
+dependency cases pass a hand-written `cargo tree --prefix depth --format {p}
 --no-dedupe -e normal` listing and a manifest lookup to
 `code_dojo::dependency_violations`, the function the full gate calls with the
 real `cargo tree` output and the real manifests.
@@ -387,7 +393,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate"
 oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is."
 tier = "fast"
-status = "planned"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence

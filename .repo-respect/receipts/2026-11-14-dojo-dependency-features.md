@@ -38,12 +38,25 @@ None.
 
 Checks run:
 All inside the rust-dev container through devrun; nothing on the host.
+cargo tree over the nine deterministic crates on main with default and all features and
+with normal and normal,build edges: no banned crate in any of the four listings; build
+edges add only `version_check` (a build-dependency of `generic-array`), and
+`--prefix depth` prints build edges without section headers. No deterministic crate has
+a `build.rs`, a `build` key or `[build-dependencies]`.
 cargo test --locked -p xtask dependency at the failing-evidence commit: the fixture test
 fails; the unchanged check reports nothing for `rand` behind an unused feature of
 `bunny-num` or `serde_json` as a build-dependency of `bunny-mesh`.
+Mutations, each under `timeout 120`, all caught by the fixture test: default features
+only, normal edges only, findings of both feature sets kept twice.
+cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
+cargo test --locked -p xtask: 79 passed.
+cargo run --locked -p xtask -- code-dojo --all with --history origin/main..HEAD --network
+at the final commit; its dependency step runs the new listings on the real workspace.
 
 Known risks:
-The change is not in this commit; its test fails here by design.
+The fixture test runs Cargo as a subprocess in a temporary directory, offline with its own
+CARGO_HOME; it needs `cargo` on PATH, which every place that runs these tests has.
+Dev-dependencies stay outside the check.
 
 Human reviewer:
 James Ross (maintainer); review pending.

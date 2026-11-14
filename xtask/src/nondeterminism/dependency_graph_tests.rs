@@ -73,14 +73,19 @@ fn package(name: &str, extra: &str) -> String {
 /// Writes the workspace and its lockfile.
 fn banned_behind_features_and_build_edges() -> Fixture {
     let fixture = Fixture::new();
-    fixture.write("Cargo.toml", "[workspace]\nmembers = [\"crates/*\", \"stand-ins/*\"]\nresolver = \"2\"\n");
+    fixture.write(
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"crates/*\", \"stand-ins/*\"]\nresolver = \"2\"\n",
+    );
     for name in DETERMINISTIC {
         let extra = match *name {
             "bunny-num" => {
                 "[dependencies]\nrand = { path = \"../../stand-ins/rand\", optional = true }\n\n\
                  [features]\nnoise = [\"dep:rand\"]\n"
             }
-            "bunny-mesh" => "[build-dependencies]\nserde_json = { path = \"../../stand-ins/serde_json\" }\n",
+            "bunny-mesh" => {
+                "[build-dependencies]\nserde_json = { path = \"../../stand-ins/serde_json\" }\n"
+            }
             _ => "",
         };
         fixture.write(&format!("crates/{name}/Cargo.toml"), &package(name, extra));

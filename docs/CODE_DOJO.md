@@ -155,16 +155,24 @@ third-party crates for that reason.
 
 ### Dependency Check
 
-The full gate runs `cargo tree --locked --edges normal --target all
---no-dedupe` for the deterministic library crates and rejects any of these in
-their normal dependency graph: `rand`, `getrandom`, `fastrand` (`random`);
-`js-sys`, `wasm-bindgen`, `web-sys` (`host-callback`); `reqwest`, `ureq`
-(`network`); `hashbrown`, `rustc-hash` (`unordered-container`); `serde_json`
-(`json-serialization`); `serde-wasm-bindgen` (`wasm-serde`); `tokio`,
-`async-std` (`thread-sleep`). A finding names the deterministic crate whose
-manifest declares the path to the banned crate; a crate reached through
-another deterministic crate is reported against that crate only. Dev and
-build dependencies are not part of the check.
+The full gate runs `cargo tree --locked --edges normal,build --target all
+--no-dedupe` for the deterministic library crates twice, with the features the
+workspace enables and with `--all-features`, and rejects any of these in either
+graph: `rand`, `getrandom`, `fastrand` (`random`); `js-sys`, `wasm-bindgen`,
+`web-sys` (`host-callback`); `reqwest`, `ureq` (`network`); `hashbrown`,
+`rustc-hash` (`unordered-container`); `serde_json` (`json-serialization`);
+`serde-wasm-bindgen` (`wasm-serde`); `tokio`, `async-std` (`thread-sleep`).
+`--all-features` finds a banned crate behind an optional dependency that no
+workspace crate enables, which a downstream crate could still turn on. Build
+edges find a banned crate a build script could use; a build script's own
+source (`build.rs`) is a Rust file of the crate and is read by the source
+rules. No deterministic crate has a build script or build-dependencies today.
+A finding names the deterministic crate whose manifest declares the path to
+the banned crate and the feature set that found it first; a crate reached
+through another deterministic crate is reported against that crate only.
+Dev-dependencies are not part of the check: core tests depend on
+`wasm-bindgen-test`, which brings `wasm-bindgen` and `js-sys` into test builds
+only.
 
 ### No-Default-Features Check
 

@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo's dependency check lists the deterministic crates' graph over
+  normal and build edges, with the workspace's features and with
+  `--all-features`, so a banned crate behind an optional dependency that no
+  workspace crate enables, or one used as a build-dependency, now fails the
+  gate. A fixture-workspace test runs the check through `cargo tree`. Main
+  still passes: no deterministic crate has a build script or
+  build-dependencies. Closes flyingrobots/bunny#322.
+
 * The published `bunny-codec` package no longer contains a test that cannot
   compile: `tests/ply_ascii_stanford_tests.rs` is excluded together with the
   Stanford fixture it reads with `include_bytes!`. `bunny-contract` had the same
