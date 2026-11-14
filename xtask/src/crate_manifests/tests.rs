@@ -32,7 +32,12 @@ fn a_deterministic_crate_has_no_build_script_and_no_target_outside_it() {
             false,
             vec![(3, "build-script")],
         ),
-        ("build script inside the crate", format!("{PACKAGE}build = \"gen.rs\"\n"), false, vec![(3, "build-script")]),
+        (
+            "build script inside the crate",
+            format!("{PACKAGE}build = \"gen.rs\"\n"),
+            false,
+            vec![(3, "build-script")],
+        ),
         ("build = true", format!("{PACKAGE}build = true\n"), true, vec![(3, "build-script")]),
         ("a build.rs Cargo finds by itself", PACKAGE.to_string(), true, vec![(0, "build-script")]),
         ("build.rs switched off", format!("{PACKAGE}build = false\n"), true, vec![]),
@@ -62,7 +67,10 @@ fn a_deterministic_crate_has_no_build_script_and_no_target_outside_it() {
         ),
         (
             "paths that stay inside",
-            format!("{PACKAGE}\n[lib]\npath = \"src/root.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"tools/../src/x.rs\"\n"),
+            format!(
+                "{PACKAGE}\n[lib]\npath = \"src/root.rs\"\n\n\
+                 [[bin]]\nname = \"x\"\npath = \"tools/../src/x.rs\"\n"
+            ),
             false,
             vec![],
         ),
@@ -88,7 +96,8 @@ fn every_workspace_member_is_classified() {
     let dirs = |parent: &Path| {
         ["tool-a", "tool-b"].iter().map(|name| parent.join(name)).collect::<Vec<PathBuf>>()
     };
-    let root = "[workspace]\nmembers = [\n  \"crates/bunny-num\",\n  \"crates/zz-probe-crate\",\n  \"xtask\",\n  \"tools/*\",\n]\n";
+    let root = "[workspace]\nmembers = [\n  \"crates/bunny-num\",\n  \"crates/zz-probe-crate\",\n\
+                \x20 \"xtask\",\n  \"tools/*\",\n]\n";
     let found = unclassified_members(root, &["bunny-num", "xtask", "tool-a"], &manifests, &dirs)
         .expect("parses")
         .into_iter()
