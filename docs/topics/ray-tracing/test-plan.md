@@ -79,7 +79,8 @@ formatting.
 | TRACE-REQ-027 | hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit. | `README.md#exact-triangle-test` |
 | TRACE-REQ-028 | compact_bvh converts a built tree into the compact layout deterministically (the same bytes on every target) and reports malformed input as a typed error; compact_closest_hit and compact_any_hit on the result make the same primitive calls in the same order and return the same answers as closest_hit and any_hit on the source tree. | `README.md#compact-layout` |
 | TRACE-REQ-029 | box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included. | `README.md#conservative-box-test` |
-| TRACE-REQ-030 | intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions. | `README.md#malformed-buffers` |
+| TRACE-REQ-030 | TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det. | `README.md#exact-triangle-test` |
+| TRACE-REQ-031 | intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions. | `README.md#malformed-buffers` |
 
 ```toml
 [[requirement]]
@@ -199,6 +200,11 @@ status = "active"
 
 [[requirement]]
 id = "TRACE-REQ-030"
+summary = "TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-031"
 summary = "intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions."
 status = "active"
 ```
@@ -304,13 +310,15 @@ Regenerating them is a contract change.
 | TRACE-TP-310 | Reference at the ends of i64 | TRACE-REQ-029 | Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range` |
 | TRACE-TP-311 | Reference on the benchmark scene | TRACE-REQ-029 | Every box test the closest_hit and any_hit searches make on the benchmark scene's 1 024 camera rays returns the same Option as the retained reference at the recorded limit, at i64::MAX, 0, -1 and at the reference's entry bound and one below it. | `crates/bunny-perf/src/profile.rs::tests::every_recorded_box_test_matches_the_reference_box_test` |
 | TRACE-TP-312 | Deliberate mutations of the faster box test | TRACE-REQ-029 | Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-308 to TRACE-TP-311 fail. | [Mutation checks](#mutation-checks) |
-| TRACE-TP-401 | Cycles: closest_hit | TRACE-REQ-030 | closest_hit on four cyclic buffers (node 0 its own left child beside a leaf the ray misses, the same beside a leaf covering everything, a three-node cycle through left children, and a node that is its own right child) returns InvalidNodeIndex with the stated number of primitive calls (none). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_401_closest_hit_refuses_cyclic_buffers` |
-| TRACE-TP-402 | Cycles: any_hit | TRACE-REQ-030 | any_hit on the four cyclic buffers of TRACE-TP-401 returns InvalidNodeIndex with no primitive call. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_402_any_hit_refuses_cyclic_buffers` |
-| TRACE-TP-403 | Cycles: intersect_ray | TRACE-REQ-030 | intersect_ray on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_403_intersect_ray_refuses_cyclic_buffers` |
-| TRACE-TP-404 | Cycles: intersect_aabb | TRACE-REQ-030 | intersect_aabb on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_404_intersect_aabb_refuses_cyclic_buffers` |
-| TRACE-TP-405 | Shared subtrees | TRACE-REQ-030 | With a query reaching every node, a shared leaf within the budget is searched as the tree it unfolds into (callbacks 0, 1, 0, as the retained functions give); a shared interior node and a 40-node ladder whose unfolding is exponential are InvalidNodeIndex; each is refused exactly when compact_bvh calls it NotATree. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_405_shared_subtrees_are_searched_within_the_budget_and_refused_beyond_it` |
-| TRACE-TP-406 | Differential against the retained functions | TRACE-REQ-030 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, a 70-level comb (deeper than the stack) and a 64-level comb ending in out-of-range children reached with a full stack, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over up to 5 040 seeded queries (a ray with t_max unbounded or up to 15 units, and a box; over 2 500 required); failures name the seed and case. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback` |
-| TRACE-TP-407 | Deliberate guard mutations | TRACE-REQ-030 | Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-313 | Exact numerators of constructed hits | TRACE-REQ-030 | 4 000 seeded constructed hits (as in TRACE-TP-001, small triangles near the origin and large ones near the domain limit) through the point with weights `(b, c) / 64`: `64 u = b det` and `64 v = c det` exactly, `det < 2^117`, and `BarycentricNumerators::new` accepts the returned values unchanged. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits` |
+| TRACE-TP-314 | Numerators off the triangle | TRACE-REQ-030 | `new` accepts the corners, an interior point and `det = i128::MAX`, and refuses `det <= 0`, a negative `u` or `v`, `u + v > det` and a `u + v` that overflows. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the_triangle_are_refused` |
+| TRACE-TP-401 | Cycles: closest_hit | TRACE-REQ-031 | closest_hit on four cyclic buffers (node 0 its own left child beside a leaf the ray misses, the same beside a leaf covering everything, a three-node cycle through left children, and a node that is its own right child) returns InvalidNodeIndex with the stated number of primitive calls (none). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_401_closest_hit_refuses_cyclic_buffers` |
+| TRACE-TP-402 | Cycles: any_hit | TRACE-REQ-031 | any_hit on the four cyclic buffers of TRACE-TP-401 returns InvalidNodeIndex with no primitive call. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_402_any_hit_refuses_cyclic_buffers` |
+| TRACE-TP-403 | Cycles: intersect_ray | TRACE-REQ-031 | intersect_ray on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_403_intersect_ray_refuses_cyclic_buffers` |
+| TRACE-TP-404 | Cycles: intersect_aabb | TRACE-REQ-031 | intersect_aabb on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_404_intersect_aabb_refuses_cyclic_buffers` |
+| TRACE-TP-405 | Shared subtrees | TRACE-REQ-031 | With a query reaching every node, a shared leaf within the budget is searched as the tree it unfolds into (callbacks 0, 1, 0, as the retained functions give); a shared interior node and a 40-node ladder whose unfolding is exponential are InvalidNodeIndex; each is refused exactly when compact_bvh calls it NotATree. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_405_shared_subtrees_are_searched_within_the_budget_and_refused_beyond_it` |
+| TRACE-TP-406 | Differential against the retained functions | TRACE-REQ-031 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, a 70-level comb (deeper than the stack) and a 64-level comb ending in out-of-range children reached with a full stack, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over up to 5 040 seeded queries (a ray with t_max unbounded or up to 15 units, and a box; over 2 500 required); failures name the seed and case. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback` |
+| TRACE-TP-407 | Deliberate guard mutations | TRACE-REQ-031 | Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -800,8 +808,26 @@ tier = "manual"
 status = "implemented"
 
 [[case]]
-id = "TRACE-TP-401"
+id = "TRACE-TP-313"
 requirements = ["TRACE-REQ-030"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits"
+oracle = "Constructed exact weights: the hit point has weights (b, c) / 64 by construction."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-314"
+requirements = ["TRACE-REQ-030"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the_triangle_are_refused"
+oracle = "Specified: the conditions of the exact triangle test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-401"
+requirements = ["TRACE-REQ-031"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_401_closest_hit_refuses_cyclic_buffers"
 oracle = "closest_hit on four cyclic buffers (node 0 its own left child beside a leaf the ray misses, the same beside a leaf covering everything, a three-node cycle through left children, and a node that is its own right child) returns InvalidNodeIndex with the stated number of primitive calls (none)."
@@ -810,7 +836,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-402"
-requirements = ["TRACE-REQ-030"]
+requirements = ["TRACE-REQ-031"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_402_any_hit_refuses_cyclic_buffers"
 oracle = "any_hit on the four cyclic buffers of TRACE-TP-401 returns InvalidNodeIndex with no primitive call."
@@ -819,7 +845,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-403"
-requirements = ["TRACE-REQ-030"]
+requirements = ["TRACE-REQ-031"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_403_intersect_ray_refuses_cyclic_buffers"
 oracle = "intersect_ray on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise)."
@@ -828,7 +854,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-404"
-requirements = ["TRACE-REQ-030"]
+requirements = ["TRACE-REQ-031"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_404_intersect_aabb_refuses_cyclic_buffers"
 oracle = "intersect_aabb on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise)."
@@ -837,7 +863,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-405"
-requirements = ["TRACE-REQ-030"]
+requirements = ["TRACE-REQ-031"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_405_shared_subtrees_are_searched_within_the_budget_and_refused_beyond_it"
 oracle = "With a query reaching every node, a shared leaf within the budget is searched as the tree it unfolds into (callbacks 0, 1, 0, as the retained functions give); a shared interior node and a 40-node ladder whose unfolding is exponential are InvalidNodeIndex; each is refused exactly when compact_bvh calls it NotATree."
@@ -846,7 +872,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-406"
-requirements = ["TRACE-REQ-030"]
+requirements = ["TRACE-REQ-031"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback"
 oracle = "On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, a 70-level comb (deeper than the stack) and a 64-level comb ending in out-of-range children reached with a full stack, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over up to 5 040 seeded queries (a ray with t_max unbounded or up to 15 units, and a box; over 2 500 required); failures name the seed and case."
@@ -855,7 +881,7 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-407"
-requirements = ["TRACE-REQ-030"]
+requirements = ["TRACE-REQ-031"]
 evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case."

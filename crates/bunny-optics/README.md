@@ -61,6 +61,10 @@ every buffer.
   cross products, within one raw unit of the exact unit vector and independent
   of face order; `None` for a vertex with no face or a zero sum, and a typed
   `VertexNormalError` for a mesh outside the trace domain.
+* `smooth_normal` (`bunny-smooth-normal/1`): the shading normal at a hit,
+  interpolated from three vertex normals with the hit's exact barycentric
+  numerators and normalized once, with no division by `det`; a shared vertex
+  normal is returned unchanged, and `None` means the normals cancel there.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.

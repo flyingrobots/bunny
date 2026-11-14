@@ -30,7 +30,10 @@ as:
 - `TraceRay` (`new`, `from_ray`, `origin`, `direction`, `box_entry`,
   `hit_triangle`);
 - `TraceTriangle` (`new`, `vertices`, `bounds`);
-- `TriangleHit` (`distance`, `front_face`, `barycentrics`);
+- `TriangleHit` (`distance`, `front_face`, `barycentrics`,
+  `barycentric_numerators`);
+- `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
+  `crates/bunny-query/src/barycentric.rs`;
 - `TRACE_COORD_LIMIT_RAW` and `TRACE_DIRECTION_LIMIT_RAW`.
 
 The traversals are implemented in `crates/bunny-broadphase/src/closest_hit.rs`
@@ -187,6 +190,16 @@ Only after a crossing is established does the test divide, once:
   `(floor(u * 2^32 / det), floor(v * 2^32 / det))`, the weights of `v1` and
   `v2`. The hit point is `v0 + (v1 - v0) * u + (v2 - v0) * v`. Each weight lies
   in `0.0..=1.0`, and their sum is at most 1.0.
+- **Exact numerators.** `TriangleHit::barycentric_numerators` returns the
+  `u`, `v` and `det` the test compared, unrounded, as a
+  `BarycentricNumerators`. Each is below `2^117` for a ray and triangle in the
+  trace domain: direction components are at most `2^32` and edge components
+  below `2^41`, so each component of `p = d x e2` is below `2^74` and
+  `det = e1 . p` is below `3 * 2^115`; `u` and `v` are at most `det`.
+  `BarycentricNumerators::new(u, v, det)` builds the same type from any values
+  that describe a point on a triangle (`det > 0`, `u >= 0`, `v >= 0`,
+  `u + v <= det`) and returns `None` otherwise, so a caller can state weights
+  without a ray. Neither changes `barycentrics`.
 
 The division is a long division of the `i128` numerator by the `i128`
 denominator that brings the 32 fractional bits down in steps the denominator's

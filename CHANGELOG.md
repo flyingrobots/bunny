@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-query`'s `TriangleHit::barycentric_numerators` returns the exact `u`,
+  `v` and `det` (each below `2^117`) that the triangle test decided the hit
+  with, as a `BarycentricNumerators`, which `BarycentricNumerators::new` also
+  builds from any point on a triangle. `barycentrics` is unchanged.
+  `bunny-optics`'s `smooth_normal` (`bunny-smooth-normal/1`,
+  `SMOOTH_NORMAL_ID`) interpolates three vertex normals with those weights:
+  a normal shared by every weighted vertex is returned unchanged; otherwise the
+  weights are shifted right by a common amount (floored) until `det` is below
+  `2^62`, combined exactly and normalized once, each component within
+  `1 + 2^-26 / rho` raw units of the exact interpolation's unit vector, and
+  `None` when the normals cancel. Every rounding has a golden input on its
+  boundary. No existing output changes. Part of flyingrobots/bunny#289; see
+  `docs/topics/optics/README.md#smooth-normal`.
+
 * `bunny-optics` computes area-weighted vertex normals for an indexed triangle
   mesh: `VertexNormals::new(&positions, &triangles)` (`bunny-vertex-normals/1`,
   `VERTEX_NORMALS_ID`) sums the exact `i128` cross products of each vertex's
