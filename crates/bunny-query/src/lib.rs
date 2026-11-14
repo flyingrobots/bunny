@@ -1,7 +1,15 @@
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
-#![deny(clippy::nursery)]
+// `clippy::nursery` is cherry-picked, not denied as a group (CODE_STANDARDS.md, Rule 10):
+// - `missing_const_for_fn` keeps every function that can be `const` usable in constant
+//   expressions, as the crate's value constructors and accessors are;
+// - `redundant_pub_crate` keeps crate-private items `pub` inside private modules, so the
+//   module's own visibility is the one boundary to read;
+// - `use_self` keeps `Self` in impls, so a renamed type changes one line.
+#![deny(clippy::missing_const_for_fn)]
+#![deny(clippy::redundant_pub_crate)]
+#![deny(clippy::use_self)]
 #![deny(missing_docs)]
 
 //! Ray-casting and spatial query math solvers for Bunny.

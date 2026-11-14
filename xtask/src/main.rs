@@ -4,6 +4,7 @@ mod code_dojo;
 mod feature_configs;
 mod generated_check;
 mod git_helpers;
+mod lint_policy;
 mod nondeterminism;
 mod perf;
 mod perf_report;
