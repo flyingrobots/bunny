@@ -172,6 +172,10 @@ depends on orientation, winding, units, or boundary contact.
 
 ## Projection and NDC
 
+`FixedMat4::try_look_at` builds the matching `view_from_world` matrix: rows
+right, up and `-forward` of the right-handed frame below, so the view axis maps
+to `-Z`.
+
 `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` in
 `bunny-linalg` are the canonical projection builders. Each returns a
 `clip_from_view` matrix that follows the transform convention above
@@ -219,7 +223,8 @@ The perspective builder takes the tangent of half the vertical field of view,
 so Bunny needs no trigonometry to build it. After the matrix, `w_clip =
 -z_view`, and NDC is the component-wise division by `w_clip`. A point behind
 the camera has `w_clip < 0`; callers clip before dividing. Bunny does not yet
-expose a clip or divide helper, unprojection, rays, or viewport conversion.
+expose a clip or divide helper, unprojection, or rays; viewport conversion is
+defined in [Viewport Conversion](#viewport-conversion).
 
 Both builders use checked Q32.32 arithmetic and return `ProjectionError`
 instead of panicking or saturating:
@@ -234,9 +239,58 @@ Each matrix entry is rounded to the nearest Q32.32 value, so a matrix is exact
 only when its entries are representable. Golden vectors therefore use
 power-of-two parameters.
 
-Viewport conversion must explicitly name the viewport origin and `y` direction.
-OpenGL, WebGPU, DirectX, image buffers, and UI systems disagree here; Bunny must
-not hide that disagreement behind ambient defaults.
+## Viewport Conversion
+
+OpenGL, WebGPU, DirectX, image buffers, and UI systems disagree about the
+viewport origin and the `y` direction, so Bunny names them explicitly.
+`Viewport::try_new(width, height)` in `bunny-linalg` takes a size in device
+pixels (`u32`), and `try_ndc_to_viewport` and `try_viewport_to_ndc` convert
+between NDC and viewport coordinates as `FixedVec3` values.
+
+The coordinate law already fixed that a conversion names its origin and `y`
+direction; the rest of this section is a choice recorded here, with its reason.
+
+- Origin: the top-left corner of the viewport. Pixel `y` runs down. NDC
+  `(-1, +1)` is `(0, 0)` and NDC `(+1, -1)` is `(width, height)`. Reason: the
+  issue specified it, and it matches image buffers and WebGPU framebuffer
+  coordinates, which are the consumers.
+- Pixel corners, not centres: a viewport coordinate is continuous, integers lie
+  on pixel corners, pixel `i` spans `[i, i + 1)` and its centre is `i + 1/2`.
+  The NDC edges `-1` and `+1` land exactly on `0` and `width`, and the NDC
+  origin lands on `width / 2`. Reason: it keeps the map linear and invertible
+  with no half-pixel offset baked in; deciding which pixel a point falls in
+  (snapping, fill rules) stays with the rasterizer.
+- Depth: viewport `z` equals NDC `z`, in `[0, 1]`, unchanged.
+- No clipping or clamping: points outside the NDC cube map linearly, so values
+  below `0` or above the size are possible.
+
+Forward mapping, with `x` and `y` in raw Q32.32 units and `ONE = 2^32`:
+
+```text
+x_px = floor((x_ndc + ONE) * width  / 2)
+y_px = floor((ONE - y_ndc) * height / 2)
+```
+
+The product is exact in `i128`, so the only rounding is one floor of at most
+half a raw unit. Floor (round toward negative infinity, an arithmetic right
+shift) is used rather than truncation or round-half-up so that the rule is the
+same on both sides of zero. At NDC `-1`, `0` and `+1` and on power-of-two sizes
+(and any even size) the result is exact.
+
+Inverse mapping: `x_ndc = floor(2 * x_px / width) - ONE` and
+`y_ndc = ONE - floor(2 * y_px / height)`, flooring the Euclidean quotient.
+
+Round trip: the exact integer reasoning is `a = x_ndc + ONE`,
+`p = floor(a * width / 2)`, then `floor(2p / width)`. When `width` is even, or
+`a` is even, `a * width` is even and the round trip returns `a`. When both are
+odd, `2p = a * width - 1` and the round trip returns exactly `a - 1`. So the
+round trip is within one raw unit per axis: `x` never comes back above its
+original and `y` never below, and it is exact unless the size and the shifted
+NDC raw value are both odd.
+
+Errors (`ViewportError`): `EmptyExtent` for a zero width or height, and
+`Overflow` when a result does not fit Q32.32. Sizes are unsigned, so a negative
+size cannot be expressed. Nothing panics or saturates.
 
 ## External Format Boundaries
 
@@ -267,13 +321,16 @@ enforce:
 Projection builders keep tests that map near and far plane points to NDC
 `z = 0` and `z = 1`, and that check the `-Z` camera and `+Y` up convention.
 
+Viewport conversion keeps golden vectors on power-of-two and odd sizes, exact
+raw rounding at the edges, and a seeded round-trip property test against exact
+integer arithmetic.
+
 Future transform, angle, and camera APIs must add tests for:
 
 - `target_from_source` naming examples
 - matrix composition order
 - point versus vector translation behavior
 - positive rotation direction
-- viewport conversion examples
 
 ## Documentation Rule
 

@@ -60,6 +60,11 @@ formatting.
 | CL-REQ-011 | Canonical NDC uses `x/y` in `[-1, 1]`, `z` in `[0, 1]`, and positive `y` up. | `README.md#projection-and-ndc` |
 | CL-REQ-012 | External boundary adapters document source convention and exact conversion into Bunny convention. | `README.md#external-format-boundaries` |
 | CL-REQ-013 | View space looks down `-Z`; projection builders map the near plane to NDC `z = 0` and the far plane to `z = 1`. | `README.md#projection-and-ndc` |
+| CL-REQ-014 | Viewport coordinates have the origin at the top-left corner of the viewport, pixel y runs down, and a coordinate is continuous with pixel corners on integers (pixel `i` spans `[i, i + 1)`). | `README.md#viewport-conversion` |
+| CL-REQ-015 | NDC to viewport maps `x_px = (x_ndc + 1) * width / 2` and `y_px = (1 - y_ndc) * height / 2`, each rounded by flooring the exact raw value; the inverse floors `2 * px / size` the same way. | `README.md#viewport-conversion` |
+| CL-REQ-016 | Viewport depth equals NDC depth; the mapping neither clips nor clamps. | `README.md#viewport-conversion` |
+| CL-REQ-017 | A viewport with a zero width or height, and any result outside the Q32.32 range, is a typed error. | `README.md#viewport-conversion` |
+| CL-REQ-018 | The round trip through the viewport is within one raw unit per axis and exact unless the size and the shifted NDC raw value are both odd. | `README.md#viewport-conversion` |
 
 ```toml
 [[requirement]]
@@ -126,6 +131,31 @@ status = "reserved"
 id = "CL-REQ-013"
 summary = "View space looks down -Z; projection builders map the near plane to NDC z = 0 and the far plane to z = 1."
 status = "active"
+
+[[requirement]]
+id = "CL-REQ-014"
+summary = "Viewport coordinates have the origin at the top-left corner of the viewport, pixel y runs down, and a coordinate is continuous with pixel corners on integers (pixel i spans [i, i + 1))."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-015"
+summary = "NDC to viewport maps x_px = (x_ndc + 1) * width / 2 and y_px = (1 - y_ndc) * height / 2, each rounded by flooring the exact raw value; the inverse floors 2 * px / size the same way."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-016"
+summary = "Viewport depth equals NDC depth; the mapping neither clips nor clamps."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-017"
+summary = "A viewport with a zero width or height, and any result outside the Q32.32 range, is a typed error."
+status = "active"
+
+[[requirement]]
+id = "CL-REQ-018"
+summary = "The round trip through the viewport is within one raw unit per axis and exact unless the size and the shifted NDC raw value are both odd."
+status = "active"
 ```
 
 Reserved requirements are part of the coordinate-law vocabulary, but they do
@@ -160,6 +190,13 @@ fixtures. Each fixture must document:
 | CL-TP-003 | Golden path, unit policy | CL-REQ-006 | Exact raw Q32.32 values for whole Bunny-unit coordinates. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_003_bunny_units_are_unitless_fixed_raw_values` |
 | CL-TP-004 | Golden path, NDC depth | CL-REQ-011, CL-REQ-013 | Exact raw NDC `z` of near-plane and far-plane points for both projection builders. | `crates/bunny-linalg/tests/projection_tests.rs::cl_tp_004_near_plane_maps_to_zero_and_far_plane_to_one` |
 | CL-TP-005 | Golden path, camera convention | CL-REQ-011, CL-REQ-013 | Exact NDC `x/y` signs for `+X`/`+Y` view points, and `w_clip < 0` behind the camera. | `crates/bunny-linalg/tests/projection_tests.rs::cl_tp_005_camera_looks_down_negative_z_with_positive_y_up` |
+| CL-TP-006 | Golden path, viewport | CL-REQ-014, CL-REQ-015 | Hand-computed exact raw pixels for a 4 x 2 viewport: corners, centre, quarter points, top-left origin and y down. | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_006_four_by_two_viewport_has_exact_golden_vectors` |
+| CL-TP-007 | Golden path, viewport sizes | CL-REQ-014, CL-REQ-015 | Exact raw pixels for 1 x 1, 1920 x 1080 and odd 3 x 5 viewports at the corners and the centre. | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_007_one_by_one_and_hd_viewports_have_exact_golden_vectors` |
+| CL-TP-008 | Boundary, rounding | CL-REQ-015 | Exact raw results one raw unit either side of the half-unit rounding edges in a 1 x 1 viewport, including negative values (floor, not truncation). | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_008_rounding_is_floor_of_exact_raw_value_at_the_edges` |
+| CL-TP-009 | Boundary, depth and outside the cube | CL-REQ-016 | Depth equals NDC depth for sampled values; points outside the NDC cube map linearly with hand-computed raw results. | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_009_depth_passes_through_and_points_outside_the_cube_map_linearly` |
+| CL-TP-010 | Negative, typed errors | CL-REQ-017 | Exact error variants for zero extents and for Q32.32 overflow of each axis in both directions; stable messages. | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_010_empty_extent_and_overflow_are_typed_errors` |
+| CL-TP-011 | Golden path, inverse | CL-REQ-015 | Hand-computed exact raw NDC for the inverse mapping, including floor behaviour for 1 x 1 and width 3. | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_011_inverse_mapping_has_exact_golden_vectors` |
+| CL-TP-012 | Property, round trip | CL-REQ-015, CL-REQ-018 | Seeded random sizes and NDC values checked against exact i128 arithmetic: floor bound on the forward map and the exact lost-bit round-trip rule. | `crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_012_seeded_round_trip_matches_exact_integer_arithmetic` |
 
 ```toml
 [[case]]
@@ -206,6 +243,69 @@ test = "crates/bunny-linalg/tests/projection_tests.rs::cl_tp_005_camera_looks_do
 oracle = "Exact NDC x/y signs for +X/+Y view points, and w_clip < 0 behind the camera."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "CL-TP-006"
+requirements = ["CL-REQ-014", "CL-REQ-015"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_006_four_by_two_viewport_has_exact_golden_vectors"
+oracle = "Hand-computed exact raw pixels for a 4 x 2 viewport."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-007"
+requirements = ["CL-REQ-014", "CL-REQ-015"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_007_one_by_one_and_hd_viewports_have_exact_golden_vectors"
+oracle = "Exact raw pixels for 1 x 1, 1920 x 1080 and 3 x 5 viewports."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-008"
+requirements = ["CL-REQ-015"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_008_rounding_is_floor_of_exact_raw_value_at_the_edges"
+oracle = "Exact raw results at half-unit rounding edges in a 1 x 1 viewport."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-009"
+requirements = ["CL-REQ-016"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_009_depth_passes_through_and_points_outside_the_cube_map_linearly"
+oracle = "Depth passthrough and hand-computed raw results outside the cube."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-010"
+requirements = ["CL-REQ-017"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_010_empty_extent_and_overflow_are_typed_errors"
+oracle = "Exact error variants and stable messages."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-011"
+requirements = ["CL-REQ-015"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_011_inverse_mapping_has_exact_golden_vectors"
+oracle = "Hand-computed exact raw NDC for the inverse mapping."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-012"
+requirements = ["CL-REQ-015", "CL-REQ-018"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_012_seeded_round_trip_matches_exact_integer_arithmetic"
+oracle = "Exact i128 arithmetic for the forward floor bound and the round-trip rule."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -235,7 +335,6 @@ Future implementation work must add explicit negative tests for:
 - point/vector misuse where type APIs can reject it
 - inverted bounds where a bounds API owns the rejection
 - external-format adapters that omit required convention metadata
-- viewport conversions with mismatched origin or `y` direction
 
 ## Edge Cases And Unusual Inputs
 
@@ -276,5 +375,4 @@ case with a stable test name.
 | `target_from_source` composition examples. | Matrix and transform primitives. |
 | Point versus vector translation behavior. | Typed point/vector/transform APIs. |
 | Positive rotation direction beyond cross-product orientation. | Angle, quaternion, or rotation APIs. |
-| Viewport conversion examples. | Viewport APIs. |
 | External source convention conversion tests. | Format-specific adapter APIs that expose convention conversion. |

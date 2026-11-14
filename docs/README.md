@@ -21,6 +21,8 @@ evidence exist.
 | [`topics/deterministic-contract-profile/`](topics/deterministic-contract-profile/) | Bunny-owned scalar profile vocabulary, generated witnesses, and wire-profile boundaries for future codecs. |
 | [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, affine point/vector transforms, determinants, inverses, and transform-boundary reservations. |
 | [`topics/performance/`](topics/performance/) | The fidelity rule for optimizations, the `bunny-perf` harness, `cargo xtask perf` before/after comparisons, CI regression gating, and the ledger of landed speedups. |
+| [`topics/ray-tracing/`](topics/ray-tracing/) | Ray tracing: the kernels (trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, rounding of distances and barycentrics) and the closest-hit and any-hit BVH traversals, with the argument that their answer does not depend on the tree. |
+| [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, and segment clipping with its rounding contract. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | The ray-tracing kernels: trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, and rounding of distances and barycentrics. |
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, segment and convex polygon clipping with its rounding contract. |
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |

@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
+  conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
+  `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
+  down, coordinates are continuous with pixel corners on integers, each
+  coordinate is the floor of the exact raw value, and depth passes through. The
+  round trip is within one raw unit per axis. The coordinate law's new
+  Viewport Conversion section records the choices; golden vectors run natively
+  and under WebAssembly. Existing functions are unchanged.
+* Added `FixedMat4::try_look_at` and `LookAtError` to `bunny-linalg`: a checked
+  Q32.32 right-handed look-at `view_from_world` matrix (camera looks down `-Z`).
+  The basis is orthonormal within 2 raw units in length and pairwise dot
+  product; eye equal to target, a zero or parallel `up`, and overflow return
+  typed errors. Golden vectors run natively and under WebAssembly.
 * Added `FixedPlane3::clip_polygon`, `PolygonClip` and `PolygonClipError` to
   `bunny-geom`: Sutherland-Hodgman clipping of a convex polygon to the closed
   front half-space, written into a caller-provided buffer (`n + 1` slots always
@@ -27,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinate law now defines the canonical NDC depth range `[0, 1]` (near to
   `0`, far to `1`) and a `-Z` camera, with golden vectors that run natively and
   under WebAssembly.
+* Added closest-hit and any-hit BVH ray traversal to `bunny-broadphase`:
+  `closest_hit`, `any_hit`, `ClosestHit` and `BvhView` (the borrowed node and
+  primitive-index buffers). The search is front to back over existing
+  `BvhNode` trees, uses `TraceRay::box_entry` for nodes and a caller closure
+  for primitives, skips subtrees whose entry bound is beyond the best hit, and
+  gives ties to the lowest primitive index. Its answer equals a test of every
+  primitive whatever the tree's shape, under the caller conditions stated in
+  the `docs/topics/ray-tracing/` chapter, which now documents the traversal
+  and its correctness argument. `intersect_ray` and the other existing
+  functions are unchanged.
 * Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
   `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
   test that never rejects a box the ray reaches and returns an entry bound
@@ -70,6 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Added `isqrt_u128_two_divides` (crate-private), an exact integer square root that
+  finishes with two hardware `u64` divisions, with unit tests against core's
+  `u128::isqrt`. Re-measured on the corrected harness it makes `sqrt` 1.33 times and
+  `length` 1.28 times faster but `normalize` about 4 % slower on aarch64, so every
+  target keeps core's implementation; `sqrt_u128` output and speed are unchanged. An early
+  version that marked `sqrt_u128` `#[inline]` read 71 % slower on `num/sqrt` on x86-64 CI
+  and was fixed (see the performance ledger, entry 3).
 * `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
   and the ray queries) now uses the table-seeded integer square root from the
   core library: the same exact bits as before, 4.9 times faster for `sqrt`,
@@ -80,6 +110,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Behaviour change (contract change, flyingrobots/bunny#211):**
+  `bunny_query::ray_intersects_aabb`, and so
+  `bunny_broadphase::intersect_ray`, no longer report a miss when a slab
+  distance or a coordinate difference overflows. The inputs that change are
+  exactly those for which the old function stopped on an overflowing
+  `bound - origin` subtraction or `(bound - origin) / direction` division:
+  a direction component of a few raw units (for a slab of half-width `k`
+  centred on the origin, any component of at most `2k` raw units), or a bound
+  2^31 units or more from the origin. For them the function now returns
+  `Some((t_enter, t_exit))` when the ray reaches the box ahead of its origin
+  and `None` when it truly misses, decided exactly with `i128` rationals; a
+  slab distance that does not fit Q32.32 saturates to the minimum or maximum
+  by sign, and coordinate differences are widened to `i128` instead of
+  saturated. Every hit the function reported before is reported with the same
+  bits, and every miss not caused by overflow is still a miss; a differential
+  test against the retained old implementation and an exact rational oracle
+  check both. The workspace version is not bumped here: per the Fidelity Rule
+  the next release must carry a version that signals this contract change.
 * Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
   toolchains no longer fails the gate.
 
