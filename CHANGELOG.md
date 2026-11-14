@@ -29,6 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   optimization must satisfy, how measurements are made and read, and the
   optimization ledger.
 
+### Changed
+
+* `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
+  and the ray queries) now uses the table-seeded integer square root from the
+  core library: the same exact bits as before, 4.9 times faster for `sqrt`,
+  2.1 times for `normalize` and 1.6 times for a sphere hit (best p50, Apple
+  M5 Pro in the rust-dev container). Equivalence tests keep the old bit-by-bit loop as the reference;
+  the performance chapter's ledger records the method, trade-offs and full
+  measurements.
+
+### Fixed
+
+* Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
+  toolchains no longer fails the gate.
+
 ## [0.6.0] - 2026-06-26
 
 ### Added
