@@ -1,6 +1,7 @@
 //! Bunny workspace automation tasks.
 
 mod code_dojo;
+mod feature_configs;
 mod git_helpers;
 mod nondeterminism;
 mod perf;

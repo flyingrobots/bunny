@@ -6,6 +6,7 @@ use bunny_mesh::{dequantize_vertex, quantize_vertex, QuantizedVertex};
 use bunny_num::FixedQ32_32;
 use wasm_bindgen_test::wasm_bindgen_test;
 
+#[cfg(feature = "mesh-hash")]
 fn mesh_hash_bounds(min: f32, max: f32) -> FixedAabb3 {
     FixedAabb3::new(
         FixedVec3::new(
@@ -256,6 +257,7 @@ fn test_mesh_buffer_structs_have_stable_layout() {
     assert_eq!(align_of::<Triangle32>(), 4);
 }
 
+#[cfg(feature = "mesh-hash")]
 #[wasm_bindgen_test(unsupported = test)]
 fn test_mesh_hash() {
     use bunny_mesh::{compute_mesh_hash, IndexBufferLayout, Triangle16, Triangle32};
@@ -304,6 +306,7 @@ fn test_mesh_hash() {
     assert_ne!(hash_empty_16, hash_empty_32);
 }
 
+#[cfg(feature = "mesh-hash")]
 #[wasm_bindgen_test(unsupported = test)]
 fn test_mesh_hash_frames_vertex_and_face_sections() {
     use bunny_mesh::{compute_mesh_hash, IndexBufferLayout, Triangle16};
@@ -319,6 +322,7 @@ fn test_mesh_hash_frames_vertex_and_face_sections() {
     assert_ne!(hash_faces_only, hash_vertices_only);
 }
 
+#[cfg(feature = "mesh-hash")]
 #[wasm_bindgen_test(unsupported = test)]
 fn test_mesh_hash_includes_quantization_bounds() {
     use bunny_mesh::{compute_mesh_hash, IndexBufferLayout, Triangle16};

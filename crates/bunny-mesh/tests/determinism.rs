@@ -1,4 +1,5 @@
 //! Integration tests.
+#![cfg(feature = "mesh-hash")]
 
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
