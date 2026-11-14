@@ -69,6 +69,7 @@ RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-contract --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-query --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-broadphase --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-mesh --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-optics --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
 ```
 
@@ -104,6 +105,8 @@ configuration. The initial property suites cover:
 * `bunny-query`: segment closest-point symmetry and AABB closest-point bounds.
 * `bunny-mesh`: quantization monotonicity and representative quantized-code
   round trips.
+* `bunny-optics`: generated camera rays against an exact integer image-plane
+  oracle, and basis orthogonality and handedness.
 
 Each generated assertion should include enough seed and case metadata to replay
 the failure. A property test discovers classes of defects; a minimized

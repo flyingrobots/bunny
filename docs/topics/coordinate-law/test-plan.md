@@ -32,8 +32,10 @@ Reserved future APIs are tracked as open gaps until those APIs exist.
 
 ## Non-Goals
 
-- Matrix, transform, projection, viewport, camera, quaternion, and angle tests
-  are not executable until those APIs exist.
+- Matrix, transform, projection, viewport, quaternion, and angle tests are not
+  executable until those APIs exist. The pinhole camera's frame and image
+  convention are verified in the optics test plan (`OPTICS-TP-001`,
+  `OPTICS-TP-007`).
 - This plan does not test renderer-specific coordinate conventions.
 - This plan does not test external file-format conversion until boundary
   adapters explicitly expose those conversions.

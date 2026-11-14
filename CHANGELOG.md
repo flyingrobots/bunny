@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added the `bunny-optics` crate with a deterministic pinhole camera.
+  `PinholeCamera::new` takes a position, a look direction, an up hint, the
+  tangent of half the vertical field of view (no trigonometry) and an integer
+  image size, derives a right-handed basis (`right = forward x up`) and refuses
+  degenerate input with a typed `CameraError`. `PinholeCamera::ray` returns a
+  `bunny_query::TraceRay` for a `PixelSample` (pixel plus sub-pixel offset in
+  `[0, 1)`; pixel `(0, 0)` is top-left and rows grow downward, as in the
+  viewport conversion) with no square
+  root or division per ray: directions are not normalized but scaled by
+  `2^-scale_shift`, chosen at construction from the image corners so every
+  component is at most 1.0. Each component is within one raw unit plus
+  `(width + height) / 2^33` of the exact image-plane point. `point_at` gives the
+  point at a hit distance. Images up to 32768 pixels per side and tangents up
+  to 256.0 are accepted. See the new `docs/topics/optics/` chapter and test plan.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
