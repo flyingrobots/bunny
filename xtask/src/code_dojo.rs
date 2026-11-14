@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display, Formatter};
@@ -15,6 +16,7 @@ use syn::{
 
 use crate::generated_check::Snapshot;
 use crate::git_helpers::git_command;
+use crate::module_tree::ModuleTree;
 use crate::waivers::{manifest_waives, Waivers};
 
 type DynError = Box<dyn Error>;
@@ -192,6 +194,7 @@ struct FileContext<'a> {
     limits: Limits,
     lines: &'a [String],
     waivers: &'a Waivers,
+    workspace_floats: &'a BTreeSet<String>,
 }
 
 struct RustSource {
@@ -283,9 +286,19 @@ pub(super) fn handle_commit_msg(args: impl IntoIterator<Item = String>) -> Resul
 fn check_rust(mode: Mode) -> Result<(), DynError> {
     let root = git_root()?;
     let mut violations = Vec::new();
+    let listing = rust_files(&root, Mode::All)?;
+    let read = |path: &Path| read_rust_source(&root, mode, path).ok();
+    let tree = ModuleTree::new(&listing, &read);
+    let core_files = listing
+        .iter()
+        .filter(|path| crate_category(path, false) == Category::Core)
+        .filter_map(|path| syn::parse_file(&read(path)?).ok())
+        .collect::<Vec<_>>();
+    let floats = crate::float_aliases::workspace_aliases(&core_files);
 
     for file in rust_sources(&root, mode)? {
-        violations.extend(file_violations(file.path, &file.source));
+        let category = file_category(&file.path, &tree);
+        violations.extend(policy_violations(file.path, category, &file.source, &floats));
     }
 
     if violations.is_empty() {
@@ -300,18 +313,64 @@ fn check_rust(mode: Mode) -> Result<(), DynError> {
     Err(DojoError::new("Code Dojo Rust AST policy violations found").into())
 }
 
-/// Applies every per-file Rust policy rule to one source file at a repository-relative path.
+/// Applies every per-file Rust policy rule to one source file at a repository-relative path,
+/// as a file of no module tree: test code when it is under its crate's `tests/` directory.
+#[cfg(test)]
 pub(super) fn file_violations(path: PathBuf, source: &str) -> Vec<Violation> {
-    let category = crate_category(&path);
-    policy_violations(path, category, source)
+    let category = crate_category(&path, false);
+    policy_violations(path, category, source, &BTreeSet::new())
 }
 
-fn policy_violations(path: PathBuf, category: Category, source: &str) -> Vec<Violation> {
+/// Applies every per-file rule to a set of sources (repository-relative paths and texts),
+/// deciding test code by their module tree as the gate does.
+#[cfg(test)]
+pub(super) fn tree_violations(files: &[(PathBuf, String)]) -> Vec<Violation> {
+    let paths = files.iter().map(|(path, _)| path.clone()).collect::<Vec<_>>();
+    let tree = ModuleTree::new(&paths, &|path| {
+        files.iter().find(|(known, _)| known == path).map(|(_, text)| text.clone())
+    });
+    let core_files = files
+        .iter()
+        .filter(|(path, _)| crate_category(path, false) == Category::Core)
+        .filter_map(|(_, text)| syn::parse_file(text).ok())
+        .collect::<Vec<_>>();
+    let floats = crate::float_aliases::workspace_aliases(&core_files);
+    files
+        .iter()
+        .flat_map(|(path, text)| {
+            policy_violations(path.clone(), file_category(path, &tree), text, &floats)
+        })
+        .collect()
+}
+
+/// The Rust files the gate lists in the repository at `root`.
+#[cfg(test)]
+pub(super) fn listed_rust_files(root: &Path) -> Vec<PathBuf> {
+    rust_files(root, Mode::All).unwrap_or_default()
+}
+
+fn file_category(path: &Path, tree: &ModuleTree) -> Category {
+    crate_category(path, tree.is_test(path))
+}
+
+/// The per-file rules for one file, with the float aliases the core crates declare.
+fn policy_violations(
+    path: PathBuf,
+    category: Category,
+    source: &str,
+    workspace_floats: &BTreeSet<String>,
+) -> Vec<Violation> {
     let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
     let parsed = syn::parse_file(source);
     let waivers = Waivers::parse(source, parsed.as_ref().ok());
-    let context =
-        FileContext { path, category, limits: category.limits(), lines: &lines, waivers: &waivers };
+    let context = FileContext {
+        path,
+        category,
+        limits: category.limits(),
+        lines: &lines,
+        waivers: &waivers,
+        workspace_floats,
+    };
     let mut violations = Vec::new();
     check_textual_limits(&mut violations, &context);
     check_ast(&mut violations, &context, parsed);
@@ -896,8 +955,16 @@ pub(super) fn is_rust_source(path: &Path) -> bool {
     })
 }
 
-fn crate_category(path: &Path) -> Category {
-    if path.iter().any(|part| part == OsStr::new("tests")) {
+/// The category of a file: test code when `in_tree_tests` (the module tree says so) or when
+/// it is under its crate's top-level `tests/` directory, else its crate's category. A
+/// directory named `tests` elsewhere decides nothing (flyingrobots/bunny#348).
+fn crate_category(path: &Path, in_tree_tests: bool) -> Category {
+    let mut parts = path.iter();
+    let under_tests = matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(first), Some(_), Some(dir)) if first == OsStr::new("crates") && dir == OsStr::new("tests")
+    );
+    if in_tree_tests || under_tests {
         return Category::Tests;
     }
 
@@ -1001,6 +1068,7 @@ fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, fi
         limits: context.limits,
         lines: context.lines,
         waivers: context.waivers,
+        float_aliases: crate::float_aliases::file_aliases(file, context.workspace_floats),
     };
     visitor.visit_file(file);
 }
@@ -1012,9 +1080,18 @@ struct PolicyVisitor<'a> {
     limits: Limits,
     lines: &'a [String],
     waivers: &'a Waivers,
+    float_aliases: std::collections::BTreeSet<String>,
 }
 
 impl PolicyVisitor<'_> {
+    /// Whether a path names a float type, a float-suffixed name or one of the file's
+    /// float aliases (`xtask/src/float_aliases.rs`).
+    fn names_float(&self, segments: &[String]) -> bool {
+        segments.iter().any(|segment| {
+            crate::float_aliases::is_float_name(segment) || self.float_aliases.contains(segment)
+        })
+    }
+
     fn violation(&mut self, line: usize, rule: &'static str, message: impl Into<String>) {
         self.violations.push(Violation::new(self.path.clone(), line, rule, message));
     }
@@ -1094,7 +1171,7 @@ impl PolicyVisitor<'_> {
             return;
         }
 
-        if names_float(&path_segments(path)) && !self.waived(line, "float-boundary") {
+        if self.names_float(&path_segments(path)) && !self.waived(line, "float-boundary") {
             self.violation(
                 line,
                 "float-boundary",
@@ -1112,7 +1189,7 @@ impl PolicyVisitor<'_> {
 
         let path_lines = crate::nondeterminism::token_paths(&mac.tokens)
             .into_iter()
-            .filter(|path| names_float(&path.segments))
+            .filter(|path| self.names_float(&path.segments))
             .map(|path| path.line);
         let literal_lines = crate::nondeterminism::token_float_literal_lines(&mac.tokens);
         let lines = path_lines.chain(literal_lines).collect::<std::collections::BTreeSet<_>>();
@@ -1131,7 +1208,7 @@ impl PolicyVisitor<'_> {
     /// no float type is written.
     fn check_float_method(&mut self, line: usize, method: &str) {
         if self.category == Category::Core
-            && is_float_name(method)
+            && crate::float_aliases::is_float_name(method)
             && !self.waived(line, "float-boundary")
         {
             self.violation(
@@ -1168,7 +1245,7 @@ impl PolicyVisitor<'_> {
         path.extend(leaf.map(crate::nondeterminism::ident_name));
         let line = line_of(tree.span());
         if self.category == Category::Core
-            && names_float(&path)
+            && self.names_float(&path)
             && !self.waived(line, "float-boundary")
         {
             self.violation(
@@ -1185,7 +1262,7 @@ impl PolicyVisitor<'_> {
         }
 
         let segments = path_segments(path);
-        if names_float(&segments) && !self.waived(line, "float-boundary") {
+        if self.names_float(&segments) && !self.waived(line, "float-boundary") {
             self.violation(
                 line,
                 "float-boundary",
@@ -1425,17 +1502,6 @@ fn in_nondeterminism_scope(path: &Path) -> bool {
     crate_name(path).is_some_and(|name| NONDETERMINISM_CRATES.contains(&name))
 }
 
-fn names_float(segments: &[String]) -> bool {
-    segments.iter().any(|segment| is_float_name(segment))
-}
-
-/// `f32`, `f64`, and every name ending in `_f32` or `_f64`: `Duration::mul_f64`,
-/// `as_secs_f32`, `from_secs_f64` and Bunny's own `to_f32` take or return a float without
-/// a float token appearing at the call.
-fn is_float_name(name: &str) -> bool {
-    name == "f32" || name == "f64" || name.ends_with("_f32") || name.ends_with("_f64")
-}
-
 fn path_segments(path: &SynPath) -> Vec<String> {
     path.segments.iter().map(|segment| crate::nondeterminism::ident_name(&segment.ident)).collect()
 }
@@ -1505,7 +1571,12 @@ mod tests {
     }
 
     fn core_policy_violations(source: &str) -> Vec<Violation> {
-        policy_violations(PathBuf::from("crates/bunny-num/src/lib.rs"), Category::Core, source)
+        policy_violations(
+            PathBuf::from("crates/bunny-num/src/lib.rs"),
+            Category::Core,
+            source,
+            &BTreeSet::new(),
+        )
     }
 
     fn has_rule(violations: &[Violation], rule: &str) -> bool {

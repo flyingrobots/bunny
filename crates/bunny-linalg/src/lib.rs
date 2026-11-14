@@ -14,6 +14,7 @@
 
 //! Linear algebra primitives for Bunny graphics contracts.
 
+// dojo: allow float-boundary -- imports the f32 DTO alias for Vec2 and Vec3 below
 use bunny_num::{FixedQ32_32, Scalar};
 
 mod fixed_affine2;
@@ -44,6 +45,7 @@ pub use viewport::{Viewport, ViewportError};
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
 const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
 
+// dojo: allow float-boundary -- f32 DTO vector; converted to FixedVec2 at the boundary
 /// Two-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 {
@@ -53,6 +55,7 @@ pub struct Vec2 {
     pub y: Scalar,
 }
 
+// dojo: allow float-boundary -- constructor of the f32 DTO vector
 impl Vec2 {
     /// Creates a new vector from components.
     #[must_use]
@@ -61,6 +64,7 @@ impl Vec2 {
     }
 }
 
+// dojo: allow float-boundary -- f32 DTO vector; converted to FixedVec3 at the boundary
 /// Three-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec3 {
@@ -72,6 +76,7 @@ pub struct Vec3 {
     pub z: Scalar,
 }
 
+// dojo: allow float-boundary -- constructor of the f32 DTO vector
 impl Vec3 {
     /// Creates a new vector from components.
     #[must_use]

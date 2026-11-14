@@ -48,6 +48,8 @@ topic-docs`.
 | ND-REQ-009 | Code a lexical gate cannot resolve is banned in deterministic crates: in a `macro_rules!` transcriber, a metavariable next to a path separator, as a macro or method name, or inside an attribute other than a `doc` value; `$crate` and matchers are accepted. | `README.md#macro-names-and-metavariables` |
 | ND-REQ-010 | The standard macros that read files or the build (`include!`, `include_str!`, `include_bytes!`, `env!`, `option_env!`, `file!`, CPU feature detection) are recognised by name as a bare name or under any path rooted at `std`, `core` or `alloc`, through imports, and a `use` of a banned one is reported where it is written. | `README.md#macro-names-and-metavariables` |
 | ND-REQ-011 | Every module and macro the pinned toolchain documents directly below `std`, `core` and `alloc` is classified as banned whole, banned item by item or permitted, and the gate reports the classified rule for each and `unclassified-std` for any other; `std::backtrace`, `std::panic::Location`, `std::arch`, `std::random`, `last_os_error` and the platform modules of `std::os` other than `raw` are banned. | `README.md#the-std-classification` |
+| ND-REQ-012 | `float-boundary` bans the float types in core under every spelling: `f16`, `f32`, `f64`, `f128`, `c_float` and `c_double` under any path, and every name a core crate binds to a float with `type` or a renamed `use`, resolved to a fixed point across the core crates; a file's own non-float item of the same name is not a float. | `README.md#scope` |
+| ND-REQ-013 | A file is test code when every `mod` declaration reaching it from a crate root is under `cfg(test)` (or `all(.., test, ..)`), or when no root reaches it and it is under its crate's top-level `tests/` directory; a directory or file named `tests` compiled into the library is library code and gets the library's rules. | `README.md#scope` |
 
 ```toml
 [[requirement]]
@@ -104,6 +106,16 @@ status = "active"
 id = "ND-REQ-011"
 summary = "Every module and macro the pinned toolchain documents directly below `std`, `core` and `alloc` is classified as banned whole, banned item by item or permitted, and the gate reports the classified rule for each and `unclassified-std` for any other; `std::backtrace`, `std::panic::Location`, `std::arch`, `std::random`, `last_os_error` and the platform modules of `std::os` other than `raw` are banned."
 status = "active"
+
+[[requirement]]
+id = "ND-REQ-012"
+summary = "`float-boundary` bans the float types in core under every spelling: `f16`, `f32`, `f64`, `f128`, `c_float` and `c_double` under any path, and every name a core crate binds to a float with `type` or a renamed `use`, resolved to a fixed point across the core crates; a file's own non-float item of the same name is not a float."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-013"
+summary = "A file is test code when every `mod` declaration reaching it from a crate root is under `cfg(test)` (or `all(.., test, ..)`), or when no root reaches it and it is under its crate's top-level `tests/` directory; a directory or file named `tests` compiled into the library is library code and gets the library's rules."
+status = "active"
 ```
 
 ## Fixtures
@@ -150,7 +162,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-019 | reasonless waiver | ND-REQ-002 | For every rule, a waiver with no reason or the reason `ok` leaves the finding reported. | `xtask/src/nondeterminism/tests.rs::waiver_without_reason_is_refused_for_each_rule` |
 | ND-TP-020 | rule-scoped waiver | ND-REQ-002 | A `std-env` waiver does not suppress a `std-fs` finding. | `xtask/src/nondeterminism/tests.rs::waiver_for_another_rule_does_not_suppress` |
 | ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test` and local `env`/`process` modules produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
-| ND-TP-022 | library scope | ND-REQ-004 | A `std::fs` call is reported in a core test file, a core `src/**/tests` file, `bunny-codec` and `bunny-contract`. | `xtask/src/nondeterminism/tests.rs::nondeterminism_rules_cover_core_tests_codec_and_contract` |
+| ND-TP-022 | library scope | ND-REQ-004 | A `std::fs` call is reported in a core integration test, a test module inside `src/`, `bunny-codec` and `bunny-contract`. | `xtask/src/nondeterminism/tests.rs::nondeterminism_rules_cover_core_tests_codec_and_contract` |
 | ND-TP-023 | tooling scope | ND-REQ-004 | Clock and filesystem use in `xtask`, `bunny-perf` and `bunny-wesley` is not reported by the rule family. | `xtask/src/nondeterminism/tests.rs::tooling_and_generator_crates_are_outside_nondeterminism_scope` |
 | ND-TP-024 | float scope | ND-REQ-004 | `f32::NAN` in `bunny-codec` is not reported as `float-boundary`. | `xtask/src/nondeterminism/tests.rs::float_rules_stay_core_only` |
 | ND-TP-025 | dependency attribution | ND-REQ-005 | A two-root tree yields exactly three findings: `rand` and `getrandom` against `bunny-num`, `serde_json` against `bunny-geom`; `rand` reached through `bunny-num` is not charged to `bunny-geom`. | `xtask/src/nondeterminism/tests.rs::banned_dependencies_are_attributed_to_the_crate_that_declares_them` |
@@ -208,6 +220,16 @@ real `cargo tree` output and the real manifests.
 | ND-TP-077 | std classification complete | ND-REQ-011 | The modules and macros the 1.96.0 documentation lists at the roots of `std` (76, 45), `core` (70, 37) and `alloc` (15, 2) are exactly the names `std_modules.rs` classifies, each once. | `xtask/src/nondeterminism/std_modules_tests.rs::every_documented_root_module_and_macro_is_classified` |
 | ND-TP-078 | std classification reported | ND-REQ-011 | For each of the 245 documented names under its root, a `use` of the module or a call of the macro gets exactly the classified rule from the gate, or nothing in the rule family for a permitted name. | `xtask/src/nondeterminism/std_modules_tests.rs::each_root_module_and_macro_gets_its_classified_rule` |
 | ND-TP-079 | platform modules | ND-REQ-011 | Each of the eight documented modules of `std::os` is `host-platform`, except `fd`, which is `std-fs` alone, and `std::os::raw`, which is permitted; a glob of `fd` is `std-fs` alone, and a glob of a platform module is `host-platform` with the `fs`, `net` and `process` rules of its children. | `xtask/src/nondeterminism/std_modules_tests.rs::the_platform_modules_of_std_os_are_banned_except_raw` |
+| ND-TP-080 | C float aliases | ND-REQ-012 | The issue's `core::ffi::c_double` cast with `sqrt`, `std::os::raw::c_float` return type and `core::ffi::c_float::from`, an imported `c_double`, `std::ffi::c_float`, `libc::c_double`, `core::primitive::f64`, `std::primitive::f32`, `f16`, `f128` and `c_double` in a macro body are each `float-boundary` at the stated line in core. | `xtask/src/nondeterminism/float_alias_tests.rs::c_float_aliases_and_unstable_floats_are_float_boundary` |
+| ND-TP-081 | float aliases in a file | ND-REQ-012 | A waived `type Real = f64` used in the next function, an alias of an alias (declared after and before it), a `c_double` alias, a renamed float import, an alias in a macro body and an alias in an inline module are each reported at the use. | `xtask/src/nondeterminism/float_alias_tests.rs::uses_of_a_float_alias_are_float_boundary` |
+| ND-TP-082 | float aliases across crates | ND-REQ-012 | With `pub type Scalar = f32` waived in `bunny-num`, `bunny-geom`'s import, parameter and comparison through `Scalar` are reported at lines 1, 2 and 3, and `bunny-linalg`'s own `struct Scalar` is not. | `xtask/src/nondeterminism/float_alias_tests.rs::a_float_alias_of_another_core_crate_is_float_boundary` |
+| ND-TP-083 | float alias look-alikes | ND-REQ-003, ND-REQ-012 | `core::ffi::c_int`, an integer type alias, a binding named `c_double_count`, a struct named `Real` and a fixed-point alias produce no `float-boundary` finding. | `xtask/src/nondeterminism/float_alias_tests.rs::float_alias_look_alikes_are_accepted` |
+| ND-TP-084 | a tests directory in the library | ND-REQ-013 | `pub mod tests;` in `lib.rs` without `cfg(test)`, with `src/tests/float.rs` below it (the issue's form), makes no file test code. | `xtask/src/module_tree/tests.rs::a_tests_directory_compiled_into_the_library_is_library_code` |
+| ND-TP-085 | the issue form reported | ND-REQ-013 | Through the gate's tree entry point, the issue's `src/tests/float.rs` gets `float-boundary` at line 1 and `indexing` at line 2. | `xtask/src/module_tree/tests.rs::the_issue_form_is_reported_under_the_core_rules` |
+| ND-TP-086 | test limits by the tree | ND-REQ-013 | Through the gate's tree entry point, a module declared under `#[cfg(test)]` has no finding for unchecked indexing. | `xtask/src/module_tree/tests.rs::a_cfg_test_module_gets_the_test_limits` |
+| ND-TP-087 | declaration forms | ND-REQ-013 | Twelve fixtures: `cfg(test)` on a directory module, on a `tests.rs` below a file module, the file's own `#![cfg(test)]`, an enclosing inline module, `all(test, ..)`, a test parent's child and a `#[path]` file's child are test code; `tests.rs` without `cfg`, `any(test, ..)`, `not(test)`, a file declared twice (once outside tests) and an unreached file under `src/` are not. | `xtask/src/module_tree/tests.rs::a_module_is_test_code_only_when_every_declaration_is_under_cfg_test` |
+| ND-TP-088 | crate roots | ND-REQ-013 | An integration test, the module it declares and an unreached file under `tests/` are test code; `benches/`, `examples/`, `src/bin/` and `build.rs` roots are not. | `xtask/src/module_tree/tests.rs::the_crate_tests_directory_is_test_code_and_other_roots_are_not` |
+| ND-TP-089 | the repository's test modules | ND-REQ-013 | The two test modules inside `src/` on main (`bvh/sah/tests/mod.rs`, `vertex_normals/tests/mod.rs`) are test code by their `cfg(test)` declarations, and `bvh/sah.rs` is not. | `xtask/src/module_tree/tests.rs::the_repository_test_modules_inside_src_are_still_tests` |
 
 ```toml
 [[case]]
@@ -918,6 +940,96 @@ requirements = ["ND-REQ-011"]
 evidence = "test"
 test = "xtask/src/nondeterminism/std_modules_tests.rs::the_platform_modules_of_std_os_are_banned_except_raw"
 oracle = "Each of the eight documented modules of `std::os` is `host-platform`, except `fd`, which is `std-fs` alone, and `std::os::raw`, which is permitted; a glob of `fd` is `std-fs` alone, and a glob of a platform module is `host-platform` with the `fs`, `net` and `process` rules of its children."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-080"
+requirements = ["ND-REQ-012"]
+evidence = "test"
+test = "xtask/src/nondeterminism/float_alias_tests.rs::c_float_aliases_and_unstable_floats_are_float_boundary"
+oracle = "The issue's `core::ffi::c_double` cast with `sqrt`, `std::os::raw::c_float` return type and `core::ffi::c_float::from`, an imported `c_double`, `std::ffi::c_float`, `libc::c_double`, `core::primitive::f64`, `std::primitive::f32`, `f16`, `f128` and `c_double` in a macro body are each `float-boundary` at the stated line in core."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-081"
+requirements = ["ND-REQ-012"]
+evidence = "test"
+test = "xtask/src/nondeterminism/float_alias_tests.rs::uses_of_a_float_alias_are_float_boundary"
+oracle = "A waived `type Real = f64` used in the next function, an alias of an alias (declared after and before it), a `c_double` alias, a renamed float import, an alias in a macro body and an alias in an inline module are each reported at the use."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-082"
+requirements = ["ND-REQ-012"]
+evidence = "test"
+test = "xtask/src/nondeterminism/float_alias_tests.rs::a_float_alias_of_another_core_crate_is_float_boundary"
+oracle = "With `pub type Scalar = f32` waived in `bunny-num`, `bunny-geom`'s import, parameter and comparison through `Scalar` are reported at lines 1, 2 and 3, and `bunny-linalg`'s own `struct Scalar` is not."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-083"
+requirements = ["ND-REQ-003", "ND-REQ-012"]
+evidence = "test"
+test = "xtask/src/nondeterminism/float_alias_tests.rs::float_alias_look_alikes_are_accepted"
+oracle = "`core::ffi::c_int`, an integer type alias, a binding named `c_double_count`, a struct named `Real` and a fixed-point alias produce no `float-boundary` finding."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-084"
+requirements = ["ND-REQ-013"]
+evidence = "test"
+test = "xtask/src/module_tree/tests.rs::a_tests_directory_compiled_into_the_library_is_library_code"
+oracle = "`pub mod tests;` in `lib.rs` without `cfg(test)`, with `src/tests/float.rs` below it (the issue's form), makes no file test code."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-085"
+requirements = ["ND-REQ-013"]
+evidence = "test"
+test = "xtask/src/module_tree/tests.rs::the_issue_form_is_reported_under_the_core_rules"
+oracle = "Through the gate's tree entry point, the issue's `src/tests/float.rs` gets `float-boundary` at line 1 and `indexing` at line 2."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-086"
+requirements = ["ND-REQ-013"]
+evidence = "test"
+test = "xtask/src/module_tree/tests.rs::a_cfg_test_module_gets_the_test_limits"
+oracle = "Through the gate's tree entry point, a module declared under `#[cfg(test)]` has no finding for unchecked indexing."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-087"
+requirements = ["ND-REQ-013"]
+evidence = "test"
+test = "xtask/src/module_tree/tests.rs::a_module_is_test_code_only_when_every_declaration_is_under_cfg_test"
+oracle = "Twelve fixtures: `cfg(test)` on a directory module, on a `tests.rs` below a file module, the file's own `#![cfg(test)]`, an enclosing inline module, `all(test, ..)`, a test parent's child and a `#[path]` file's child are test code; `tests.rs` without `cfg`, `any(test, ..)`, `not(test)`, a file declared twice (once outside tests) and an unreached file under `src/` are not."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-088"
+requirements = ["ND-REQ-013"]
+evidence = "test"
+test = "xtask/src/module_tree/tests.rs::the_crate_tests_directory_is_test_code_and_other_roots_are_not"
+oracle = "An integration test, the module it declares and an unreached file under `tests/` are test code; `benches/`, `examples/`, `src/bin/` and `build.rs` roots are not."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-089"
+requirements = ["ND-REQ-013"]
+evidence = "test"
+test = "xtask/src/module_tree/tests.rs::the_repository_test_modules_inside_src_are_still_tests"
+oracle = "The two test modules inside `src/` on main (`bvh/sah/tests/mod.rs`, `vertex_normals/tests/mod.rs`) are test code by their `cfg(test)` declarations, and `bvh/sah.rs` is not."
 tier = "fast"
 status = "implemented"
 ```

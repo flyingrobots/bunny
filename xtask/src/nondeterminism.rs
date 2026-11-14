@@ -741,6 +741,8 @@ mod dependency_graph_tests;
 #[cfg(test)]
 mod evasion_tests;
 #[cfg(test)]
+mod float_alias_tests;
+#[cfg(test)]
 mod host_access_tests;
 #[cfg(test)]
 mod macro_tests;
