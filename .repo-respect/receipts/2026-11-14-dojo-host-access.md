@@ -59,7 +59,8 @@ visible line below, and the mutant survived), `text` blocks scanned as Rust (the
 look-alike test), doc-test findings not mapped to their own line (1), block doc comment
 lines collapsed to the first (1).
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
-cargo test --locked -p xtask: 113 passed.
+cargo test --locked -p xtask: 113 passed; 118 after merging the review fixes made in the
+pull requests below this one (#329, #331, #332).
 cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository: clean. No
 deterministic crate calls a filesystem `Path` method, names a platform module, reads
 terminal input, or has a doc test that breaks a rule. Their sources hold three Rust doc
