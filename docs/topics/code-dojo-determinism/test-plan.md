@@ -107,7 +107,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-018 | reasoned waiver | ND-REQ-002 | For every rule, a waiver with a reason on the line above suppresses the finding. | `xtask/src/nondeterminism/tests.rs::waiver_with_reason_suppresses_each_rule` |
 | ND-TP-019 | reasonless waiver | ND-REQ-002 | For every rule, a waiver with no reason or the reason `ok` leaves the finding reported. | `xtask/src/nondeterminism/tests.rs::waiver_without_reason_is_refused_for_each_rule` |
 | ND-TP-020 | rule-scoped waiver | ND-REQ-002 | A `std-env` waiver does not suppress a `std-fs` finding. | `xtask/src/nondeterminism/tests.rs::waiver_for_another_rule_does_not_suppress` |
-| ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
+| ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test` and local `env`/`process` modules produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
 | ND-TP-022 | library scope | ND-REQ-004 | A `std::fs` call is reported in a core test file, a core `src/**/tests` file, `bunny-codec` and `bunny-contract`. | `xtask/src/nondeterminism/tests.rs::nondeterminism_rules_cover_core_tests_codec_and_contract` |
 | ND-TP-023 | tooling scope | ND-REQ-004 | Clock and filesystem use in `xtask`, `bunny-perf` and `bunny-wesley` is not reported by the rule family. | `xtask/src/nondeterminism/tests.rs::tooling_and_generator_crates_are_outside_nondeterminism_scope` |
 | ND-TP-024 | float scope | ND-REQ-004 | `f32::NAN` in `bunny-codec` is not reported as `float-boundary`. | `xtask/src/nondeterminism/tests.rs::float_rules_stay_core_only` |
@@ -120,7 +120,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-031 | raw identifiers | ND-REQ-001 | `r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line. | `xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names` |
 | ND-TP-032 | raw float types | ND-REQ-001 | `r#f64` as a type and as a path segment is reported as `float-boundary`. | `xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary` |
 | ND-TP-033 | self in a use group | ND-REQ-001 | `use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case. | `xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself` |
-| ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
+| ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include` and a binding named `env` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
 | ND-TP-035 | waiver outside a comment | ND-REQ-002 | Waiver text in a string, raw string, byte string, a line of a multi-line raw string, an outer, inner or block doc comment, a doc attribute or macro tokens leaves the `std-fs` finding reported. | `xtask/src/waivers/tests.rs::waiver_text_outside_a_comment_waives_nothing` |
 | ND-TP-036 | comment waivers | ND-REQ-002 | A line comment or block comment above the finding, or a line comment on its line, suppresses it. | `xtask/src/waivers/tests.rs::line_and_block_comments_waive` |
 | ND-TP-037 | one rule per waiver | ND-REQ-002 | A comment with a `std-fs` and a `std-env` clause leaves both findings reported. | `xtask/src/waivers/tests.rs::a_comment_with_two_clauses_waives_nothing` |
@@ -133,6 +133,10 @@ real `cargo tree` output and the real manifests.
 | ND-TP-044 | exact rule name | ND-REQ-002 | A waiver for `std-fs-extra` leaves a `std-fs` finding reported. | `xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly` |
 | ND-TP-045 | manifest waiver form | ND-REQ-002, ND-REQ-005 | A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not. | `xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments` |
 | ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
+| ND-TP-047 | include of source | ND-REQ-001 | Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named` |
+| ND-TP-048 | path attributes | ND-REQ-001 | `#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file` |
+| ND-TP-049 | included data | ND-REQ-001 | `include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`. | `xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate` |
+| ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
 
 ```toml
 [[case]]
@@ -320,7 +324,7 @@ id = "ND-TP-021"
 requirements = ["ND-REQ-003"]
 evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted"
-oracle = "Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family."
+oracle = "Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test` and local `env`/`process` modules produce no finding in the rule family."
 tier = "fast"
 status = "implemented"
 
@@ -437,7 +441,7 @@ id = "ND-TP-034"
 requirements = ["ND-REQ-003"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted"
-oracle = "An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family."
+oracle = "An identifier `r#type`, `HashMap` in a comment and a string, `core` and `alloc` renamed by `extern crate`, a `#[path]` module and included data inside the crate, a function named `include` and a binding named `env` produce no finding in the rule family."
 tier = "fast"
 status = "implemented"
 
@@ -548,6 +552,42 @@ test = "xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line"
 oracle = "A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "ND-TP-047"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named"
+oracle = "Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-048"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file"
+oracle = "`#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-049"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate"
+oracle = "`include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-050"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env"
+oracle = "`env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!(\"CARGO_PKG_VERSION\")` and `env!` in a macro body are each reported as `std-env`."
+tier = "fast"
+status = "planned"
 ```
 
 ## Determinism Obligations And Evidence

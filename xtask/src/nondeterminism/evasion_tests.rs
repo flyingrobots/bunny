@@ -120,6 +120,86 @@ fn self_in_a_use_group_names_the_module_itself() {
     );
 }
 
+#[test]
+fn include_of_source_is_rejected_however_it_is_named() {
+    assert_rejects(
+        "include-source",
+        &[
+            ("item include", "include!(\"payload.inc\");", 1),
+            ("expression include", "pub fn f() -> u64 { include!(\"payload.inc\") }", 1),
+            ("include of a .rs file", "include!(\"generated.rs\");", 1),
+            ("computed path", "include!(concat!(\"pay\", \"load.inc\"));", 1),
+            ("std path", "std::include!(\"payload.inc\");", 1),
+            ("core path", "core::include!(\"payload.inc\");", 1),
+            ("renamed import", "use std::include as inc;\ninc!(\"payload.inc\");", 2),
+            ("macro body", "pub fn f() -> Vec<u64> { vec![include!(\"payload.inc\")] }", 1),
+        ],
+    );
+}
+
+#[test]
+fn path_attributes_must_name_a_scanned_file() {
+    assert_rejects(
+        "include-source",
+        &[
+            ("not a .rs file", "#[path = \"payload.inc\"]\nmod hidden;", 1),
+            ("outside the crate", "#[path = \"../../../outside/hidden.rs\"]\nmod hidden;", 1),
+            ("absolute", "#[path = \"/tmp/hidden.rs\"]\nmod hidden;", 1),
+            ("backslash separators", "#[path = \"..\\\\..\\\\hidden.rs\"]\nmod hidden;", 1),
+            ("under cfg_attr", "#[cfg_attr(test, path = \"payload.inc\")]\nmod hidden;", 1),
+        ],
+    );
+}
+
+#[test]
+fn included_data_must_come_from_inside_the_crate() {
+    assert_rejects(
+        "include-data",
+        &[
+            (
+                "string outside the crate",
+                "pub const X: &str = include_str!(\"../../../generated/x.json\");",
+                1,
+            ),
+            ("absolute bytes", "pub const X: &[u8] = include_bytes!(\"/etc/hostname\");", 1),
+            (
+                "computed path",
+                "pub const X: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/x.bin\"));",
+                1,
+            ),
+            (
+                "renamed import",
+                "use std::include_str as text;\npub const X: &str = text!(\"/etc/hostname\");",
+                2,
+            ),
+            (
+                "macro body",
+                "pub fn f() -> Vec<&'static str> { vec![include_str!(\"/etc/hostname\")] }",
+                1,
+            ),
+        ],
+    );
+}
+
+#[test]
+fn compile_time_environment_macros_are_std_env() {
+    assert_rejects(
+        "std-env",
+        &[
+            ("env", "pub fn f() -> &'static str { env!(\"HOME\") }", 1),
+            ("option_env", "pub fn f() -> Option<&'static str> { option_env!(\"HOME\") }", 1),
+            ("std path", "pub fn f() -> &'static str { std::env!(\"HOME\") }", 1),
+            (
+                "core path",
+                "pub fn f() -> Option<&'static str> { core::option_env!(\"HOME\") }",
+                1,
+            ),
+            ("cargo variable", "pub fn f() -> &'static str { env!(\"CARGO_PKG_VERSION\") }", 1),
+            ("macro body", "pub fn f() -> String { format!(\"{}\", env!(\"HOME\")) }", 1),
+        ],
+    );
+}
+
 /// Deterministic code next to the forms above that the rules must accept.
 const ACCEPTED: &[(&str, &str)] = &[
     ("raw identifier `r#type`", "pub fn f(r#type: u8) -> u8 { r#type }"),
@@ -135,6 +215,14 @@ const ACCEPTED: &[(&str, &str)] = &[
         "alloc renamed by extern crate",
         "extern crate alloc as a;\npub fn f() -> a::collections::BTreeMap<u8, u8> { a::collections::BTreeMap::new() }",
     ),
+    ("module path inside the crate", "#[path = \"support/oracle.rs\"]\nmod oracle;"),
+    ("data inside the crate", "pub const X: &str = include_str!(\"fixtures/case.txt\");"),
+    (
+        "data in the crate's tests",
+        "pub const X: &[u8] = include_bytes!(\"../tests/fixtures/case.bin\");",
+    ),
+    ("a function named include", "fn include(x: u8) -> u8 { x }\npub fn f() -> u8 { include(1) }"),
+    ("a binding named env", "pub fn f(env: u8) -> u8 { env }"),
 ];
 
 #[test]
