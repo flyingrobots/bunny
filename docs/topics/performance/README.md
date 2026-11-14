@@ -108,8 +108,11 @@ The likely cause is where memory, stack and code land in each process (address
 randomization and cache or branch-predictor aliasing), which no compiler flag controls.
 
 A median over a handful of rounds can land in either mode, so the same code can appear
-20 % faster or slower. The best p50 across rounds does not have that problem: noise only
-adds time, so with enough rounds both sides reach the fast mode. That is why speedups and
+20 % faster or slower. The best p50 across rounds reduces that problem without removing it:
+noise only adds time, so more rounds make it likelier that both sides reach the fast mode,
+but a side can still miss it in every round. A CI failure on a case whose median and best
+disagree sharply, on code the change did not touch, calls for a rerun with more rounds
+before it is treated as a regression. That is why speedups and
 the CI gate use the best p50, while the median columns stay in the table to show spread.
 When a case's median change and best change disagree sharply, suspect placement before
 code.
@@ -227,103 +230,51 @@ matched. No golden vector changed.
 - *Readability.* One line replaces a 20-line loop. Readers who want the algorithm read the
   Rust source rather than Bunny's.
 - *Unmeasured targets.* Results are identical everywhere because the operations are
-  integer-only; the speedup has been measured on an Apple M5 Pro only, not on x86-64 or
-  WASM.
+  integer-only; the speedup has been measured on an Apple M5 Pro (in a Linux container) only, not on
+  x86-64 or WASM.
 
 **Rejected alternatives.**
 
 - *Float-seeded square root with integer correction.* Exact and fast, but it uses
   `f64::sqrt` inside canonical math, which Rule 2 bans.
-- *Table-seeded Newton iteration written in Bunny.* Measured at 87 ns against the old
-  loop's 60 ns: each Newton step needs a 128-bit division.
+- *Table-seeded Newton iteration written in Bunny.* Measured with the earlier
+  harness (not re-measured) as slower than the old loop: each Newton step needs a 128-bit
+  division.
 - *Fast inverse square root and other approximations.* They change output bits, so they
   are contract changes, not optimizations.
 
-**Measured.** `cargo run --locked -p xtask -- perf --base origin/main --rounds 11
---align-code` on an Apple M5 Pro (macOS, Rust 1.96.0, desktop load), base `9bf43600d08f`
-(v0.6.0):
+**Measured.** Re-measured on 2026-11-13 with the corrected harness, which passes every
+result through `black_box`. Environment: Apple M5 Pro, inside the
+`flyingrobots/rust-dev:1.96.0` container (Linux VM, `aarch64-linux`), one run of 11
+rounds. Command, run through the guarded container runner with the branch's merge of
+`origin/main` as the working tree:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Base revision `be55424fef16` (`origin/main` after PR #209). This table supersedes the
+earlier numbers, which were taken on the host with the older harness that let the
+optimizer drop work in some cases; none of those numbers is retained.
 
 | Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `linalg/length` | 55.34 | 16.64 | -69.9% | 51.27 | 15.30 | -70.2% | 3.35× | 56.36 | 17.37 |
-| `linalg/normalize` | 87.85 | 42.24 | -51.9% | 81.91 | 39.31 | -52.0% | 2.08× | 93.42 | 46.55 |
-| `num/div` | 6.75 | 6.88 | +1.9% | 6.39 | 6.47 | +1.3% | 0.99× | 7.00 | 7.00 |
-| `num/mul` | 1.46 | 1.42 | -2.7% | 1.30 | 1.30 | +0.0% | 1.00× | 1.51 | 1.51 |
-| `num/sqrt` | 55.91 | 14.08 | -74.8% | 52.37 | 12.90 | -75.4% | 4.06× | 57.09 | 14.28 |
-| `query/ray_aabb` | 51.88 | 40.85 | -21.3% | 42.56 | 37.52 | -11.8% | 1.13× | 55.95 | 42.40 |
-| `query/ray_build` | 128.13 | 53.10 | -58.6% | 118.41 | 50.58 | -57.3% | 2.34× | 132.57 | 54.93 |
-| `query/ray_sphere_hit` | 116.09 | 67.14 | -42.2% | 111.45 | 65.35 | -41.4% | 1.71× | 119.22 | 72.14 |
-| `query/ray_sphere_miss` | 49.11 | 20.92 | -57.4% | 45.90 | 19.57 | -57.4% | 2.35× | 50.17 | 21.12 |
-| `query/ray_triangle` | 52.82 | 51.92 | -1.7% | 51.68 | 51.27 | -0.8% | 1.01× | 54.40 | 53.92 |
+| `linalg/length` | 70.15 | 15.58 | -77.8% | 63.92 | 14.89 | -76.7% | 4.29× | 79.51 | 17.25 |
+| `linalg/normalize` | 86.79 | 39.92 | -54.0% | 80.93 | 38.66 | -52.2% | 2.09× | 110.35 | 42.03 |
+| `num/div` | 6.47 | 6.63 | +2.5% | 6.14 | 6.18 | +0.7% | 0.99× | 6.67 | 7.24 |
+| `num/mul` | 1.38 | 1.46 | +5.8% | 1.34 | 1.34 | +0.0% | 1.00× | 1.71 | 1.71 |
+| `num/sqrt` | 72.10 | 13.35 | -81.5% | 62.54 | 12.82 | -79.5% | 4.88× | 78.65 | 15.79 |
+| `query/ray_aabb` | 43.95 | 41.67 | -5.2% | 39.67 | 39.27 | -1.0% | 1.01× | 51.15 | 48.99 |
+| `query/ray_build` | 125.33 | 50.21 | -59.9% | 118.49 | 49.60 | -58.1% | 2.39× | 149.17 | 54.40 |
+| `query/ray_sphere_hit` | 103.92 | 67.06 | -35.5% | 100.34 | 63.40 | -36.8% | 1.58× | 126.83 | 70.23 |
+| `query/ray_sphere_miss` | 51.68 | 19.90 | -61.5% | 45.70 | 19.73 | -56.8% | 2.32× | 57.90 | 19.98 |
+| `query/ray_triangle` | 49.44 | 49.68 | +0.5% | 48.42 | 48.71 | +0.6% | 0.99× | 52.78 | 52.98 |
 
-The square-root kernels speed up 4.1× (`num/sqrt`), 3.4× (`linalg/length`), 2.1×
-(`linalg/normalize`), 2.3× (`query/ray_build`, `query/ray_sphere_miss`) and 1.7×
+The square-root kernels speed up 4.9× (`num/sqrt`), 4.3× (`linalg/length`), 2.4×
+(`query/ray_build`), 2.3× (`query/ray_sphere_miss`), 2.1× (`linalg/normalize`) and 1.6×
 (`query/ray_sphere_hit`). `num/div`, `num/mul`, `query/ray_triangle` and `query/ray_aabb`
-take no square root and serve as controls. The first three stay within 1.3 % of their
-previous best. `query/ray_aabb` reads 11.8 % faster on unchanged code. It is the
-[bimodal case](#bimodal-cases) described above, so that number is not claimed as a speedup.
-
-### 3. Bunny's own square root, without 128-bit division
-
-**Where:** `FixedQ32_32::sqrt_u128`, implemented by `isqrt_u128` in `crates/bunny-num/src/lib.rs`, so the same callers
-as entry 1.
-
-**Technique.** Rust 1.96's `u128::isqrt` (`core/src/num/imp/int_sqrt.rs`) runs Karatsuba
-square-root stages from a byte lookup table up to 64 bits, then a last stage that divides
-`u128 / u128`. aarch64 and wasm32 have no 128-bit divide instruction, so that one division
-goes to compiler-rt's software routine, although its divisor is below `2^33`. Bunny now:
-
-1. hands inputs up to `u64::MAX` to `u64::isqrt`, whose stages divide in hardware;
-2. otherwise normalizes by an even shift, takes `u64::isqrt` of the top 64 bits and its
-   remainder, and does the same last Karatsuba step as core;
-3. performs that step's division as long division in two 31-bit digits, so each step is
-   one hardware `u64` divide and no intermediate reaches `2^64`;
-4. applies core's correction (`candidate^2 > n` means subtract one).
-
-**Fidelity: exact replacement.** The result is the floor of the square root, identical to
-`u128::isqrt` and to the original bit-by-bit loop. Tests compare it with the old loop
-(boundaries, perfect squares, 20 000 seeded inputs, every small raw value) and with core's
-`isqrt` on 200 000 seeded inputs plus the 64-bit split and the squares around the
-quotient-correction points.
-
-**Trade-offs.**
-
-- *Bunny owns the algorithm again* (about 40 lines). Entry 1 traded that away for
-  `u128::isqrt`; this entry takes it back for speed, and keeps both oracles in the tests.
-- *A measured regression in `normalize`.* Over 21 aligned rounds, `linalg/normalize` was
-  5.0 % slower at the median and 7.4 % at best p50, although `length` (its first step) got
-  faster. The cause is not established. One hypothesis: `normalize` then calls three
-  software 128-bit divides, whose code is shared with the routine core's square root used
-  to call, and that routine is no longer warm. Entry 4 (a planned change) removes
-  `normalize`'s three divides, so this entry should land with it rather than alone.
-- `#[inline]` is required: without it, callers in other crates stop inlining the square
-  root and slow down further.
-
-**Measured.** `cargo run --locked -p xtask -- perf --base origin/perf/fast-exact-fixed-math
---rounds 11 --align-code` on an Apple M5 Pro (the base is entry 1's branch, so this is the
-change on top of entry 1):
-
-| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `linalg/length` | 15.83 | 12.21 | -22.9% | 15.26 | 12.13 | -20.5% | 1.26× | 16.07 | 12.78 |
-| `linalg/normalize` | 40.28 | 43.86 | +8.9% | 39.43 | 41.14 | +4.3% | 0.96× | 44.39 | 47.28 |
-| `num/div` | 6.47 | 6.47 | +0.0% | 6.31 | 6.31 | +0.0% | 1.00× | 6.59 | 6.71 |
-| `num/mul` | 1.38 | 1.38 | +0.0% | 1.34 | 1.34 | +0.0% | 1.00× | 1.38 | 1.38 |
-| `num/sqrt` | 13.51 | 9.93 | -26.5% | 13.14 | 9.89 | -24.7% | 1.33× | 13.67 | 9.97 |
-| `query/ray_aabb` | 47.93 | 47.69 | -0.5% | 37.23 | 39.84 | +7.0% | 0.93× | 52.04 | 52.17 |
-| `query/ray_build` | 51.76 | 53.02 | +2.4% | 49.28 | 52.45 | +6.4% | 0.94× | 53.51 | 53.87 |
-| `query/ray_sphere_hit` | 68.36 | 69.58 | +1.8% | 63.80 | 64.70 | +1.4% | 0.99× | 71.70 | 72.96 |
-| `query/ray_sphere_miss` | 19.61 | 19.65 | +0.2% | 19.45 | 19.57 | +0.6% | 0.99× | 19.78 | 19.78 |
-| `query/ray_triangle` | 49.24 | 50.09 | +1.7% | 48.26 | 48.38 | +0.2% | 1.00× | 52.57 | 52.94 |
-
-**Measured on WebAssembly** (`--base origin/perf/fast-exact-fixed-math --rounds 9 --target
-wasm32-wasip1 --runner wasmtime`, wasmtime 50.0.1 on the same Mac), best p50:
-`num/sqrt` 32.19 → 20.67 ns (1.56×), `linalg/length` 39.02 → 26.41 ns (1.48×),
-`linalg/normalize` 101.81 → 103.60 ns (+1.8 %, within noise), every other case within
-2.5 %. So the change wins clearly on WebAssembly and is mixed on Apple Silicon, which
-makes it a candidate for a [target-specific implementation](#target-specific-implementations).
-
-`num/sqrt` is 1.33× faster than entry 1 (5.3× faster than v0.6.0's loop) and `linalg/length`
-1.26×. `linalg/normalize`, `query/ray_build` and `query/ray_sphere_hit` are slower by
-1.4–6.4 % at best p50, as discussed above; the `query/ray_aabb` control, whose code did not
-change, moved 7.0 % in the same run.
+take no square root and serve as controls. Their best p50 moved by +0.7 %, 0.0 %, +0.6 %
+and -1.0 %, and their median p50 by +2.5 %, +5.8 %, +0.5 % and -5.2 %, all inside the
+roughly 10 % noise band. `query/ray_aabb`, the [bimodal case](#bimodal-cases), did not
+show a layout or placement effect in this run. That does not mean it cannot. This is one
+run on one machine under a Linux VM, not an x86-64 or WASM measurement.
