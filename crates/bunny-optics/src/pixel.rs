@@ -59,6 +59,7 @@ impl std::error::Error for PixelError {}
 ///
 /// The remainder is below the denominator, and every denominator here is at most `2^32`, so
 /// doubling it cannot overflow.
+#[inline]
 const fn div_round_half_even(numerator: i64, denominator: i64) -> i64 {
     let (quotient, remainder) = (numerator / denominator, numerator % denominator);
     let twice = remainder * 2;

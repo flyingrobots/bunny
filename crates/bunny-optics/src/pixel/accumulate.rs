@@ -89,6 +89,7 @@ impl PixelAccumulator {
     /// # Errors
     ///
     /// [`PixelError::NoSamples`] when no sample has been added.
+    #[inline]
     pub fn resolve(&self) -> Result<[FixedQ32_32; 3], PixelError> {
         if self.count == 0 {
             return Err(PixelError::NoSamples);

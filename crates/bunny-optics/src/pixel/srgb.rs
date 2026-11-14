@@ -22,6 +22,7 @@ const LOWEST_OCTAVE: u32 = 8;
 /// At or below zero: 0. At or above 1.0: 1.0. Below [`TOE_END_RAW`]: `12.92 * x` rounded to
 /// nearest. Otherwise the power segment, interpolated from [`KNOTS`] and floored, but never
 /// below [`TOE_LAST`].
+#[inline]
 pub fn encode(linear: i64) -> i64 {
     if linear <= 0 {
         0
@@ -41,6 +42,7 @@ pub fn encode(linear: i64) -> i64 {
 /// `2^23 < TOE_END_RAW`. Each octave holds `2^SUB_SEGMENT_BITS` segments of
 /// `2^(24 - e)` raw units, so the fraction is below `2^24` and the knot difference below
 /// `2^32`: the product stays below `2^56`.
+#[inline]
 fn power_segment(linear: i64) -> i64 {
     let octave = linear.leading_zeros() - 32;
     let shift = 31 - octave - SUB_SEGMENT_BITS;
