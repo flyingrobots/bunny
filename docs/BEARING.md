@@ -8,11 +8,12 @@ work state belongs in GitHub issues and pull requests.
 
 | Field | State |
 | --- | --- |
-| Release focus | `v0.7.0`: Geometry Law and remaining frame math |
+| Release focus | `0.7.x`: the rest of Geometry Law and Primitive Coverage, as additive releases |
+| Latest release cut | `v0.7.0`, an early cut prepared on 2026-11-13 (tag and publish pending until the lead completes them) |
 | Previous release baseline | `v0.6.0`, cut from the 2026-06-26 release prep |
 | Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
-| Next release step | Start the `v0.7.0` goalposts and keep moved frame-math slices explicit |
-| Next feature train | `v0.7.0` Geometry Law and Primitive Coverage |
+| Next release step | Tag and publish `v0.7.0`, then continue the unfinished `v0.7.0` goalposts as `0.7.x` |
+| Next feature train | Remaining `v0.7.0` Geometry Law goalposts, then `v0.8.0` Collision and Contact |
 
 ## Recent Truth
 
@@ -59,12 +60,20 @@ work state belongs in GitHub issues and pull requests.
   preconditions, property corpora, matrices, affine transforms, and deterministic
   contract-profile witnesses. Projection, quaternion, angle, interpolation,
   curve, and transform-aware bounds work moved forward to the next train.
+* `v0.7.0` is an early cut of the 0.7 line: ray-tracing kernels, closest-hit and
+  any-hit BVH traversal, the `bunny-optics` pinhole camera, `FixedAngle` with
+  `sin_cos`, projection, look-at and viewport math, plane classification with
+  segment and polygon clipping, and the `ray_intersects_aabb` overflow fix
+  (flyingrobots/bunny#211), a declared behaviour change that motivates the minor
+  version. Quaternions, interpolation, curves, robust predicates, shapes,
+  topology and mass properties are not in it.
 
 ## Release Sequence
 
-1. Complete the `v0.7.0` remaining frame-math and geometry-law goalposts.
-2. Open a release-prep pull request that bumps the workspace version to
-   `0.7.0`, updates release notes and signposts, and passes Code Dojo plus
+1. Complete the goalposts planned for the release (for `0.7.0`, an early cut,
+   this was the view, projection, ray-tracing and clipping work; the remaining
+   0.7 goalposts continue as `0.7.x`).
+2. Open a release-prep pull request that bumps the workspace version, updates release notes and signposts, and passes Code Dojo plus
    release archive verification.
 3. Merge the verified release-prep pull request to `main`.
 4. Tag the verified `main` tip as `v0.7.0`.
@@ -81,9 +90,9 @@ work state belongs in GitHub issues and pull requests.
 * Keep GP2 codec parser zero-copy claims intact. GP3 decoder claims are limited
   to borrowed raw payload sections plus typed checked accessors; no typed slice
   reinterpretation is claimed.
-* Quaternion, projection, viewport, interpolation, curve, and transform-aware
-  bounds APIs are still absent; future frame-math work must either add them or
-  explicitly stay out of that scope.
+* Quaternion, interpolation, curve, and transform-aware bounds APIs are still
+  absent; future frame-math work must either add them or explicitly stay out of
+  that scope.
 
 ## Last Known Local Verification
 
@@ -95,6 +104,6 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The standards-alignment goalpost is complete. Evidence is recorded in
-`docs/goalposts/post-v0.4.0-standards-alignment.md`; the `v0.6.0` release prep
-must pass `RELEASE_TAG=v0.6.0 scripts/publish-crates.sh verify`, full Code Dojo,
+`docs/goalposts/post-v0.4.0-standards-alignment.md`; the `v0.7.0` release prep
+must pass `RELEASE_TAG=v0.7.0 scripts/publish-crates.sh verify`, full Code Dojo,
 GitHub Actions, and CodeRabbit review before tagging.

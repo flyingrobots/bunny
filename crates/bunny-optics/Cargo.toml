@@ -1,10 +1,10 @@
 [package]
 name = "bunny-optics"
-description = "Deterministic camera and ray-generation math for Bunny."
+description = "Deterministic camera, ray-generation and sampling math for Bunny."
 authors.workspace = true
 categories = ["game-development", "graphics", "mathematics"]
 edition.workspace = true
-keywords = ["bunny", "camera", "ray-tracing", "fixed-point"]
+keywords = ["bunny", "camera", "ray-tracing", "fixed-point", "sampling"]
 license.workspace = true
 readme = "README.md"
 repository.workspace = true
@@ -12,9 +12,9 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-linalg = { path = "../bunny-linalg", version = "0.6.0" }
-bunny-num = { path = "../bunny-num", version = "0.6.0" }
-bunny-query = { path = "../bunny-query", version = "0.6.0" }
+bunny-linalg = { path = "../bunny-linalg", version = "0.7.0" }
+bunny-num = { path = "../bunny-num", version = "0.7.0" }
+bunny-query = { path = "../bunny-query", version = "0.7.0" }
 
 [lib]
 path = "src/lib.rs"

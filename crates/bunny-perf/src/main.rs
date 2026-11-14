@@ -15,6 +15,8 @@ mod compact;
 mod memory;
 #[cfg(feature = "trace")]
 mod profile;
+#[cfg(feature = "sample")]
+mod sample;
 #[cfg(any(feature = "scene", feature = "trace", feature = "trace_compact"))]
 mod scene;
 mod timing;

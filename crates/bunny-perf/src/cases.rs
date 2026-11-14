@@ -15,7 +15,7 @@ use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
 
 /// Calls per timed batch.
-const BATCH: usize = 1024;
+pub(crate) const BATCH: usize = 1024;
 const PERF_SEED: u64 = 0xB002_9E2F_0000_0001;
 
 /// A named kernel; `run` makes `calls` calls and returns a checksum. Each call's whole result
@@ -52,6 +52,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::memory::memory_cases());
     #[cfg(feature = "trace_compact")]
     cases.extend(crate::compact::compact_cases());
+    #[cfg(feature = "sample")]
+    cases.extend(crate::sample::sample_cases());
     cases
 }
 
@@ -62,7 +64,9 @@ pub(crate) fn all() -> Vec<Case> {
     feature = "angle",
     feature = "prepared",
     feature = "scene",
-    feature = "trace"
+    feature = "trace",
+    feature = "sample",
+    feature = "trace_compact"
 ))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }

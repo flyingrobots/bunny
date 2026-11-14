@@ -70,8 +70,10 @@ Release `v0.6.0` is the first frame-commons line. It publishes coordinate law,
 checked numeric preconditions, deterministic property corpora, matrix and affine
 transform primitives, and generated deterministic contract-profile witnesses.
 
-The next feature train is `v0.7.0` Geometry Law and Primitive Coverage. It
-should close the remaining frame-commons gaps before broader collision and
-rendering math depend on them: transform-aware bounds, projection and viewport
-mapping, quaternions, angle/trigonometry policy, interpolation, curves,
-degeneracy law, robust predicates, and expanded shape coverage.
+Release `v0.7.0` is an early cut of the Geometry Law and Primitive Coverage
+line. It adds ray-tracing kernels and BVH traversal, the `bunny-optics` pinhole
+camera, binary angles with `sin_cos`, projection, look-at and viewport math, and
+plane clipping. The rest of that line ships as `0.7.x` and should close the
+remaining gaps before broader collision and rendering math depend on them:
+transform-aware bounds, quaternions, interpolation, curves, degeneracy law,
+robust predicates, and expanded shape coverage.
