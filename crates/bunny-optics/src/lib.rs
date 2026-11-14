@@ -24,7 +24,9 @@
 //! and [`ShadingFrame`], a [`SurfaceHit`] applies the facing rule and starts secondary rays
 //! strictly on the arrival side of the surface, [`ShadingFrame::cosine_direction`] maps a sampler
 //! point to a cosine-weighted bounce direction, a [`DirectionalLight`] gives the direct term and
-//! its shadow ray, and [`Albedo::reflect`] combines the direct and indirect radiance.
+//! its shadow ray, and [`Albedo::reflect`] combines the direct and indirect radiance. The
+//! `try_` forms of the surface hit, the bounce direction and the bounce ray name each refusal
+//! with a [`SecondaryRayError`].
 //!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
@@ -64,7 +66,8 @@ pub use pixel::{
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
-    Albedo, DirectionalLight, LightSample, ShadingError, ShadingFrame, SkyLight, SurfaceHit,
-    TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX,
+    Albedo, DirectionalLight, LightSample, SecondaryRayError, ShadingError, ShadingFrame, SkyLight,
+    SurfaceHit, TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID,
+    SHADOW_T_MAX,
 };
 pub use xoroshiro::Xoroshiro128Plus;

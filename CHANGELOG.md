@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `bunny_optics::SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
+  `ShadingFrame::try_cosine_direction` return `Result<_, SecondaryRayError>`
+  and say why an input was refused. `SecondaryRayError` (`#[non_exhaustive]`)
+  has one variant per cause, each carrying the values the check saw:
+  `HitPointUnrepresentable { distance }`, `HitPointOutsideTraceDomain { point }`,
+  `NotOnArrivalSide { point }`, `StartOutsideTraceDomain { start }`,
+  `SampleOutsideUnitInterval { sample }` and the defensive
+  `BounceRayRefused { origin, direction }`. The existing `Option` functions are
+  now these with the error dropped; a differential test over generated inputs
+  shows they keep every output of the 0.7.1 code, retained in the tests
+  (flyingrobots/bunny#280).
+
+### Fixed
+
+* `bunny_optics::SurfaceHit::new` no longer overflows `i128` for a hit whose
+  point is far outside the trace domain (for example a `hit.distance` of
+  `-2^30` units set by the caller): 0.7.1 panicked there in debug builds and
+  returned `None` in release builds; it now returns `None` in both. Hits the
+  trace kernel reports are not affected (flyingrobots/bunny#280).
+
 ## [0.7.1] - 2026-11-14
 
 This is the first 0.7 release on crates.io. `0.7.0` was tagged and has a GitHub release,
