@@ -22,7 +22,11 @@ const fn raw3(v: FixedVec3) -> [i64; 3] {
 }
 
 /// The old `TraceRay::box_entry`, bit for bit.
-pub(crate) fn box_entry(ray: &TraceRay, aabb: &FixedAabb3, t_max: FixedQ32_32) -> Option<FixedQ32_32> {
+pub(crate) fn box_entry(
+    ray: &TraceRay,
+    aabb: &FixedAabb3,
+    t_max: FixedQ32_32,
+) -> Option<FixedQ32_32> {
     let (origin, direction) = (raw3(ray.origin()), raw3(ray.direction()));
     let reciprocals = direction.map(reciprocal);
     let limit = u64::try_from(t_max.raw()).ok()?;
