@@ -205,3 +205,25 @@ fn optics_tp_077_golden_shading_normals_lock_the_rule() {
     }
     assert_eq!(check([G, negated, Y], (1 << 100) + 1, 3, (1 << 116) + 5), Ok(Checked::Bounded));
 }
+
+/// OPTICS-TP-099: a shared normal is returned unchanged, so it is as far from the exact unit
+/// vector along it as the `FixedUnitVec3` invariant allows: less than 2 raw units, more than 1.
+/// `(2^32 + 1, 92 681, 0)` has a floored length of `2^32 + 1` (a valid `FixedUnitVec3`) and a
+/// length of `2^32 + 1.999 98`, so its `x` is 1.999 98 raw units from the exact unit vector
+/// (60-digit decimal arithmetic, flyingrobots/bunny#351); `within` decides both sides exactly.
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_099_a_shared_normal_is_within_two_raw_units_of_its_exact_direction() {
+    let raw_normal = [ONE_RAW + 1, 92_681, 0];
+    let [x, y, z] = raw_normal.map(FixedQ32_32::from_raw);
+    let shared =
+        FixedUnitVec3::try_from_unit(FixedVec3::new(x, y, z)).expect("within one raw unit");
+    let weights = BarycentricNumerators::new(0, 0, 1).expect("the corner v0");
+    assert_eq!(smooth_normal([shared; 3], weights), Some(shared), "returned unchanged");
+    let direction = raw_normal.map(|component| Signed::new(i128::from(component)));
+    let zero = Signed::new(0);
+    assert!(within(raw_normal, &direction, 2, &zero), "within 2 raw units");
+    assert!(!within(raw_normal, &direction, 1, &zero), "but not within 1: the exception is real");
+    // One more in `y` and the length floors to `2^32 + 2`: not a unit vector.
+    let [x, y, z] = [ONE_RAW + 1, 92_682, 0].map(FixedQ32_32::from_raw);
+    assert_eq!(FixedUnitVec3::try_from_unit(FixedVec3::new(x, y, z)), None);
+}

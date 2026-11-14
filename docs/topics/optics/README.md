@@ -702,8 +702,12 @@ rounding. The rule has its own identity, `bunny-smooth-normal/1`
    floor of the integer square root of the sum of squares, and each component
    divided by it, rounded to nearest with ties to even.
 
-`None` means `m` is exactly zero: vertex normals that cancel at this point,
-such as opposite normals at the midpoint of their edge. The caller chooses
+`None` means `m`, the sum of step 3 after the shift, is exactly zero: vertex
+normals whose shifted weights cancel at this point, such as opposite normals at
+the midpoint of their edge. Because the weights are floored before they are
+combined, `m` can be zero where the exact interpolation `sum w_i n_i` is not
+(an independent review found 545 such cases in 60 000 generated inputs, each
+with `rho` at most `2.5e-19`). The caller chooses
 what to shade with then, for example the geometric normal.
 
 **Bound.** Let `rho = |sum w_i n_i| / (2^32 det)` be the length, in units, of
@@ -721,6 +725,25 @@ within 1 raw unit when `k = 0`:
 
 For `rho >= 2^-26` that is within 2 raw units. For nearly cancelling normals
 the direction itself is ill-conditioned, and the bound grows as `rho` falls.
+
+The bound is for steps 2 to 4. The shared-normal step returns its input, and
+a `FixedUnitVec3` is only within one raw unit of unit length: the floored
+integer square root of its squared raw length is `2^32 - 1`, `2^32` or
+`2^32 + 1`, so its length `L` lies in `[2^32 - 1, 2^32 + 2)`. The exact unit
+vector along it is `n 2^32 / L`, so each component is off by
+`|n_i| |L - 2^32| / L < 2` raw units, and by at most one when `L <= 2^32`. So
+**each component of a shared normal is within 2 raw units** (strictly less) of
+the exact unit vector along it, and it is exactly the vertex normal the caller
+gave. The worst case is a dominant component near
+`2^32 + 1` with the length just below `2^32 + 2`: the normal `(2^32 + 1,
+92 681, 0)` is a valid `FixedUnitVec3` (its floored length is `2^32 + 1`), its
+length is `2^32 + 1.999 98`, and its `x` is `1.999 98` raw units from the exact
+unit vector (OPTICS-TP-099; computed with 60-digit decimals). Normals from
+`VertexNormals` are the output of the same normalization as step 4, so a mesh's
+shared normals are within one raw unit of their exact direction; the case
+concerns normals a caller builds with `try_from_unit`. An independent review
+found shared-normal outputs up to 1.86 raw units away in 60 000 generated
+cases (flyingrobots/bunny#351), within this bound.
 
 **Every rounding is pinned.** The rule rounds in four places: the weight shift
 (floor), the prescale (floor when it scales down), the length (floor of the

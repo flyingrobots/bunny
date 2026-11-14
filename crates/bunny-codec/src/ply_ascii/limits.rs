@@ -161,6 +161,28 @@ impl std::error::Error for AsciiPlyLimitedError {}
 /// # Errors
 /// [`AsciiPlyLimitedError::Limit`] with the limit, the maximum, the observed value and the
 /// line, or [`AsciiPlyLimitedError::Format`] with the profile error.
+///
+/// # Examples
+///
+/// ```
+/// use bunny_codec::{parse_ascii_ply_with_limits, AsciiPlyLimit, AsciiPlyLimitedError, AsciiPlyLimits};
+///
+/// let input = b"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\n\
+///     property float y\nproperty float z\nelement face 1\n\
+///     property list uchar int vertex_indices\nend_header\n\
+///     0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n";
+/// assert!(parse_ascii_ply_with_limits(input, &AsciiPlyLimits::DEFAULT).is_ok());
+///
+/// // Two vertices allowed: the declared count of three is refused before the body is read.
+/// let tight = AsciiPlyLimits::new(2, 1, 64);
+/// match parse_ascii_ply_with_limits(input, &tight) {
+///     Err(AsciiPlyLimitedError::Limit(refused)) => {
+///         assert_eq!(refused.limit(), AsciiPlyLimit::Vertices);
+///         assert_eq!((refused.maximum(), refused.observed()), (2, 3));
+///     }
+///     other => panic!("expected the vertex limit, got {other:?}"),
+/// }
+/// ```
 pub fn parse_ascii_ply_with_limits<'a>(
     input: &'a [u8],
     limits: &AsciiPlyLimits,

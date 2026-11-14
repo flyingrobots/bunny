@@ -89,6 +89,37 @@ where
 ///
 /// # Errors
 /// Returns the error [`compact_closest_hit`] returns, and no counts.
+///
+/// # Examples
+///
+/// ```
+/// use bunny_broadphase::{compact_closest_hit_counted, CompactChild, CompactRoot, CompactView};
+/// use bunny_geom::FixedAabb3;
+/// use bunny_linalg::FixedVec3;
+/// use bunny_num::fixed_q32_32::ONE_RAW;
+/// use bunny_num::FixedQ32_32;
+/// use bunny_query::TraceRay;
+///
+/// let point = |x: i64, y: i64, z: i64| {
+///     let [x, y, z] = [x, y, z].map(|units| FixedQ32_32::from_raw(units * ONE_RAW));
+///     FixedVec3::new(x, y, z)
+/// };
+/// // A one-leaf tree: the root is a leaf holding primitive 7.
+/// let root = CompactRoot {
+///     bounds: FixedAabb3::new(point(-1, -1, -1), point(1, 1, 1)),
+///     child: CompactChild { first: 0, prim_count: 1 },
+/// };
+/// let tree = CompactView { root: Some(root), nodes: &[], prim_indices: &[7] };
+/// let ray = TraceRay::new(point(0, 0, 5), point(0, 0, -1)).expect("inside the trace domain");
+/// let four = FixedQ32_32::from_raw(4 * ONE_RAW);
+/// let far = FixedQ32_32::from_raw(i64::MAX);
+/// let (hit, counts) = compact_closest_hit_counted(tree, &ray, far, |_, _| Some(four))?;
+/// assert_eq!(hit.map(|hit| (hit.primitive, hit.distance)), Some((7, four)));
+/// // One box test (the root's), one leaf, one primitive test, no interior node.
+/// assert_eq!((counts.box_tests, counts.leaf_visits, counts.primitive_tests), (1, 1, 1));
+/// assert_eq!(counts.interior_visits, 0);
+/// # Ok::<(), bunny_broadphase::TraversalError>(())
+/// ```
 pub fn compact_closest_hit_counted<F>(
     bvh: CompactView<'_>,
     ray: &TraceRay,

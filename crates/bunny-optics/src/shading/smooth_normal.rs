@@ -28,13 +28,41 @@ const WEIGHT_BITS: u32 = 62;
 /// 4. **Normalize.** `m` normalized as `TriangleSurface::new` normalizes a face normal (a
 ///    power-of-two prescale to `[2^61, 2^62)`, then `FixedUnitVec3::new`).
 ///
-/// Returns `None` when `m` is exactly zero (opposite normals that cancel at this point).
+/// Returns `None` when `m`, after the shift of step 2, is exactly zero: normals whose shifted
+/// weights cancel at this point. The exact interpolation `sum w_i n_i` can be nonzero then,
+/// with `rho` (below) tiny.
 ///
 /// **Bound.** Let `rho = |sum w_i n_i| / (det * 2^32)`, the length of the exact interpolation in
-/// units. Each component is within `1 + 2^-26 / rho` raw units of the exact unit vector along
-/// `sum w_i n_i` (within 1 when `k = 0`): one raw unit from step 4, and at most
-/// `6 (2^32 + 1) / (rho 2^61)` from the floors of step 2. See
-/// `docs/topics/optics/README.md#smooth-normal`.
+/// units. For steps 2 to 4, each component is within `1 + 2^-26 / rho` raw units of the exact
+/// unit vector along `sum w_i n_i` (within 1 when `k = 0`): one raw unit from step 4, and at
+/// most `6 (2^32 + 1) / (rho 2^61)` from the floors of step 2. Step 1 returns its input, which
+/// a `FixedUnitVec3` holds only to within one raw unit of unit length (length in
+/// `[2^32 - 1, 2^32 + 2)` raw), so each component of a shared normal is less than 2 raw units
+/// from the exact unit vector along it. See `docs/topics/optics/README.md#smooth-normal`.
+///
+/// # Examples
+///
+/// ```
+/// use bunny_linalg::{FixedUnitVec3, FixedVec3};
+/// use bunny_num::fixed_q32_32::ONE_RAW;
+/// use bunny_num::FixedQ32_32;
+/// use bunny_optics::smooth_normal;
+/// use bunny_query::BarycentricNumerators;
+///
+/// let unit = |x: i64, y: i64, z: i64| {
+///     let [x, y, z] = [x, y, z].map(FixedQ32_32::from_raw);
+///     FixedUnitVec3::new(FixedVec3::new(x, y, z)).expect("a nonzero vector")
+/// };
+/// let (up, east) = (unit(0, 0, ONE_RAW), unit(ONE_RAW, 0, 0));
+/// // Halfway along the edge from v0 to v1: weights (1, 1, 0) / 2.
+/// let midpoint = BarycentricNumerators::new(1, 0, 2).expect("on the triangle");
+/// let normal = smooth_normal([up, east, up], midpoint).expect("the normals do not cancel");
+/// let n = normal.into_inner();
+/// assert_eq!((n.x, n.y), (n.z, FixedQ32_32::ZERO)); // midway between up and east
+/// // At v0 alone the shared-normal step returns v0's normal unchanged.
+/// let corner = BarycentricNumerators::new(0, 0, 2).expect("on the triangle");
+/// assert_eq!(smooth_normal([up, east, up], corner), Some(up));
+/// ```
 #[must_use]
 pub fn smooth_normal(
     normals: [FixedUnitVec3; 3],

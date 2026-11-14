@@ -44,6 +44,14 @@ the file on disk is fresh, and a fresh staged artifact passes beside a stale
 unstaged copy. The generator itself is built from the working tree, as the
 hook's `cargo test` is.
 
+The outputs compared are the fixed list `OUTPUTS` in `generated_check.rs`, the
+three paths the generator is given. The generator requires each of its three
+flags, so an output added to it as a fourth flag makes it fail on the gate's
+argument list until the list grows; a file the generator writes to a path of
+its own, not given as a flag, is not compared. In the pre-commit gate the
+generator is built from the working tree, not the index, so an unstaged change
+to `bunny-wesley` decides what the staged artifacts are compared with.
+
 Each run uses its own directory, `target/dojo-generated/run-<process id>/`,
 and removes it when it ends, so a pre-commit hook that runs during a pre-push
 gate in the same checkout cannot delete the other run's files. Separate

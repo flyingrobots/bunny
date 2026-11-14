@@ -1960,12 +1960,18 @@ file unchanged and whose counted forms are a second copy of the loop, against ba
 inside the A/A reading's +2.2 %, so the shared loop's cost on the changed function is not
 measurable here. The surprise is elsewhere: `trace/closest_hit`, `trace/any_hit` and
 `trace/closest_hit_sah`, which run `closest_hit.rs` and `any_hit` (code this change does not
-touch), read 2 % to 7 % faster in every reading, and so did `trace/any_hit_compact`. The same
-shift appears with one codegen unit and with the separate copy, whose uncounted source is main's
-file byte for byte, so it is not caused by the shared loop: adding code to `bunny-broadphase`
-moved the placement of unrelated hot code, the [code-layout](#code-layout-noise) and
-[bimodal](#bimodal-cases) effects described above, here in the favourable direction. It was not
-checked in the assembly. The x86-64 reading comes from the pull request's CI perf job.
+touch), read 2 % to 7 % faster in every reading. That shift appears with one codegen unit and
+with the separate copy, whose uncounted source is main's file byte for byte, so it is not caused
+by the shared loop: adding code to `bunny-broadphase` moved the placement of unrelated hot code,
+the [code-layout](#code-layout-noise) and [bimodal](#bimodal-cases) effects described above, here
+in the favourable direction. `trace/any_hit_compact`, which runs the changed loop, is different:
+-6.4 % to -7.1 % in every shared-loop reading, but -2.2 % / -2.6 % with one codegen unit and
+-2.2 % / -1.5 % with the separate copy. About 2 % of it is the same shift; the other 4 to 5 %
+appears only with the shared loop. It is measured faster, and its cause is not established; it
+was not checked in the assembly. No x86-64 reading of this change is recorded here. (Corrected
+in flyingrobots/bunny#351; the entry first said the shift on `trace/any_hit_compact` was not
+caused by the shared loop and cited the pull request's CI perf job for x86-64 without its
+numbers.)
 
 The separate copy was not selected: it measured the same on the changed function and on the
 untouched ones, and it would leave two search loops to keep in step by a test instead of one
