@@ -48,12 +48,15 @@ cargo fmt --all --check; cargo clippy --locked --workspace --all-targets -- -D w
 cargo test --locked --workspace (all passed, in the rust-dev:1.96.0 container)
 prepared_ray_tests: 4 passed, including the overflow corpus and the constructed overflow
 case; a deliberate mutation (discarding the wide path's hit) fails both
-cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code, twice,
-base b2fe36638429, 2026-11-13, Apple M5 Pro in the container; best p50, runs 1 and 2:
-prepared/div 3.46 and 3.42 ns vs num/div 6.75 and 6.71; prepared/ray_aabb 21.81 and
-21.00 vs query/ray_aabb 39.92 and 40.97; prepared/ray_prepare 26.12 and 26.29;
-trace/box_entry 5.98 and 5.98; trace/box_ray_prepare 1.83 and 1.83. The earlier host numbers
-are superseded. Full tables: ledger entry 5 and the pull request.
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code, twice, with
+--exclusive, base cc0521e15084, 2026-11-13, Apple M5 Pro in the container; best p50, runs 1
+and 2: prepared/div 3.99 and 3.50 ns vs num/div 6.43 and 6.47; prepared/ray_aabb 21.73 and
+21.53 vs query/ray_aabb 52.25 and 51.47 (same runs); prepared/ray_prepare 26.00 and 26.04;
+trace/box_entry 5.98 and 5.98; trace/box_ray_prepare 1.83 and 1.83. Two earlier runs against
+base b2fe36638429 agree. The earlier host numbers are superseded. Full tables: ledger
+entry 5 and the pull request.
+Harness: the case helper in bunny-perf compiled only with the scene or trace group on main,
+so the other groups failed to build alone against a base; repaired in this branch.
 cargo run --locked -p xtask -- topic-docs
 cargo run --locked -p xtask -- code-dojo --all
 

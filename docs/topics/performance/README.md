@@ -582,7 +582,8 @@ hit on overflow (`.filter(|_| false)`) fails both overflow tests.
 
 **Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
 (`aarch64-linux`), through the guarded container runner with the branch's commits as
-history, on 2026-11-13, base revision `b2fe36638429` (`origin/main`). Two complete runs:
+history and the machine to itself (`--exclusive`), on 2026-11-13, base revision
+`cc0521e15084` (`origin/main`). Two complete runs:
 
 ```sh
 cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
@@ -592,75 +593,94 @@ Run 1:
 
 | Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `angle/f64_sin_cos_reference` | 4.19 | 4.15 | -1.0% | 4.15 | 4.15 | +0.0% | 1.00× | 4.92 | 4.88 |
-| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% | 1.00× | 0.94 | 0.94 |
-| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.15 | 11.15 |
-| `linalg/length` | 16.60 | 15.87 | -4.4% | 16.07 | 15.71 | -2.2% | 1.02× | 16.89 | 16.56 |
-| `linalg/normalize` | 42.56 | 41.87 | -1.6% | 41.18 | 40.93 | -0.6% | 1.01× | 47.73 | 43.91 |
-| `num/div` | 6.84 | 6.84 | +0.0% | 6.47 | 6.75 | +4.3% | 0.96× | 7.00 | 7.00 |
-| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
-| `num/sqrt` | 14.20 | 13.79 | -2.9% | 13.63 | 13.55 | -0.6% | 1.01× | 14.73 | 14.12 |
-| `prepared/div` | — | 4.11 | new | — | 3.46 | new | — | — | 4.15 |
-| `prepared/ray_aabb` | — | 24.21 | new | — | 21.81 | new | — | — | 37.23 |
-| `prepared/ray_prepare` | — | 27.22 | new | — | 26.12 | new | — | — | 28.56 |
-| `query/ray_aabb` | 47.61 | 52.86 | +11.0% | 42.48 | 39.92 | -6.0% | 1.06× | 56.64 | 59.16 |
-| `query/ray_build` | 53.59 | 53.71 | +0.2% | 53.06 | 52.65 | -0.8% | 1.01× | 56.48 | 56.60 |
-| `query/ray_sphere_hit` | 72.02 | 71.98 | -0.1% | 66.61 | 66.81 | +0.3% | 1.00× | 74.87 | 75.32 |
-| `query/ray_sphere_miss` | 21.16 | 21.12 | -0.2% | 21.00 | 21.00 | +0.0% | 1.00× | 21.28 | 21.20 |
-| `query/ray_triangle` | 52.04 | 52.37 | +0.6% | 51.59 | 51.64 | +0.1% | 1.00× | 54.65 | 55.38 |
-| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.98 | 5.98 | +0.0% | 1.00× | 6.02 | 6.06 |
-| `trace/box_ray_prepare` | 2.03 | 1.95 | -3.9% | 1.87 | 1.83 | -2.1% | 1.02× | 2.08 | 1.99 |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.23 | +1.0% | 4.11 | 4.19 | +1.9% | 0.98× | 4.80 | 5.09 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.89 | 0.94 | +5.6% | 0.95× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.07 | 11.15 | +0.7% | 10.42 | 10.46 | +0.4% | 1.00× | 11.11 | 11.19 |
+| `linalg/length` | 16.11 | 16.24 | +0.8% | 15.46 | 15.62 | +1.0% | 0.99× | 16.60 | 16.76 |
+| `linalg/normalize` | 41.71 | 41.91 | +0.5% | 38.98 | 39.14 | +0.4% | 1.00× | 45.12 | 43.82 |
+| `num/div` | 6.59 | 6.63 | +0.6% | 6.27 | 6.43 | +2.6% | 0.98× | 6.84 | 6.80 |
+| `num/mul` | 1.38 | 1.42 | +2.9% | 1.34 | 1.34 | +0.0% | 1.00× | 1.46 | 1.46 |
+| `num/sqrt` | 13.59 | 13.88 | +2.1% | 13.31 | 13.27 | -0.3% | 1.00× | 14.16 | 14.12 |
+| `prepared/div` | — | 4.27 | new | — | 3.99 | new | — | — | 4.44 |
+| `prepared/ray_aabb` | — | 36.30 | new | — | 21.73 | new | — | — | 39.10 |
+| `prepared/ray_prepare` | — | 26.45 | new | — | 26.00 | new | — | — | 26.57 |
+| `query/ray_aabb` | 55.09 | 54.24 | -1.5% | 52.29 | 52.25 | -0.1% | 1.00× | 61.28 | 56.88 |
+| `query/ray_build` | 51.96 | 52.21 | +0.5% | 47.93 | 50.25 | +4.8% | 0.95× | 54.36 | 55.09 |
+| `query/ray_sphere_hit` | 65.63 | 68.60 | +4.5% | 62.34 | 61.00 | -2.1% | 1.02× | 71.82 | 71.90 |
+| `query/ray_sphere_miss` | 21.16 | 21.20 | +0.2% | 19.86 | 19.78 | -0.4% | 1.00× | 21.28 | 21.24 |
+| `query/ray_triangle` | 52.61 | 52.41 | -0.4% | 52.49 | 51.80 | -1.3% | 1.01× | 55.26 | 54.97 |
+| `scene/closest_visitor` | 3167.16 | 3189.79 | +0.7% | 3125.86 | 3149.30 | +0.7% | 0.99× | 3229.30 | 3326.10 |
+| `trace/any_hit` | 206.50 | 208.90 | +1.2% | 205.12 | 204.75 | -0.2% | 1.00× | 222.66 | 223.06 |
+| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.62 | 5.98 | +6.4% | 0.94× | 6.06 | 6.06 |
+| `trace/box_ray_prepare` | 1.91 | 1.95 | +2.1% | 1.75 | 1.83 | +4.6% | 0.96× | 1.95 | 1.99 |
+| `trace/closest_hit` | 224.65 | 224.57 | -0.0% | 220.87 | 221.64 | +0.3% | 1.00× | 246.83 | 236.70 |
+| `trace/ray_prepare` | 1.99 | 2.03 | +2.0% | 1.87 | 1.87 | +0.0% | 1.00× | 2.04 | 2.04 |
 
 Run 2:
 
 | Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.15 | 4.15 | +0.0% | 1.00× | 4.76 | 4.84 |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.11 | 4.19 | +1.9% | 0.98× | 4.84 | 5.13 |
 | `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% | 1.00× | 0.94 | 0.94 |
-| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.19 | 11.15 |
-| `linalg/length` | 16.72 | 15.79 | -5.6% | 16.36 | 15.71 | -4.0% | 1.04× | 16.97 | 16.24 |
-| `linalg/normalize` | 42.81 | 41.99 | -1.9% | 41.26 | 41.02 | -0.6% | 1.01× | 45.74 | 45.00 |
-| `num/div` | 6.84 | 6.84 | +0.0% | 6.71 | 6.71 | +0.0% | 1.00× | 7.04 | 7.04 |
-| `num/mul` | 1.42 | 1.46 | +2.8% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
-| `num/sqrt` | 14.32 | 13.75 | -4.0% | 13.96 | 13.51 | -3.2% | 1.03× | 15.18 | 14.08 |
-| `prepared/div` | — | 3.99 | new | — | 3.42 | new | — | — | 4.19 |
-| `prepared/ray_aabb` | — | 35.16 | new | — | 21.00 | new | — | — | 38.09 |
-| `prepared/ray_prepare` | — | 27.14 | new | — | 26.29 | new | — | — | 27.47 |
-| `query/ray_aabb` | 45.49 | 51.27 | +12.7% | 42.20 | 40.97 | -2.9% | 1.03× | 58.72 | 59.08 |
-| `query/ray_build` | 53.26 | 53.63 | +0.7% | 51.88 | 52.98 | +2.1% | 0.98× | 56.11 | 56.27 |
-| `query/ray_sphere_hit` | 71.94 | 71.57 | -0.5% | 65.80 | 65.23 | -0.9% | 1.01× | 74.87 | 74.42 |
-| `query/ray_sphere_miss` | 21.16 | 21.08 | -0.4% | 21.04 | 21.00 | -0.2% | 1.00× | 21.28 | 21.20 |
-| `query/ray_triangle` | 51.72 | 52.45 | +1.4% | 51.35 | 51.96 | +1.2% | 0.99× | 54.77 | 55.42 |
-| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.98 | 5.98 | +0.0% | 1.00× | 6.06 | 6.06 |
-| `trace/box_ray_prepare` | 1.95 | 1.95 | +0.0% | 1.83 | 1.83 | +0.0% | 1.00× | 1.99 | 1.99 |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.15 | 11.19 |
+| `linalg/length` | 16.36 | 16.36 | +0.0% | 15.75 | 15.18 | -3.6% | 1.04× | 16.68 | 16.68 |
+| `linalg/normalize` | 42.56 | 42.40 | -0.4% | 40.69 | 41.02 | +0.8% | 0.99× | 44.68 | 43.66 |
+| `num/div` | 6.63 | 6.71 | +1.2% | 6.47 | 6.47 | +0.0% | 1.00× | 6.84 | 6.92 |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
+| `num/sqrt` | 14.08 | 14.16 | +0.6% | 12.70 | 13.67 | +7.6% | 0.93× | 14.16 | 14.28 |
+| `prepared/div` | — | 4.03 | new | — | 3.50 | new | — | — | 4.23 |
+| `prepared/ray_aabb` | — | 23.36 | new | — | 21.53 | new | — | — | 23.72 |
+| `prepared/ray_prepare` | — | 26.33 | new | — | 26.04 | new | — | — | 27.14 |
+| `query/ray_aabb` | 54.28 | 53.30 | -1.8% | 51.64 | 51.47 | -0.3% | 1.00× | 60.71 | 59.86 |
+| `query/ray_build` | 51.76 | 51.39 | -0.7% | 50.33 | 50.66 | +0.7% | 0.99× | 54.40 | 54.04 |
+| `query/ray_sphere_hit` | 66.90 | 66.32 | -0.9% | 64.86 | 64.86 | +0.0% | 1.00× | 71.66 | 70.56 |
+| `query/ray_sphere_miss` | 21.20 | 21.16 | -0.2% | 21.04 | 21.04 | +0.0% | 1.00× | 21.32 | 21.24 |
+| `query/ray_triangle` | 52.86 | 52.61 | -0.5% | 52.45 | 52.29 | -0.3% | 1.00× | 55.42 | 55.01 |
+| `scene/closest_visitor` | 3177.54 | 3200.65 | +0.7% | 3146.78 | 3159.27 | +0.4% | 1.00× | 3260.38 | 3257.05 |
+| `trace/any_hit` | 210.08 | 210.74 | +0.3% | 207.11 | 206.95 | -0.1% | 1.00× | 227.34 | 232.54 |
+| `trace/box_entry` | 5.98 | 6.02 | +0.7% | 5.98 | 5.98 | +0.0% | 1.00× | 6.02 | 6.02 |
+| `trace/box_ray_prepare` | 1.87 | 1.91 | +2.1% | 1.83 | 1.83 | +0.0% | 1.00× | 1.91 | 1.95 |
+| `trace/closest_hit` | 226.97 | 224.73 | -1.0% | 222.37 | 221.92 | -0.2% | 1.00× | 251.71 | 251.59 |
+| `trace/ray_prepare` | 1.99 | 1.99 | +0.0% | 1.99 | 1.99 | +0.0% | 1.00× | 2.04 | 2.04 |
 
-The `prepared/*` and the base's missing cases report as new. The cases below time the same
-rays and box (`query/ray_aabb`, `prepared/ray_aabb`, `trace/box_entry`), best p50 in
-nanoseconds, run 1 and run 2:
+`prepared/*` report as new because the base has no such API. Best p50 in nanoseconds, run 1
+and run 2, for the cases that time the same rays and box (`query/ray_aabb`,
+`prepared/ray_aabb`, `trace/box_entry`):
 
 | Operation | Run 1 | Run 2 |
 | --- | ---: | ---: |
-| `num/div` (`checked_div`) | 6.75 (base 6.47) | 6.71 (base 6.71) |
-| `prepared/div` | 3.46 | 3.42 |
-| `query/ray_aabb` (exact distances) | 39.92 (base 42.48) | 40.97 (base 42.20) |
-| `prepared/ray_aabb` (the same exact bits) | 21.81 | 21.00 |
-| `prepared/ray_prepare` (once per ray) | 26.12 | 26.29 |
-| `trace/box_entry` (conservative, no distances) | 5.98 | 5.98 |
-| `trace/box_ray_prepare` (once per ray) | 1.83 | 1.83 |
+| `num/div` (`checked_div`) | 6.43 (base 6.27) | 6.47 (base 6.47) |
+| `prepared/div` | 3.99 | 3.50 |
+| `query/ray_aabb` (exact distances) | 52.25 (base 52.29) | 51.47 (base 51.64) |
+| `prepared/ray_aabb` (the same exact bits) | 21.73 | 21.53 |
+| `prepared/ray_prepare` (once per ray) | 26.00 | 26.04 |
+| `trace/box_entry` (conservative, no distances) | 5.98 (base 5.62) | 5.98 (base 5.98) |
+| `trace/box_ray_prepare` (once per ray) | 1.83 (base 1.75) | 1.83 (base 1.83) |
 
-A prepared division is 1.9 to 2.0 times faster than `checked_div`; a prepared box test is
-1.8 to 2.0 times faster than `ray_intersects_aabb`, and with its 26 ns preparation it
-wins from a ray's second box (at one box it loses: 26 + 22 against 40 ns). `trace/box_entry`
-takes 6.0 ns after a 1.8 ns preparation: 3.5 times faster than the prepared exact test per
-box and 14 times cheaper to prepare. Medians are bimodal for `query/ray_aabb` (+11.0 % and
-+12.7 % median on code that did not change, best p50 -6.0 % and -2.9 %) and for
-`prepared/ray_aabb` (24.21 and 35.16 median against 21.81 and 21.00 best), the placement
-sensitivity described under [bimodal cases](#bimodal-cases); the best-p50 figures are the
-ones used here. `linalg/length` (-2.2 % and -4.0 %) and `num/sqrt` (-0.6 % and -3.2 %) moved
-without a code change in the same direction in both runs; their code is identical to
-`main`'s, so the change is code layout, not a claim. Every other existing case was within
-6 % at best p50, and `FixedQ32_32::sqrt_u128` is byte-identical to `main`'s, so the square
-root dispatch from entry 3 is not re-selected.
+A prepared division is 1.6 to 1.8 times faster than `checked_div` (best p50); a prepared box
+test is 2.4 times faster than `ray_intersects_aabb` in the same run, and with its 26 ns
+preparation it is level at one box (26 + 22 = 48 ns against 52 ns) and ahead from the second.
+`trace/box_entry` takes 6.0 ns after a 1.8 ns preparation: 3.6 times faster than the prepared
+exact test per box and 14 times cheaper to prepare. Two things limit these readings.
+`prepared/ray_aabb` and `prepared/div` medians are bimodal (36.30 and 23.36 ns median
+against 21.73 and 21.53 best for the box test), the placement sensitivity described under
+[bimodal cases](#bimodal-cases), so best p50 is used. And `query/ray_aabb`, whose code has
+not changed, measured about 40 ns best p50 in two earlier runs against base `b2fe36638429`
+and measures about 52 ns here against base `cc0521e15084`, in both the base and the
+branch build: its absolute time depends on the build's code layout, so ratios are taken
+within one run only, and no absolute `query/ray_aabb` figure is claimed. Every existing case
+is within 8 % at best p50 in both runs and shows no consistent direction, and
+`FixedQ32_32::sqrt_u128` is byte-identical to `main`'s, so the square root dispatch from
+entry 3 is not re-selected. This run's `origin/main` could not build most groups alone
+(the `case` helper compiled only with the `scene` or `trace` group); the commit
+"bunny-perf: compile the case helper for every feature group" repairs that, and an earlier
+attempt without it reported every `num`, `linalg`, `query` and `angle` case as new.
+
+Two earlier complete runs of this branch against base `b2fe36638429`, before main added
+closest-hit traversal, gave the same picture: best p50 `prepared/div` 3.46 and 3.42 ns,
+`prepared/ray_aabb` 21.81 and 21.00 ns, `prepared/ray_prepare` 26.12 and 26.29 ns,
+`trace/box_entry` 5.98 ns, with `num/div` 6.75 and 6.71 ns and `query/ray_aabb` 39.92 and
+40.97 ns in the same runs.
 
 The numbers of the earlier version of this entry (host measurement, older harness, stacked
 on the two-divide square root) are superseded and not carried over. The x86-64 platform
@@ -682,7 +702,7 @@ regression this machine could not see.
 - *A single division or a single box per ray:* `checked_div` and `ray_intersects_aabb`.
 
 **Does the exact prepared API still earn its place?** `FixedDivisor` does: nothing else in
-Bunny offers exact repeated division, and it is 1.9 to 2.0 times faster. `PreparedRay3` is
+Bunny offers exact repeated division, and it is 1.6 to 1.8 times faster. `PreparedRay3` is
 narrower than when it was written. Its use is an exact box test that is faster than
 `ray_intersects_aabb`, and nothing in the workspace calls it yet; the traversals added since
 use `box_entry`. It stays as a new API with an oracle test. If the maintainer prefers not
