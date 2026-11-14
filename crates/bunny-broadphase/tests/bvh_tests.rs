@@ -259,11 +259,11 @@ fn test_traversal_rejects_malformed_bvh_without_panic() {
     );
 }
 
-/// Documents flyingrobots/bunny#211 through the broadphase: a one-leaf BVH skips a primitive
-/// whose box a near-axis ray passes through, because `ray_intersects_aabb` reports `None`.
-/// The correct answer is that the leaf is visited. Flip the assertion when the defect is fixed.
+/// Regression for flyingrobots/bunny#211 through the broadphase: a near-axis ray whose slab
+/// distance does not fit Q32.32 used to make `ray_intersects_aabb` report `None`, so a one-leaf
+/// BVH skipped a primitive the ray passes through. The leaf must be visited.
 #[wasm_bindgen_test(unsupported = test)]
-fn known_defect_issue_211_intersect_ray_skips_a_leaf_the_ray_passes_through() {
+fn issue_211_intersect_ray_visits_a_leaf_a_near_axis_ray_passes_through() {
     use bunny_linalg::FixedUnitVec3;
 
     let one = FixedQ32_32::from_raw(bunny_num::fixed_q32_32::ONE_RAW);
@@ -286,5 +286,5 @@ fn known_defect_issue_211_intersect_ray_skips_a_leaf_the_ray_passes_through() {
     );
     let mut visited = Vec::new();
     intersect_ray(&nodes[..1], &prim_indices, &ray, |idx| visited.push(idx)).expect("traversal");
-    assert!(visited.is_empty(), "defect fixed? the leaf should now be visited");
+    assert_eq!(visited, vec![0]);
 }

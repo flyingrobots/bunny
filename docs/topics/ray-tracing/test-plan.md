@@ -16,11 +16,13 @@ This plan covers `TraceRay`, `TraceTriangle` and `TriangleHit` in
 - the conservative `box_entry` test, its never-reject guarantee and its bound;
 - the exact `hit_triangle` test, its edge rule and its facing;
 - rounding of distances and barycentric weights;
-- overflow freedom at the edges of the domain.
+- overflow freedom at the edges of the domain;
+- the overflow behaviour of the general-purpose `ray_intersects_aabb` and its
+  effect on `bunny_broadphase::intersect_ray` (flyingrobots/bunny#211).
 
-The existing solvers in `crates/bunny-query/src/ray.rs` keep their own
-evidence and are out of scope. BVH closest-hit traversal and timing are out of
-scope until those APIs exist.
+The other solvers in `crates/bunny-query/src/ray.rs` keep their own evidence
+and are out of scope. BVH closest-hit traversal and timing are out of scope
+until those APIs exist.
 
 ## Test Goals
 
@@ -52,6 +54,10 @@ formatting.
 | TRACE-REQ-008 | front_face is true when the ray arrives on the side from which the vertices appear counter-clockwise. | `README.md#facing` |
 | TRACE-REQ-009 | No intermediate overflows for any input inside the trace domain. | `README.md#trace-domain` |
 | TRACE-REQ-010 | Parallel rays (including rays in the triangle's plane), zero-area triangles and crossings whose distance does not fit i64 are misses. | `README.md#exact-triangle-test` |
+| TRACE-REQ-011 | ray_intersects_aabb returns every hit it reported before flyingrobots/bunny#211 with the same bits, and every miss not caused by overflow stays a miss. | `README.md#general-purpose-ray-aabb-solver` |
+| TRACE-REQ-012 | When a coordinate difference or slab distance overflows, ray_intersects_aabb reports a hit exactly when an exact rational slab test does. | `README.md#general-purpose-ray-aabb-solver` |
+| TRACE-REQ-013 | Reported ray_intersects_aabb bounds are the exact slab bounds rounded to nearest (ties to even) and saturated to the Q32.32 range, with t_enter <= t_exit; coordinate differences are widened, not saturated. | `README.md#general-purpose-ray-aabb-solver` |
+| TRACE-REQ-014 | bunny_broadphase::intersect_ray visits a leaf whose box a near-axis ray passes through. | `README.md#general-purpose-ray-aabb-solver` |
 
 ```toml
 [[requirement]]
@@ -103,6 +109,26 @@ status = "active"
 id = "TRACE-REQ-010"
 summary = "Parallel rays (including rays in the triangle's plane), zero-area triangles and crossings whose distance does not fit i64 are misses."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-011"
+summary = "ray_intersects_aabb returns every hit it reported before flyingrobots/bunny#211 with the same bits, and every miss not caused by overflow stays a miss."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-012"
+summary = "When a coordinate difference or slab distance overflows, ray_intersects_aabb reports a hit exactly when an exact rational slab test does."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-013"
+summary = "Reported ray_intersects_aabb bounds are the exact slab bounds rounded to nearest (ties to even) and saturated to the Q32.32 range, with t_enter <= t_exit; coordinate differences are widened, not saturated."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-014"
+summary = "bunny_broadphase::intersect_ray visits a leaf whose box a near-axis ray passes through."
+status = "active"
 ```
 
 ## Fixtures
@@ -139,6 +165,21 @@ Regenerating them is a contract change.
 | TRACE-TP-010 | Golden box entries | TRACE-REQ-002, TRACE-REQ-003 | Hand-computed raw bounds for seven cases, including an inexact reciprocal, an edge graze, a corner graze whose exact exit equals its exact entry, a near miss and a face contact. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_010_golden_box_entries_lock_raw_outputs` |
 | TRACE-TP-011 | Degenerate and far cases | TRACE-REQ-010 | Collinear and duplicate-vertex triangles, a ray in the plane, and a crossing 2^71 raw away all miss; control hits at the same places are reported. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_011_degenerate_triangles_parallel_rays_and_far_hits_miss` |
 | TRACE-TP-012 | Deliberate mutations | TRACE-REQ-002, TRACE-REQ-003, TRACE-REQ-005 | Each rounding or edge rule, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-013 | Differential against the old function | TRACE-REQ-011, TRACE-REQ-013 | Over 200 000 seeded ordinary, axis-parallel, tiny-component, grazing and origin-inside cases, every hit of the retained pre-#211 implementation is returned with the same bits, every miss it reports without overflow stays a miss, and every bound equals the exact bound rounded and saturated. | `crates/bunny-query/tests/ray_aabb_oracle_tests.rs::every_previous_hit_keeps_its_bits_on_the_ordinary_corpus` |
+| TRACE-TP-014 | Exact rational oracle on the overflow region | TRACE-REQ-011, TRACE-REQ-012, TRACE-REQ-013 | Over 200 000 seeded cases with coordinates near and past 2^62, i64 extremes and components of 1 to 4 000 raw units, every case where the old function overflowed agrees in hit or miss with an i128 cross-multiplication slab test, and every bound equals the exact bound rounded and saturated. | `crates/bunny-query/tests/ray_aabb_oracle_tests.rs::overflow_cases_agree_with_the_exact_rational_oracle` |
+| TRACE-TP-015 | Oracle rounding pinned to checked_div | TRACE-REQ-013 | The test oracle's floor-based ties-to-even rounding equals FixedQ32_32::checked_div on 50 000 seeded representable quotients and on exact ties. | `crates/bunny-query/tests/ray_aabb_oracle_tests.rs::rounding_oracle_matches_checked_div_on_representable_quotients` |
+| TRACE-TP-016 | Golden one-raw-unit component | TRACE-REQ-012, TRACE-REQ-013 | Origin (-5, 0, 0), direction (1, 2^-32, 0), box [-1, 1]^3 returns exactly (4, 6). | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::one_raw_unit_component_hits_the_box_it_passes_through` |
+| TRACE-TP-017 | Golden two-raw-unit component | TRACE-REQ-012, TRACE-REQ-013 | The same ray with a component of 2 raw units returns exactly (4, 6). | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::two_raw_unit_component_hits_the_box_it_passes_through` |
+| TRACE-TP-018 | Golden negative tiny component | TRACE-REQ-012, TRACE-REQ-013 | The same ray with a component of -1 raw unit returns exactly (4, 6). | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::negative_tiny_component_hits_too` |
+| TRACE-TP-019 | Sweep across the old threshold | TRACE-REQ-011, TRACE-REQ-012 | For k = 1..=64 and components d = 1..=2k+3 raw units, box [-k, k]^3 from (-100, 0, 0) returns exactly (100 - k, 100 + k) on both sides of the old d <= 2k miss boundary. | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::hits_across_the_old_overflow_threshold_of_twice_the_slab_half_width` |
+| TRACE-TP-020 | Golden unrepresentable exit | TRACE-REQ-013 | From x = -1.5e9 into x in [5e8, 7e8] returns (2e9, i64::MAX raw). | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::origin_far_from_box_saturates_the_unrepresentable_exit` |
+| TRACE-TP-021 | Widened coordinate difference | TRACE-REQ-013 | A difference of 2^63 + 2^30 raw with direction 1 + 2^-32 returns the exactly computed raw exit 9 223 372 035 781 033 984, not the 9 223 372 034 707 292 160 that saturating the difference first gives. | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::coordinate_difference_beyond_i64_is_widened_not_saturated` |
+| TRACE-TP-022 | Saturated entries decided exactly | TRACE-REQ-012 | Two slabs whose entries both saturate to the maximum, and whose rounded bounds would tie, are a miss because the exact entry exceeds the exact exit. | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::saturated_entries_that_tie_when_rounded_are_decided_exactly` |
+| TRACE-TP-023 | Hit beyond the representable distance | TRACE-REQ-012, TRACE-REQ-013 | A box first reached more than 2^31 units from the origin is a hit with both bounds at i64::MAX raw. | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::a_hit_beyond_the_representable_distance_saturates_both_bounds` |
+| TRACE-TP-024 | No false hit from saturation | TRACE-REQ-012 | Near-axis rays with components of 0 to 4 raw units still miss a box beside their path. | `crates/bunny-query/tests/ray_aabb_overflow_tests.rs::saturated_bounds_never_create_a_false_hit` |
+| TRACE-TP-025 | Face contact at the edge of the range | TRACE-REQ-012, TRACE-REQ-013 | An origin at i64::MAX raw on the box's +x face returns (i64::MIN raw, 0). | `crates/bunny-query/tests/query_tests.rs::ray_aabb_saturates_an_overflowing_slab_distance_instead_of_missing` |
+| TRACE-TP-026 | Broadphase leaf visit | TRACE-REQ-014 | A one-leaf BVH walked by intersect_ray with direction (1, 2^-32, 0) visits primitive 0. | `crates/bunny-broadphase/tests/bvh_tests.rs::issue_211_intersect_ray_visits_a_leaf_a_near_axis_ray_passes_through` |
+| TRACE-TP-027 | Deliberate mutations of the overflow path | TRACE-REQ-012, TRACE-REQ-013 | Each rule of the overflow path, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -248,6 +289,141 @@ artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Each rounding or edge rule, broken on purpose, makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-013"
+requirements = ["TRACE-REQ-011", "TRACE-REQ-013"]
+evidence = "property"
+test = "crates/bunny-query/tests/ray_aabb_oracle_tests.rs::every_previous_hit_keeps_its_bits_on_the_ordinary_corpus"
+oracle = "Over 200 000 seeded ordinary, axis-parallel, tiny-component, grazing and origin-inside cases, every hit of the retained pre-#211 implementation is returned with the same bits, every miss it reports without overflow stays a miss, and every bound equals the exact bound rounded and saturated."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-014"
+requirements = ["TRACE-REQ-011", "TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "property"
+test = "crates/bunny-query/tests/ray_aabb_oracle_tests.rs::overflow_cases_agree_with_the_exact_rational_oracle"
+oracle = "Over 200 000 seeded cases with coordinates near and past 2^62, i64 extremes and components of 1 to 4 000 raw units, every case where the old function overflowed agrees in hit or miss with an i128 cross-multiplication slab test, and every bound equals the exact bound rounded and saturated."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-015"
+requirements = ["TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_oracle_tests.rs::rounding_oracle_matches_checked_div_on_representable_quotients"
+oracle = "The test oracle's floor-based ties-to-even rounding equals FixedQ32_32::checked_div on 50 000 seeded representable quotients and on exact ties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-016"
+requirements = ["TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::one_raw_unit_component_hits_the_box_it_passes_through"
+oracle = "Origin (-5, 0, 0), direction (1, 2^-32, 0), box [-1, 1]^3 returns exactly (4, 6)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-017"
+requirements = ["TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::two_raw_unit_component_hits_the_box_it_passes_through"
+oracle = "The same ray with a component of 2 raw units returns exactly (4, 6)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-018"
+requirements = ["TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::negative_tiny_component_hits_too"
+oracle = "The same ray with a component of -1 raw unit returns exactly (4, 6)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-019"
+requirements = ["TRACE-REQ-011", "TRACE-REQ-012"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::hits_across_the_old_overflow_threshold_of_twice_the_slab_half_width"
+oracle = "For k = 1..=64 and components d = 1..=2k+3 raw units, box [-k, k]^3 from (-100, 0, 0) returns exactly (100 - k, 100 + k) on both sides of the old d <= 2k miss boundary."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-020"
+requirements = ["TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::origin_far_from_box_saturates_the_unrepresentable_exit"
+oracle = "From x = -1.5e9 into x in [5e8, 7e8] returns (2e9, i64::MAX raw)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-021"
+requirements = ["TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::coordinate_difference_beyond_i64_is_widened_not_saturated"
+oracle = "A difference of 2^63 + 2^30 raw with direction 1 + 2^-32 returns the exactly computed raw exit 9 223 372 035 781 033 984, not the 9 223 372 034 707 292 160 that saturating the difference first gives."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-022"
+requirements = ["TRACE-REQ-012"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::saturated_entries_that_tie_when_rounded_are_decided_exactly"
+oracle = "Two slabs whose entries both saturate to the maximum, and whose rounded bounds would tie, are a miss because the exact entry exceeds the exact exit."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-023"
+requirements = ["TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::a_hit_beyond_the_representable_distance_saturates_both_bounds"
+oracle = "A box first reached more than 2^31 units from the origin is a hit with both bounds at i64::MAX raw."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-024"
+requirements = ["TRACE-REQ-012"]
+evidence = "test"
+test = "crates/bunny-query/tests/ray_aabb_overflow_tests.rs::saturated_bounds_never_create_a_false_hit"
+oracle = "Near-axis rays with components of 0 to 4 raw units still miss a box beside their path."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-025"
+requirements = ["TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "test"
+test = "crates/bunny-query/tests/query_tests.rs::ray_aabb_saturates_an_overflowing_slab_distance_instead_of_missing"
+oracle = "An origin at i64::MAX raw on the box's +x face returns (i64::MIN raw, 0)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-026"
+requirements = ["TRACE-REQ-014"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/bvh_tests.rs::issue_211_intersect_ray_visits_a_leaf_a_near_axis_ray_passes_through"
+oracle = "A one-leaf BVH walked by intersect_ray with direction (1, 2^-32, 0) visits primitive 0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-027"
+requirements = ["TRACE-REQ-012", "TRACE-REQ-013"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
+oracle = "Each rule of the ray_intersects_aabb overflow path, broken on purpose, makes at least one implemented case fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -269,6 +445,23 @@ passed all of them.
 The upper-bound mutation is caught only by the corner-graze golden case in
 `TRACE-TP-010`: seeded rays almost never meet a box with exact entry equal to
 exact exit. That case was added for this reason.
+
+The overflow path of `ray_intersects_aabb` (`crates/bunny-query/src/ray/aabb_wide.rs`)
+was checked the same way, running `ray_aabb_overflow_tests`, `ray_aabb_oracle_tests`
+and `query_tests`:
+
+| Mutation in `ray/aabb_wide.rs` | Rule broken | Failing cases |
+| --- | --- | --- |
+| Magnitude truncated instead of rounded to nearest | Bounds are correctly rounded | TRACE-TP-013, TRACE-TP-014 |
+| Hit decided from the rounded, saturated bounds instead of exactly | Saturation never creates a hit | TRACE-TP-013, TRACE-TP-014, TRACE-TP-022 |
+| Coordinate difference saturated to `i64` before the division | Differences are widened | TRACE-TP-014, TRACE-TP-021 |
+| `t_exit >= 0` check dropped | Boxes behind the origin miss | TRACE-TP-013, TRACE-TP-014 |
+
+Ties to even versus ties away from zero is not observable through the public
+API: a quotient `diff * 2^32 / d` is an exact half only when `d` is a multiple
+of `2^33`, and a unit direction component is at most `2^32 + 1` raw. Replacing
+the tie rule therefore passes every case; `TRACE-TP-015` pins the oracle's tie
+rule to `checked_div` directly instead.
 
 ## Determinism Obligations And Evidence
 
@@ -300,7 +493,12 @@ Current tests cover:
 - distances and weights that are not exact in Q32.32;
 - collinear and duplicate-vertex (zero-area) triangles;
 - a ray lying in the triangle's plane;
-- a crossing whose distance does not fit `i64`.
+- a crossing whose distance does not fit `i64`;
+- for `ray_intersects_aabb`: direction components of 1 to 4 000 raw units,
+  coordinate differences past `i64`, slab distances past Q32.32 on one or both
+  sides, two saturated entries, an origin on a face at the edge of the range,
+  inverted boxes (`min > max` on an axis) and grazing contacts whose rounded
+  bounds tie.
 
 Future traversal work must add cases for ties between equal-distance hits.
 
@@ -308,6 +506,9 @@ Future traversal work must add cases for ties between equal-distance hits.
 
 No fuzz target exists today. `TRACE-TP-001`, `TRACE-TP-002`, `TRACE-TP-004`
 and `TRACE-TP-007` are seeded property cases over 4 000 to 40 000 inputs each.
+`TRACE-TP-013` and `TRACE-TP-014` are seeded property cases over 200 000 inputs
+each (SplitMix64, seeds `0xB002_0211_0000_0001` and `0xB002_0211_0000_0002`);
+their failure messages name the seed and the case index.
 
 Every minimized fuzz failure must become a committed deterministic regression
 case with a stable test name.

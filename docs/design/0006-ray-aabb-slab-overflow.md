@@ -1,6 +1,14 @@
 # 0006 — `ray_intersects_aabb` reports a miss when a slab division overflows
 
-Status: proposal, awaiting a maintainer decision. Issue: flyingrobots/bunny#211.
+Status: accepted, option (a), implemented in PR #236. Issue: flyingrobots/bunny#211.
+
+The maintainer chose option (a) as a declared contract change. The current contract is described
+in `docs/topics/ray-tracing/README.md#general-purpose-ray-aabb-solver` and the rustdoc of
+`ray_intersects_aabb`; this note keeps the analysis that led to it. Two details differ from the
+sketch below: coordinate differences are widened to `i128` rather than saturated, and on the
+overflow path the hit is decided with exact rationals before the bounds are saturated, because
+two entries that both saturate to the maximum would otherwise tie and report a false hit. The
+differential test the option asked for found no input whose previous `Some` result changes.
 
 ## Finding
 
