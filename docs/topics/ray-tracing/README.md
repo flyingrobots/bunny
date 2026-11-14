@@ -14,6 +14,12 @@ behaviour of `ray_intersects_aabb`, which `intersect_ray` uses for every node,
 is described in
 [General-Purpose Ray-AABB Solver](#general-purpose-ray-aabb-solver).
 
+`PreparedRay3` with `ray_intersects_aabb_prepared` (`bunny-query`) is the exact
+counterpart: the same `(enter, exit)` bits as `ray_intersects_aabb` on every input, with a
+prepared divisor per axis. It is for callers that need those exact distances for many boxes
+per ray. For traversal, `TraceRay::box_entry` is the faster test; the measured comparison is
+ledger entry 4 in [Performance](../performance/README.md).
+
 ## Status
 
 This is a living topic chapter, not a proposal.

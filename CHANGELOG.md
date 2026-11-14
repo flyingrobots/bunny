@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Added `FixedDivisor`, a Q32.32 divisor prepared for repeated exact division
   (Möller–Granlund division by an invariant integer): `divisor.checked_div(a)`
-  returns exactly `a.checked_div(divisor)`, at 3.5 ns instead of 6.3 ns after
-  preparation.
-* Added `PreparedRay3` and `ray_intersects_aabb_prepared`: the same results as
-  `ray_intersects_aabb`, 1.77 times faster per box test after a one-time
-  preparation of about 25 ns per ray.
+  returns exactly `a.checked_div(divisor)`, `None` included. Best p50 on an
+  Apple M5 Pro: 3.4 ns against 6.5 to 6.7 ns for `FixedQ32_32::checked_div`
+  (two runs, ledger entry 4).
+* Added `PreparedRay3` and `ray_intersects_aabb_prepared`: the same
+  `(enter, exit)` bits as `ray_intersects_aabb` on every input, including the
+  overflow inputs that `ray_intersects_aabb` now decides exactly
+  (flyingrobots/bunny#211), with no division per box. Best p50: 21.0 to 21.8 ns
+  against 39.9 to 41.0 ns per box after a 26 ns preparation. For ray
+  traversal that does not need exact distances, `TraceRay::box_entry` (6.0 ns
+  after a 1.8 ns preparation) is faster; see the ledger entry.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs

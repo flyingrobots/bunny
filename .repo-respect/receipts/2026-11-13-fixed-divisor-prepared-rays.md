@@ -4,7 +4,9 @@ Task:
 Add exact division by a prepared divisor (`FixedDivisor`, Möller–Granlund Algorithm 4) and
 a prepared ray (`PreparedRay3`, `ray_intersects_aabb_prepared`) whose box test multiplies
 instead of dividing, with results identical to the existing `checked_div` and
-`ray_intersects_aabb`. Stacked on perf/bunny-isqrt.
+`ray_intersects_aabb` (including its overflow handling, flyingrobots/bunny#211). Re-measured
+and merged with main for flyingrobots/bunny#220; no longer stacked on the two-divide square
+root, which main retains but does not select.
 
 Files read:
 crates/bunny-num/src/fixed_q32_32.rs
@@ -28,39 +30,43 @@ crates/bunny-query/src/lib.rs
 crates/bunny-query/tests/prepared_ray_tests.rs
 crates/bunny-perf/Cargo.toml
 crates/bunny-perf/src/cases.rs
+crates/bunny-query/README.md
+docs/topics/ray-tracing/README.md
 docs/topics/performance/README.md
 docs/topics/performance/test-plan.md
 .repo-respect/receipts/2026-11-13-fixed-divisor-prepared-rays.md
 
 Topic docs:
 docs/topics/performance/README.md (ledger entry 4)
-docs/topics/performance/test-plan.md (PERF-TP-014 to PERF-TP-019)
+docs/topics/performance/test-plan.md (PERF-TP-024 to PERF-TP-031)
 
 Generated artifacts:
 None.
 
 Checks run:
-cargo test --locked -p bunny-num --test fixed_divisor_tests (4 passed)
-cargo test --locked -p bunny-query --test prepared_ray_tests (2 passed)
-bunny-perf builds with each feature group alone and together
-cargo run --locked -p xtask -- perf --base origin/perf/bunny-isqrt --rounds 11 --align-code
-(best p50: prepared/div 3.54 ns vs num/div 6.27 ns; prepared/ray_aabb 22.46 ns vs
-query/ray_aabb 39.84 ns; prepared/ray_prepare 24.78 ns; existing cases within 1.5 %)
-A scratch prototype matched checked_div on 1 000 000 random pairs before implementation.
+cargo fmt --all --check; cargo clippy --locked --workspace --all-targets -- -D warnings;
+cargo test --locked --workspace (all passed, in the rust-dev:1.96.0 container)
+prepared_ray_tests: 4 passed, including the overflow corpus and the constructed overflow
+case; a deliberate mutation (discarding the wide path's hit) fails both
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code, twice,
+base b2fe36638429, 2026-11-13, Apple M5 Pro in the container; best p50, runs 1 and 2:
+prepared/div 3.46 and 3.42 ns vs num/div 6.75 and 6.71; prepared/ray_aabb 21.81 and
+21.00 vs query/ray_aabb 39.92 and 40.97; prepared/ray_prepare 26.12 and 26.29;
+trace/box_entry 5.98 and 5.98; trace/ray_prepare 1.83 and 1.83. The earlier host numbers
+are superseded. Full tables: ledger entry 4 and the pull request.
 cargo run --locked -p xtask -- topic-docs
 cargo run --locked -p xtask -- code-dojo --all
 
-Follow-up: recorded the rejected division-free normalize experiment (branch
-experiment/divide-free-normalize) under "Tried And Rejected" in
-docs/topics/performance/README.md, with its measurements.
-
-Follow-up: the rejected division-free normalize was also 9.1 % slower on WebAssembly
-(wasmtime, 9 rounds); ledger row added.
+Superseded follow-up: the division-free normalize experiment (branch
+experiment/divide-free-normalize) stays recorded under "Tried And Rejected" with its
+original measurements, which predate the black_box harness and were not repeated.
 
 Known risks:
 The correctness of Algorithm 4 rests on the paper's proof and the equivalence tests, which
 sample rather than exhaust the input space. New public API names may change in review.
-Speed measured on an Apple M5 Pro only.
+Speed measured on an Apple M5 Pro only; the x86-64 CI job is reported in the pull request.
+PreparedRay3 has no caller in the workspace; box_entry is faster for traversal, and the
+maintainer decides whether to keep an exact box API.
 
 Human reviewer:
 James Ross approved the researched speedups as new APIs with stated bounds on 2026-11-13;

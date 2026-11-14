@@ -459,6 +459,160 @@ it matches `main`.
 
 **Not measured:** wasm32, and local x86-64.
 
+### 4. Prepared divisors and prepared rays (new exact APIs)
+
+**Where:** new `bunny_num::FixedDivisor`, `bunny_query::PreparedRay3` and
+`bunny_query::ray_intersects_aabb_prepared`. Existing functions are unchanged.
+
+**Technique.** Division by an invariant integer (Möller and Granlund, "Improved Division
+by Invariant Integers", IEEE Transactions on Computers 60(2), 2011, Algorithm 4).
+`FixedDivisor::new` normalizes the divisor's magnitude so its top bit is set and computes
+one 64-bit reciprocal with a single 128-bit division. Each later division of a Q32.32
+dividend becomes one or two two-word steps, each one 64×64→128 multiplication, a few
+additions and at most two corrections; quotients small enough for one word take one step.
+The remainder comes out exact, so ties-to-even rounding and the overflow decision are the
+same as `FixedQ32_32::checked_div`.
+
+`PreparedRay3` holds one `FixedDivisor` per nonzero direction component, so the slab test
+in `ray_intersects_aabb_prepared` multiplies where `ray_intersects_aabb` divides. When a
+slab distance or coordinate difference does not fit Q32.32 it calls the same exact wide
+path as `ray_intersects_aabb` (`aabb_wide::exact_slab_hit`), so the two agree there too.
+
+**Fidelity: exact, as new APIs.** `divisor.checked_div(a)` returns exactly
+`a.checked_div(divisor)`, `None` included, and `ray_intersects_aabb_prepared` returns exactly
+what `ray_intersects_aabb` returns for the same ray and box, the overflow inputs of
+flyingrobots/bunny#211 included. Evidence (PERF-TP-024 to PERF-TP-031): boundary values,
+every power-of-two divisor with both signs, 100 000 seeded pairs across all magnitudes,
+10 000 constructed exact ties, 160 000 seeded ray and box pairs including axis-parallel
+rays, up to 240 000 pairs from an overflow-heavy corpus (coordinates near the `i64` extremes,
+direction components of a few raw units; the test asserts more than 100 000 pairs, more than
+5 000 hits, more than 5 000 misses and more than 1 000 hits with a saturated bound) and one
+constructed case answered by the wide path. Deliberate mutation: discarding the wide path's
+hit on overflow (`.filter(|_| false)`) fails both overflow tests.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), through the guarded container runner with the branch's commits as
+history, on 2026-11-13, base revision `b2fe36638429` (`origin/main`). Two complete runs:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Run 1:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.15 | -1.0% | 4.15 | 4.15 | +0.0% | 1.00× | 4.92 | 4.88 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% | 1.00× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.15 | 11.15 |
+| `linalg/length` | 16.60 | 15.87 | -4.4% | 16.07 | 15.71 | -2.2% | 1.02× | 16.89 | 16.56 |
+| `linalg/normalize` | 42.56 | 41.87 | -1.6% | 41.18 | 40.93 | -0.6% | 1.01× | 47.73 | 43.91 |
+| `num/div` | 6.84 | 6.84 | +0.0% | 6.47 | 6.75 | +4.3% | 0.96× | 7.00 | 7.00 |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
+| `num/sqrt` | 14.20 | 13.79 | -2.9% | 13.63 | 13.55 | -0.6% | 1.01× | 14.73 | 14.12 |
+| `prepared/div` | — | 4.11 | new | — | 3.46 | new | — | — | 4.15 |
+| `prepared/ray_aabb` | — | 24.21 | new | — | 21.81 | new | — | — | 37.23 |
+| `prepared/ray_prepare` | — | 27.22 | new | — | 26.12 | new | — | — | 28.56 |
+| `query/ray_aabb` | 47.61 | 52.86 | +11.0% | 42.48 | 39.92 | -6.0% | 1.06× | 56.64 | 59.16 |
+| `query/ray_build` | 53.59 | 53.71 | +0.2% | 53.06 | 52.65 | -0.8% | 1.01× | 56.48 | 56.60 |
+| `query/ray_sphere_hit` | 72.02 | 71.98 | -0.1% | 66.61 | 66.81 | +0.3% | 1.00× | 74.87 | 75.32 |
+| `query/ray_sphere_miss` | 21.16 | 21.12 | -0.2% | 21.00 | 21.00 | +0.0% | 1.00× | 21.28 | 21.20 |
+| `query/ray_triangle` | 52.04 | 52.37 | +0.6% | 51.59 | 51.64 | +0.1% | 1.00× | 54.65 | 55.38 |
+| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.98 | 5.98 | +0.0% | 1.00× | 6.02 | 6.06 |
+| `trace/ray_prepare` | 2.03 | 1.95 | -3.9% | 1.87 | 1.83 | -2.1% | 1.02× | 2.08 | 1.99 |
+
+Run 2:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.15 | 4.15 | +0.0% | 1.00× | 4.76 | 4.84 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% | 1.00× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.19 | 11.15 |
+| `linalg/length` | 16.72 | 15.79 | -5.6% | 16.36 | 15.71 | -4.0% | 1.04× | 16.97 | 16.24 |
+| `linalg/normalize` | 42.81 | 41.99 | -1.9% | 41.26 | 41.02 | -0.6% | 1.01× | 45.74 | 45.00 |
+| `num/div` | 6.84 | 6.84 | +0.0% | 6.71 | 6.71 | +0.0% | 1.00× | 7.04 | 7.04 |
+| `num/mul` | 1.42 | 1.46 | +2.8% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
+| `num/sqrt` | 14.32 | 13.75 | -4.0% | 13.96 | 13.51 | -3.2% | 1.03× | 15.18 | 14.08 |
+| `prepared/div` | — | 3.99 | new | — | 3.42 | new | — | — | 4.19 |
+| `prepared/ray_aabb` | — | 35.16 | new | — | 21.00 | new | — | — | 38.09 |
+| `prepared/ray_prepare` | — | 27.14 | new | — | 26.29 | new | — | — | 27.47 |
+| `query/ray_aabb` | 45.49 | 51.27 | +12.7% | 42.20 | 40.97 | -2.9% | 1.03× | 58.72 | 59.08 |
+| `query/ray_build` | 53.26 | 53.63 | +0.7% | 51.88 | 52.98 | +2.1% | 0.98× | 56.11 | 56.27 |
+| `query/ray_sphere_hit` | 71.94 | 71.57 | -0.5% | 65.80 | 65.23 | -0.9% | 1.01× | 74.87 | 74.42 |
+| `query/ray_sphere_miss` | 21.16 | 21.08 | -0.4% | 21.04 | 21.00 | -0.2% | 1.00× | 21.28 | 21.20 |
+| `query/ray_triangle` | 51.72 | 52.45 | +1.4% | 51.35 | 51.96 | +1.2% | 0.99× | 54.77 | 55.42 |
+| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.98 | 5.98 | +0.0% | 1.00× | 6.06 | 6.06 |
+| `trace/ray_prepare` | 1.95 | 1.95 | +0.0% | 1.83 | 1.83 | +0.0% | 1.00× | 1.99 | 1.99 |
+
+The `prepared/*` and the base's missing cases report as new. The cases below time the same
+rays and box (`query/ray_aabb`, `prepared/ray_aabb`, `trace/box_entry`), best p50 in
+nanoseconds, run 1 and run 2:
+
+| Operation | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| `num/div` (`checked_div`) | 6.75 (base 6.47) | 6.71 (base 6.71) |
+| `prepared/div` | 3.46 | 3.42 |
+| `query/ray_aabb` (exact distances) | 39.92 (base 42.48) | 40.97 (base 42.20) |
+| `prepared/ray_aabb` (the same exact bits) | 21.81 | 21.00 |
+| `prepared/ray_prepare` (once per ray) | 26.12 | 26.29 |
+| `trace/box_entry` (conservative, no distances) | 5.98 | 5.98 |
+| `trace/ray_prepare` (once per ray) | 1.83 | 1.83 |
+
+A prepared division is 1.9 to 2.0 times faster than `checked_div`; a prepared box test is
+1.8 to 2.0 times faster than `ray_intersects_aabb`, and with its 26 ns preparation it
+wins from a ray's second box (at one box it loses: 26 + 22 against 40 ns). `trace/box_entry`
+takes 6.0 ns after a 1.8 ns preparation: 3.5 times faster than the prepared exact test per
+box and 14 times cheaper to prepare. Medians are bimodal for `query/ray_aabb` (+11.0 % and
++12.7 % median on code that did not change, best p50 -6.0 % and -2.9 %) and for
+`prepared/ray_aabb` (24.21 and 35.16 median against 21.81 and 21.00 best), the placement
+sensitivity described under [bimodal cases](#bimodal-cases); the best-p50 figures are the
+ones used here. `linalg/length` (-2.2 % and -4.0 %) and `num/sqrt` (-0.6 % and -3.2 %) moved
+without a code change in the same direction in both runs; their code is identical to
+`main`'s, so the change is code layout, not a claim. Every other existing case was within
+6 % at best p50, and `FixedQ32_32::sqrt_u128` is byte-identical to `main`'s, so the square
+root dispatch from entry 3 is not re-selected.
+
+The numbers of the earlier version of this entry (host measurement, older harness, stacked
+on the two-divide square root) are superseded and not carried over. The x86-64 platform
+job has not been consulted for these numbers; it is the check that caught the entry 3
+regression this machine could not see.
+
+**Which API suits which use.**
+
+- *Exact `(enter, exit)` distances, bit for bit as `ray_intersects_aabb`, for many boxes
+  per ray* (for example a caller of `bunny_broadphase::intersect_ray` that wants the
+  existing results faster): `PreparedRay3` with `ray_intersects_aabb_prepared`.
+- *Division by one divisor many times, exactly as `checked_div`:* `FixedDivisor`.
+- *Ray tracing and closest-hit traversal* (deciding whether a node can contain a hit and
+  ordering nodes by a lower bound on the entry distance): `TraceRay::box_entry`. It is
+  faster than the prepared exact test per box and per ray. It does not return the exit
+  distance, may report a box a ray narrowly misses, and limits inputs to the trace domain.
+  `PreparedRay3` does not speed up a ray tracer that can use it, and this entry does not
+  claim it does.
+- *A single division or a single box per ray:* `checked_div` and `ray_intersects_aabb`.
+
+**Does the exact prepared API still earn its place?** `FixedDivisor` does: nothing else in
+Bunny offers exact repeated division, and it is 1.9 to 2.0 times faster. `PreparedRay3` is
+narrower than when it was written. Its use is an exact box test that is faster than
+`ray_intersects_aabb`, and nothing in the workspace calls it yet; the traversals added since
+use `box_entry`. It stays as a new API with an oracle test. If the maintainer prefers not
+to keep an exact box API without a caller, the cheapest course is to keep `FixedDivisor`,
+drop `PreparedRay3` and `ray_intersects_aabb_prepared`, and move this experiment's box part
+to "Tried And Rejected"; the pull request states the same recommendation. Switching
+`intersect_ray` to the prepared test would keep its output bits and is a separate change
+that needs its own measurement.
+
+**Trade-offs.**
+
+- *Preparation costs a division per axis.* `PreparedRay3::new` takes about 26 ns; a single
+  division should still use `checked_div`.
+- *More state per ray.* `PreparedRay3` carries three divisors (25 bytes each, with padding)
+  next to the ray.
+- *Subtle arithmetic.* Algorithm 4's correction steps are easy to get wrong; the
+  equivalence tests against `checked_div` are the guard.
+- *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
+  divisions it would replace there.
+
 ## Contract Change Cost Checks
 
 A declared contract change is not an optimization and does not enter the ledger above, but
@@ -491,3 +645,37 @@ cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code 
 p50: inside the noise band, with no consistent direction. Its rays all reach the unit box
 without overflow, so the cases time the common path only; the exact path's cost is not
 measured and is paid only by inputs that used to return a false miss.
+
+## Tried And Rejected
+
+Experiments that kept exact results but did not pay off. They are recorded so the same idea
+is not retried without new evidence (a different target, or a changed design).
+
+### Division-free `normalize`
+
+**Idea.** Replace `normalize`'s three divisions by the length with multiplications: a
+reciprocal of the length from a 256-entry seed table and three Newton steps
+(`y <- y(2 - xy)`, within 0–2 units of `2^127 / x` on 1 000 000 samples), a multiplied
+quotient estimate, and an exact remainder correction. No component is longer than the
+length, so the quotient is at most `2^32` and one correction step suffices.
+
+**Fidelity.** Exact: equivalence tests against `checked_div` and against the previous
+`normalize` (100 000 `FixedVec3` and `FixedVec2` cases each) passed.
+
+**Result on an Apple M5 Pro** (`--base origin/perf/fixed-divisor --rounds 11
+--align-code --filter linalg/`; measured with the harness before it passed every result
+through `black_box`, and not re-measured since, so read the sizes as indicative):
+
+| Variant | Best p50 before → after | Median before → after |
+| --- | --- | --- |
+| Branching correction | 42.72 → 41.46 ns (−2.9 %) | 45.49 → 55.66 ns (+22.4 %) |
+| Branch-free correction (masks) | 42.60 → 58.39 ns (+37.1 %) | 44.47 → 61.85 ns (+39.1 %) |
+
+**Why it lost.** The M5's 64-bit divide instruction is fast, so compiler-rt's 128-bit
+division takes few cycles for these operand sizes. The replacement's dependent chain
+(widening multiply, variable 128-bit shift, second multiply, subtract, correct, round) is
+about as long, and the branch-free form only lengthens it. Targets without a fast 64-bit
+divide (wasm32 in particular) were not measured and may behave differently.
+
+**Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
+not proposed for merging.
