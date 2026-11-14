@@ -35,10 +35,18 @@ fn assert_rejects(rule: &str, forms: &[Form]) {
     for (label, source, line) in forms {
         let found = reported(CORE_PATH, source);
         if !found.iter().any(|(at, name)| at == line && name == rule) {
-            missed.push(format!("{label}: expected [{rule}] at line {line}, gate reported {found:?}"));
+            missed.push(format!(
+                "{label}: expected [{rule}] at line {line}, gate reported {found:?}"
+            ));
         }
     }
-    assert!(missed.is_empty(), "{} of {} forms slipped through:\n{}", missed.len(), forms.len(), missed.join("\n"));
+    assert!(
+        missed.is_empty(),
+        "{} of {} forms slipped through:\n{}",
+        missed.len(),
+        forms.len(),
+        missed.join("\n")
+    );
 }
 
 #[test]
@@ -50,10 +58,18 @@ fn time_system_rejects_every_seeded_form() {
             ("use", "use std::time::SystemTime;", 1),
             ("use group", "use std::time::{Duration, SystemTime};", 1),
             ("renamed import", "use std::time::SystemTime as WallClock;", 1),
-            ("module alias", "use std::time as clock;\npub fn f() { let _ = clock::SystemTime::now(); }", 2),
+            (
+                "module alias",
+                "use std::time as clock;\npub fn f() { let _ = clock::SystemTime::now(); }",
+                2,
+            ),
             ("epoch constant", "pub fn f() { let _ = std::time::UNIX_EPOCH; }", 1),
             ("type position", "pub fn f(_at: std::time::SystemTime) {}", 1),
-            ("macro body", "pub fn f() -> String { format!(\"{:?}\", std::time::SystemTime::now()) }", 1),
+            (
+                "macro body",
+                "pub fn f() -> String { format!(\"{:?}\", std::time::SystemTime::now()) }",
+                1,
+            ),
             ("glob import", "use std::time::*;", 1),
         ],
     );
@@ -68,10 +84,22 @@ fn time_instant_rejects_every_seeded_form() {
             ("use", "use std::time::Instant;", 1),
             ("use group", "use std::time::{Instant};", 1),
             ("renamed import", "use std::time::Instant as Tick;", 1),
-            ("renamed import call", "use std::time::Instant as Tick;\npub fn f() { let _ = Tick::now(); }", 2),
-            ("module alias", "use std::time as clock;\npub fn f() { let _ = clock::Instant::now(); }", 2),
+            (
+                "renamed import call",
+                "use std::time::Instant as Tick;\npub fn f() { let _ = Tick::now(); }",
+                2,
+            ),
+            (
+                "module alias",
+                "use std::time as clock;\npub fn f() { let _ = clock::Instant::now(); }",
+                2,
+            ),
             ("type position", "pub fn f(_at: std::time::Instant) {}", 1),
-            ("macro body", "pub fn f() -> String { format!(\"{:?}\", std::time::Instant::now()) }", 1),
+            (
+                "macro body",
+                "pub fn f() -> String { format!(\"{:?}\", std::time::Instant::now()) }",
+                1,
+            ),
             ("glob import", "use std::time::*;", 1),
         ],
     );
@@ -83,7 +111,11 @@ fn thread_sleep_rejects_every_seeded_form() {
         "thread-sleep",
         &[
             ("qualified call", "pub fn f() { std::thread::sleep(core::time::Duration::ZERO); }", 1),
-            ("module import", "use std::thread;\npub fn f() { thread::sleep(core::time::Duration::ZERO); }", 2),
+            (
+                "module import",
+                "use std::thread;\npub fn f() { thread::sleep(core::time::Duration::ZERO); }",
+                2,
+            ),
             ("renamed import", "use std::thread::sleep as nap;", 1),
             ("tokio sleep", "pub fn f() { let _ = tokio::time::sleep; }", 1),
             ("async-std sleep", "pub fn f() { let _ = async_std::time::sleep; }", 1),
@@ -101,7 +133,11 @@ fn host_parallelism_rejects_every_seeded_form() {
             ("qualified call", "pub fn f() { let _ = std::thread::available_parallelism(); }", 1),
             ("use", "use std::thread::available_parallelism;", 1),
             ("bare call", "pub fn f() { let _ = available_parallelism(); }", 1),
-            ("module alias", "use std::thread as host;\npub fn f() { let _ = host::available_parallelism(); }", 2),
+            (
+                "module alias",
+                "use std::thread as host;\npub fn f() { let _ = host::available_parallelism(); }",
+                2,
+            ),
             ("glob import", "use std::thread::*;", 1),
         ],
     );
@@ -143,10 +179,18 @@ fn network_rejects_every_seeded_form() {
         &[
             ("qualified call", "pub fn f() { let _ = std::net::TcpStream::connect(\"x\"); }", 1),
             ("use group", "use std::net::{UdpSocket};", 1),
-            ("module alias", "use std::net as wire;\npub fn f() { let _ = wire::TcpListener::bind(\"x\"); }", 2),
+            (
+                "module alias",
+                "use std::net as wire;\npub fn f() { let _ = wire::TcpListener::bind(\"x\"); }",
+                2,
+            ),
             ("reqwest", "pub fn f() { let _ = reqwest::get(\"x\"); }", 1),
             ("ureq", "pub fn f() { let _ = ureq::get(\"x\"); }", 1),
-            ("macro body", "pub fn f() -> String { format!(\"{:?}\", std::net::Ipv4Addr::LOCALHOST) }", 1),
+            (
+                "macro body",
+                "pub fn f() -> String { format!(\"{:?}\", std::net::Ipv4Addr::LOCALHOST) }",
+                1,
+            ),
         ],
     );
 }
@@ -156,15 +200,28 @@ fn unordered_container_rejects_every_seeded_form() {
     assert_rejects(
         "unordered-container",
         &[
-            ("qualified constructor", "pub fn f() { let _ = std::collections::HashMap::<u8, u8>::new(); }", 1),
+            (
+                "qualified constructor",
+                "pub fn f() { let _ = std::collections::HashMap::<u8, u8>::new(); }",
+                1,
+            ),
             ("use group", "use std::collections::{BTreeMap, HashSet};", 1),
             ("renamed import", "use std::collections::HashMap as Map;", 1),
-            ("renamed import call", "use std::collections::HashMap as Map;\npub fn f() { let _ = Map::<u8, u8>::new(); }", 2),
+            (
+                "renamed import call",
+                "use std::collections::HashMap as Map;\n\
+                 pub fn f() { let _ = Map::<u8, u8>::new(); }",
+                2,
+            ),
             ("hash_map module", "use std::collections::hash_map::Entry;", 1),
             ("random state", "pub fn f() { let _ = std::hash::RandomState::new(); }", 1),
             ("fx map", "pub fn f(_map: rustc_hash::FxHashMap<u8, u8>) {}", 1),
             ("hashbrown", "pub fn f(_set: hashbrown::HashSet<u8>) {}", 1),
-            ("macro body", "pub fn f() { let _ = vec![std::collections::HashMap::<u8, u8>::new()]; }", 1),
+            (
+                "macro body",
+                "pub fn f() { let _ = vec![std::collections::HashMap::<u8, u8>::new()]; }",
+                1,
+            ),
             ("glob import", "use std::collections::*;", 1),
         ],
     );
@@ -188,7 +245,11 @@ fn json_serialization_rejects_every_seeded_form() {
         &[
             ("qualified call", "pub fn f() { let _ = serde_json::to_vec(&0); }", 1),
             ("use", "use serde_json::Value;", 1),
-            ("crate alias", "use serde_json as json;\npub fn f() { let _ = json::to_string(&0); }", 2),
+            (
+                "crate alias",
+                "use serde_json as json;\npub fn f() { let _ = json::to_string(&0); }",
+                2,
+            ),
             ("json macro", "pub fn f() { let _ = serde_json::json!({}); }", 1),
             ("macro body", "pub fn f() { let _ = vec![serde_json::Value::Null]; }", 1),
         ],
@@ -213,7 +274,11 @@ fn float_sentinels_are_rejected_as_float_boundary() {
         &[
             ("nan constant", "pub fn f() -> u32 { f32::NAN.to_bits() }", 1),
             ("infinity constant", "pub fn f() -> u64 { f64::INFINITY.to_bits() }", 1),
-            ("legacy module constant", "pub fn f() -> u64 { core::f64::NEG_INFINITY.to_bits() }", 1),
+            (
+                "legacy module constant",
+                "pub fn f() -> u64 { core::f64::NEG_INFINITY.to_bits() }",
+                1,
+            ),
             ("consts module", "pub fn f() -> u64 { core::f64::consts::PI.to_bits() }", 1),
             ("macro body", "pub fn f() -> String { format!(\"{}\", f64::NAN) }", 1),
         ],
@@ -226,7 +291,11 @@ fn float_operations_are_rejected_as_float_boundary() {
         "float-boundary",
         &[
             ("method on typed float", "pub fn f(x: f64) -> u64 { x.sqrt().to_bits() }", 1),
-            ("associated function", "pub fn f() -> u64 { f64::powi(core::f64::consts::E, 2).to_bits() }", 1),
+            (
+                "associated function",
+                "pub fn f() -> u64 { f64::powi(core::f64::consts::E, 2).to_bits() }",
+                1,
+            ),
             ("float literal in macro", "pub fn f() -> String { format!(\"{}\", 0.5) }", 1),
         ],
     );
@@ -253,10 +322,22 @@ fn std_fs_rejects_every_seeded_form() {
         "std-fs",
         &[
             ("qualified call", "pub fn f() { let _ = std::fs::read(\"x\"); }", 1),
-            ("imported function", "use std::fs::read_to_string;\npub fn f() { let _ = read_to_string(\"x\"); }", 1),
-            ("renamed module in group", "use std::{fs as disk};\npub fn f() { let _ = disk::write(\"x\", b\"\"); }", 2),
+            (
+                "imported function",
+                "use std::fs::read_to_string;\npub fn f() { let _ = read_to_string(\"x\"); }",
+                1,
+            ),
+            (
+                "renamed module in group",
+                "use std::{fs as disk};\npub fn f() { let _ = disk::write(\"x\", b\"\"); }",
+                2,
+            ),
             ("file open", "pub fn f() { let _ = std::fs::File::open(\"x\"); }", 1),
-            ("macro body", "pub fn f() -> String { format!(\"{:?}\", std::fs::metadata(\"x\")) }", 1),
+            (
+                "macro body",
+                "pub fn f() -> String { format!(\"{:?}\", std::fs::metadata(\"x\")) }",
+                1,
+            ),
         ],
     );
 }
@@ -308,7 +389,10 @@ fn waiver_with_reason_suppresses_each_rule() {
             "{rule}: the unwaived witness must be reported first"
         );
         let waiver = format!("// dojo: allow {rule} -- reviewed boundary adapter, issue 279");
-        if reported_rules(CORE_PATH, &waived_source(&waiver, offending)).iter().any(|found| found == rule) {
+        if reported_rules(CORE_PATH, &waived_source(&waiver, offending))
+            .iter()
+            .any(|found| found == rule)
+        {
             still_reported.push(*rule);
         }
     }
@@ -331,7 +415,10 @@ fn waiver_without_reason_is_refused_for_each_rule() {
 
 #[test]
 fn waiver_for_another_rule_does_not_suppress() {
-    let source = waived_source("// dojo: allow std-env -- reviewed boundary adapter, issue 279", "pub fn f() { let _ = std::fs::read(\"x\"); }");
+    let source = waived_source(
+        "// dojo: allow std-env -- reviewed boundary adapter, issue 279",
+        "pub fn f() { let _ = std::fs::read(\"x\"); }",
+    );
 
     assert!(reported_rules(CORE_PATH, &source).iter().any(|rule| rule == "std-fs"));
 }
@@ -343,8 +430,17 @@ const ACCEPTED: &[(&str, &str)] = &[
     ("random", "pub fn f(seed: u64) -> u64 { seed.wrapping_mul(6_364_136_223_846_793_005) }"),
     ("host-callback", "use wasm_bindgen_test::wasm_bindgen_test;\n#[wasm_bindgen_test]\nfn runs_in_wasm() {}"),
     ("network", "pub fn f() -> core::net::Ipv4Addr { core::net::Ipv4Addr::LOCALHOST }"),
-    ("unordered-container", "use std::collections::{BTreeMap, BTreeSet};\npub fn f() -> (BTreeMap<u8, u8>, BTreeSet<u8>) { (BTreeMap::new(), BTreeSet::new()) }"),
+    (
+        "unordered-container",
+        "use std::collections::{BTreeMap, BTreeSet};\n\
+         pub fn f() -> (BTreeMap<u8, u8>, BTreeSet<u8>) { (BTreeMap::new(), BTreeSet::new()) }",
+    ),
     ("hand-hashed-table", "// Sorted vector addressed by binary search.\npub struct Table;"),
+    (
+        "default hasher",
+        "use std::collections::hash_map::DefaultHasher;\n\
+         pub fn f() -> DefaultHasher { DefaultHasher::new() }",
+    ),
     ("json-serialization", "pub fn f(bytes: &[u8]) -> usize { bytes.len() }"),
     ("float-op on fixed point", "pub fn f(x: Fixed, a: Angle) -> (Option<Fixed>, Fixed) { (x.sqrt(), a.sin()) }"),
     ("std-env", "mod env { pub fn name() -> &'static str { \"bunny\" } }\npub fn f() -> &'static str { env::name() }"),
@@ -396,16 +492,24 @@ fn nondeterminism_rules_cover_core_tests_codec_and_contract() {
         "crates/bunny-codec/src/lib.rs",
         "crates/bunny-contract/src/lib.rs",
     ] {
-        assert!(reported_rules(path, STD_FS_CALL).iter().any(|rule| rule == "std-fs"), "{path} was not scanned");
+        assert!(
+            reported_rules(path, STD_FS_CALL).iter().any(|rule| rule == "std-fs"),
+            "{path} was not scanned"
+        );
     }
 }
 
 #[test]
 fn tooling_and_generator_crates_are_outside_nondeterminism_scope() {
     let timing = "use std::time::Instant;\npub fn f() { let _ = Instant::now(); let _ = std::fs::read(\"x\"); }";
-    for path in ["xtask/src/perf.rs", "crates/bunny-perf/src/timing.rs", "crates/bunny-wesley/src/main.rs"] {
+    for path in
+        ["xtask/src/perf.rs", "crates/bunny-perf/src/timing.rs", "crates/bunny-wesley/src/main.rs"]
+    {
         let rules = reported_rules(path, timing);
-        assert!(rules.iter().all(|rule| rule != "time-instant" && rule != "std-fs"), "{path}: {rules:?}");
+        assert!(
+            rules.iter().all(|rule| rule != "time-instant" && rule != "std-fs"),
+            "{path}: {rules:?}"
+        );
     }
 }
 
@@ -413,14 +517,19 @@ fn tooling_and_generator_crates_are_outside_nondeterminism_scope() {
 fn float_rules_stay_core_only() {
     let parser = "pub fn f() -> f32 { f32::NAN }";
 
-    assert!(!reported_rules("crates/bunny-codec/src/obj/float.rs", parser).iter().any(|rule| rule == "float-boundary"));
+    assert!(!reported_rules("crates/bunny-codec/src/obj/float.rs", parser)
+        .iter()
+        .any(|rule| rule == "float-boundary"));
 }
 
 #[test]
 fn each_rule_is_reported_once_per_line() {
     let source = "use std::collections::{HashMap, HashSet};";
 
-    let count = reported(CORE_PATH, source).iter().filter(|(_, rule)| rule == "unordered-container").count();
+    let count = reported(CORE_PATH, source)
+        .iter()
+        .filter(|(_, rule)| rule == "unordered-container")
+        .count();
 
     assert_eq!(count, 1);
 }
@@ -458,9 +567,14 @@ fn banned_dependencies_are_attributed_to_the_crate_that_declares_them() {
 
     let summary = findings.iter().map(|(rule, text)| format!("{rule}: {text}")).collect::<Vec<_>>();
     assert_eq!(findings.len(), 3, "{summary:#?}");
-    assert!(summary.iter().any(|line| line.starts_with("random:") && line.contains("crates/bunny-num/Cargo.toml") && line.contains("`rand`")));
-    assert!(summary.iter().any(|line| line.starts_with("random:") && line.contains("crates/bunny-num/Cargo.toml") && line.contains("`getrandom`")));
-    assert!(summary.iter().any(|line| line.starts_with("json-serialization:") && line.contains("crates/bunny-geom/Cargo.toml")));
+    assert!(summary.iter().any(|line| line.starts_with("random:")
+        && line.contains("crates/bunny-num/Cargo.toml")
+        && line.contains("`rand`")));
+    assert!(summary.iter().any(|line| line.starts_with("random:")
+        && line.contains("crates/bunny-num/Cargo.toml")
+        && line.contains("`getrandom`")));
+    assert!(summary.iter().any(|line| line.starts_with("json-serialization:")
+        && line.contains("crates/bunny-geom/Cargo.toml")));
 }
 
 #[test]
@@ -483,14 +597,18 @@ fn every_banned_dependency_maps_to_its_rule() {
     ];
     for (dependency, rule) in cases {
         let tree = format!("0bunny-mesh v0.7.1 (/work/crates/bunny-mesh)\n1{dependency} v1.0.0\n");
-        let rules = dependency_findings(&tree, &no_manifest).into_iter().map(|(found, _)| found).collect::<Vec<_>>();
+        let rules = dependency_findings(&tree, &no_manifest)
+            .into_iter()
+            .map(|(found, _)| found)
+            .collect::<Vec<_>>();
         assert_eq!(rules, vec![rule.to_string()], "{dependency}");
     }
 }
 
 #[test]
 fn permitted_dependencies_are_accepted() {
-    let tree = "0bunny-mesh v0.7.1 (/work/crates/bunny-mesh)\n1sha2 v0.10.9\n2digest v0.10.7\n2cpufeatures v0.2.17 (*)\n";
+    let tree = "0bunny-mesh v0.7.1 (/work/crates/bunny-mesh)\n\
+                1sha2 v0.10.9\n2digest v0.10.7\n2cpufeatures v0.2.17 (*)\n";
 
     assert!(dependency_findings(tree, &no_manifest).is_empty());
 }
@@ -505,14 +623,17 @@ fn manifest_waiver_with_reason_suppresses_a_dependency_rule() {
         }
     };
 
-    let rules = dependency_findings(TREE, &manifest).into_iter().map(|(rule, _)| rule).collect::<Vec<_>>();
+    let rules =
+        dependency_findings(TREE, &manifest).into_iter().map(|(rule, _)| rule).collect::<Vec<_>>();
 
     assert_eq!(rules, vec!["json-serialization".to_string()]);
 }
 
 #[test]
 fn manifest_waiver_without_reason_is_refused() {
-    let manifest = |_crate_name: &str| "# dojo: allow random\n# dojo: allow json-serialization -- ok\n".to_string();
+    let manifest = |_crate_name: &str| {
+        "# dojo: allow random\n# dojo: allow json-serialization -- ok\n".to_string()
+    };
 
     assert_eq!(dependency_findings(TREE, &manifest).len(), 3);
 }

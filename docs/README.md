@@ -17,6 +17,7 @@ evidence exist.
 | --- | --- |
 | [`topics/angle-trigonometry/`](topics/angle-trigonometry/) | Binary angles (`FixedAngle`), conversions from turns, degrees and radians, and table-based deterministic sine and cosine with error bounds. |
 | [`topics/bvh-construction/`](topics/bvh-construction/) | The flat BVH node format and its two builders: the quartile builder `build_bvh` and the binned SAH builder `build_bvh_sah`, with costs, overflow rule, tie rules, depth cap and stable partition. |
+| [`topics/code-dojo-determinism/`](topics/code-dojo-determinism/) | The Code Dojo rules that enforce Echo's `ban-nondeterminism` rule IDs: banned paths and crates, import and macro resolution, crate scope, waivers, and the dependency check. |
 | [`topics/contract-generation/`](topics/contract-generation/) | Schema-to-artifact generation, generated Rust/TypeScript DTO shape, manifest witnesses, and Bunny-owned object boundaries. |
 | [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection and NDC conventions. |
 | [`topics/deterministic-contract-profile/`](topics/deterministic-contract-profile/) | Bunny-owned scalar profile vocabulary, generated witnesses, and wire-profile boundaries for future codecs. |

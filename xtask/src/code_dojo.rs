@@ -26,6 +26,20 @@ const CORE_CRATES: &[&str] = &[
     "bunny-mesh",
     "bunny-optics",
 ];
+/// Crates whose output must not depend on the host: the core crates plus the mesh codecs
+/// and the generated contract DTOs, which are WASM libraries producing canonical data.
+/// The nondeterminism rules cover every file in them, tests included.
+const NONDETERMINISM_CRATES: &[&str] = &[
+    "bunny-num",
+    "bunny-linalg",
+    "bunny-geom",
+    "bunny-query",
+    "bunny-broadphase",
+    "bunny-mesh",
+    "bunny-optics",
+    "bunny-codec",
+    "bunny-contract",
+];
 const GENERATOR_CRATES: &[&str] = &["bunny-wesley"];
 const TOOLING_CRATES: &[&str] = &["xtask", "bunny-perf"];
 const STRICT_CLIPPY_PACKAGES: &[&str] = &[
@@ -220,6 +234,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     crate::repo_respect::check_branch()?;
     check_determinism_receipts(true)?;
     ensure_cargo_manifest("full gate")?;
+    check_dependency_rules()?;
     run_quality_commands(true)?;
     println!("Code Dojo: full gate clean");
     Ok(())
@@ -282,11 +297,67 @@ pub(super) fn file_violations(path: PathBuf, source: &str) -> Vec<Violation> {
 }
 
 /// Applies the dependency-level nondeterminism rules to `cargo tree` output.
+///
+/// `manifest` returns the text of a deterministic crate's `Cargo.toml`; a line
+/// `# dojo: allow <rule> -- <reason>` anywhere in it waives that rule for that crate.
 pub(super) fn dependency_violations(
-    _tree: &str,
-    _manifest: &dyn Fn(&str) -> String,
+    tree: &str,
+    manifest: &dyn Fn(&str) -> String,
 ) -> Vec<Violation> {
-    Vec::new()
+    crate::nondeterminism::dependency_findings(tree, NONDETERMINISM_CRATES)
+        .into_iter()
+        .filter(|finding| {
+            !manifest(&finding.root).lines().any(|line| waiver_accepts(line, finding.rule))
+        })
+        .map(|finding| {
+            Violation::new(
+                PathBuf::from("crates").join(&finding.root).join("Cargo.toml"),
+                0,
+                finding.rule,
+                format!(
+                    "normal dependency graph reaches `{}`, which deterministic crates must not use",
+                    finding.dependency
+                ),
+            )
+        })
+        .collect()
+}
+
+fn check_dependency_rules() -> Result<(), DynError> {
+    let root = git_root()?;
+    let mut args = [
+        "tree",
+        "--locked",
+        "--edges",
+        "normal",
+        "--target",
+        "all",
+        "--no-dedupe",
+        "--prefix",
+        "depth",
+        "--format",
+        "{p}",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect::<Vec<_>>();
+    args.extend(package_args(NONDETERMINISM_CRATES));
+    let output = Command::new("cargo").args(&args).current_dir(&root).output()?;
+    if !output.status.success() {
+        return Err(command_error("cargo tree", &output.stderr).into());
+    }
+    let tree = String::from_utf8(output.stdout)?;
+    let manifest = |crate_name: &str| {
+        std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
+            .unwrap_or_default()
+    };
+    let violations = dependency_violations(&tree, &manifest);
+    if violations.is_empty() {
+        println!("Code Dojo: deterministic dependency graph clean");
+        return Ok(());
+    }
+    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
+    Err(DojoError::new("deterministic dependency policy violations found").into())
 }
 
 fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {
@@ -824,6 +895,21 @@ fn check_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>) {
 }
 
 fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, file: &File) {
+    if in_nondeterminism_scope(&context.path) {
+        let findings = crate::nondeterminism::source_findings(file)
+            .into_iter()
+            .chain(crate::nondeterminism::text_findings(context.lines));
+        for finding in findings {
+            if !has_waiver(context.lines, finding.line.saturating_sub(1), finding.rule) {
+                violations.push(Violation::new(
+                    context.path.clone(),
+                    finding.line,
+                    finding.rule,
+                    finding.message,
+                ));
+            }
+        }
+    }
     let mut visitor = PolicyVisitor {
         violations,
         path: context.path.clone(),
@@ -915,47 +1001,42 @@ impl PolicyVisitor<'_> {
         }
     }
 
-    fn check_path_call(&mut self, line: usize, path: &SynPath) {
+    /// Expression paths such as `f32::NAN`, `f64::from_bits` or `core::f64::consts::PI`
+    /// bring floats into core without naming a float type.
+    fn check_expr_path_floats(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
         }
 
-        let segments = path_segments(path);
-        let banned = if has_suffix(&segments, &["SystemTime", "now"])
-            || has_suffix(&segments, &["Instant", "now"])
-        {
-            Some(("ambient-state", "ambient clock access is banned; inject a deterministic clock"))
-        } else if is_single_segment(&segments, "thread_rng")
-            || has_suffix(&segments, &["rand", "thread_rng"])
-        {
-            Some(("ambient-state", "thread_rng is banned; inject a seeded generator"))
-        } else if has_suffix(&segments, &["rand", "random"]) {
-            Some(("ambient-state", "rand::random is banned; inject a seeded generator"))
-        } else if has_suffix(&segments, &["std", "env", "args"])
-            || has_suffix(&segments, &["std", "env", "var"])
-        {
-            Some((
-                "ambient-state",
-                "ambient environment/process access is banned in deterministic core crates",
-            ))
-        } else if is_filesystem_path(&segments) {
-            Some(("ambient-state", "filesystem access is banned in deterministic core crates"))
-        } else if is_nondeterministic_map_constructor(&segments) {
-            Some((
-                "nondeterministic-map",
-                "HashMap/HashSet constructors are banned in canonical core output paths",
-            ))
-        } else if has_suffix(&segments, &["TcpStream", "connect"])
-            || has_suffix(&segments, &["UdpSocket", "bind"])
-        {
-            Some(("ambient-state", "network access is banned in deterministic core crates"))
-        } else {
-            None
-        };
+        if names_float(&path_segments(path)) && !self.waived(line, "float-boundary") {
+            self.violation(
+                line,
+                "float-boundary",
+                "float constants and functions in core require a boundary/proof waiver",
+            );
+        }
+    }
 
-        if let Some((rule, message)) = banned {
-            if !self.waived(line, rule) {
-                self.violation(line, rule, message);
+    /// Macro bodies are token streams `syn` does not parse, so float literals and float
+    /// paths inside them are found from the tokens.
+    fn check_macro_floats(&mut self, mac: &Macro) {
+        if self.category != Category::Core {
+            return;
+        }
+
+        let path_lines = crate::nondeterminism::token_paths(&mac.tokens)
+            .into_iter()
+            .filter(|path| names_float(&path.segments))
+            .map(|path| path.line);
+        let literal_lines = crate::nondeterminism::token_float_literal_lines(&mac.tokens);
+        let lines = path_lines.chain(literal_lines).collect::<std::collections::BTreeSet<_>>();
+        for line in lines {
+            if !self.waived(line, "float-boundary") {
+                self.violation(
+                    line,
+                    "float-boundary",
+                    "floats inside a macro in core require a boundary/proof waiver",
+                );
             }
         }
     }
@@ -966,19 +1047,7 @@ impl PolicyVisitor<'_> {
         }
 
         let segments = path_segments(path);
-        if segments.iter().any(|segment| segment == "HashMap" || segment == "HashSet")
-            && !self.waived(line, "nondeterministic-map")
-        {
-            self.violation(
-                line,
-                "nondeterministic-map",
-                "HashMap/HashSet are banned in canonical core output paths; use BTree* or sorted Vec",
-            );
-        }
-
-        if segments.iter().any(|segment| segment == "f32" || segment == "f64")
-            && !self.waived(line, "float-boundary")
-        {
+        if names_float(&segments) && !self.waived(line, "float-boundary") {
             self.violation(
                 line,
                 "float-boundary",
@@ -1083,8 +1152,13 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     }
 
     fn visit_expr_path(&mut self, node: &'ast ExprPath) {
-        self.check_path_call(line_of(node.span()), &node.path);
+        self.check_expr_path_floats(line_of(node.span()), &node.path);
         visit::visit_expr_path(self, node);
+    }
+
+    fn visit_macro(&mut self, node: &'ast Macro) {
+        self.check_macro_floats(node);
+        visit::visit_macro(self, node);
     }
 
     fn visit_type_path(&mut self, node: &'ast TypePath) {
@@ -1220,31 +1294,25 @@ fn has_waiver(lines: &[String], index: usize, rule: &str) -> bool {
     false
 }
 
-fn path_segments(path: &SynPath) -> Vec<String> {
-    path.segments.iter().map(|segment| segment.ident.to_string()).collect()
-}
-
-fn has_suffix(path: &[String], suffix: &[&str]) -> bool {
-    path.len() >= suffix.len()
-        && path.iter().rev().zip(suffix.iter().rev()).all(|(left, right)| left.as_str() == *right)
-}
-
-fn has_prefix(path: &[String], prefix: &[&str]) -> bool {
-    path.len() >= prefix.len()
-        && path.iter().zip(prefix.iter()).all(|(left, right)| left.as_str() == *right)
-}
-
-fn is_filesystem_path(path: &[String]) -> bool {
-    has_suffix(path, &["File", "open"])
-        || has_prefix(path, &["std", "fs"])
-        || has_prefix(path, &["fs"])
-}
-
-fn is_nondeterministic_map_constructor(path: &[String]) -> bool {
-    let [.., collection, constructor] = path else {
+/// Whether one line is a `dojo: allow <rule> -- <reason>` waiver with a real reason.
+fn waiver_accepts(text: &str, rule: &str) -> bool {
+    let Some((_, after)) = text.split_once(&format!("dojo: allow {rule}")) else {
         return false;
     };
-    constructor == "new" && matches!(collection.as_str(), "HashMap" | "HashSet")
+    after.starts_with([' ', '\t'])
+        && after.split_once("--").is_some_and(|(_, reason)| reason.trim().len() >= 8)
+}
+
+fn in_nondeterminism_scope(path: &Path) -> bool {
+    crate_name(path).is_some_and(|name| NONDETERMINISM_CRATES.contains(&name))
+}
+
+fn names_float(segments: &[String]) -> bool {
+    segments.iter().any(|segment| segment == "f32" || segment == "f64")
+}
+
+fn path_segments(path: &SynPath) -> Vec<String> {
+    path.segments.iter().map(|segment| segment.ident.to_string()).collect()
 }
 
 fn is_panicking_macro(name: &str) -> bool {
@@ -1261,10 +1329,6 @@ fn is_panicking_macro(name: &str) -> bool {
             | "unimplemented"
             | "unreachable"
     )
-}
-
-fn is_single_segment(path: &[String], segment: &str) -> bool {
-    path.len() == 1 && path.first().is_some_and(|value| value == segment)
 }
 
 fn line_of(span: Span) -> usize {
@@ -1368,7 +1432,7 @@ pub fn read_path(path: &std::path::Path) {
 
         let violations = core_policy_violations(source);
 
-        assert!(has_rule(&violations, "ambient-state"));
+        assert!(has_rule(&violations, "std-fs"));
     }
 
     #[test]
@@ -1386,7 +1450,8 @@ pub fn build() {
 
         let violations = core_policy_violations(source);
 
-        assert_eq!(rule_count(&violations, "nondeterministic-map"), 2);
+        // One finding for the `use` group line and one for each constructor line.
+        assert_eq!(rule_count(&violations, "unordered-container"), 3);
     }
 
     #[test]

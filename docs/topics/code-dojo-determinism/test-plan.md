@@ -107,7 +107,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-018 | reasoned waiver | ND-REQ-002 | For every rule, a waiver with a reason on the line above suppresses the finding. | `xtask/src/nondeterminism/tests.rs::waiver_with_reason_suppresses_each_rule` |
 | ND-TP-019 | reasonless waiver | ND-REQ-002 | For every rule, a waiver with no reason or the reason `ok` leaves the finding reported. | `xtask/src/nondeterminism/tests.rs::waiver_without_reason_is_refused_for_each_rule` |
 | ND-TP-020 | rule-scoped waiver | ND-REQ-002 | A `std-env` waiver does not suppress a `std-fs` finding. | `xtask/src/nondeterminism/tests.rs::waiver_for_another_rule_does_not_suppress` |
-| ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
+| ND-TP-021 | look-alikes | ND-REQ-003 | Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family. | `xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted` |
 | ND-TP-022 | library scope | ND-REQ-004 | A `std::fs` call is reported in a core test file, a core `src/**/tests` file, `bunny-codec` and `bunny-contract`. | `xtask/src/nondeterminism/tests.rs::nondeterminism_rules_cover_core_tests_codec_and_contract` |
 | ND-TP-023 | tooling scope | ND-REQ-004 | Clock and filesystem use in `xtask`, `bunny-perf` and `bunny-wesley` is not reported by the rule family. | `xtask/src/nondeterminism/tests.rs::tooling_and_generator_crates_are_outside_nondeterminism_scope` |
 | ND-TP-024 | float scope | ND-REQ-004 | `f32::NAN` in `bunny-codec` is not reported as `float-boundary`. | `xtask/src/nondeterminism/tests.rs::float_rules_stay_core_only` |
@@ -125,7 +125,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::time_system_rejects_every_seeded_form"
 oracle = "Nine seeded forms of wall-clock access are each reported as `time-system` at the stated line."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-002"
@@ -134,7 +134,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::time_instant_rejects_every_seeded_form"
 oracle = "Nine seeded forms of monotonic clock access are each reported as `time-instant`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-003"
@@ -143,7 +143,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::thread_sleep_rejects_every_seeded_form"
 oracle = "Seven seeded sleep forms (std, tokio, async-std, alias, macro, glob) are each reported as `thread-sleep`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-004"
@@ -152,7 +152,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::host_parallelism_rejects_every_seeded_form"
 oracle = "Five seeded forms of `available_parallelism` are each reported as `host-parallelism`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-005"
@@ -161,7 +161,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::random_rejects_every_seeded_form"
 oracle = "Seven seeded forms naming `rand`, `getrandom`, `fastrand` or `thread_rng` are each reported as `random`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-006"
@@ -170,7 +170,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::host_callback_rejects_every_seeded_form"
 oracle = "Seeded `js_sys`, `wasm_bindgen` closure and `web_sys` paths are each reported as `host-callback`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-007"
@@ -179,7 +179,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::network_rejects_every_seeded_form"
 oracle = "Seeded `std::net`, `reqwest` and `ureq` forms are each reported as `network`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-008"
@@ -188,7 +188,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::unordered_container_rejects_every_seeded_form"
 oracle = "Ten seeded hash-container forms (std, `hash_map` module, `RandomState`, `FxHashMap`, `hashbrown`, alias, macro, glob) are each reported as `unordered-container`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-009"
@@ -197,7 +197,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::hand_hashed_table_rejects_every_seeded_form"
 oracle = "Comments and doc comments naming open addressing are reported as `hand-hashed-table`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-010"
@@ -206,7 +206,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::json_serialization_rejects_every_seeded_form"
 oracle = "Seeded `serde_json` paths, aliases and macros are each reported as `json-serialization`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-011"
@@ -215,7 +215,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::wasm_serde_rejects_every_seeded_form"
 oracle = "Seeded `serde_wasm_bindgen` paths are each reported as `wasm-serde`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-012"
@@ -224,7 +224,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::float_sentinels_are_rejected_as_float_boundary"
 oracle = "`NAN`, `INFINITY`, `NEG_INFINITY` and float `consts` paths, also inside a macro, are reported as `float-boundary`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-013"
@@ -233,7 +233,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::float_operations_are_rejected_as_float_boundary"
 oracle = "A float method on a typed float, a float associated function and a float literal inside a macro are reported as `float-boundary`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-014"
@@ -242,7 +242,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::std_env_rejects_every_seeded_form"
 oracle = "Six seeded environment forms are each reported as `std-env`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-015"
@@ -251,7 +251,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::std_fs_rejects_every_seeded_form"
 oracle = "Five seeded filesystem forms, including an imported function called by its bare name, are each reported as `std-fs`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-016"
@@ -260,7 +260,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::std_process_rejects_every_seeded_form"
 oracle = "Five seeded process forms are each reported as `std-process`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-017"
@@ -269,7 +269,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::each_rule_is_reported_once_per_line"
 oracle = "A `use` group naming two hash containers yields exactly one `unordered-container` finding for that line."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-018"
@@ -278,7 +278,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::waiver_with_reason_suppresses_each_rule"
 oracle = "For every rule, a waiver with a reason on the line above suppresses the finding."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-019"
@@ -287,7 +287,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::waiver_without_reason_is_refused_for_each_rule"
 oracle = "For every rule, a waiver with no reason or the reason `ok` leaves the finding reported."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-020"
@@ -296,16 +296,16 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::waiver_for_another_rule_does_not_suppress"
 oracle = "A `std-env` waiver does not suppress a `std-fs` finding."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-021"
 requirements = ["ND-REQ-003"]
 evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::deterministic_look_alikes_are_accepted"
-oracle = "Duration, BTree containers, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family."
+oracle = "Duration, BTree containers, `hash_map::DefaultHasher`, `core::net`, fixed-point `sqrt`/`sin`, `wasm_bindgen_test`, local `env`/`process` modules and `env!` produce no finding in the rule family."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-022"
@@ -314,7 +314,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::nondeterminism_rules_cover_core_tests_codec_and_contract"
 oracle = "A `std::fs` call is reported in a core test file, a core `src/**/tests` file, `bunny-codec` and `bunny-contract`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-023"
@@ -323,7 +323,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::tooling_and_generator_crates_are_outside_nondeterminism_scope"
 oracle = "Clock and filesystem use in `xtask`, `bunny-perf` and `bunny-wesley` is not reported by the rule family."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-024"
@@ -332,7 +332,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::float_rules_stay_core_only"
 oracle = "`f32::NAN` in `bunny-codec` is not reported as `float-boundary`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-025"
@@ -341,7 +341,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::banned_dependencies_are_attributed_to_the_crate_that_declares_them"
 oracle = "A two-root tree yields exactly three findings: `rand` and `getrandom` against `bunny-num`, `serde_json` against `bunny-geom`; `rand` reached through `bunny-num` is not charged to `bunny-geom`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-026"
@@ -350,7 +350,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::every_banned_dependency_maps_to_its_rule"
 oracle = "Each of the fourteen banned crate names yields exactly one finding under its stated rule."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-027"
@@ -359,7 +359,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::permitted_dependencies_are_accepted"
 oracle = "`sha2`, `digest` and `cpufeatures` produce no finding."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-028"
@@ -368,7 +368,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::manifest_waiver_with_reason_suppresses_a_dependency_rule"
 oracle = "A reasoned `random` waiver in the `bunny-num` manifest leaves only the `json-serialization` finding."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-029"
@@ -377,7 +377,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/tests.rs::manifest_waiver_without_reason_is_refused"
 oracle = "Manifest waivers without a reason or with the reason `ok` leave all three findings reported."
 tier = "fast"
-status = "planned"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
