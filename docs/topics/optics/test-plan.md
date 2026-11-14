@@ -1344,8 +1344,8 @@ general. Every shading case runs natively and under WebAssembly.
 The vertex normals use only exact `i128` additions and multiplications and
 the normalization of `TriangleSurface::new`; their oracle is exact big-integer
 arithmetic in the test file, with no floating point. `OPTICS-TP-071` is the
-order evidence for them: the sums are exact, so face order, corner order and
-vertex labels cannot change a bit.
+order evidence for them: the sums are exact, so face order, a cyclic rotation
+of a face's corners and vertex labels cannot change a bit.
 
 ## Known Failures
 

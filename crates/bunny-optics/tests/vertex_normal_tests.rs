@@ -246,6 +246,9 @@ fn check_vertex(normal: Option<Raw3>, sum: [i128; 3]) -> Result<(), String> {
     let Some(raw) = normal else {
         return if sum == [0; 3] { Ok(()) } else { Err(format!("None for sum {sum:?}")) };
     };
+    if sum == [0; 3] {
+        return Err(format!("{raw:?} for a zero sum"));
+    }
     let square = |s: i128| Big::new(s.unsigned_abs()).mul(&Big::new(s.unsigned_abs()));
     let q = sum.iter().fold(Big::new(0), |q, &s| q.add(&square(s)));
     for (component, s) in raw.iter().zip(sum) {
@@ -302,6 +305,10 @@ fn optics_tp_070_vertex_normals_are_within_one_raw_unit_of_the_exact_oracle() {
     let points: Vec<Raw3> = [[0, 0, 0]].into_iter().chain(corners).collect();
     let faces: Vec<[u32; 3]> = (0..1000).map(|k| [0, 1 + k % 4, 1 + (k + 1 + k / 4) % 4]).collect();
     assert_eq!(check_mesh(&points, &faces), Ok(()));
+    // The oracle itself refuses a normal for a zero sum and a None for a nonzero one.
+    assert!(check_vertex(Some([0, 0, ONE]), [0; 3]).is_err());
+    assert!(check_vertex(None, [0, 0, 1]).is_err());
+    assert_eq!(check_vertex(Some([0, 0, ONE]), [0, 0, 7]), Ok(()));
     // Witnesses: both outcomes occur.
     assert!(nones > 100 && somes > 1000, "{nones} None, {somes} Some");
 }
