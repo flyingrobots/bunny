@@ -33,7 +33,8 @@ docs/topics/performance/test-plan.md
 Generated artifacts:
 None.
 
-Checks run (all inside the flyingrobots/rust-dev:1.96.0 container via devrun):
+Checks run:
+All inside the flyingrobots/rust-dev:1.96.0 container via devrun.
 cargo test --locked --workspace (after the merge): passed
 cargo test --locked -p bunny-num; cargo clippy --locked -p bunny-num --all-targets: clean
 cargo run --locked -p xtask -- topic-docs: contract graph clean
@@ -43,7 +44,7 @@ cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code,
 and once with --rounds 21 --filter linalg/ (base 91ed71fc7a5e, Apple M5 Pro, 2026-11-13).
 Best p50: num/sqrt 1.33x, 1.34x; linalg/length 1.28x, 1.29x, 1.26x; linalg/normalize +4.5 %,
 +3.5 %, +5.5 %; controls num/mul, num/div, query/ray_triangle within 3.2 %.
-code-dojo --all: see the pull request
+code-dojo --all --history origin/main..HEAD: clean after the final commit
 
 Known risks:
 x86-64 and wasm32 are unmeasured in this PR; both keep core's implementation. The cause of
