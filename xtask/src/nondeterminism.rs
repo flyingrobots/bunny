@@ -467,4 +467,6 @@ fn line_of(span: Span) -> usize {
 }
 
 #[cfg(test)]
+mod evasion_tests;
+#[cfg(test)]
 mod tests;

@@ -116,6 +116,11 @@ real `cargo tree` output and the real manifests.
 | ND-TP-027 | permitted dependencies | ND-REQ-005 | `sha2`, `digest` and `cpufeatures` produce no finding. | `xtask/src/nondeterminism/tests.rs::permitted_dependencies_are_accepted` |
 | ND-TP-028 | manifest waiver | ND-REQ-005 | A reasoned `random` waiver in the `bunny-num` manifest leaves only the `json-serialization` finding. | `xtask/src/nondeterminism/tests.rs::manifest_waiver_with_reason_suppresses_a_dependency_rule` |
 | ND-TP-029 | reasonless manifest waiver | ND-REQ-005 | Manifest waivers without a reason or with the reason `ok` leave all three findings reported. | `xtask/src/nondeterminism/tests.rs::manifest_waiver_without_reason_is_refused` |
+| ND-TP-030 | extern crate aliases | ND-REQ-001 | `extern crate std as host;` makes `host::env::var`, `use host::fs::read` and `host::time::Instant` findings under `std-env`, `std-fs` and `time-instant`; `extern crate rand;` and a renamed `rand` are `random` findings. | `xtask/src/nondeterminism/evasion_tests.rs::extern_crate_aliases_resolve_like_imports` |
+| ND-TP-031 | raw identifiers | ND-REQ-001 | `r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line. | `xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names` |
+| ND-TP-032 | raw float types | ND-REQ-001 | `r#f64` as a type and as a path segment is reported as `float-boundary`. | `xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary` |
+| ND-TP-033 | self in a use group | ND-REQ-001 | `use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case. | `xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself` |
+| ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
 
 ```toml
 [[case]]
@@ -378,6 +383,51 @@ test = "xtask/src/nondeterminism/tests.rs::manifest_waiver_without_reason_is_ref
 oracle = "Manifest waivers without a reason or with the reason `ok` leave all three findings reported."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "ND-TP-030"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::extern_crate_aliases_resolve_like_imports"
+oracle = "`extern crate std as host;` makes `host::env::var`, `use host::fs::read` and `host::time::Instant` findings under `std-env`, `std-fs` and `time-instant`; `extern crate rand;` and a renamed `rand` are `random` findings."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-031"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::raw_identifiers_match_their_plain_names"
+oracle = "`r#std::fs::read`, `std::r#env::var`, `use std::collections::r#HashMap`, a raw `HashSet` in a macro body, a raw spelling of an alias, `x.r#unwrap()` and `r#panic!` are reported under their rules at the stated line."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-032"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary"
+oracle = "`r#f64` as a type and as a path segment is reported as `float-boundary`."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-033"
+requirements = ["ND-REQ-001"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself"
+oracle = "`use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "ND-TP-034"
+requirements = ["ND-REQ-003"]
+evidence = "test"
+test = "xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted"
+oracle = "An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family."
+tier = "fast"
+status = "planned"
 ```
 
 ## Determinism Obligations And Evidence
