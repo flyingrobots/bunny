@@ -357,6 +357,9 @@ impl<'ast> Visit<'ast> for Scanner {
             let rules = includes::macro_rules(&self.expand(&call.path), &call.args, &self.origin);
             self.report(call.line, rules);
         }
+        for (line, rule) in includes::token_module_path_findings(&node.tokens, &self.origin) {
+            self.report(line, vec![rule]);
+        }
         visit::visit_macro(self, node);
     }
 

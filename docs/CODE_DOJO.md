@@ -130,13 +130,14 @@ and counted with the forms above:
 
 | `include!` in every spelling: a non-Rust file, a `.rs` file, a `concat!` path, `std::`/`core::`, renamed, in a macro | `include-source` (Bunny's own) | 0 of 8 | `include_of_source_is_rejected_however_it_is_named` |
 | `#[path]` to a non-`.rs` file, outside the crate, absolute, with backslashes, through `cfg_attr` | `include-source` | 0 of 5 | `path_attributes_must_name_a_scanned_file` |
+| `#[path]` emitted by a macro, under nested `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 5 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
 | `include_str!`/`include_bytes!` outside the crate, absolute, computed, renamed, in a macro | `include-data` (Bunny's own) | 0 of 5 | `included_data_must_come_from_inside_the_crate` |
 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")`, in a macro | `std-env` | 1 of 6 (`std::env!`, through the `std::env` prefix) | `compile_time_environment_macros_are_std_env` |
 
 | `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park`, `park_timeout_ms`, `yield_now`, `park_timeout` by alias; `SystemTimeError` | `thread-sleep`, `time-system` | 0 of 5 | `sibling_names_in_banned_families_are_rejected` |
 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64(text.parse().ok()?)`, `div_duration_f32`, `as_secs_f32` in `format!`, `x.to_f32()` | `float-boundary` | 0 of 5 | `float_methods_with_no_float_token_are_float_boundary` |
 
-With these the rule tests seed 140 forms; the gate before #321 caught 93.
+With these the rule tests seed 145 forms; the gate before #321 caught 93.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14
@@ -294,12 +295,15 @@ What a waiver covers:
   an expression), it covers that one line.
 
 The gate finds comments from the token stream (`xtask/src/waivers.rs`):
-whatever part of a line no token covers is a comment.
+whatever text no token covers is whitespace or a comment, and each comment is
+read whole, so a block comment over several lines with two clauses waives
+neither rule.
 
 A dependency-rule waiver is the same clause in a whole-line TOML comment
 (`#` first on the line) anywhere in the manifest of the crate the finding
-names; the same text inside a TOML string, or after a value on the line, is
-not a waiver:
+names; the same text inside a TOML string (a line inside a multi-line
+`"""` or `'''` string included), or after a value on the line, is not a
+waiver:
 
 ```toml
 # dojo: allow random -- seeded generator behind the reviewed `fuzz` feature
