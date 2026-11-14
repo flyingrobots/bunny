@@ -36,6 +36,13 @@ holds only Bunny crates, with no crates.io crate; the full gate checks this on
 every run. See
 [`docs/topics/ascii-ply`](../../docs/topics/ascii-ply/README.md#dependencies-and-features).
 
+## Package Contents
+
+The published package leaves out the 143 KB Stanford bunny asset under
+`tests/fixtures/stanford-bunny-ascii/` and the one test that reads it,
+`tests/ply_ascii_stanford_tests.rs`; every other test compiles from the package.
+See [`docs/topics/release-packaging`](../../docs/topics/release-packaging/README.md).
+
 ## ASCII PLY
 
 `parse_ascii_ply` reads `format ascii 1.0` PLY triangle meshes. Vertex positions
