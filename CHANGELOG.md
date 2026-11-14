@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
+  hits on the benchmark sphere: `shade/smooth_normal` (the shipped
+  interpolation from exact numerators), `shade/smooth_normal_divided` (a
+  replica of the rejected alternative with two floored `barycentrics`
+  weights), and `shade/smooth_hit_shading` beside `shade/flat_hit_shading_mesh`
+  on the same hits. A test checks that the replica and `smooth_normal` agree
+  within both bounds. Ledger entry 13 records the cost; closes
+  flyingrobots/bunny#289.
+
+* `bunny-optics` tests pin the start point's two-step case and its tie rule:
+  kernel-reported hits that take zero, one and two steps (a regular-octahedron
+  face, whose equal normal components are the proof's worst case, and a general
+  triangle), five hits on planes whose largest normal components tie, and a
+  generated check of 100 000 rays against the rule with an exact plane test.
+  Before them only the comparison with the retained 0.7.1 code caught a
+  one-step limit, and nothing caught the highest axis on a tie. The optics
+  chapter no longer says that two steps were never needed: 1 808 of 99 616
+  generated hits needed two. No library function changes
+  (flyingrobots/bunny#288).
+
 * `bunny-optics` tests pin the three rounding rules of
   `bunny-diffuse-shading/1` that had none: the light cosine rounds to nearest,
   and `round_shift` (cosine and hemisphere direction) and the frame division

@@ -33,6 +33,8 @@ mod sample;
 mod scene;
 #[cfg(feature = "shade")]
 mod shade;
+#[cfg(feature = "smooth")]
+mod smooth;
 mod timing;
 
 use std::error::Error;
