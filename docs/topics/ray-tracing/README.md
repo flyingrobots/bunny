@@ -1,21 +1,22 @@
-# Ray Tracing Kernels
+# Ray Tracing
 
-This chapter defines Bunny's current contract for the ray-tracing kernels in
-`bunny-query`: a prepared ray, a prepared triangle, a conservative ray-box test
-and an exact ray-triangle test.
+This chapter defines Bunny's current contract for ray tracing: the kernels in
+`bunny-query` (a prepared ray, a prepared triangle, a conservative ray-box test
+and an exact ray-triangle test) and the closest-hit and any-hit BVH traversals
+in `bunny-broadphase` that run them.
 
-They are the per-node and per-primitive tests a closest-hit traversal runs
-millions of times, so they avoid division wherever the answer allows it. The
-general-purpose solvers in `crates/bunny-query/src/ray.rs`
-(`ray_intersects_aabb`, `ray_intersects_triangle`) are unchanged and keep their
-own contracts.
+The kernels are the per-node and per-primitive tests a closest-hit traversal
+runs millions of times, so they avoid division wherever the answer allows it.
+The general-purpose solvers in `crates/bunny-query/src/ray.rs`
+(`ray_intersects_aabb`, `ray_intersects_triangle`) and the all-hits traversal
+`bunny_broadphase::intersect_ray` are unchanged and keep their own contracts.
 
 ## Status
 
 This is a living topic chapter, not a proposal.
 
-Current behavior is implemented in `crates/bunny-query/src/trace.rs` and
-exported as:
+The kernels are implemented in `crates/bunny-query/src/trace.rs` and exported
+as:
 
 - `TraceRay` (`new`, `from_ray`, `origin`, `direction`, `box_entry`,
   `hit_triangle`);
@@ -23,9 +24,16 @@ exported as:
 - `TriangleHit` (`distance`, `front_face`, `barycentrics`);
 - `TRACE_COORD_LIMIT_RAW` and `TRACE_DIRECTION_LIMIT_RAW`.
 
-Evidence is listed in the [test plan](test-plan.md). A BVH closest-hit
-traversal built on these kernels, and their benchmarks, are not part of this
-chapter yet.
+The traversals are implemented in `crates/bunny-broadphase/src/closest_hit.rs`
+and exported as:
+
+- `closest_hit` and `any_hit`;
+- `BvhView` (`new`, `nodes`, `prim_indices`), the borrowed BVH buffers they
+  search;
+- `ClosestHit` (`primitive`, `distance`).
+
+Evidence is listed in the [test plan](test-plan.md). Benchmarks of the kernels
+and the traversals are not part of this chapter yet.
 
 All arithmetic is integer arithmetic on raw Q32.32 values (`i64`, widened to
 `u128` or `i128`). There is no floating point, no `unsafe` code and no
@@ -158,3 +166,118 @@ which `v0, v1, v2` appear counter-clockwise, that is when
 the direction is not normalized. `TraceTriangle::vertices` returns the three
 vertices given to `new`, and `TraceTriangle::bounds` returns the smallest
 `FixedAabb3` that contains them.
+
+## Closest-Hit Traversal
+
+`closest_hit(bvh, ray, t_max, hit)` returns the primitive the ray hits first
+within distances `0..=t_max`, as a `ClosestHit { primitive, distance }`, or
+`None` when nothing is hit. `any_hit(bvh, ray, t_max, hit)` returns whether
+anything is hit in that range.
+
+`bvh` is a `BvhView`: the node buffer (truncated to the nodes `build_bvh`
+used; the root is node 0) and the primitive-index buffer. Both stay owned by
+the caller, and the traversal allocates nothing; its stack is a fixed array of
+64 entries on the call stack.
+
+The primitive test is a caller closure, so the traversal works for any
+primitive type:
+
+- `closest_hit` calls `hit(primitive, limit)`. It returns the hit distance, or
+  `None` for a miss. `limit` is the best distance found so far (at first
+  `t_max`); a triangle closure passes it to `TraceRay::hit_triangle` as
+  `t_max` with `t_min` zero. A reported distance outside `0..=limit` is
+  ignored.
+- `any_hit` calls `hit(primitive)`, which returns whether the primitive is hit
+  within `0..=t_max`. After the first `true` the search ends and the closure is
+  not called again.
+
+### Search Order And Pruning
+
+The search is depth first and front to back:
+
+1. The root is pushed with its `box_entry` bound if the ray can reach it.
+2. At an interior node, both children are tested with
+   `TraceRay::box_entry(child, limit)`. A child the ray cannot reach within
+   the current limit is dropped. The farther child is pushed first and the
+   nearer one on top, so the nearer one is searched first; when both bounds
+   are equal the left child is searched first.
+3. A node popped from the stack is skipped when its entry bound is strictly
+   greater than the current limit, which may have shrunk since it was pushed.
+   A node whose bound equals the limit is still searched.
+4. At a leaf, each primitive is tested in the order the primitive-index buffer
+   lists it. A hit replaces the best one when its distance is smaller, or equal
+   with a lower primitive index. The limit becomes the best distance.
+
+Malformed buffers are reported as `TraversalError::InvalidNodeIndex` or
+`TraversalError::InvalidPrimitiveRange` when the search reaches the malformed
+node; a malformed node the search prunes is not inspected. A tree deeper than
+the 64-entry stack allows returns `TraversalError::StackOverflow`. An empty
+node buffer is a miss.
+
+### Correctness: The Answer Does Not Depend On The Tree
+
+The result is the hit a test of every primitive would choose: of all
+primitives whose test reports a distance in `0..=t_max`, the one with the
+smallest distance, and among those the lowest primitive index. That holds for
+every tree over the same primitives, whatever its shape and whatever order its
+leaves list primitives in. The argument, for a tree whose node bounds contain
+the bounds of every primitive below them (as `build_bvh` guarantees) and a
+closure that reports `floor(T)` for a hit at true distance `T` (as
+`hit_triangle` does):
+
+1. **The box bound is a lower bound.** `box_entry` returns an integer raw
+   value at or below the exact entry distance of the box
+   ([Conservative Box Test](#conservative-box-test)). Its computed slab upper
+   bounds are above the exact exits, so a box the ray reaches is rejected only
+   when that lower bound exceeds the distance limit.
+2. **A primitive inside a node is no nearer than the node.** The hit point at
+   true distance `T` lies in the primitive's box, so in every ancestor's box;
+   the ray is inside that box at `T`, so the exact entry `E` is at most `T`.
+   The computed bound `b` therefore satisfies `b <= E <= T`.
+3. **The floor keeps the order.** The reported distance is `floor(T)`, and `b`
+   is an integer at most `T`, so `b <= floor(T)`: the floor of a value that is
+   at least an integer bound is itself at least that bound.
+4. **Ties are kept.** Let the winner be the primitive the full test chooses,
+   with reported distance `d`. Until it is found, the limit is at least `d`
+   (the limit only ever becomes the distance of a hit that was accepted, and no
+   accepted hit beats the winner). Every ancestor of the winner has bound
+   `b <= d <= limit`, and a node is dropped or skipped only when its bound is
+   strictly greater than the limit, so every ancestor is searched and the
+   winner is tested. Its test reports `d <= limit`, and no hit already kept can
+   beat `(d, index)`, so it is kept; nothing found later beats it either.
+5. **Nothing better is invented.** Every kept hit was reported by the closure
+   within `0..=t_max`, so the result is never a primitive the full test would
+   not consider.
+
+`any_hit` runs the same search with the limit held at `t_max` until the first
+hit, which ends it. Every ancestor of a primitive hit at true distance `T` with
+`floor(T) <= t_max` has bound `b <= floor(T) <= t_max` (steps 1 to 3), so it is
+searched: `any_hit` returns `true` exactly when testing every primitive would
+find a hit.
+
+**What the caller must guarantee.** The claim needs three things of the
+closure and the tree:
+
+- every reported distance is at least the floor of some distance at which the
+  ray is inside the primitive's box (for `any_hit`: a primitive is reported
+  hit only if the ray is inside its box at a distance whose floor is at most
+  `t_max`), and the tree's node bounds contain the box of every primitive
+  below them;
+- the closure answers the same way for a primitive whatever `limit` it
+  receives, except that it may return `None` (or a distance above the limit)
+  for hits beyond the limit, as `hit_triangle` does;
+- it has no other dependence on call order (it is a function of its inputs).
+
+A closure that reports distances larger than the floor of the true distance
+(a conservative overestimate) still satisfies the first condition. A closure
+that reports a distance below the box bound of a primitive's subtree breaks
+step 4: that primitive is found only if the search happens to reach its leaf
+before the limit drops below the subtree's bound, so the answer can depend on
+the tree's shape and differ from the full test. It is still a primitive the
+closure reported within `0..=t_max`, and the traversal remains deterministic
+for a fixed tree.
+
+### Example
+
+The rustdoc of `closest_hit` builds a BVH over two triangles with `build_bvh`
+and traces a ray with a closure over `TraceRay::hit_triangle`.
