@@ -188,7 +188,16 @@ pub(crate) struct Rig {
 
 impl Rig {
     pub(crate) fn new() -> Self {
-        let scene = scene();
+        Self::with(scene())
+    }
+
+    /// The same triangles and rays in the tree `build_bvh_sah` builds.
+    #[cfg(feature = "sah")]
+    fn sah() -> Self {
+        Self::with(crate::scene::sah_scene())
+    }
+
+    fn with(scene: Scene) -> Self {
         let triangles = trace_triangles(&scene);
         Self { scene, triangles, rays: trace_rays() }
     }
@@ -558,15 +567,24 @@ fn render_packets(rig: &Rig) -> String {
     out
 }
 
-/// The `--stats` report, as Markdown tables.
+/// The `--stats` report, as Markdown tables: for the `build_bvh` tree and, with the `sah`
+/// group, again for the `build_bvh_sah` tree.
 pub(crate) fn report() -> String {
-    let rig = Rig::new();
+    #[allow(unused_mut)]
+    let mut out = report_for(&Rig::new(), "");
+    #[cfg(feature = "sah")]
+    out.push_str(&report_for(&Rig::sah(), " (build_bvh_sah tree)"));
+    out
+}
+
+fn report_for(rig: &Rig, tree: &str) -> String {
     format!(
-        "## BVH\n\n| | |\n| --- | ---: |\n{}\n## closest_hit\n\n{}\n## any_hit\n\n{}\n## Neighbouring rays\n\n{}",
-        render_tree(&rig),
-        render_counts(&rig, Mode::Closest),
-        render_counts(&rig, Mode::Any),
-        render_packets(&rig),
+        "## BVH{tree}\n\n| | |\n| --- | ---: |\n{}\n## closest_hit{tree}\n\n{}\n\
+         ## any_hit{tree}\n\n{}\n## Neighbouring rays{tree}\n\n{}",
+        render_tree(rig),
+        render_counts(rig, Mode::Closest),
+        render_counts(rig, Mode::Any),
+        render_packets(rig),
     )
 }
 
@@ -719,6 +737,33 @@ mod tests {
             }
         }
         assert_eq!(bad, Vec::<usize>::new());
+    }
+
+    /// TRACE-TP-311: every box test the benchmark's 1 024 `closest_hit` and `any_hit`
+    /// searches make returns the same `Option` as the retained pre-#258 box test, at the
+    /// recorded limit and at the limits that decide each answer.
+    #[test]
+    fn every_recorded_box_test_matches_the_reference_box_test() {
+        use crate::box_entry_reference;
+        let rig = Rig::new();
+        let (mut compared, mut reached) = (0_usize, 0_usize);
+        for ray in &rig.rays {
+            let mut boxes = walk(&rig, ray, Mode::Closest).boxes;
+            boxes.extend(walk(&rig, ray, Mode::Any).boxes);
+            for (node, limit) in boxes {
+                let node = rig.scene.nodes.get(node as usize).expect("recorded nodes exist");
+                let entry = box_entry_reference::box_entry(ray, &node.bounds, FAR);
+                let decisive = entry.map_or(0, FixedQ32_32::raw);
+                let limits = [limit.raw(), FAR.raw(), 0, -1, decisive, decisive.saturating_sub(1)];
+                for limit in limits.map(FixedQ32_32::from_raw) {
+                    let expected = box_entry_reference::box_entry(ray, &node.bounds, limit);
+                    assert_eq!(ray.box_entry(&node.bounds, limit), expected, "{ray:?} {node:?}");
+                }
+                compared += 1;
+                reached += usize::from(entry.is_some());
+            }
+        }
+        assert!(compared > 30_000 && reached > 10_000, "{compared} tests, {reached} reached");
     }
 
     #[test]

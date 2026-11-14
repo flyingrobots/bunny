@@ -8,6 +8,10 @@
 //! sets the number of timed batches per case (default 101); `--stats` prints the traversal
 //! counters and tree shape of the benchmark scene as Markdown instead of timing anything.
 
+// The retained pre-#258 box test, shared with bunny-query's equivalence tests.
+#[cfg(all(test, feature = "trace"))]
+#[path = "../../bunny-query/tests/support/box_entry_reference.rs"]
+mod box_entry_reference;
 mod cases;
 #[cfg(feature = "trace_compact")]
 mod compact;
@@ -17,7 +21,13 @@ mod memory;
 mod profile;
 #[cfg(feature = "sample")]
 mod sample;
-#[cfg(any(feature = "scene", feature = "trace", feature = "trace_compact"))]
+#[cfg(any(
+    feature = "scene",
+    feature = "trace",
+    feature = "trace_compact",
+    feature = "build",
+    feature = "sah"
+))]
 mod scene;
 #[cfg(feature = "shade")]
 mod shade;
@@ -58,6 +68,17 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(not(feature = "trace"))]
         return Err("--stats needs the `trace` feature".into());
+    }
+    #[cfg(all(feature = "trace", feature = "sah"))]
+    {
+        // The SAH cases are comparable with the quartile-tree cases only if both trees give the
+        // same answers.
+        let bad = scene::sah_disagreeing_rays();
+        if !bad.is_empty() {
+            return Err(
+                format!("the SAH tree and the quartile tree disagree on rays {bad:?}").into()
+            );
+        }
     }
     for case in cases::all() {
         if options.filter.as_deref().is_some_and(|filter| !case.name.contains(filter)) {

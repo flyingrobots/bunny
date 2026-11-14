@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+* The pixel path in `bunny-optics` no longer slows down when unrelated code is added to the
+  crate (flyingrobots/bunny#271): the small per-channel helpers and the public entry points
+  are marked `#[inline]`, so their inlining no longer depends on how the release profile
+  splits the crate into codegen units. No output bit changes.
+
 ### Added
 
 * Added a compact BVH node layout to `bunny-broadphase` (flyingrobots/bunny#215):
@@ -28,6 +35,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `trace_compact` group that times the compact layout, its conversion and three
   node orders.
 
+* Added `build_bvh_sah` to `bunny-broadphase`: a binned surface-area-heuristic
+  BVH builder that writes the same buffers and node format as `build_bvh`, so
+  every traversal accepts its trees. 16 centroid bins per axis, integer `u128`
+  costs with a per-node shift that rules out overflow, stated tie rules (lower
+  axis, then lower plane; an equal split and leaf cost makes a leaf), leaves of
+  at most four primitives below a depth cap of 60, a stable partition (leaves
+  list primitives in ascending index order), no recursion and no allocation.
+  Its parameters are public constants in `bunny_broadphase::bvh`. `build_bvh`'s
+  output is unchanged, and both builders' bytes are now locked by golden
+  fingerprints. The new BVH construction chapter (`docs/topics/bvh-construction/`)
+  states both builders' contracts.
+* Added the `build` and `sah` feature groups to `bunny-perf`: build-time cases
+  for both builders (`build/bvh`, `build/bvh_sah`) and the benchmark rays traced
+  through the SAH tree (`trace/closest_hit_sah`, `trace/any_hit_sah`), with a
+  check that both trees give the same `closest_hit` and `any_hit` answers on
+  every ray. Ledger entry 9 in `docs/topics/performance/` records the
+  measurement.
 * Added diffuse shading for a one-bounce path tracer to `bunny-optics`, as
   `bunny-diffuse-shading/1` (`SHADING_ID`), integer-only, with golden vectors
   and stated bounds (flyingrobots/bunny#160, the diffuse slice).
@@ -107,6 +131,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with alpha 255 into a four-byte slice and refuses any other length. Golden
   vectors, an `f64` reference oracle in the tests and eight recorded mutations;
   `bunny-perf` gains a `pixel` group with `pixel/resolve_srgb_rgba8`.
+
+### Changed
+
+* `TraceRay::box_entry` is cheaper, with the same result for every input
+  (flyingrobots/bunny#258): slab differences in `i64` (bitwise not turns a
+  negative direction into a forward one) instead of `i128`, parallel axes in
+  the same path, and no data-dependent branch of its own. `TraceRay` is
+  unchanged (72 bytes, same fields). On the benchmark scene (Apple M5 Pro,
+  container) `trace/closest_hit` is about 17 % faster and the replayed box tests
+  of a ray about 20 %, and the compact-layout search `trace/closest_hit_compact`
+  about 17 %; see ledger entry 10 in the performance chapter. The pre-#258 box test
+  is kept as a reference oracle (`crates/bunny-query/tests/support/box_entry_reference.rs`)
+  with equivalence tests over seeded, extreme-coordinate and benchmark-scene
+  corpora (`TRACE-TP-308` to `TRACE-TP-312`).
+
+### Changed (behaviour)
+
+* `FixedMat4::try_look_at` (shipped in 0.7.0) changes its result for two input
+  classes (flyingrobots/bunny#273); every other input that returned `Ok` keeps
+  every output bit, checked against the 0.7.0 implementation on 60 000 seeded
+  inputs. First, an `up` vector that is exactly parallel or antiparallel to
+  `target - eye` (their exact integer cross product is zero), or zero, now
+  returns `LookAtError::ParallelUp`; before, rounding of the normalized view
+  direction made some such inputs return `Ok` with a roll made of rounding
+  error (for example `eye = (0, 0, 0)` and `target = up = (1, 2, 3)`). Nearly
+  parallel inputs are still accepted. Second, a translation entry whose finished
+  value `-(row . eye)` is representable no longer returns `Overflow` because an
+  intermediate term or sum was out of range (for example `eye.x = i64::MIN` raw,
+  `target = (0, 0, 0)`, `up = (0, 1, 0)`, where the entry is `-2^31` units);
+  each entry is now summed in a wider integer and only the finished entry is
+  checked. The seeded orthonormality test now draws the 2^38 range it states;
+  the documented bounds hold over it.
 
 ## [0.7.0] - 2026-11-13
 

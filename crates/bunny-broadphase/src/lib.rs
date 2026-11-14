@@ -19,7 +19,7 @@ pub mod sweep_and_prune;
 pub mod traversal;
 pub mod utils;
 
-pub use bvh::{build_bvh, BvhNode};
+pub use bvh::{build_bvh, build_bvh_sah, BvhNode};
 pub use closest_hit::{any_hit, closest_hit, BvhView, ClosestHit};
 pub use compact::{compact_bvh, CompactChild, CompactError, CompactNode, CompactRoot};
 pub use compact_hit::{compact_any_hit, compact_closest_hit, CompactView};

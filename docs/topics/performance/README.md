@@ -68,7 +68,7 @@ How the comparison stays fair:
   median of each percentile across rounds and the best (lowest) p50; the speedup column and
   the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
-  `linalg`, `query`, `scene`, `trace`, `sample`, …). When the base revision cannot compile a group (an API it does not
+  `linalg`, `query`, `scene`, `trace`, `sample`, `build`, `sah`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
 
 The temporary worktree is removed after the build. Build outputs stay under `target/perf/`.
@@ -98,6 +98,21 @@ trade-off: absolute times under `--align-code` are not what production code sees
 padding can cost a few nanoseconds per call), so use it for comparisons and treat unaligned
 numbers as a second opinion. CI always uses it. Inherited `RUSTFLAGS` are kept and the
 alignment flags are appended.
+
+### Codegen-unit noise
+
+Adding code to a crate can change how the release profile (16 codegen units) splits that
+crate, and with it which small functions the compiler inlines along an unrelated hot path.
+Without `#[inline]`, a function in another unit is a call, and a public function of another
+crate is always a call. This is seen in flyingrobots/bunny#271: adding the shading module to
+`bunny-optics` made `pixel/resolve_srgb_rgba8` 30 % slower (median) on the aarch64
+container and 38 % slower (best p50) on the x86-64 CI runner, with no pixel code changed;
+building with `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1` removed most of the gap. The remedy
+for a path of small hot helpers is explicit `#[inline]` on them and on the entry points a
+caller invokes per item (never `#[inline(always)]`, which the `inline_always` lint rejects
+here), checked on both architectures, because an inlining attribute can cost speed on one
+and not the other (ledger entry 3). [Entry 11](#11-inline-on-the-pixel-path-no-output-change)
+records the measurement.
 
 ### Bimodal cases
 
@@ -199,8 +214,13 @@ The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere o
 triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
 rays (a 32 by 32 grid). Where a case measures an old API against a new one, the harness
 also checks that both give the same answer on every input: `scene/closest_visitor` and
-`trace/closest_hit` must choose the same primitive on every ray. The harness runs that
-check before timing and exits with the differing ray indices if it fails.
+`trace/closest_hit` must choose the same primitive on every ray, and `trace/closest_hit`
+and `trace/any_hit` must give the same answers through the `build_bvh` tree as
+`trace/closest_hit_sah` and `trace/any_hit_sah` through the `build_bvh_sah` tree. The
+harness runs those checks before timing and exits with the differing ray indices if one
+fails. Both trees' traversal cases call the same functions, so they run the same machine
+code and differ only in the tree. The `build` and `sah` groups also time one whole build
+of the scene's tree per call (`build/bvh`, `build/bvh_sah`, into buffers allocated once).
 
 The `sample` group (`crates/bunny-perf/src/sample.rs`) times the `bunny-optics` sample hash
 and pixel sampler over 1 024 keys of a 32 by 32 tile, 16 samples and 4 dimensions:
@@ -909,6 +929,454 @@ this scene's does not.
 **Unmeasured.** wasm32, ARM Linux and Windows runners; local x86-64; other scenes and ray
 batches; scenes whose trees do not fit the cache; whether the gain survives a different builder (flyingrobots/bunny#213) or packets
 (flyingrobots/bunny#217).
+
+### 9. Binned SAH BVH builder (new API)
+
+**Where:** `build_bvh_sah` in `bunny-broadphase` (flyingrobots/bunny#213). The contract is in
+the [BVH construction chapter](../bvh-construction/README.md#the-binned-sah-builder).
+
+**Technique.** `build_bvh` tries three planes per axis at the quartiles of the centroid
+span, with a full pass over the node's primitives for each. `build_bvh_sah` counts
+centroids into 16 equal-width bins per axis in one pass, sweeps the bins from both ends to
+cost all 15 planes per axis, and compares the cheapest with the leaf cost, using the
+surface area heuristic with unit traversal and intersection weights. Nodes of up to four
+primitives become leaves when splitting does not pay. Costs are `u128` integers.
+
+**Fidelity: new API.** `build_bvh` keeps every output bit: its source changed only in the
+visibility of four helpers, its earlier tests pass unmodified, and a new golden fingerprint
+locks its bytes. The SAH tree is a deterministic function of the input with stated tie
+rules (lower axis, then lower plane; an equal split and leaf cost makes a leaf; a stable
+partition), locked by its own golden fingerprint on every CI platform. `closest_hit` and
+`any_hit` return the same answers on both trees, by the
+[tree-independence argument](../ray-tracing/README.md#correctness-the-answer-does-not-depend-on-the-tree);
+the harness checks it on all 1 024 benchmark rays before timing, and the broadphase tests
+against a test of every primitive on seeded scenes.
+
+**Choosing the parameters.** Exploratory sweeps, each variant a fresh build of the harness
+run three times inside one `--exclusive` container run (Apple M5 Pro, `aarch64-linux`,
+alignment flags on, not through `xtask perf`). Median of the three p50s, nanoseconds per
+ray; the quartile-tree case ran in the same process as the reference:
+
+| Leaf size | Bins | `closest_hit` quartile | `closest_hit` SAH | ratio | `any_hit` quartile | `any_hit` SAH | ratio | SAH build |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 16 | 227.50 | 230.51 | 1.013 | 211.47 | 216.23 | 1.023 | 18.1 ms |
+| 2 | 16 | 226.93 | 210.32 | 0.927 | 209.59 | 195.47 | 0.933 | 17.8 ms |
+| 4 | 16 | 225.02 | 208.45 | 0.926 | 207.97 | 194.74 | 0.936 | 17.5 ms |
+| 8 | 16 | 225.79 | 209.92 | 0.930 | 207.84 | 197.14 | 0.949 | 17.6 ms |
+| 4 | 8 | 227.95 | 212.57 | 0.933 | 208.70 | 198.45 | 0.951 | 12.7 ms |
+| 4 | 16 | 222.25 | 209.35 | 0.942 | 209.55 | 196.66 | 0.938 | 17.5 ms |
+| 4 | 32 | 225.59 | 206.46 | 0.915 | 208.46 | 193.12 | 0.926 | 26.1 ms |
+
+Weights other than 1 : 1 were no better: traversal 1 and intersection 2 gave ratios 0.955
+and 0.967, traversal 2 and intersection 1 gave 0.983 and 0.922 (leaf size 4, 16 bins).
+Leaf size 1 (always split) loses the gain; sizes 2, 4 and 8 are within the noise of each
+other, and 4 was best or tied in both runs. 32 bins traced about 1 to 2 % faster than 16,
+inside the noise, at 1.5 times the build time; 8 bins built faster and traced no better.
+Chosen: leaf size 4, 16 bins, weights 1 and 1.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), 2026-11-13, two complete runs with `--exclusive` (no other container run
+overlapped) of:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Run 1 used base `8cdbb1cb38f5` and the branch before its last merge of `origin/main`; run 2
+used base `fd69f19` (`origin/main`, the 0.7.0 release preparation, which changed versions
+and documentation only) and the final branch. The base cannot build `build_bvh_sah`, so the
+SAH cases are reported as `new`; the comparison that matters is quartile tree against SAH
+tree within one run, on the same binary, the same rays and the same traversal functions.
+After run 2, `origin/main` gained the `sample` group and the `trace/triangle_*` cases
+(flyingrobots/bunny#214 and the optics sampler), which change no function these cases
+call; the branch was merged with it and not re-timed locally.
+Best p50 (nanoseconds per ray; per build for `build/`):
+
+| Case | Run 1 base | Run 1 head | Run 2 base | Run 2 head |
+| --- | ---: | ---: | ---: | ---: |
+| `trace/closest_hit` (quartile tree) | 221.15 | 220.26 | 221.07 | 219.24 |
+| `trace/closest_hit_sah` (SAH tree) | new | 205.20 | new | 204.14 |
+| `trace/any_hit` (quartile tree) | 206.70 | 205.12 | 205.97 | 204.79 |
+| `trace/any_hit_sah` (SAH tree) | new | 188.68 | new | 188.44 |
+| `build/bvh` | 167.29 ms | 167.53 ms | 166.28 ms | 166.01 ms |
+| `build/bvh_sah` | new | 17.44 ms | new | 17.39 ms |
+| `scene/closest_visitor` (quartile tree) | 3175.99 | 3179.41 | 3162.15 | 3183.06 |
+
+Within the head side of each run, `closest_hit` costs 205.20 / 220.26 = 0.932 and
+204.14 / 219.24 = 0.931 on the SAH tree, 15.1 and 15.1 ns less per ray (6.9 %); `any_hit`
+costs 188.68 / 205.12 = 0.920 and 188.44 / 204.79 = 0.920, 16.4 and 16.4 ns less (8.0 %).
+The median p50 ratios agree (closest 210.65 / 225.18 = 0.935 and 207.97 / 223.88 = 0.929;
+any 193.31 / 207.85 = 0.930 and 192.42 / 209.02 = 0.921). Base against head on the
+unchanged cases is the noise reference: `trace/closest_hit`, `trace/any_hit`, `build/bvh`
+and `scene/closest_visitor` moved by -0.8 % to +0.7 % in best p50. The kernel cases of the
+other groups moved by at most 6.7 % in best p50 (`num/div`, run 2; its median moved
+-1.2 %), except `prepared/div`, +17.4 % in best p50 in run 1 with its median unchanged
+(4.23 ns on both sides) and -3.4 % in run 2: a lucky base round, not a change. The exception is the three `trace/kernel_tri_*` replays, which were 7 to 14 %
+slower on the head side in both runs (best p50 +13.2 %, +7.0 %, +9.2 % and +13.7 %, +8.9 %,
++8.5 %): see the note below.
+
+**The `trace/kernel_tri_*` shift.** Those cases replay the quartile tree's recorded triangle
+tests through `TraceRay::hit_triangle` in `bunny-query`, which this branch does not touch,
+and the harness source is the same on both sides. The difference between the two binaries
+is that the head harness also compiles the `build` and `sah` groups, which the base cannot
+build. To test whether that alone moves them, the head harness was built
+in the workspace twice, with and without the `build` and `sah` groups (alignment flags on),
+and the two binaries were run alternately three times with `--filter trace/kernel_tri`
+inside one `--exclusive` container run: p50s were 18.84 to 19.45, 29.01 to 32.31 and 45.49
+to 50.13 ns, with no consistent difference between the binaries. So the shift was not
+reproduced outside `xtask perf`'s standalone builds, and its cause is not established.
+Binary layout or placement (see [code-layout noise](#code-layout-noise) and
+[bimodal cases](#bimodal-cases)) is the suspect, because no code those cases run changed;
+that is a suspicion, not a finding. The cases replay the quartile tree's calls, so they do
+not bear on the SAH comparison above.
+
+**x86-64 CI reading.** The pull request's `Perf / before and after` job (GitHub's shared
+x86-64 Linux runner, 7 rounds, `--align-code`, base `cda15ecc020a`) read, best p50:
+`trace/closest_hit` 411.54 ns against `trace/closest_hit_sah` 386.45 ns (0.939),
+`trace/any_hit` 371.78 against `trace/any_hit_sah` 347.00 (0.933), and `build/bvh`
+248.5 ms against `build/bvh_sah` 30.2 ms (8.2 times faster). Base against head moved the
+unchanged trace, build and scene cases by -0.2 % to +0.5 %, and the `trace/kernel_tri_*`
+replays by -0.2 % to +1.4 %: the shift seen on aarch64 did not appear there. Shared runners
+are coarse; this is one reading.
+
+**Why the gain is small, from the traversal counters.** `bunny-perf --stats` now prints the
+profile tables for both trees (per ray, averaged over the 1 024 `closest_hit` searches):
+
+| | quartile tree | SAH tree |
+| --- | ---: | ---: |
+| nodes | 55 277 | 29 279 |
+| leaf sizes (primitives: leaves) | 1: 27 628, 2: 11 | 1: 2 473, 2: 11 388, 3: 715, 4: 64 |
+| maximum / mean leaf depth | 19 / 15.44 | 18 / 14.93 |
+| interior area / root area (SAH traversal term) | 3.13 | 2.17 |
+| leaf area times count / root area (intersection term) | 1.86 | 1.87 |
+| nodes popped | 11.37 | 10.20 |
+| `box_entry` calls | 19.76 | 17.89 |
+| interior nodes visited by sphere rays | 24.14 | 21.49 |
+| triangle tests | 1.63 | 1.91 |
+| depth of the two ground triangles' leaves | 3 | 2 |
+
+The SAH tree has 9.5 % fewer box tests and 10 % fewer pops, and 17 % more triangle tests,
+because leaves hold two primitives on average. At the profile's costs (about 6.5 ns per box
+test, about 4 ns per pop, 16 to 32 ns per triangle test) that is roughly 12 ns saved, 6 ns
+of pops saved and 5 to 9 ns of triangle tests added, close to the 14 to 16 ns measured.
+The SAH cost fell by 19 % (4.99 to 4.04 root areas), almost all of it in the traversal term,
+but the ray cost fell by 7 %: the root box is dominated by the 40-unit ground triangles, so
+the area weights describe rays spread uniformly over that box, not camera rays aimed at a
+unit sphere. On the near-uniform tessellated sphere the quartile split is already close to
+the median split SAH would choose, so the sphere rays still make 21.5 interior visits where
+one descent takes about 15. The profile's ceiling for a builder on this scene was 30 to
+35 ns; this one gets about half of it.
+
+**Build time.** `build_bvh_sah` builds the scene's tree in about 17.5 ms against 167 to
+169 ms for `build_bvh`, 9.6 times faster: one binning pass per node instead of nine full
+passes, and half as many nodes. The stable partition sorts both sides of every split in
+place, which is included.
+
+**Quality independent of timing.** SAH cost (the builder's own weights, exact areas, per
+1 000 root areas): benchmark scene 4 984 (quartile) and 4 038 (SAH); seeded test scenes
+from `bvh_tp_015`: 600 scattered boxes 16 672 and 16 175, clustered boxes 3 233 and 3 228,
+a grid on two huge ground boxes 2 935 and 2 935 (lower by less than one part in a
+thousand). The cost is the SAH builder's own objective, so a lower value is expected, not
+independent evidence that rays get faster; the timings above are the evidence for this
+scene.
+
+**Trade-offs.**
+
+- *Different trees.* `intersect_ray` and `intersect_aabb` report primitives in a different
+  order on SAH trees, and leaves hold up to four primitives, so a caller that relied on the
+  quartile tree's order or on one primitive per leaf must not switch silently.
+- *Memory.* 29 279 nodes of 56 bytes (1.6 MB) instead of 55 277 (3.1 MB); the buffers the
+  caller provides are the same size (2n - 1 nodes).
+- *More triangle tests per ray*, which a scene with a costlier primitive test would feel.
+- *Depth cap.* A node at depth 60 is a leaf of any size, a guarantee for the 64-entry
+  traversal stacks that ordinary inputs do not reach.
+
+**One scene is one scene.** These numbers are for the 27 650-triangle bumpy sphere on two
+ground triangles, one camera and 1 024 primary rays. Scenes with uneven primitive density,
+long thin primitives or secondary rays may gain more or less.
+
+**Unmeasured.** x86-64 beyond the one CI reading above, wasm32, other
+scenes, the parameter sweep on any other machine, and tuning the weights per scene.
+
+### 10. A straight-line `TraceRay::box_entry` in `i64` (exact replacement)
+
+**Where:** `TraceRay::box_entry` and its helpers in `crates/bunny-query/src/trace.rs`
+(flyingrobots/bunny#258). The [profile](#profile-of-closest_hit-on-the-benchmark-scene)
+put box tests at about 60 % of a ray; this entry makes each one cheaper. `TraceRay` keeps
+its three fields (72 bytes), its derived `PartialEq` and `Debug`, and its public API.
+
+**Technique.** The bounds are computed exactly as before (see the
+[ray-tracing chapter](../ray-tracing/README.md#conservative-box-test)); only the code
+shape changed:
+
+1. **Slab differences in `i64`.** For a negative direction component the origin and both
+   planes are flipped with bitwise not, which reverses the order of `i64` and keeps
+   `!a - !b = b - a`, so every axis is crossed forwards. A signed comparison decides
+   whether a plane lies ahead of the origin, and once `a >= b` is known the wrapping
+   `i64` difference read as `u64` is the exact difference (it lies in `0..2^64`). The old
+   code widened to `i128` and subtracted with borrow chains.
+2. **Parallel axes in the same path.** A zero component is a forward crossing with a zero
+   reciprocal: lower bound 0, upper bound saturated to `u64::MAX` by a step of `u64::MAX`
+   instead of 1, plus a rejection when the near plane is ahead of the origin.
+3. **Straight-line code with one validity flag.** All three axes, both bounds and the
+   comparison with `t_max` are computed with no early return and combined with `&`, so the
+   test has no data-dependent branch of its own (about 100 lines of aarch64 assembly for the
+   whole test, from about 190, read from `--emit asm` of a non-inlined wrapper). The only branch left is the caller's on the result.
+
+**Fidelity: exact replacement.** For every ray, box and limit the new test returns the same
+`Option<FixedQ32_32>` as the old one, which is kept verbatim in
+`crates/bunny-query/tests/support/box_entry_reference.rs`. `TRACE-TP-308` to `TRACE-TP-311`
+compare them on the golden and oracle corpora, 300 000 seeded trace-domain cases, a sweep
+of every pair of 15 extreme coordinates (`i64::MIN`, `i64::MAX`, inverted pairs) plus
+200 000 seeded near-extreme boxes, and every box test of the benchmark scene, each at ten
+limits including `i64::MIN`, -1, 0 and the entry bound and its neighbours. The existing
+tests, including the exact rational oracle `TRACE-TP-007` and the traversal's equality with
+a test of every primitive (`TRACE-TP-101`), pass unmodified. Fourteen deliberate mutations
+(`TRACE-TP-312`) each fail at least one case; three of them (the upper multiplier `r + 1`
+made `r`, the upper step `+ 1` made `+ 0`, and `enter <= exit` made strict) pass every case
+that existed before and are caught only by the new corpora.
+
+**Each step, measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(aarch64 Linux), 2026-11-13, every run with `--exclusive`:
+`cargo run --locked -p xtask -- perf --base <previous step> --rounds 11 --align-code --filter trace/`.
+Best-p50 change against the step before:
+
+| Step | `kernel_box_entry` | `kernel_box_entry_chain` | `closest_hit` | `any_hit` | Kept |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1. `i64` differences (base `origin/main`) | -24.9 % | -24.2 % | -7.5 % | -8.7 % | yes |
+| 2. Parallel axes in the slab path | -0.8 % | -1.7 % | -0.6 % | +2.6 % | yes, neutral (see below) |
+| 3. All rejections first, return before the upper products when `enter > t_max` | -0.9 % | -1.5 % | -4.2 % | -3.4 % | superseded by 4 |
+| 4. Straight-line code with one flag | +6.3 % | +8.4 % | -5.6 % | -0.2 % | yes |
+| 5. Exit decided by one 128-bit comparison `(enter - 1) * 2^31 <= far * (r + 1)` | +2.8 % | +3.1 % | +1.4 % | -3.7 % | no, reverted |
+| 6. `r + 1` and the flipped origin precomputed in `TraceRay` (72 to 120 bytes) | -2.6 % | -5.7 % | -2.5 % | -1.3 % | no, reverted |
+
+The triangle replays, which these changes do not touch, moved by at most 2.6 % best p50
+in these runs. Notes on the decisions:
+
+- Step 2 is within noise. It stays because steps 3 and 4 are written over its single path;
+  it removes the special case from the source, though the compiler re-derived a branch on
+  zero until step 4.
+- Step 4 is slower than step 3 in the isolated replay (a replay that rejects early is
+  cheaper when the rejections are predictable from the replayed sequence) but faster in the
+  real search, where the box test's own branches mispredict. The search is what callers
+  run, so step 4 was kept. Step 3's early return is not in the final code.
+- Step 5 was slower in three of four cases: the 128-bit comparison is about as many
+  instructions as the shift, saturation and minimum it replaces.
+- Step 6 looked like a small gain in its `trace/`-only run, but a full-table run against
+  step 4 read `closest_hit` -0.3 %, `kernel_box_entry` +1.1 %, `any_hit` +0.0 %, while
+  `trace/ray_prepare` rose from 1.87 to 2.36 ns and `TraceRay` grew by 48 bytes. Reverted.
+
+**Final build.** Two complete runs of
+`cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code`
+(all cases, `--exclusive`), base `origin/main` at `cda15ecc020a`, head the branch's final
+code (the box test is identical in both runs).
+
+Run 1:
+
+| Case | Before p50 | After p50 | Before best | After best | Best change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | 4.15 | 4.15 | +0.0% |
+| `angle/from_radians` | 0.94 | 0.94 | 0.94 | 0.94 | +0.0% |
+| `angle/sin_cos` | 11.11 | 11.11 | 11.07 | 11.07 | +0.0% |
+| `linalg/length` | 16.07 | 16.03 | 15.38 | 14.89 | -3.2% |
+| `linalg/normalize` | 41.46 | 41.99 | 40.77 | 41.14 | +0.9% |
+| `num/div` | 6.75 | 6.75 | 6.63 | 6.63 | +0.0% |
+| `num/mul` | 1.42 | 1.42 | 1.34 | 1.34 | +0.0% |
+| `num/sqrt` | 14.08 | 13.83 | 12.66 | 13.43 | +6.1% |
+| `prepared/div` | 4.27 | 4.35 | 3.50 | 4.07 | +16.3% |
+| `prepared/ray_aabb` | 23.44 | 35.44 | 21.04 | 21.81 | +3.7% |
+| `prepared/ray_prepare` | 26.45 | 26.45 | 25.92 | 26.00 | +0.3% |
+| `query/ray_aabb` | 51.55 | 51.84 | 49.28 | 51.23 | +4.0% |
+| `query/ray_build` | 52.37 | 52.08 | 50.62 | 50.58 | -0.1% |
+| `query/ray_sphere_hit` | 67.59 | 67.46 | 65.92 | 66.37 | +0.7% |
+| `query/ray_sphere_miss` | 21.08 | 21.08 | 19.82 | 20.96 | +5.8% |
+| `query/ray_triangle` | 52.82 | 52.53 | 52.53 | 52.37 | -0.3% |
+| `sample/sampler_new_point` | 24.82 | 24.82 | 23.52 | 23.40 | -0.5% |
+| `sample/sampler_point` | 19.61 | 19.61 | 19.29 | 18.47 | -4.3% |
+| `sample/stream_bits` | 0.53 | 0.53 | 0.49 | 0.49 | +0.0% |
+| `scene/closest_visitor` | 3198.12 | 3179.00 | 3162.15 | 3150.03 | -0.4% |
+| `trace/any_hit` | 208.46 | 181.97 | 204.51 | 180.58 | -11.7% |
+| `trace/box_entry` | 6.02 | 4.44 | 5.66 | 4.39 | -22.4% |
+| `trace/box_ray_prepare` | 1.91 | 1.91 | 1.83 | 1.83 | +0.0% |
+| `trace/closest_hit` | 224.89 | 185.71 | 220.78 | 184.20 | -16.6% |
+| `trace/kernel_box_entry` | 132.85 | 104.98 | 131.06 | 104.21 | -20.5% |
+| `trace/kernel_box_entry_chain` | 135.46 | 110.35 | 133.75 | 108.97 | -18.5% |
+| `trace/kernel_tri_all_chain` | 39.59 | 44.72 | 39.39 | 44.64 | +13.3% |
+| `trace/kernel_tri_divided` | 26.16 | 28.24 | 25.43 | 27.83 | +9.4% |
+| `trace/kernel_tri_rejected` | 16.36 | 17.86 | 16.28 | 17.78 | +9.2% |
+| `trace/ray_prepare` | 1.99 | 2.03 | 1.99 | 1.99 | +0.0% |
+| `trace/triangle_beyond_limit` | 30.11 | 29.95 | 29.79 | 29.75 | -0.1% |
+| `trace/triangle_hit` | 29.99 | 29.79 | 29.74 | 29.66 | -0.3% |
+
+Run 2:
+
+| Case | Before p50 | After p50 | Before best | After best | Best change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.15 | 4.19 | 4.15 | 4.15 | +0.0% |
+| `angle/from_radians` | 0.94 | 0.94 | 0.90 | 0.89 | -1.1% |
+| `angle/sin_cos` | 11.11 | 11.11 | 11.07 | 11.07 | +0.0% |
+| `linalg/length` | 15.95 | 16.15 | 15.01 | 15.30 | +1.9% |
+| `linalg/normalize` | 41.38 | 42.24 | 38.90 | 40.41 | +3.9% |
+| `num/div` | 6.71 | 6.75 | 6.43 | 6.47 | +0.6% |
+| `num/mul` | 1.42 | 1.42 | 1.34 | 1.34 | +0.0% |
+| `num/sqrt` | 13.88 | 14.00 | 12.61 | 13.47 | +6.8% |
+| `prepared/div` | 4.31 | 3.95 | 3.50 | 3.46 | -1.1% |
+| `prepared/ray_aabb` | 23.44 | 23.68 | 21.52 | 21.73 | +1.0% |
+| `prepared/ray_prepare` | 26.37 | 26.37 | 26.00 | 25.80 | -0.8% |
+| `query/ray_aabb` | 51.27 | 52.37 | 49.48 | 49.44 | -0.1% |
+| `query/ray_build` | 51.39 | 51.96 | 50.37 | 51.23 | +1.7% |
+| `query/ray_sphere_hit` | 67.18 | 66.85 | 66.12 | 65.96 | -0.2% |
+| `query/ray_sphere_miss` | 21.12 | 21.08 | 21.00 | 20.96 | -0.2% |
+| `query/ray_triangle` | 52.73 | 52.61 | 52.45 | 52.29 | -0.3% |
+| `sample/sampler_new_point` | 24.82 | 24.82 | 23.36 | 23.36 | +0.0% |
+| `sample/sampler_point` | 19.61 | 19.61 | 18.43 | 18.51 | +0.4% |
+| `sample/stream_bits` | 0.53 | 0.53 | 0.49 | 0.49 | +0.0% |
+| `scene/closest_visitor` | 3196.82 | 3185.88 | 3163.21 | 3149.70 | -0.4% |
+| `trace/any_hit` | 211.26 | 182.58 | 204.10 | 180.99 | -11.3% |
+| `trace/box_entry` | 6.02 | 4.44 | 5.98 | 4.19 | -29.9% |
+| `trace/box_ray_prepare` | 1.95 | 1.95 | 1.83 | 1.83 | +0.0% |
+| `trace/closest_hit` | 225.30 | 185.30 | 219.81 | 183.31 | -16.6% |
+| `trace/kernel_box_entry` | 133.02 | 105.02 | 131.18 | 104.21 | -20.6% |
+| `trace/kernel_box_entry_chain` | 134.68 | 110.15 | 133.59 | 108.97 | -18.4% |
+| `trace/kernel_tri_all_chain` | 39.51 | 44.76 | 39.27 | 44.64 | +13.7% |
+| `trace/kernel_tri_divided` | 26.20 | 28.28 | 25.59 | 27.75 | +8.4% |
+| `trace/kernel_tri_rejected` | 16.40 | 17.82 | 16.19 | 17.74 | +9.6% |
+| `trace/ray_prepare` | 1.99 | 2.03 | 1.95 | 1.99 | +2.1% |
+| `trace/triangle_beyond_limit` | 30.68 | 30.15 | 29.91 | 29.62 | -1.0% |
+| `trace/triangle_hit` | 30.97 | 29.91 | 29.87 | 29.62 | -0.8% |
+
+**Reading.** `trace/closest_hit` is 16.6 % faster in both runs (best p50 220.8 to 184.2 ns
+and 219.8 to 183.3 ns, 1.20x), `trace/any_hit` 11.7 % and 11.3 %, the replayed box tests of
+a ray 20.5 % and 20.6 % (independent) and 18.5 % and 18.4 % (chained), and the standalone
+`trace/box_entry` 22.4 % and 29.9 % (from about 6.0 to 4.4 ns per call). The box tests of a
+ray fall by about 27 ns of the 37 ns saved, so the rest of the search gains about 10 ns as
+well, consistent with fewer mispredicted branches inside the box test (an interpretation, not
+measured: no branch counters were read). Untouched cases
+moved by at most a few percent, except the known noisy ones (`prepared/div`,
+`prepared/ray_aabb` median, `num/sqrt` best).
+
+**One unexplained reading.** The three `trace/kernel_tri_*` replays, which time
+`hit_triangle` (unchanged), read 8 to 14 % slower in all four full-table runs of the
+final code, and in a full-table run against step 4. In every `trace/`-only run, and in a
+run with `--filter trace/kernel_tri` against `origin/main` (best p50 39.27 to 39.27 ns,
+22.42 to 22.54 ns, 16.24 to 16.24 ns), they are unchanged, and the two standalone triangle
+cases (`trace/triangle_hit`, `trace/triangle_beyond_limit`) are unchanged in every run. So
+the effect depends on which cases ran before in the same process, not on the triangle
+code; its mechanism is not established. A second, unrelated change (the SAH builder,
+flyingrobots/bunny#264, which changes no triangle code either) saw the same reading on its
+branch, and the run on current main above did not show it, so it is very likely a harness or
+placement effect; it is left to its own issue. The whole-search cases, which include every
+triangle test, are the ones to trust.
+
+**On current main, with the compact layout.** The compact search of ledger entry 8
+(`compact_closest_hit`, `compact_any_hit`) calls the same `box_entry`, so it gains too. One
+full-table run, `perf --base origin/main --rounds 11 --align-code`, `--exclusive`, base
+`origin/main` at `069bd8dd3c6f` (entry 8 merged, old box test), head this branch merged
+with it. Best p50, nanoseconds per ray:
+
+| Case | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| `trace/closest_hit` | 221.72 | 184.33 | -16.9 % |
+| `trace/any_hit` | 205.61 | 179.89 | -12.5 % |
+| `trace/closest_hit_compact` | 198.81 | 164.18 | -17.4 % |
+| `trace/any_hit_compact` | 184.61 | 149.58 | -19.0 % |
+| `trace/kernel_box_entry` | 131.88 | 104.00 | -21.1 % |
+| `trace/kernel_tri_all_chain` | 39.35 | 39.23 | -0.3 % |
+| `trace/ray_prepare` | 1.99 | 1.99 | +0.0 % |
+
+With both changes the compact closest-hit search is at 164 ns per ray on this scene, from
+222 ns for `trace/closest_hit` before either. The compact layout's other variants
+(`_builder_order`, `_near_first`, `_shuffled`) moved by -15.6 % to -15.9 %; the harness's
+`kernel_box_single`, `kernel_box_pair` and `kernel_box_load*` cases, which do not call
+`box_entry`, moved by at most 1.0 %. In this run the triangle replays were flat.
+
+**Trade-offs.**
+
+- *Code.* The test is three small helpers instead of one; the `!` flip and the parallel-axis
+  rule need the comments beside them. Two `#[allow(clippy::needless_bitwise_bool)]` mark
+  the deliberate `&` on booleans.
+- *Isolated replay against search.* The straight-line form gives up about 6 % in a replay
+  of box tests alone to win in the search.
+- *No new state.* `TraceRay` is unchanged in size; `trace/ray_prepare` is unchanged.
+- *Inlining.* `box_entry` stays `#[inline]`, as on `main`; no inlining attribute changed. In
+  the release `bunny-perf` binary of the final code (aarch64, no `--align-code`),
+  `objdump` finds calls to an out-of-line `box_entry` only from the harness's replica walk
+  and its two box replay cases; `closest_hit` and `any_hit` have it inlined. The replays
+  therefore include a call per box test and the searches do not.
+
+**x86-64 (CI).** The pull request's `Perf / before and after` job (GitHub's shared x86-64
+Linux runner, `--rounds 7 --align-code`, base `origin/main` at `0e84fff31a3c`; coarse, as
+the [CI section](#continuous-integration) says) read, best p50:
+
+| Case | Before best | After best | Best change |
+| --- | ---: | ---: | ---: |
+| `trace/closest_hit` | 412.22 | 376.83 | -8.6 % |
+| `trace/any_hit` | 371.01 | 340.95 | -8.1 % |
+| `trace/kernel_box_entry` | 275.28 | 255.86 | -7.1 % |
+| `trace/kernel_box_entry_chain` | 277.62 | 252.67 | -9.0 % |
+| `trace/box_entry` | 8.53 | 7.80 | -8.6 % |
+| `trace/kernel_tri_all_chain` | 68.03 | 68.30 | +0.4 % |
+| `trace/kernel_tri_rejected` | 20.47 | 20.70 | +1.1 % |
+| `trace/ray_prepare` | 7.72 | 7.72 | +0.0 % |
+
+After the merge with the compact layout (entry 8), the same job against `origin/main` at
+`069bd8dd3c6f` read best p50 `trace/closest_hit` 411.25 to 378.23 ns (-8.0 %),
+`trace/closest_hit_compact` 370.16 to 344.42 ns (-7.0 %), `trace/any_hit` -8.1 %,
+`trace/any_hit_compact` -6.6 %, `trace/kernel_box_entry` -7.0 % and `trace/ray_prepare`
++0.0 %.
+
+Every box-test case is faster there too, by about 7 to 9 % instead of 17 to 21 %: the gain
+is smaller on x86-64 but has the same sign, so no target-specific choice is needed. The
+triangle replays are flat on x86-64 in a full-table run.
+
+**Not measured:** wasm32.
+
+### 11. `#[inline]` on the pixel path (no output change)
+
+**Where:** `crates/bunny-optics/src/pixel.rs` and `pixel/{srgb,tone,accumulate}.rs`
+(flyingrobots/bunny#271).
+
+**Technique.** `#[inline]` on `div_round_half_even`, `srgb::encode`, `srgb::power_segment`,
+`ToneCurve::{apply, encode_8, encode_16}`, `quantize_8`, `quantize_16`, `quantize`,
+`write_rgba8` and `PixelAccumulator::resolve`: the small per-channel helpers and the public
+entry points a renderer calls per pixel. Nothing else changed. `add_sample`, `merge` and
+the accessors are not on the measured path and were left alone.
+
+**Fidelity.** No output bit changes; no arithmetic was touched, and every existing test and
+golden vector passes unmodified.
+
+**Why.** Merging the shading module (PR #270) into `bunny-optics` made
+`pixel/resolve_srgb_rgba8` slower without touching it; see
+[codegen-unit noise](#codegen-unit-noise).
+
+**Measured.** Apple M5 Pro, `aarch64-linux`, `rust-dev:1.96.0` container, `--exclusive`,
+`cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code`, base
+`6b808d4` (`pixel/` rows, nanoseconds per call; "lighting" is a throwaway local merge of
+`origin/feat/optics-lighting`, never pushed):
+
+| Head | Run | Before p50 | After p50 | Change | Best change |
+| --- | --- | ---: | ---: | ---: | ---: |
+| lighting, no fix | filtered | 8.30 | 10.78 | +29.9 % | +19.9 % |
+| fix alone | filtered | 8.18 | 8.30 | +1.5 % | +0.0 % |
+| fix alone | full | 8.18 | 8.30 | +1.5 % | +4.8 % |
+| fix alone | full | 8.46 | 8.46 | +0.0 % | +0.5 % |
+| fix + lighting | filtered | 8.26 | 8.83 | +6.9 % | +8.9 % |
+| fix + lighting | filtered | 8.22 | 8.79 | +6.9 % | -2.6 % |
+
+The fix alone is level with main, and no other case was slower by more than the noise described under
+[Reading the numbers](#reading-the-numbers) and [Bimodal cases](#bimodal-cases) in either
+full run (the largest best-p50 rises were `trace/kernel_tri_divided` +11.1 % and
+`query/ray_aabb` +7.4 % in the first, neither in the second). With the lighting module
+present the pixel case went from about +30 % to about +7 % (median), about the +5 % that
+one codegen unit left; the best-p50 column swings between runs, which is the
+[bimodal](#bimodal-cases) pattern. The x86-64 reading comes from CI.
+
+**Trade-offs.** `#[inline]` lets the compiler copy these bodies into callers; code size
+grows slightly where they are called, and the speed they give is still the compiler's
+choice (`#[inline]` is a hint). A later crate change can still move other paths; this
+only removes the pixel path's dependence on the split.
+
+||||||| 6b808d4
 
 ## Profile of `closest_hit` on the benchmark scene
 

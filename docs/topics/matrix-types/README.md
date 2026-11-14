@@ -204,10 +204,25 @@ its inputs before normalization. Axis-aligned cameras are exact.
 `LookAtError` names the failures; the function never panics:
 
 - `CoincidentEyeTarget`: `target == eye`.
-- `ParallelUp`: `up` is zero, or its cross product with the normalized view
-  direction is exactly zero. A nearly parallel `up` is accepted: the bounds hold
-  but the camera roll is set by rounding noise.
-- `Overflow`: a translation entry is outside the Q32.32 range.
+- `ParallelUp`: `up` is zero, or exactly parallel or antiparallel to `target -
+  eye`. This is decided before any rounding, from the exact integer
+  cross product of the two raw vectors (computed with 256-bit products, since a
+  raw difference needs 65 bits), so it does not depend on the rounded view
+  direction. Only exact parallelism is refused. A nearly parallel `up` is
+  accepted: the bounds hold, but the camera roll is dominated by rounding noise.
+  Inputs so close to parallel that the rounded basis still collapses also return
+  `ParallelUp`.
+- `Overflow`: a finished translation entry `-(row . eye)` is outside the Q32.32
+  range. Each entry is summed from its three rounded products in a wider
+  integer and only the finished entry is checked, so an intermediate term or
+  sum that is out of range does not cause a refusal when the entry fits (for
+  example `eye.x = i64::MIN` raw looking at the origin gives the entry
+  `i64::MIN`).
+
+Compared with the 0.7.0 release, this changes two input classes: exactly
+parallel inputs went from `Ok` to `ParallelUp`, and inputs whose finished
+translation fits went from `Overflow` to `Ok`. Every other `Ok` result keeps all
+its bits; the fidelity test compares against the retained 0.7.0 code.
 
 ## Required Tests
 
@@ -228,5 +243,7 @@ The current repository must keep tests for:
 - exact golden rows and frustum-corner NDC values for both projection
   builders, typed errors for invalid parameters, and seeded properties;
 - exact axis-aligned and pinned diagonal look-at rows, a look-at composed with a
-  projection, typed look-at errors, and a seeded property for the orthonormality
-  bound.
+  projection, typed look-at errors (exactly parallel up, a representable
+  translation near the range limit), a seeded property for the orthonormality
+  bound over its full stated range, and a differential test against the 0.7.0
+  implementation.
