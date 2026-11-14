@@ -43,12 +43,12 @@ weight `w0 = 2^32 - b1` (b2 dropped), and the weights of `v1` and `v2` swapped.
 cargo fmt --check, clippy -D warnings on bunny-perf (all targets), the bunny-perf tests.
 Timing: `cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
 --filter shade/` with --exclusive, three runs (Apple M5 Pro, rust-dev:1.96.0, base e7a4fabf55bb),
-and one run with `--base HEAD`. Recorded as ledger entry 13 and under Tried And Rejected.
+and one run with `--base HEAD`; the x86-64 reading of the PR's CI perf job. Recorded as ledger entry 13 and under Tried And Rejected.
 code-dojo --all at the final commit (see the PR).
 
 Known risks:
-The comparison of (a) and (b) is from one machine (aarch64); x86-64 and WebAssembly divide
-`i128` at different costs. The inputs leave out the scene's ground, whose hits take the
+The comparison of (a) and (b) rests on three aarch64 runs; x86-64 has one CI reading (which
+shows a larger gap) and WebAssembly none. The inputs leave out the scene's ground, whose hits take the
 shared-normal step in both paths. Where the extra time of a smooth hit goes was not timed step
 by step.
 

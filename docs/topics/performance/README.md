@@ -1490,12 +1490,21 @@ costs about 171 ns against 67 ns for the flat step on the same hits: about 104 n
 per hit, 2.5 times the flat cost. The flat step on these hits costs the same as
 `shade/hit_shading` on its seeded triangles. The existing `shade/` cases did not move.
 
+**x86-64, one reading.** The pull request's CI perf job (GitHub's hosted x86-64 Linux runner,
+`--rounds 7 --align-code`, same base, all cases), median p50 / best p50 on the head side:
+`shade/smooth_normal` 78.53 / 77.00, `shade/smooth_normal_divided` 116.00 / 114.44 (48 % and
+49 % slower), `shade/smooth_hit_shading` 253.77 / 250.18 against `shade/flat_hit_shading_mesh`
+119.48 / 118.25 (about 134 ns more, 2.1 times), `shade/hit_shading` 109.99 / 107.23. Every
+same-code change in that run was within -0.8 % and +2.8 % (median). One run on a shared runner
+is a reading, not a result; it points the same way as the M5, more strongly.
+
 **What is not.** Where the extra time of a smooth hit goes was not timed step by step: besides
 `smooth_normal` (about 72 ns), `SmoothHit::new` builds a frame around the interpolated normal
 (three rounded `i128` divisions, which the flat step takes from the prepared `TriangleSurface`),
-and the smooth step takes two exact plane tests (the frame's side and the bounce's). Other targets were not measured here, and x86-64,
-where a 128-by-64 divide is native, may narrow the gap between (a) and (b). A traced image's cost
-per sample also includes traversal (`trace/closest_hit` is about 227 ns per ray).
+and the smooth step takes two exact plane tests (the frame's side and the bounce's).
+WebAssembly, where 128-bit division is a software routine, was not measured, and x86-64 has only
+the one CI reading above. A traced image's cost per sample also includes traversal
+(`trace/closest_hit` is about 227 ns per ray).
 
 **Readings and the test plan.** The optics test plan treats the readings of a case that no base
 can compare as readings for later comparisons, not speed claims, and gives them no ledger entry.
@@ -1897,8 +1906,8 @@ best p50. The base side of the same runs, the same code, gives 15 % to
 16 %.
 
 **Why it lost.** Two long divisions of `i128` numerators cost more than the shift `smooth_normal`
-does instead, and the floors cost accuracy. Targets with a different division cost were not
-measured.
+does instead, and the floors cost accuracy. The one x86-64 reading (CI, entry 13) shows a larger
+gap: 48 % in median p50. WebAssembly was not measured.
 
 ### Shared core for typed shading refusals
 
