@@ -369,8 +369,7 @@ mod tests {
     #[test]
     fn harness_manifest_includes_every_crate_the_cases_use() {
         let manifest = harness_manifest(Path::new("/tmp/base"), &["scene".to_owned()]);
-        for name in ["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"]
-        {
+        for name in ["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"] {
             assert!(manifest.contains(&format!("{name} = {{ path = ")), "{name} is missing");
         }
     }
