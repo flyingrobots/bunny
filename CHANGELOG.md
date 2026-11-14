@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+* The pixel path in `bunny-optics` no longer slows down when unrelated code is added to the
+  crate (flyingrobots/bunny#271): the small per-channel helpers and the public entry points
+  are marked `#[inline]`, so their inlining no longer depends on how the release profile
+  splits the crate into codegen units. No output bit changes.
+
 ### Added
 
 * Added a compact BVH node layout to `bunny-broadphase` (flyingrobots/bunny#215):

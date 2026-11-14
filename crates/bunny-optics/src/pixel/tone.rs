@@ -42,6 +42,7 @@ impl ToneCurve {
     ///
     /// Inputs at or below zero give 0 and inputs at or above 1.0 give 1.0.
     #[must_use]
+    #[inline]
     pub fn apply(self, linear: FixedQ32_32) -> FixedQ32_32 {
         FixedQ32_32::from_raw(match self {
             Self::SrgbV1 => srgb::encode(linear.raw()),
@@ -51,12 +52,14 @@ impl ToneCurve {
 
     /// The 8-bit code of one linear channel: [`quantize_8`] of [`ToneCurve::apply`].
     #[must_use]
+    #[inline]
     pub fn encode_8(self, linear: FixedQ32_32) -> u8 {
         quantize_8(self.apply(linear))
     }
 
     /// The 16-bit code of one linear channel: [`quantize_16`] of [`ToneCurve::apply`].
     #[must_use]
+    #[inline]
     pub fn encode_16(self, linear: FixedQ32_32) -> u16 {
         quantize_16(self.apply(linear))
     }
@@ -65,6 +68,7 @@ impl ToneCurve {
 /// The 8-bit code of a display value: `round(255 * v)`, to nearest with ties to even, after
 /// clamping `v` to `[0, 1]`.
 #[must_use]
+#[inline]
 pub fn quantize_8(display: FixedQ32_32) -> u8 {
     u8::try_from(quantize(display, 255)).unwrap_or(u8::MAX)
 }
@@ -72,6 +76,7 @@ pub fn quantize_8(display: FixedQ32_32) -> u8 {
 /// The 16-bit code of a display value: `round(65535 * v)`, to nearest with ties to even, after
 /// clamping `v` to `[0, 1]`.
 #[must_use]
+#[inline]
 pub fn quantize_16(display: FixedQ32_32) -> u16 {
     u16::try_from(quantize(display, 65_535)).unwrap_or(u16::MAX)
 }
@@ -79,6 +84,7 @@ pub fn quantize_16(display: FixedQ32_32) -> u16 {
 /// `round(max_code * v / 2^32)` for the clamped raw value `v`; at most `max_code`.
 ///
 /// `v <= 2^32` and `max_code < 2^16`, so the product is below `2^48`.
+#[inline]
 const fn quantize(display: FixedQ32_32, max_code: i64) -> i64 {
     let raw = display.raw();
     let clamped = if raw < 0 {
@@ -98,6 +104,7 @@ const fn quantize(display: FixedQ32_32, max_code: i64) -> i64 {
 ///
 /// [`PixelError::WrongSliceLength`] when `out` is not exactly four bytes long; `out` is then
 /// unchanged.
+#[inline]
 pub fn write_rgba8(
     out: &mut [u8],
     curve: ToneCurve,
