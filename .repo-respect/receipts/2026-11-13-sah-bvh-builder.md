@@ -4,7 +4,7 @@ Task:
 Implement flyingrobots/bunny#213: add `build_bvh_sah`, a binned surface-area-heuristic
 BVH builder, to `bunny-broadphase` as a new function writing the same buffers and node
 format as `build_bvh`; leave `build_bvh`'s output unchanged; measure traversal through
-both trees on the benchmark scene and record the result as ledger entry 5.
+both trees on the benchmark scene and record the result as ledger entry 6.
 
 Files read:
 CODE_STANDARDS.md
@@ -54,6 +54,7 @@ crates/bunny-perf/Cargo.toml
 crates/bunny-perf/src/cases.rs
 crates/bunny-perf/src/main.rs
 crates/bunny-perf/src/scene.rs
+crates/bunny-perf/src/profile.rs (`--stats` also reports the SAH tree)
 docs/README.md
 docs/topics/bvh-construction/README.md
 docs/topics/bvh-construction/test-plan.md
@@ -65,17 +66,23 @@ CHANGELOG.md
 Topic docs:
 docs/topics/bvh-construction/README.md and test-plan.md (new chapter: node format, both
 builders' contracts, BVH-REQ-001..009, BVH-TP-001..021)
-docs/topics/performance/README.md (ledger entry 5) and test-plan.md (PERF-REQ-007,
-PERF-TP-028, PERF-TP-029)
+docs/topics/performance/README.md (ledger entry 6, adding-a-case) and test-plan.md
+(PERF-REQ-008, PERF-TP-042, PERF-TP-043)
 
 Generated artifacts:
 None.
 
 Checks run:
-All runs are in the rust-dev container through devrun; the commands and results are in
-the pull request description.
+All in the rust-dev container through devrun: cargo fmt --all -- --check; cargo clippy
+--workspace --all-targets --all-features -D warnings; strict package clippy for
+bunny-broadphase; cargo test --locked --workspace; topic-docs; code-dojo --all; two
+`perf --base origin/main --rounds 11 --align-code` runs with --exclusive; parameter sweeps
+and deliberate mutations recorded in the topic docs. Results are in the pull request.
 
 Known risks:
+The `trace/kernel_tri_*` replay cases read 7 to 14 % slower on the head side in both
+runs although no code they run changed; not reproduced in workspace builds, cause not
+established (see ledger entry 6).
 The traversal measurement is one synthetic scene on one machine. The SAH tree is a
 different tree, so `intersect_ray` and `intersect_aabb` report primitives in a different
 order on it than on a `build_bvh` tree; `closest_hit` and `any_hit` answers are the same.
