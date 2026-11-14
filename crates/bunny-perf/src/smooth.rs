@@ -2,8 +2,9 @@
 //!
 //! The inputs are 1 024 closest hits on the sphere of the benchmark scene (`scene.rs`): camera
 //! rays on a 96 by 96 grid through the window of the scene's camera, every `n`-th sphere hit kept
-//! so the batch spans the image (ground hits are left out: their normals are shared). The scene's positions are welded by value into an indexed mesh and its vertex normals
-//! come from `VertexNormals::new`, so the determinants, weights and normals are a renderer's.
+//! so the batch spans the image (ground hits are left out: their normals are shared). The
+//! scene's positions are welded by value into an indexed mesh and its vertex normals come from
+//! `VertexNormals::new`, so the determinants, weights and normals are a renderer's.
 //!
 //! `shade/smooth_normal` is the shipped interpolation (the exact numerators, then
 //! `smooth_normal`). `shade/smooth_normal_divided` is the alternative that was not selected,
