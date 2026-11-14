@@ -96,7 +96,7 @@ policy from their consumers.
 | Collision and contact | Ray and closest queries | Narrowphase coverage |
 | Acceleration | BVH, sweep-and-prune | Dynamic structures |
 | Mesh and codecs | Quantized mesh, PLY/OBJ, decoder | Topology and encoder |
-| Visibility and optics | Ray and BVH ingredients | Camera and visibility math |
+| Visibility and optics | Trace kernels, pinhole camera | Projection and visibility math |
 | SIMD and performance | Scalar reference | Parity and benchmarks |
 | Consumer confidence | Docs, witnesses, gates | Examples and fixtures |
 
@@ -161,7 +161,8 @@ Current surface:
 - `FixedRay3`
 - `FixedAabb3`
 - `FixedSphere3`
-- `FixedPlane3` and `FixedSegment3` with checked segment clipping
+- `FixedPlane3` and `FixedSegment3` with checked segment clipping and
+  `clip_polygon` for convex polygons
 - validated fixed/float boundary conversions
 - ray and closest-point query inputs
 
@@ -262,6 +263,9 @@ Current surface:
 - ray primitives
 - ray intersection queries
 - BVH traversal ingredients
+- ray-tracing kernels (`TraceRay`, `TraceTriangle`)
+- `bunny-optics` pinhole camera: deterministic per-pixel trace-ray generation
+  (`docs/topics/optics/`)
 - coordinate law reservations for future projection work
 
 Open work:
@@ -270,7 +274,7 @@ Open work:
 | --- | --- |
 | Occlusion and visibility queries | #158 |
 | Ray tracing hit suites | #159 |
-| Camera and ray generation | #138 |
+| Projection matrices; camera models beyond the pinhole | #138, #201, #202 |
 | Lighting and BRDF inputs | #160 |
 
 ### SIMD and Performance
