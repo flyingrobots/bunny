@@ -72,6 +72,43 @@ on identical code. The report now also takes the best p50 across rounds; speedup
 regression gate use it, with a test for the bimodal case. Re-ran cargo test -p xtask,
 topic-docs and code-dojo --all: clean.
 
+Follow-up (cross-target):
+Added --target/--runner to cargo xtask perf, target-named report headings, a report-only
+platform matrix job (workflow_dispatch with platforms=true) and the "Measuring other
+targets" and "Target-specific implementations" sections. Verified locally: wasm32-wasip1
+under wasmtime 50.0.1 against origin/main (3 rounds; identical code, changes within 6 %),
+and with --align-code. cargo test -p xtask (42 passed); workflow YAML parsed with Ruby.
+The platform matrix itself has not run on GitHub yet.
+
+Follow-up (Windows CI, PR #209):
+The Windows determinism job failed harness_manifest_points_at_the_given_crates: Path::join
+adds backslashes there, and the manifest used Debug formatting, which also escapes
+non-ASCII characters as \u{...} (invalid TOML). Manifest paths are now written with forward
+slashes and escaped quotes (toml_path), with a Windows-shaped test (PERF-TP-021).
+cargo test -p xtask: 43 passed. The Dojo job's cargo-deny failure (RUSTSEC-2026-0386,
+tokio 1.48.0 via ninelives 0.2.0 -> wesley-core) is not caused by this branch and is not
+fixed here.
+
+Follow-up (RUSTSEC-2026-0386, PR #209 Dojo job):
+cargo deny failed on tokio 1.48.0 (RUSTSEC-2026-0386), reached through wesley-core ->
+ninelives 0.2.0, whose "~1.48.0" requirement blocked any patched tokio. Fixed upstream in
+flyingrobots/ninelives#8, released as ninelives 0.2.1 (tokio ^1.54.1). Cargo.lock now has
+ninelives 0.2.1 and tokio 1.54.1, produced by `cargo update -p ninelives -p tokio` inside
+flyingrobots/rust-dev:1.96.0 through devcontainers' devrun, exported as a patch and applied.
+
+Follow-up (CodeRabbit review of PR #209, seven findings, all valid):
+- Benchmarks pass each call's whole result through black_box; linalg/normalize read only
+  n.x, so the optimizer could drop the y and z divisions (and similar partial reads in the
+  query cases). Ledger numbers measured with the old harness need re-measuring.
+- Each harness build passes --target-dir, so an inherited CARGO_TARGET_DIR cannot make both
+  sides share (or run stale) binaries.
+- The gate fails when no case was measured on both sides (a mistyped --filter passed before)
+  and its message reports the best-p50 change it tested (PERF-TP-022, PERF-TP-023).
+- The README says best-of-rounds reduces bimodal noise rather than removing it, with the
+  rerun advice for a suspected bimodal CI failure.
+- The Perf workflow pins its actions to commit SHAs and sets CARGO_INCREMENTAL=0.
+Checks: cargo fmt applied from the dev container; full code-dojo --all via devrun.
+
 Known risks:
 Timing on shared CI runners is noisy; the 20 % threshold is chosen to catch real
 regressions and may still need tuning after the first runs. The workflow has not run on

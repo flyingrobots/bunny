@@ -109,9 +109,18 @@ pub(crate) fn regressions(rows: &[Row], max_percent: f64) -> Vec<&Row> {
 }
 
 /// A Markdown before/after table.
-pub(crate) fn render(rows: &[Row], base_label: &str, head_label: &str, rounds: usize) -> String {
+/// What a report compares, for its heading.
+pub(crate) struct Heading<'a> {
+    pub(crate) base: &'a str,
+    pub(crate) head: &'a str,
+    pub(crate) platform: &'a str,
+    pub(crate) rounds: usize,
+}
+
+pub(crate) fn render(rows: &[Row], heading: &Heading<'_>) -> String {
+    let Heading { base: base_label, head: head_label, platform, rounds } = *heading;
     let mut out = String::new();
-    let _ = writeln!(out, "### Bunny perf: `{base_label}` → `{head_label}`\n");
+    let _ = writeln!(out, "### Bunny perf on `{platform}`: `{base_label}` → `{head_label}`\n");
     let _ = writeln!(
         out,
         "{rounds} interleaved rounds per side; nanoseconds per call. Median and best are taken \
@@ -197,7 +206,10 @@ mod tests {
         );
         assert_eq!(rows[0].change_percent(), None);
         assert!((rows[1].change_percent().expect("both sides") + 75.0).abs() < 1e-9);
-        let table = render(&rows, "main", "HEAD", 5);
+        let table = render(
+            &rows,
+            &Heading { base: "main", head: "HEAD", platform: "test-platform", rounds: 5 },
+        );
         assert!(
             table.contains(
                 "| `num/sqrt` | 60.00 | 15.00 | -75.0% | 60.00 | 15.00 | -75.0% | 4.00× |"

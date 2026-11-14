@@ -16,7 +16,9 @@ use bunny_num::FixedQ32_32;
 const BATCH: usize = 1024;
 const PERF_SEED: u64 = 0xB002_9E2F_0000_0001;
 
-/// A named kernel; `run` makes `calls` calls and returns a checksum so the work is kept.
+/// A named kernel; `run` makes `calls` calls and returns a checksum. Each call's whole result
+/// passes through `black_box` before the checksum reads part of it, so the optimizer cannot drop
+/// work whose output the checksum ignores (such as the y and z divisions of `normalize`).
 pub(crate) struct Case {
     pub(crate) name: &'static str,
     pub(crate) calls: usize,
@@ -108,7 +110,7 @@ fn linalg_cases() -> Vec<Case> {
         case("linalg/normalize", move || {
             for_normalize
                 .iter()
-                .map(|&v| black_box(v).normalize().map_or(0, |n| n.x.raw()))
+                .map(|&v| black_box(black_box(v).normalize()).map_or(0, |n| n.x.raw()))
                 .fold(0, i64::wrapping_add)
         }),
     ]
@@ -127,30 +129,32 @@ fn query_cases() -> Vec<Case> {
             origins_and_directions
                 .iter()
                 .map(|&(o, d)| {
-                    FixedRay3::try_new(black_box(o), d)
+                    black_box(FixedRay3::try_new(black_box(o), d))
                         .map_or(0, |r| r.direction.into_inner().x.raw())
                 })
                 .fold(0, i64::wrapping_add)
         }),
         case("query/ray_sphere_hit", move || {
             sum_hits(&sphere_rays, |r| {
-                bunny_query::ray_intersects_sphere(r, &unit_sphere()).map(|(p, _)| p.x.raw())
+                black_box(bunny_query::ray_intersects_sphere(r, &unit_sphere()))
+                    .map(|(p, _)| p.x.raw())
             })
         }),
         case("query/ray_sphere_miss", move || {
             sum_hits(&away, |r| {
-                bunny_query::ray_intersects_sphere(r, &unit_sphere()).map(|(p, _)| p.x.raw())
+                black_box(bunny_query::ray_intersects_sphere(r, &unit_sphere()))
+                    .map(|(p, _)| p.x.raw())
             })
         }),
         case("query/ray_aabb", move || {
             sum_hits(&aabb_rays, |r| {
-                bunny_query::ray_intersects_aabb(r, &unit_box()).map(|(t, _)| t.raw())
+                black_box(bunny_query::ray_intersects_aabb(r, &unit_box())).map(|(t, _)| t.raw())
             })
         }),
         case("query/ray_triangle", move || {
             let [a, b, c] = triangle();
             sum_hits(&triangle_rays, |r| {
-                bunny_query::ray_intersects_triangle(r, a, b, c).map(|p| p.x.raw())
+                black_box(bunny_query::ray_intersects_triangle(r, a, b, c)).map(|p| p.x.raw())
             })
         }),
     ]

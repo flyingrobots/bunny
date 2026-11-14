@@ -23,6 +23,10 @@ on:
         description: "Fail when any case's p50 slows by more than this percent"
         default: "20"
         required: false
+      platforms:
+        description: "Also run the report-only platform matrix (x86-64 and ARM Linux, Windows, macOS, WebAssembly)"
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       base:
@@ -47,6 +51,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   perf:
@@ -54,13 +59,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
@@ -88,3 +93,58 @@ jobs:
           --align-code
           --max-regression "$MAX_REGRESSION"
           --summary "$GITHUB_STEP_SUMMARY"
+
+  # Report-only: the same comparison on other CPUs and on WebAssembly, so an optimization
+  # can be judged per target. Started by hand (workflow_dispatch with platforms = true),
+  # never on pull requests, to keep runner minutes bounded.
+  platforms:
+    name: Perf / ${{ matrix.name }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86-64 Linux
+            os: ubuntu-latest
+          - name: ARM Linux
+            os: ubuntu-24.04-arm
+          - name: x86-64 Windows
+            os: windows-latest
+          - name: Apple Silicon macOS
+            os: macos-latest
+          - name: WebAssembly (wasmtime)
+            os: ubuntu-latest
+            target: wasm32-wasip1
+            runner: wasmtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Add the WebAssembly target
+        if: ${{ matrix.target == 'wasm32-wasip1' }}
+        run: rustup target add wasm32-wasip1
+
+      - name: Install wasmtime
+        if: ${{ matrix.target == 'wasm32-wasip1' }}
+        uses: bytecodealliance/actions/wasmtime/setup@9152e710e9f7182e4c29ad218e4f335a7b203613 # v1
+
+      - name: Show runner facts
+        shell: bash
+        run: |
+          rustc -Vv
+          uname -a || true
+
+      - name: Compare base and candidate
+        shell: bash
+        env:
+          BASE: ${{ inputs.base || 'origin/main' }}
+          TARGET: ${{ matrix.target }}
+          RUNNER: ${{ matrix.runner }}
+        run: |
+          args=(--base "$BASE" --rounds 7 --align-code --summary "$GITHUB_STEP_SUMMARY")
+          if [ -n "$TARGET" ]; then args+=(--target "$TARGET" --runner "$RUNNER"); fi
+          cargo run --locked -p xtask -- perf "${args[@]}"
