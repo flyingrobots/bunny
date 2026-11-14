@@ -15,7 +15,8 @@ bash scripts/install-githooks.sh
 Hooks installed:
 
 - `pre-commit` — checks staged Rust files with the AST policy gate and the core
-  crates' Clippy lint policy, then runs topic documentation contract checks, repo-respect receipt coverage,
+  crates' Clippy lint policy, then runs topic documentation contract checks,
+  the generated-artifact regeneration check, repo-respect receipt coverage,
   `cargo fmt --check`, workspace Clippy, strict package-scoped library Clippy,
   dependency policy, `cargo test`, and doctests.
 - `commit-msg` — enforces focused commit subjects and repo-respect receipt trailers.
@@ -335,6 +336,16 @@ gate on any `deny`, `warn` or `forbid` of `clippy::nursery` as a group in a
 core crate's `src/lib.rs`, its manifest or the workspace manifest, naming the
 file and line. It runs right after the Rust source rules and has no waiver.
 The chapter is [`topics/lint-policy/`](topics/lint-policy/).
+
+## Generated Artifacts
+
+The full gate and the pre-commit gate regenerate `bunny-wesley`'s contract
+artifacts in a per-run directory under `target/dojo-generated/` and fail when
+a committed artifact differs (the pre-commit gate compares the staged schema
+and artifacts, the full gate the working tree), naming the file, its first differing line and
+`cargo run --locked -p xtask -- generate`. Run it alone with
+`cargo run --locked -p xtask -- code-dojo-generated`. See the
+[contract-generation chapter](topics/contract-generation/README.md#regeneration-check).
 
 ## Waivers
 
