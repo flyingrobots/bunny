@@ -70,7 +70,8 @@ Release `v0.6.0` is the first frame-commons line. It publishes coordinate law,
 checked numeric preconditions, deterministic property corpora, matrix and affine
 transform primitives, and generated deterministic contract-profile witnesses.
 
-Release `v0.7.0` is an early cut of the Geometry Law and Primitive Coverage
+Release `v0.7.1` (the first 0.7 release on crates.io; `v0.7.0` was tagged but not
+published) is an early cut of the Geometry Law and Primitive Coverage
 line. It adds ray-tracing kernels and BVH traversal, the `bunny-optics` pinhole
 camera, binary angles with `sin_cos`, projection, look-at and viewport math, and
 plane clipping. The rest of that line ships as `0.7.x` and should close the

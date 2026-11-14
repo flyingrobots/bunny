@@ -9,10 +9,10 @@ work state belongs in GitHub issues and pull requests.
 | Field | State |
 | --- | --- |
 | Release focus | `0.7.x`: the rest of Geometry Law and Primitive Coverage, as additive releases |
-| Latest release cut | `v0.7.0`, an early cut prepared on 2026-11-13 (tag and publish pending until the lead completes them) |
+| Latest release cut | `v0.7.1`, prepared on 2026-11-14 (tag and publish pending until the lead completes them); `v0.7.0` was tagged on 2026-11-13 but never published to crates.io |
 | Previous release baseline | `v0.6.0`, cut from the 2026-06-26 release prep |
 | Current quality gate | Code Dojo, release archive verification, and GitHub Actions |
-| Next release step | Tag and publish `v0.7.0`, then continue the unfinished `v0.7.0` goalposts as `0.7.x` |
+| Next release step | Tag and publish `v0.7.1`, then continue the unfinished `v0.7.0` goalposts as `0.7.x` |
 | Next feature train | Remaining `v0.7.0` Geometry Law goalposts, then `v0.8.0` Collision and Contact |
 
 ## Recent Truth
@@ -60,7 +60,10 @@ work state belongs in GitHub issues and pull requests.
   preconditions, property corpora, matrices, affine transforms, and deterministic
   contract-profile witnesses. Projection, quaternion, angle, interpolation,
   curve, and transform-aware bounds work moved forward to the next train.
-* `v0.7.0` is an early cut of the 0.7 line: ray-tracing kernels, closest-hit and
+* `v0.7.0` was tagged but its crates.io upload was refused (authentication), so
+  nothing was published at 0.7.0; `v0.7.1` carries everything in it plus the
+  later work (compact BVH layout, SAH builder, faster box test, optics sampler,
+  pixel math, diffuse shading, the look-at correction). The 0.7 line is an early cut: ray-tracing kernels, closest-hit and
   any-hit BVH traversal, the `bunny-optics` pinhole camera, `FixedAngle` with
   `sin_cos`, projection, look-at and viewport math, plane classification with
   segment and polygon clipping, and the `ray_intersects_aabb` overflow fix
@@ -76,7 +79,7 @@ work state belongs in GitHub issues and pull requests.
 2. Open a release-prep pull request that bumps the workspace version, updates release notes and signposts, and passes Code Dojo plus
    release archive verification.
 3. Merge the verified release-prep pull request to `main`.
-4. Tag the verified `main` tip as `v0.7.0`.
+4. Tag the verified `main` tip as `v0.7.1`.
 5. Publish the GitHub Release so the release workflow can verify and publish the
    public crates.
 6. Confirm crates.io visibility for every published Bunny crate.
@@ -104,6 +107,6 @@ cargo run --locked -p xtask -- code-dojo --all
 ```
 
 The standards-alignment goalpost is complete. Evidence is recorded in
-`docs/goalposts/post-v0.4.0-standards-alignment.md`; the `v0.7.0` release prep
-must pass `RELEASE_TAG=v0.7.0 scripts/publish-crates.sh verify`, full Code Dojo,
+`docs/goalposts/post-v0.4.0-standards-alignment.md`; the `v0.7.1` release prep
+must pass `RELEASE_TAG=v0.7.1 scripts/publish-crates.sh verify`, full Code Dojo,
 GitHub Actions, and CodeRabbit review before tagging.
