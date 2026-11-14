@@ -68,7 +68,7 @@ How the comparison stays fair:
   median of each percentile across rounds and the best (lowest) p50; the speedup column and
   the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
-  `linalg`, `query`, `scene`, `trace`, …). When the base revision cannot compile a group (an API it does not
+  `linalg`, `query`, `scene`, `trace`, `sample`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
 
 The temporary worktree is removed after the build. Build outputs stay under `target/perf/`.
@@ -201,6 +201,13 @@ rays (a 32 by 32 grid). Where a case measures an old API against a new one, the 
 also checks that both give the same answer on every input: `scene/closest_visitor` and
 `trace/closest_hit` must choose the same primitive on every ray. The harness runs that
 check before timing and exits with the differing ray indices if it fails.
+
+The `sample` group (`crates/bunny-perf/src/sample.rs`) times the `bunny-optics` sample hash
+and pixel sampler over 1 024 keys of a 32 by 32 tile, 16 samples and 4 dimensions:
+`sample/stream_bits` and `sample/sampler_point` draw from a pixel's held `PixelStream` or
+`PixelSampler`, and `sample/sampler_new_point` builds the sampler first. A crate that the
+base revision lacks (such as `bunny-optics` before it existed) is left out of the base
+manifest, and the groups that need it are reported as `new`.
 
 ## Optimization Ledger
 

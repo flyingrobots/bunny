@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added deterministic sampling to `bunny-optics`. `PixelStream`
+  (`bunny-sample-hash/1`) is a counter-based hash: 64 mixed bits per (seed,
+  pixel x, pixel y, sample index, dimension) from three chained SplitMix64
+  absorptions, with no state, so values do not depend on evaluation order or
+  thread count; keys that differ only in the pixel, or only in (sample,
+  dimension), never collide. `fraction_from_bits` and `PixelStream::fraction`
+  give the top 32 bits as a Q32.32 fraction in `[0, 1)`, never 1.0.
+  `PixelSampler` (`bunny-sobol-owen/1`) gives points in `[0, 1)^2` per (seed,
+  pixel, sample, dimension pair): the first two Sobol dimensions with a
+  hash-based Owen scramble (Burley 2020), where every aligned block of `2^k`
+  samples is a (0, k, 2)-net, and `camera_sample` returns pair 0 as a
+  `PixelSample` for `PinholeCamera::ray`. `Xoroshiro128Plus` carries Echo's
+  `warp-math` `Prng` bit for bit (an empty `next_int` range returns `None`
+  instead of panicking; `next_unit` is `next_f32` as exact Q32.32). Golden
+  vectors, an exact stratification property, order-independence and
+  avalanche guards run natively and under WebAssembly. The `bunny-perf`
+  harness has a new `sample` group, and `cargo xtask perf` now leaves out of
+  the base manifest any harness crate the base revision lacks.
 * Added the `bunny-optics` crate with a deterministic pinhole camera.
   `PinholeCamera::new` takes a position, a look direction, an up hint, the
   tangent of half the vertical field of view (no trigonometry) and an integer

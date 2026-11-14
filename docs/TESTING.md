@@ -106,7 +106,9 @@ configuration. The initial property suites cover:
 * `bunny-mesh`: quantization monotonicity and representative quantized-code
   round trips.
 * `bunny-optics`: generated camera rays against an exact integer image-plane
-  oracle, and basis orthogonality and handedness.
+  oracle, and basis orthogonality and handedness; exact stratification of
+  every power-of-two block of sampler points, and evaluation-order
+  independence of the sample hash and the sampler.
 
 Each generated assertion should include enough seed and case metadata to replay
 the failure. A property test discovers classes of defects; a minimized

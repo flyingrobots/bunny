@@ -418,7 +418,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/optics/test-plan.md#mutation-checks"
 oracle = "Each key field and the stratification rule, broken on purpose, makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -441,17 +441,46 @@ at `k = 0`, but a sample at the very corner of the image has a component of
 `-(1 + 2^-20)`, which `TraceRay::new` refuses. That case was added for this
 reason.
 
+### Sampler Mutations
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/hash.rs` or `sampler.rs`, and the sampler and
+generator tests were run (`cargo test --locked -p bunny-optics --test
+sampler_tests --test xoroshiro_tests`). Every mutation made at least one case
+fail; the restored source passed all eleven.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `y` dropped from the pixel word (`pack(x, y & 0)`) | Every key field reaches the hash | OPTICS-TP-010, OPTICS-TP-013, OPTICS-TP-015, OPTICS-TP-016, OPTICS-TP-017 |
+| `dimension` dropped from the sample word | Every key field reaches the hash | OPTICS-TP-010, OPTICS-TP-015, OPTICS-TP-016 |
+| `pair` dropped from the sampler's pair seed | Each dimension pair has its own scrambles | OPTICS-TP-013, OPTICS-TP-017 |
+| Second Sobol dimension made van der Corput (`direction >>= 1`) | The two coordinates form a (0, 2)-sequence | OPTICS-TP-012, OPTICS-TP-013 |
+| First Laine-Karras constant made odd (`0x6C50B47D`) | The scramble is nested | OPTICS-TP-012, OPTICS-TP-013, OPTICS-TP-017 |
+| Index shuffle replaced by an odd multiply and add | The shuffle maps aligned blocks onto aligned blocks | OPTICS-TP-012, OPTICS-TP-013, OPTICS-TP-017 |
+| `mix64` replaced by the identity | The hash mixes | OPTICS-TP-010, OPTICS-TP-013, OPTICS-TP-016 |
+
 ## Determinism Obligations And Evidence
 
-The camera and its tests use only integer arithmetic: `i64` and `i128`
-additions, multiplications, shifts and floor divisions with defined results.
+The camera, the sample hash, the sampler, the sequential generator and their
+tests use only integer arithmetic: `i64` and `i128` additions,
+multiplications, shifts and floor divisions, and wrapping `u64` and `u32`
+arithmetic and bit reversal, all with defined results.
 There is no floating point, trigonometry, square root per ray, randomness from
 the host, time, filesystem access, parallel scheduling, map iteration, stdout,
 stderr or logging in any oracle. The square roots in construction are those of
 `FixedUnitVec3::new`, an exact integer square root.
 
 Test builds check integer overflow, so `OPTICS-TP-004` turns any overflow at
-the corners of the accepted domain into a test failure.
+the corners of the accepted domain into a test failure. The hash and sampler
+use explicit wrapping operations, so the checks do not apply to them; their
+golden vectors run natively and under WebAssembly, which locks the wrapping
+results on both.
+
+`OPTICS-TP-014` is the evaluation-order evidence: the values are pure
+functions, so no thread-count test is needed beyond showing that order and
+handle reuse do not matter. No statistical test suite (PractRand, TestU01) has
+been run; `OPTICS-TP-016` and `OPTICS-TP-017` are regression guards with
+stated thresholds, not statistical certification.
 
 ## Known Failures
 
@@ -472,7 +501,13 @@ Current tests cover:
 - look and up vectors one raw unit long and as long as Q32.32 allows;
 - up hints just inside and just outside the near-parallel threshold;
 - positions one raw unit inside and outside the trace domain;
-- sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero.
+- sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero;
+- hash and sampler keys of all zeros and all ones, keys one unit apart in each
+  field, swapped pixel coordinates and swapped sample and dimension;
+- the last block of 1 024 samples below `2^32`;
+- `fraction_from_bits` of 0, all ones, and values on either side of a step of
+  the top 32 bits;
+- the all-zero seed of `Xoroshiro128Plus`, one-value and empty ranges.
 
 ## Stress And Fuzz
 
@@ -487,5 +522,6 @@ case with a stable test name.
 | Gap | Blocking API |
 | --- | --- |
 | A differential check that points along a camera ray project, through `FixedMat4::try_look_at`, `FixedMat4::try_perspective` and `Viewport`, back to the ray's sample. | None; a follow-up case (the matrices landed while this chapter was written). |
-| Sample positions from a sampling sequence. | flyingrobots/bunny#221. |
+| A statistical test suite (PractRand or TestU01) over the sample hash and the sampler. | None; it needs a harness outside the core crates. |
+| Stratification evidence above 1 024 samples per pixel (the property is proven for every `k` up to 32 and tested to 10). | None; a slow-tier case. |
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
