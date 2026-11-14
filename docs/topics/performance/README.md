@@ -68,7 +68,7 @@ How the comparison stays fair:
   median of each percentile across rounds and the best (lowest) p50; the speedup column and
   the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
-  `linalg`, `query`, `scene`, `trace`, …). When the base revision cannot compile a group (an API it does not
+  `linalg`, `query`, `scene`, `trace`, `sample`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
 
 The temporary worktree is removed after the build. Build outputs stay under `target/perf/`.
@@ -202,6 +202,13 @@ also checks that both give the same answer on every input: `scene/closest_visito
 `trace/closest_hit` must choose the same primitive on every ray. The harness runs that
 check before timing and exits with the differing ray indices if it fails.
 
+The `sample` group (`crates/bunny-perf/src/sample.rs`) times the `bunny-optics` sample hash
+and pixel sampler over 1 024 keys of a 32 by 32 tile, 16 samples and 4 dimensions:
+`sample/stream_bits` and `sample/sampler_point` draw from a pixel's held `PixelStream` or
+`PixelSampler`, and `sample/sampler_new_point` builds the sampler first. A crate that the
+base revision lacks (such as `bunny-optics` before it existed) is left out of the base
+manifest, and the groups that need it are reported as `new`.
+
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
 the search loop in `crates/bunny-perf/src/profile.rs`, built on public APIs only, so the core
@@ -209,6 +216,13 @@ crates carry no counters; a test checks that it tests the same primitives in the
 the shipped functions on every ray. The same module provides the `trace/kernel_*` cases, which
 replay the box and triangle tests the search makes and time them in isolation. See the
 [profile](#profile-of-closest_hit-on-the-benchmark-scene).
+
+`trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
+on the scene: each camera ray that hits something against the triangle it hits first,
+repeated to fill a batch, once with no upper limit and once with `t_max` one raw unit below
+the hit (the case the traversal meets behind its best hit). The scene's unit tests also
+compare every triangle test of `trace/closest_hit` with the frozen reference copy of the
+kernel and count how many reach the division (entry 6).
 
 ## Optimization Ledger
 
@@ -557,6 +571,203 @@ follow from this one.
 hand), other scenes, other ray batches, thread scaling, and `closest_hit` against
 `intersect_ray` with a pruning triangle test (the old path here never prunes).
 
+### 5. Prepared divisors and prepared rays (new exact APIs)
+
+**Where:** new `bunny_num::FixedDivisor`, `bunny_query::PreparedRay3` and
+`bunny_query::ray_intersects_aabb_prepared`. Existing functions are unchanged.
+
+**Technique.** Division by an invariant integer (Möller and Granlund, "Improved Division
+by Invariant Integers", IEEE Transactions on Computers 60(2), 2011, Algorithm 4).
+`FixedDivisor::new` normalizes the divisor's magnitude so its top bit is set and computes
+one 64-bit reciprocal with a single 128-bit division. Each later division of a Q32.32
+dividend becomes one or two two-word steps, each one 64×64→128 multiplication, a few
+additions and at most two corrections; quotients small enough for one word take one step.
+The remainder comes out exact, so ties-to-even rounding and the overflow decision are the
+same as `FixedQ32_32::checked_div`.
+
+`PreparedRay3` holds one `FixedDivisor` per nonzero direction component, so the slab test
+in `ray_intersects_aabb_prepared` multiplies where `ray_intersects_aabb` divides. When a
+slab distance or coordinate difference does not fit Q32.32 it calls the same exact wide
+path as `ray_intersects_aabb` (`aabb_wide::exact_slab_hit`), so the two agree there too.
+
+**Fidelity: exact, as new APIs.** `divisor.checked_div(a)` returns exactly
+`a.checked_div(divisor)`, `None` included, and `ray_intersects_aabb_prepared` returns exactly
+what `ray_intersects_aabb` returns for the same ray and box, the overflow inputs of
+flyingrobots/bunny#211 included. Evidence (PERF-TP-034 to PERF-TP-041): boundary values,
+every power-of-two divisor with both signs, 100 000 seeded pairs across all magnitudes,
+10 000 constructed exact ties, 160 000 seeded ray and box pairs including axis-parallel
+rays, up to 240 000 pairs from an overflow-heavy corpus (coordinates near the `i64` extremes,
+direction components of a few raw units; the test asserts more than 100 000 pairs, more than
+5 000 hits, more than 5 000 misses and more than 1 000 hits with a saturated bound) and one
+constructed case answered by the wide path. Deliberate mutation: discarding the wide path's
+hit on overflow (`.filter(|_| false)`) fails both overflow tests.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), through the guarded container runner with the branch's commits as
+history and the machine to itself (`--exclusive`), on 2026-11-13, base revision
+`cc0521e15084` (`origin/main`). Two complete runs:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Run 1:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.23 | +1.0% | 4.11 | 4.19 | +1.9% | 0.98× | 4.80 | 5.09 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.89 | 0.94 | +5.6% | 0.95× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.07 | 11.15 | +0.7% | 10.42 | 10.46 | +0.4% | 1.00× | 11.11 | 11.19 |
+| `linalg/length` | 16.11 | 16.24 | +0.8% | 15.46 | 15.62 | +1.0% | 0.99× | 16.60 | 16.76 |
+| `linalg/normalize` | 41.71 | 41.91 | +0.5% | 38.98 | 39.14 | +0.4% | 1.00× | 45.12 | 43.82 |
+| `num/div` | 6.59 | 6.63 | +0.6% | 6.27 | 6.43 | +2.6% | 0.98× | 6.84 | 6.80 |
+| `num/mul` | 1.38 | 1.42 | +2.9% | 1.34 | 1.34 | +0.0% | 1.00× | 1.46 | 1.46 |
+| `num/sqrt` | 13.59 | 13.88 | +2.1% | 13.31 | 13.27 | -0.3% | 1.00× | 14.16 | 14.12 |
+| `prepared/div` | — | 4.27 | new | — | 3.99 | new | — | — | 4.44 |
+| `prepared/ray_aabb` | — | 36.30 | new | — | 21.73 | new | — | — | 39.10 |
+| `prepared/ray_prepare` | — | 26.45 | new | — | 26.00 | new | — | — | 26.57 |
+| `query/ray_aabb` | 55.09 | 54.24 | -1.5% | 52.29 | 52.25 | -0.1% | 1.00× | 61.28 | 56.88 |
+| `query/ray_build` | 51.96 | 52.21 | +0.5% | 47.93 | 50.25 | +4.8% | 0.95× | 54.36 | 55.09 |
+| `query/ray_sphere_hit` | 65.63 | 68.60 | +4.5% | 62.34 | 61.00 | -2.1% | 1.02× | 71.82 | 71.90 |
+| `query/ray_sphere_miss` | 21.16 | 21.20 | +0.2% | 19.86 | 19.78 | -0.4% | 1.00× | 21.28 | 21.24 |
+| `query/ray_triangle` | 52.61 | 52.41 | -0.4% | 52.49 | 51.80 | -1.3% | 1.01× | 55.26 | 54.97 |
+| `scene/closest_visitor` | 3167.16 | 3189.79 | +0.7% | 3125.86 | 3149.30 | +0.7% | 0.99× | 3229.30 | 3326.10 |
+| `trace/any_hit` | 206.50 | 208.90 | +1.2% | 205.12 | 204.75 | -0.2% | 1.00× | 222.66 | 223.06 |
+| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.62 | 5.98 | +6.4% | 0.94× | 6.06 | 6.06 |
+| `trace/box_ray_prepare` | 1.91 | 1.95 | +2.1% | 1.75 | 1.83 | +4.6% | 0.96× | 1.95 | 1.99 |
+| `trace/closest_hit` | 224.65 | 224.57 | -0.0% | 220.87 | 221.64 | +0.3% | 1.00× | 246.83 | 236.70 |
+| `trace/ray_prepare` | 1.99 | 2.03 | +2.0% | 1.87 | 1.87 | +0.0% | 1.00× | 2.04 | 2.04 |
+
+Run 2:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.11 | 4.19 | +1.9% | 0.98× | 4.84 | 5.13 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% | 1.00× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.15 | 11.19 |
+| `linalg/length` | 16.36 | 16.36 | +0.0% | 15.75 | 15.18 | -3.6% | 1.04× | 16.68 | 16.68 |
+| `linalg/normalize` | 42.56 | 42.40 | -0.4% | 40.69 | 41.02 | +0.8% | 0.99× | 44.68 | 43.66 |
+| `num/div` | 6.63 | 6.71 | +1.2% | 6.47 | 6.47 | +0.0% | 1.00× | 6.84 | 6.92 |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
+| `num/sqrt` | 14.08 | 14.16 | +0.6% | 12.70 | 13.67 | +7.6% | 0.93× | 14.16 | 14.28 |
+| `prepared/div` | — | 4.03 | new | — | 3.50 | new | — | — | 4.23 |
+| `prepared/ray_aabb` | — | 23.36 | new | — | 21.53 | new | — | — | 23.72 |
+| `prepared/ray_prepare` | — | 26.33 | new | — | 26.04 | new | — | — | 27.14 |
+| `query/ray_aabb` | 54.28 | 53.30 | -1.8% | 51.64 | 51.47 | -0.3% | 1.00× | 60.71 | 59.86 |
+| `query/ray_build` | 51.76 | 51.39 | -0.7% | 50.33 | 50.66 | +0.7% | 0.99× | 54.40 | 54.04 |
+| `query/ray_sphere_hit` | 66.90 | 66.32 | -0.9% | 64.86 | 64.86 | +0.0% | 1.00× | 71.66 | 70.56 |
+| `query/ray_sphere_miss` | 21.20 | 21.16 | -0.2% | 21.04 | 21.04 | +0.0% | 1.00× | 21.32 | 21.24 |
+| `query/ray_triangle` | 52.86 | 52.61 | -0.5% | 52.45 | 52.29 | -0.3% | 1.00× | 55.42 | 55.01 |
+| `scene/closest_visitor` | 3177.54 | 3200.65 | +0.7% | 3146.78 | 3159.27 | +0.4% | 1.00× | 3260.38 | 3257.05 |
+| `trace/any_hit` | 210.08 | 210.74 | +0.3% | 207.11 | 206.95 | -0.1% | 1.00× | 227.34 | 232.54 |
+| `trace/box_entry` | 5.98 | 6.02 | +0.7% | 5.98 | 5.98 | +0.0% | 1.00× | 6.02 | 6.02 |
+| `trace/box_ray_prepare` | 1.87 | 1.91 | +2.1% | 1.83 | 1.83 | +0.0% | 1.00× | 1.91 | 1.95 |
+| `trace/closest_hit` | 226.97 | 224.73 | -1.0% | 222.37 | 221.92 | -0.2% | 1.00× | 251.71 | 251.59 |
+| `trace/ray_prepare` | 1.99 | 1.99 | +0.0% | 1.99 | 1.99 | +0.0% | 1.00× | 2.04 | 2.04 |
+
+`prepared/*` report as new because the base has no such API. Best p50 in nanoseconds, run 1
+and run 2, for the cases that time the same rays and box (`query/ray_aabb`,
+`prepared/ray_aabb`, `trace/box_entry`):
+
+| Operation | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| `num/div` (`checked_div`) | 6.43 (base 6.27) | 6.47 (base 6.47) |
+| `prepared/div` | 3.99 | 3.50 |
+| `query/ray_aabb` (exact distances) | 52.25 (base 52.29) | 51.47 (base 51.64) |
+| `prepared/ray_aabb` (the same exact bits) | 21.73 | 21.53 |
+| `prepared/ray_prepare` (once per ray) | 26.00 | 26.04 |
+| `trace/box_entry` (conservative, no distances) | 5.98 (base 5.62) | 5.98 (base 5.98) |
+| `trace/box_ray_prepare` (once per ray) | 1.83 (base 1.75) | 1.83 (base 1.83) |
+
+A prepared division is 1.6 to 1.8 times faster than `checked_div` (best p50); a prepared box
+test is 2.4 times faster than `ray_intersects_aabb` in the same run, and with its 26 ns
+preparation it is level at one box (26 + 22 = 48 ns against 52 ns) and ahead from the second.
+`trace/box_entry` takes 6.0 ns after a 1.8 ns preparation: 3.6 times faster than the prepared
+exact test per box and 14 times cheaper to prepare. Two things limit these readings.
+`prepared/ray_aabb` and `prepared/div` medians are bimodal (36.30 and 23.36 ns median
+against 21.73 and 21.53 best for the box test), the placement sensitivity described under
+[bimodal cases](#bimodal-cases), so best p50 is used. And `query/ray_aabb`, whose code has
+not changed, measured about 40 ns best p50 in two earlier runs against base `b2fe36638429`
+and measures about 52 ns here against base `cc0521e15084`, in both the base and the
+branch build: its absolute time depends on the build's code layout, so ratios are taken
+within one run only, and no absolute `query/ray_aabb` figure is claimed. Every existing case
+is within 8 % at best p50 in both runs and shows no consistent direction, and
+`FixedQ32_32::sqrt_u128` is byte-identical to `main`'s, so the square root dispatch from
+entry 3 is not re-selected. This run's `origin/main` could not build most groups alone
+(the `case` helper compiled only with the `scene` or `trace` group); the commit
+"bunny-perf: compile the case helper for every feature group" repairs that, and an earlier
+attempt without it reported every `num`, `linalg`, `query` and `angle` case as new.
+
+Two earlier complete runs of this branch against base `b2fe36638429`, before main added
+closest-hit traversal, gave the same picture: best p50 `prepared/div` 3.46 and 3.42 ns,
+`prepared/ray_aabb` 21.81 and 21.00 ns, `prepared/ray_prepare` 26.12 and 26.29 ns,
+`trace/box_entry` 5.98 ns, with `num/div` 6.75 and 6.71 ns and `query/ray_aabb` 39.92 and
+40.97 ns in the same runs.
+
+The numbers of the earlier version of this entry (host measurement, older harness, stacked
+on the two-divide square root) are superseded and not carried over.
+
+**x86-64 (the pull request's `Perf / before and after` job, GitHub `ubuntu-24.04` runner,
+shared and coarse, 7 rounds, base `origin/main`).** The gate passed: no existing case moved
+by more than 2.5 % at best p50 (`num/sqrt` -2.5 %, `linalg/length` +1.4 %, the controls
+within 1.1 %). The new cases are much less favourable to the exact prepared APIs than on the
+M5. Best p50 in nanoseconds:
+
+| Operation | x86-64 CI | M5 Pro (two runs) |
+| --- | ---: | ---: |
+| `num/div` | 9.92 | 6.43, 6.47 |
+| `prepared/div` | 7.97 | 3.99, 3.50 |
+| `query/ray_aabb` | 68.76 | 52.25, 51.47 |
+| `prepared/ray_aabb` | 62.06 | 21.73, 21.53 |
+| `prepared/ray_prepare` | 18.75 | 26.00, 26.04 |
+| `trace/box_entry` | 15.52 | 5.98, 5.98 |
+| `trace/box_ray_prepare` | 8.05 | 1.83, 1.83 |
+
+On x86-64 a prepared division is 1.25 times faster than `checked_div` and a prepared box
+test only 1.11 times faster than `ray_intersects_aabb`, so with its preparation it pays off
+only from a ray's third box (18.75 + 2 x 62.06 = 142.9 against 137.5 ns at two boxes, 205.0
+against 206.3 ns at three). `trace/box_entry` is 4.4 times faster than the exact box test
+there. The speed of the prepared exact API is therefore target-dependent and modest where
+the hardware divides quickly; the
+[target-specific rules](#target-specific-implementations) do not apply because the prepared
+path is a separate API, not a replacement.
+
+**Which API suits which use.**
+
+- *Exact `(enter, exit)` distances, bit for bit as `ray_intersects_aabb`, for many boxes
+  per ray* (for example a caller of `bunny_broadphase::intersect_ray` that wants the
+  existing results faster): `PreparedRay3` with `ray_intersects_aabb_prepared`.
+- *Division by one divisor many times, exactly as `checked_div`:* `FixedDivisor`.
+- *Ray tracing and closest-hit traversal* (deciding whether a node can contain a hit and
+  ordering nodes by a lower bound on the entry distance): `TraceRay::box_entry`. It is
+  faster than the prepared exact test per box and per ray. It does not return the exit
+  distance, may report a box a ray narrowly misses, and limits inputs to the trace domain.
+  `PreparedRay3` does not speed up a ray tracer that can use it, and this entry does not
+  claim it does.
+- *A single division or a single box per ray:* `checked_div` and `ray_intersects_aabb`.
+
+**Does the exact prepared API still earn its place?** `FixedDivisor` does: nothing else in
+Bunny offers exact repeated division, and it is 1.6 to 1.8 times faster. `PreparedRay3` is
+narrower than when it was written. Its use is an exact box test that is faster than
+`ray_intersects_aabb`, and nothing in the workspace calls it yet; the traversals added since
+use `box_entry`. It stays as a new API with an oracle test. If the maintainer prefers not
+to keep an exact box API without a caller, the cheapest course is to keep `FixedDivisor`,
+drop `PreparedRay3` and `ray_intersects_aabb_prepared`, and move this experiment's box part
+to "Tried And Rejected"; the pull request states the same recommendation. Switching
+`intersect_ray` to the prepared test would keep its output bits and is a separate change
+that needs its own measurement.
+
+**Trade-offs.**
+
+- *Preparation costs a division per axis.* `PreparedRay3::new` takes about 26 ns; a single
+  division should still use `checked_div`.
+- *More state per ray.* `PreparedRay3` carries three divisors (25 bytes each, with padding)
+  next to the ray.
+- *Subtle arithmetic.* Algorithm 4's correction steps are easy to get wrong; the
+  equivalence tests against `checked_div` are the guard.
+- *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
+  divisions it would replace there.
+
 ## Profile of `closest_hit` on the benchmark scene
 
 This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
@@ -811,3 +1022,164 @@ cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code 
 p50: inside the noise band, with no consistent direction. Its rays all reach the unit box
 without overflow, so the cases time the common path only; the exact path's cost is not
 measured and is paid only by inputs that used to return a false miss.
+
+## Tried And Rejected
+
+Experiments that kept exact results but did not pay off. They are recorded so the same idea
+is not retried without new evidence (a different target, or a changed design).
+
+### Division-free `normalize`
+
+**Idea.** Replace `normalize`'s three divisions by the length with multiplications: a
+reciprocal of the length from a 256-entry seed table and three Newton steps
+(`y <- y(2 - xy)`, within 0–2 units of `2^127 / x` on 1 000 000 samples), a multiplied
+quotient estimate, and an exact remainder correction. No component is longer than the
+length, so the quotient is at most `2^32` and one correction step suffices.
+
+**Fidelity.** Exact: equivalence tests against `checked_div` and against the previous
+`normalize` (100 000 `FixedVec3` and `FixedVec2` cases each) passed.
+
+**Result on an Apple M5 Pro** (`--base origin/perf/fixed-divisor --rounds 11
+--align-code --filter linalg/`; measured with the harness before it passed every result
+through `black_box`, and not re-measured since, so read the sizes as indicative):
+
+| Variant | Best p50 before → after | Median before → after |
+| --- | --- | --- |
+| Branching correction | 42.72 → 41.46 ns (−2.9 %) | 45.49 → 55.66 ns (+22.4 %) |
+| Branch-free correction (masks) | 42.60 → 58.39 ns (+37.1 %) | 44.47 → 61.85 ns (+39.1 %) |
+
+**Why it lost.** The M5's 64-bit divide instruction is fast, so compiler-rt's 128-bit
+division takes few cycles for these operand sizes. The replacement's dependent chain
+(widening multiply, variable 128-bit shift, second multiply, subtract, correct, round) is
+about as long, and the branch-free form only lengthens it. Targets without a fast 64-bit
+divide (wasm32 in particular) were not measured and may behave differently.
+
+**Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
+not proposed for merging.
+
+### 6. Reject triangle hits beyond the limit before dividing
+
+**Where tried:** `TraceRay::hit_triangle` in `bunny-query` (flyingrobots/bunny#214). The
+kernel on `main` is unchanged; the branch added the check, measured it and withdrew it.
+
+**Idea.** After the exact crossing test, `hit_triangle` divides once to get
+`distance = floor(t * 2^32 / det)` (with `det > 0`) and only then compares it with the limits.
+`closest_hit` passes the best distance so far as `t_max`, so a triangle crossed behind the
+best hit pays for a division whose result is thrown away. The check tried was, before the
+division:
+
+```text
+reject when  t >= (t_max + 1) * ceil(det / 2^32)        (checked i128 multiply)
+```
+
+**Why it is exact.** With `c = ceil(det / 2^32)`, `det <= c * 2^32`. For `t_max >= 0`,
+`t >= (t_max + 1) * c` gives `t * 2^32 >= (t_max + 1) * c * 2^32 >= (t_max + 1) * det`, so
+the floored distance is at least `t_max + 1`: the old code returns `None` too (or the quotient
+does not fit `i64`, which is also `None`). For `t_max < 0`, every crossing is a miss either way:
+a negative `t` is behind the origin, and a non-negative `t` gives a distance of at least zero.
+A product that overflows `i128` (`t_max + 1` up to `2^63` times `c` up to about `2^85`)
+exceeds every `t`, so it proves nothing and the old division runs. The check can only say
+"certainly beyond"; otherwise the code is the old code. It is conservative only where
+`det` is not a multiple of `2^32` and the distance is within `(t_max + 1) / c` of the limit,
+which for the scene's triangles (`det` around `2^86`) means essentially never. A symmetric
+check for `t_min` was not tried: the traversal always passes `t_min = 0`, and a negative `t`
+is already rejected by a sign test before any division (`u128::try_from` in
+`shifted_quotient`), so neither an early sign test nor a lower-limit check removes work here.
+
+**Fidelity: it was an exact replacement.** `crates/bunny-query/tests/trace_equivalence_tests.rs`
+compares `hit_triangle` with a frozen copy of its arithmetic
+(`crates/bunny-query/tests/support/trace_reference.rs`): distance, facing and both
+barycentric weights, at upper and lower limits equal to the true distance, one and two raw
+units below it, one above, zero, -1, 1, `i64::MIN`, `i64::MAX` and `i64::MAX - 1`, over
+30 000 seeded rays and triangles (each at those limits as an upper limit, a lower limit and an
+upper limit with `t_min = i64::MIN`: up to 900 000 comparisons), constructed
+hits whose `det` is a multiple of `2^32`, `2^32 + 1` (`641 * 6 700 417`) or 1, and the
+corners of the trace domain. `crates/bunny-perf/src/scene.rs` compares every triangle test
+the scene's `closest_hit` makes, at the limit it passed and around the true distance. The
+existing traversal tests passed unmodified. Four deliberate mutations of the check were each
+caught:
+
+| Mutation | Caught by |
+| --- | --- |
+| `t_max` instead of `t_max + 1` (one raw unit too eager) | TRACE-TP-003, TRACE-TP-201 to TRACE-TP-205, TRACE-TP-102, TRACE-TP-103, TRACE-TP-106, TRACE-TP-108 |
+| `floor(det / 2^32)` instead of the ceiling | TRACE-TP-201, TRACE-TP-204 |
+| `t + 1 >= bound` instead of `t >= bound` | TRACE-TP-204 |
+| `ceil` computed with `2^32 - 2` instead of `2^32 - 1` | TRACE-TP-204 |
+
+The last two survived the first corpus; `TRACE-TP-204` (raw-unit triangles whose `det` is
+exactly `2^32`, `2^32 + 1` or 1) was added to catch them.
+
+**How often it could fire.** `count_the_divisions_the_scene_traversal_makes` in
+`crates/bunny-perf/src/scene.rs` replays `trace/closest_hit` on its 1 024 camera rays and
+classifies every triangle test with the reference arithmetic:
+
+| Triangle tests | Reach the division (`t >= 0` crossing) | Divided but beyond the limit | Rejected by the check |
+| ---: | ---: | ---: | ---: |
+| 1 673 (1.63 per ray) | 714 (42.7 %) | 24 (3.4 % of divisions, 1.4 % of tests) | 24 (all of them) |
+
+The traversal already prunes almost everything behind the best hit at the box level, so
+only 24 divisions in 1 024 rays are wasted. This agrees with the
+[profile](#profile-of-closest_hit-on-the-benchmark-scene) (0.02 of 0.70 divisions per ray
+beyond the limit), which predicted that #214 could not pay on this scene. Even a check that cost nothing would save about
+24 × 12.5 ns over 1 024 rays, roughly 0.3 ns per ray, or 0.13 % of `trace/closest_hit`.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), 2026-11-13, two complete runs through the guarded container runner with
+`--exclusive` (no other container run active) and the branch's commits as history:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Base revision `42279ed2825f` (`origin/main`); the working tree was the branch merged with
+that base, with the check in place. The two `trace/triangle_*` cases are new in the
+harness and run the same source on both sides: `trace/triangle_hit` tests each camera ray
+against the triangle it hits first with no upper limit (the hit divides), and
+`trace/triangle_beyond_limit` tests the same pairs with `t_max` one raw unit below the hit.
+Nanoseconds per call:
+
+| Case | Run 1 p50 before | Run 1 p50 after | Run 1 best change | Run 2 p50 before | Run 2 p50 after | Run 2 best change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `trace/closest_hit` | 225.02 | 222.94 | -1.5% | 223.75 | 223.02 | -2.0% |
+| `trace/any_hit` | 208.42 | 209.72 | +0.5% | 209.47 | 209.96 | +2.1% |
+| `trace/triangle_beyond_limit` | 30.64 | 18.07 | -39.8% | 30.56 | 17.99 | -39.9% |
+| `trace/triangle_hit` | 30.15 | 32.71 | +7.1% | 29.95 | 32.59 | +7.2% |
+| `trace/ray_prepare` | 2.03 | 1.99 | +0.0% | 1.99 | 1.99 | +0.0% |
+| `scene/closest_visitor` | 3179.13 | 3217.74 | +0.3% | 3226.89 | 3203.49 | -0.4% |
+| `query/ray_triangle` | 52.61 | 52.73 | +0.2% | 52.86 | 52.69 | -0.5% |
+| `query/ray_aabb` | 54.12 | 54.57 | +2.6% | 54.97 | 54.32 | -0.8% |
+| `query/ray_build` | 51.55 | 51.84 | -0.2% | 51.35 | 51.72 | -0.5% |
+| `query/ray_sphere_hit` | 67.26 | 70.56 | -1.6% | 67.59 | 70.68 | +0.6% |
+| `query/ray_sphere_miss` | 21.20 | 21.20 | -0.2% | 21.12 | 21.16 | -0.2% |
+| `linalg/length` | 16.32 | 16.03 | -0.8% | 16.24 | 16.36 | +0.3% |
+| `linalg/normalize` | 41.83 | 42.48 | -1.3% | 41.95 | 42.11 | +0.3% |
+| `num/div` | 6.71 | 6.71 | +0.0% | 6.67 | 6.67 | -1.2% |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.42 | +0.0% |
+| `num/sqrt` | 13.59 | 13.88 | +3.2% | 13.92 | 14.04 | -0.3% |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.4% | 11.11 | 11.11 | +0.0% |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.19 | 4.15 | +0.0% |
+
+**Reading.** In isolation the check does what it should: a rejected hit costs about 12.6 ns
+less (-40 %, both runs), and every hit that still divides costs about 2.1 ns more (+7 %, both
+runs), the price of the 128-bit checked multiply and compare. On the scene, 690 crossings
+pay that price for every 24 that skip the division, so the per-ray cost model predicts a
+loss of about 1.2 ns (+0.5 %), and the check breaks even only when about one crossing in
+seven is behind the limit. The measured `trace/closest_hit` moved by -1.5 % and -2.0 % in best
+p50 and -0.9 % and -0.3 % in median p50: inside the noise band, smaller than the controls'
+spread (`num/sqrt` +3.2 %, `query/ray_aabb` +2.6 %, `trace/any_hit` +2.1 % on unchanged or
+non-firing paths), and the opposite of what the counts predict, so it is not claimed as a
+gain. `trace/any_hit` passes an unbounded limit, so the check never fires there and only
+adds cost.
+
+**Decision: not shipped.** It adds a kernel branch whose benefit cannot be seen on the scene
+this project measures. The equivalence tests, the scene comparison, the counting test and
+the two micro cases stay: they are the oracle and the measurement any later attempt needs.
+
+**What would change it:** a scene where many crossings are behind the nearest hit at the
+leaf level (dense overlapping geometry, large leaves, or a tree whose leaf boxes overlap a
+lot; flyingrobots/bunny#213 may change the tree), or a cheaper certainty test. The counting
+test gives the fraction directly; above about 15 % of crossings it is worth re-measuring.
+x86-64 (with a hardware 128-by-64 divide the saving per skipped division is smaller) and
+wasm32 (where both the division and the 128-bit multiply are software routines) were not
+measured; the CI job measured x86-64 only on the withdrawn state.

@@ -7,9 +7,11 @@
 //! Deterministic numeric profiles for Bunny graphics primitives.
 
 pub mod fixed_angle;
+pub mod fixed_divisor;
 pub mod fixed_q32_32;
 
 pub use fixed_angle::FixedAngle;
+pub use fixed_divisor::FixedDivisor;
 pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
 
 /// Bunny's first scalar representation.

@@ -116,6 +116,14 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-031 | Profile | PERF-REQ-007 | The the tree statistics account for every primitive, nodes = 2 leaves - 1, depth below the stack capacity. | `crates/bunny-perf/src/profile.rs::tests::the_tree_statistics_account_for_every_primitive` |
 | PERF-TP-032 | Profile | PERF-REQ-007 | The the three ray classes cover all 1 024 rays and the sphere class is not empty. | `crates/bunny-perf/src/profile.rs::tests::rays_split_into_the_three_classes` |
 | PERF-TP-033 | Profile | PERF-REQ-007 | The the stage replica classifies hand-built rays as divided, behind, parallel, first-barycentric and second-barycentric failures. | `crates/bunny-perf/src/profile.rs::tests::the_stage_replica_matches_hit_triangle_on_a_hand_built_case` |
+| PERF-TP-034 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on boundary values, signs and overflow. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_boundaries` |
+| PERF-TP-035 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div for every power-of-two divisor and both signs. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_for_every_power_of_two_divisor` |
+| PERF-TP-036 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 100 000 seeded pairs. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_seeded_pairs` |
+| PERF-TP-037 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 10 000 constructed exact ties. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties` |
+| PERF-TP-038 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes` |
+| PERF-TP-039 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes` |
+| PERF-TP-040 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb, bit for bit, on an overflow-heavy seeded corpus (coordinates near the i64 extremes, direction components of a few raw units) that hits, misses and saturates bounds. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_the_overflow_corpus` |
+| PERF-TP-041 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -367,6 +375,78 @@ requirements = ["PERF-REQ-007"]
 evidence = "test"
 test = "crates/bunny-perf/src/profile.rs::tests::the_stage_replica_matches_hit_triangle_on_a_hand_built_case"
 oracle = "The stage replica classifies hand-built rays as divided, behind, parallel, first-barycentric and second-barycentric failures."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-034"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_boundaries"
+oracle = "FixedDivisor equals checked_div on boundary values, signs and overflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-035"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_for_every_power_of_two_divisor"
+oracle = "FixedDivisor equals checked_div for every power-of-two divisor and both signs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-036"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_seeded_pairs"
+oracle = "FixedDivisor equals checked_div on 100 000 seeded pairs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-037"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties"
+oracle = "FixedDivisor equals checked_div on 10 000 constructed exact ties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-038"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes"
+oracle = "Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-039"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes"
+oracle = "Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-040"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_the_overflow_corpus"
+oracle = "Prepared ray-box results equal ray_intersects_aabb, bit for bit, on an overflow-heavy seeded corpus (coordinates near the i64 extremes, direction components of a few raw units) that hits, misses and saturates bounds."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-041"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases"
+oracle = "Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path."
 tier = "fast"
 status = "implemented"
 ```
