@@ -160,6 +160,17 @@ fn banned_macros_are_found_through_every_std_path() {
             ("file!, bare", "pub fn f() -> &'static str { file!() }", 1),
             ("file! under core", "pub fn f() -> &'static str { core::file!() }", 1),
             (
+                "file! beside a function imported as file (review)",
+                "mod local { pub fn file() {} }\nuse local::file;\npub fn f() -> &'static str { file!() }",
+                3,
+            ),
+            (
+                "option_env imported inside a macro body (review)",
+                "macro_rules! read_host {\n    () => {{\n        use std::prelude::v1::option_env as read;\n        \
+                 read!(\"HOME\")\n    }};\n}",
+                3,
+            ),
+            (
                 "file! through the prelude",
                 "use std::prelude::v1::file as here;\npub fn f() -> &'static str { here!() }",
                 1,

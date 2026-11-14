@@ -266,9 +266,14 @@ fn starts_with(segments: &[String], prefix: &[&str]) -> bool {
     segments.len() >= prefix.len() && segments.iter().zip(prefix).all(segment_matches)
 }
 
-/// A written segment against a pattern segment, where `*` matches any one segment.
+/// A written segment against a pattern segment, where `*` matches any one segment but the
+/// two modules of `std::os` that are not platforms, `fd` and `raw` (found in review: a glob
+/// of `std::os::fd` read as a platform gained its `net` and `process` rules).
 fn segment_matches((written, pattern): (&String, &&str)) -> bool {
-    *pattern == "*" || written == pattern
+    if *pattern == "*" {
+        return written != "fd" && written != "raw";
+    }
+    written == pattern
 }
 
 /// Items below a banned prefix that are deterministic. `DefaultHasher::new()` uses fixed
@@ -318,6 +323,12 @@ fn glob_rules(module: &[String]) -> Vec<(&'static str, &'static str)> {
         .filter(|rule| starts_with(module, rule.prefix) || is_strict_prefix(module, rule.prefix))
         .map(|rule| (rule.rule, rule.message))
         .collect::<Vec<_>>();
+    let below_specific = PREFIX_RULES
+        .iter()
+        .any(|rule| rule.rule != PLATFORM_RULE && starts_with(module, rule.prefix));
+    if below_specific {
+        rules.retain(|(rule, _)| *rule != PLATFORM_RULE);
+    }
     rules.extend(unclassified_rule(module));
     rules
 }
@@ -451,6 +462,21 @@ impl Scanner {
         expanded
     }
 
+    /// The rules a macro call breaks. Macros and functions have separate namespaces, so a
+    /// bare name is judged as the standard macro too: `use local::file;` imports a
+    /// function and leaves `file!()` the standard macro.
+    fn macro_call_rules(
+        &self,
+        written: &[String],
+        args: &TokenStream,
+    ) -> Vec<(&'static str, &'static str)> {
+        let mut rules = includes::macro_rules(&self.expand(written), args, &self.origin);
+        if written.len() == 1 {
+            rules.extend(includes::macro_rules(written, args, &self.origin));
+        }
+        rules
+    }
+
     fn check_path(&mut self, line: usize, written: &[String]) {
         let expanded = self.expand(written);
         let rules = path_rules(&expanded, written);
@@ -477,12 +503,14 @@ impl<'ast> Visit<'ast> for Scanner {
     fn visit_macro(&mut self, node: &'ast Macro) {
         for path in token_paths(&node.tokens) {
             self.check_path(path.line, &path.segments);
+            // A `use` of a standard macro inside a macro body binds a name the file's
+            // import map does not hold, so the path is judged where it is written.
+            self.report(path.line, includes::imported_macro_rules(&self.expand(&path.segments)));
         }
-        let invoked = self.expand(&path_names(&node.path));
-        let rules = includes::macro_rules(&invoked, &node.tokens, &self.origin);
+        let rules = self.macro_call_rules(&path_names(&node.path), &node.tokens);
         self.report(path_line(&node.path), rules);
         for call in includes::macro_calls(&node.tokens) {
-            let rules = includes::macro_rules(&self.expand(&call.path), &call.args, &self.origin);
+            let rules = self.macro_call_rules(&call.path, &call.args);
             self.report(call.line, rules);
         }
         for (line, method) in token_method_calls(&node.tokens) {

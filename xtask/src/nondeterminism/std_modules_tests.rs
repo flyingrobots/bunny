@@ -106,16 +106,32 @@ fn each_root_module_and_macro_gets_its_classified_rule() {
 fn the_platform_modules_of_std_os_are_banned_except_raw() {
     let mut wrong = Vec::new();
     for module in section("[std::os]").iter().copied().chain(["raw"]) {
-        let source = format!("use std::os::{module};");
-        let found = family_rules(&source);
         let expected_rules = match module {
             "raw" => Vec::new(),
             "fd" => vec!["std-fs".to_string()],
             _ => vec!["host-platform".to_string()],
         };
-        if found != expected_rules {
-            wrong.push(format!("`{source}`: expected {expected_rules:?}, gate reported {found:?}"));
+        // A glob of a module gets the module's own rules, no more (found in review).
+        for source in [format!("use std::os::{module};"), format!("use std::os::{module}::*;")] {
+            let found = family_rules(&source);
+            let expected_rules = if source.ends_with("*;") && module != "raw" && module != "fd" {
+                glob_expectation(module)
+            } else {
+                expected_rules.clone()
+            };
+            if found != expected_rules {
+                wrong.push(format!(
+                    "`{source}`: expected {expected_rules:?}, gate reported {found:?}"
+                ));
+            }
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A glob of a platform module also brings in whatever `fs`, `io`, `net`, `process` and
+/// `prelude` children it has, each banned under its own rule (the rules name them for every
+/// platform), beside `host-platform`.
+fn glob_expectation(_module: &str) -> Vec<String> {
+    ["host-platform", "network", "std-fs", "std-process"].map(str::to_string).to_vec()
 }

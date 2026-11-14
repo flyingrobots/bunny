@@ -123,8 +123,10 @@ CPU feature-detection macros) are recognised by name: as a bare name, or as
 the last segment of a path at any depth below `std`, `core` or `alloc` after
 imports are resolved. So `std::prelude::v1::include!`,
 `core::prelude::rust_2021::env!` and a `use` that renames either are the
-macros themselves, and the `use` is reported where it is written. A macro of
-another crate with the same name is not.
+macros themselves, and the `use` is reported where it is written, also
+inside a macro body. A bare call is judged as the standard macro even when a
+function of that name is imported, since macros and functions have separate
+namespaces. A macro of another crate called by a path is not.
 
 A lexical gate cannot know what a `macro_rules!` metavariable will be at an
 invocation, and the invocation's own tokens hold only an identifier or a
