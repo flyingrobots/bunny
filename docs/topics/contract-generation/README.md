@@ -25,6 +25,51 @@ Regenerate those artifacts with:
 cargo run --locked -p xtask -- generate
 ```
 
+## Regeneration Check
+
+Code Dojo's full gate and pre-commit gate check that the committed artifacts
+are exactly what the generator writes now (`xtask/src/generated_check.rs`).
+The step runs `bunny-wesley` with the same arguments as
+`cargo run --locked -p xtask -- generate`, from a scratch directory that
+holds a copy of the schema at its repository path, so the paths the generator
+records in its output (the schema path in every file, the output paths in the
+manifest) are the repository's. It then compares each of the three outputs
+with the committed file byte for byte.
+
+What it reads depends on the gate. The full gate and `code-dojo-generated` read
+the schema and the artifacts from the working tree. The pre-commit gate reads
+both from the index (`git cat-file`), as its other staged checks do, so it
+judges what the commit records: a stale artifact that is staged fails even when
+the file on disk is fresh, and a fresh staged artifact passes beside a stale
+unstaged copy. The generator itself is built from the working tree, as the
+hook's `cargo test` is.
+
+Each run uses its own directory, `target/dojo-generated/run-<process id>/`,
+and removes it when it ends, so a pre-commit hook that runs during a pre-push
+gate in the same checkout cannot delete the other run's files. Separate
+worktrees have separate `target/` directories.
+
+On any difference the gate fails and names each differing file with the line
+where it first differs, or a committed file that is missing, then the command
+that fixes it:
+
+```text
+Code Dojo: generated contract artifacts differ from what bunny-wesley writes
+  generated/typescript/bunny-graphics.ts:1: differs from the regenerated file
+Regenerate with `cargo run --locked -p xtask -- generate` and commit the result.
+```
+
+A schema edited without regenerating fails the same way, because the schema
+hash is in every output. Run the step alone with
+`cargo run --locked -p xtask -- code-dojo-generated`.
+
+It is cheap enough for the pre-commit gate. Measured in the rust-dev container
+with `--exclusive`: 0.03 s when the generator is built, 0.36 s after every
+source file is touched, and 5.66 s from an empty target directory (building
+`wesley-core` and the generator's other dependencies). The check does not look
+for files the generator does not write, and it does not run the generator's
+unit tests, which the gate runs anyway.
+
 ## Ownership
 
 Bunny owns:
