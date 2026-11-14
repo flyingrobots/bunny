@@ -7,6 +7,8 @@ use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
 mod aabb_wide;
+mod prepared;
+pub use prepared::{ray_intersects_aabb_prepared, PreparedRay3};
 
 /// Computes the intersection of a ray and a sphere.
 ///
@@ -192,9 +194,13 @@ impl RayInterval {
 
         let t0 = axis.slab_distance(axis.min_bound)?;
         let t1 = axis.slab_distance(axis.max_bound)?;
+        self.include(t0, t1);
+        Ok(())
+    }
+
+    fn include(&mut self, t0: FixedQ32_32, t1: FixedQ32_32) {
         self.enter = max(self.enter, min(t0, t1));
         self.exit = min(self.exit, max(t0, t1));
-        Ok(())
     }
 
     fn hit(&self) -> Option<(FixedQ32_32, FixedQ32_32)> {

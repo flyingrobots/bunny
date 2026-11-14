@@ -64,6 +64,19 @@ workspace tool and is not published.
   search makes. The performance chapter's new profile section says where the
   time of `trace/closest_hit` goes and ranks the stage 2 options. No library
   function changed and the core crates carry no counters.
+* Added `FixedDivisor`, a Q32.32 divisor prepared for repeated exact division
+  (Möller–Granlund division by an invariant integer): `divisor.checked_div(a)`
+  returns exactly `a.checked_div(divisor)`, `None` included. Best p50 on an
+  Apple M5 Pro: 3.5 to 4.0 ns against 6.4 to 6.5 ns for
+  `FixedQ32_32::checked_div` (two runs, ledger entry 5).
+* Added `PreparedRay3` and `ray_intersects_aabb_prepared`: the same
+  `(enter, exit)` bits as `ray_intersects_aabb` on every input, including the
+  overflow inputs that `ray_intersects_aabb` now decides exactly
+  (flyingrobots/bunny#211), with no division per box. Best p50: 21.5 to 21.7 ns
+  against 51.5 to 52.3 ns in the same runs, after a 26 ns preparation. For ray
+  traversal that does not need exact distances, `TraceRay::box_entry` (6.0 ns
+  after a 1.8 ns preparation) is faster, and on an x86-64 CI runner the
+  prepared box test is only 1.11 times faster; see the ledger entry.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
@@ -176,6 +189,10 @@ workspace tool and is not published.
 
 ### Fixed
 
+* Fixed `bunny-perf` so every feature group builds on its own: the `case` helper
+  compiled only with the `scene` or `trace` group, which made `cargo xtask perf`
+  report the `num`, `linalg`, `query` and `angle` cases as new instead of
+  comparing them against a base revision.
 * Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
   toolchains no longer fails the gate.
 
