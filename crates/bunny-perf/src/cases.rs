@@ -49,7 +49,15 @@ pub(crate) fn all() -> Vec<Case> {
     cases
 }
 
-#[cfg(any(feature = "scene", feature = "trace"))]
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "angle",
+    feature = "prepared",
+    feature = "scene",
+    feature = "trace"
+))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }
 }
