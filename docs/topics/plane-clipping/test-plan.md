@@ -1,7 +1,7 @@
-# Plane Classification And Segment Clipping Test Plan
+# Plane Classification, Segment And Polygon Clipping Test Plan
 
-This document defines how Bunny verifies the fixed-point plane and segment
-clipping contract.
+This document defines how Bunny verifies the fixed-point plane, segment and
+convex polygon clipping contract.
 
 The current topic chapter is [`README.md`](README.md). This test plan is a
 living verification design.
@@ -15,9 +15,11 @@ in `bunny-geom`:
 - the rule for a point exactly on the plane;
 - clipping one segment to the closed front half-space;
 - the rounding of the clipped endpoint;
-- checked overflow behavior.
+- checked overflow behavior;
+- convex polygon clipping into a caller buffer: vertex order, degenerate
+  results, buffer size, canonical cut direction on shared edges.
 
-Polygon clipping is out of scope (flyingrobots/bunny#204).
+Clipping concave polygons is out of scope.
 
 ## Test Goals
 
@@ -43,6 +45,12 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PC-REQ-005 | The clipped endpoint rounds the parameter with ties-to-even and each coordinate offset with ties-to-even. | `README.md#rounding-of-the-clipped-endpoint` |
 | PC-REQ-006 | Overflow in distance, parameter or interpolation returns None. | `README.md#overflow` |
 | PC-REQ-007 | The clipped endpoint stays within a stated raw bound of the exact intersection. | `README.md#rounding-of-the-clipped-endpoint` |
+| PC-REQ-008 | Polygon clipping keeps the closed front half-space, preserves winding and starts output at the first kept input vertex. | `README.md#vertex-order` |
+| PC-REQ-009 | Fewer than three input vertices is an error; a result with fewer than three vertices is Outside; all-on-plane and all-front polygons are unchanged. | `README.md#degenerate-results` |
+| PC-REQ-010 | A cut is skipped on an edge with an on-plane end, and input vertices are never merged. | `README.md#vertices-on-the-plane` |
+| PC-REQ-011 | The output buffer holds a convex polygon's result when it has n + 1 slots; a smaller buffer reports OutputTooSmall. | `README.md#buffer-size` |
+| PC-REQ-012 | Each cut is computed in the canonical edge direction, so adjacent polygons agree bit for bit and the cut equals clip_segment of the canonical segment, within the stated bound. | `README.md#cut-points-and-shared-edges` |
+| PC-REQ-013 | Polygon overflow returns Overflow. | `README.md#overflow` |
 
 ```toml
 [[requirement]]
@@ -79,6 +87,36 @@ status = "active"
 id = "PC-REQ-007"
 summary = "The clipped endpoint stays within a stated raw bound of the exact intersection."
 status = "active"
+
+[[requirement]]
+id = "PC-REQ-008"
+summary = "Polygon clipping keeps the closed front half-space, preserves winding and starts output at the first kept input vertex."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-009"
+summary = "Fewer than three input vertices is an error; a result with fewer than three vertices is Outside; all-on-plane and all-front polygons are unchanged."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-010"
+summary = "A cut is skipped on an edge with an on-plane end, and input vertices are never merged."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-011"
+summary = "The output buffer holds a convex polygon's result when it has n + 1 slots; a smaller buffer reports OutputTooSmall."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-012"
+summary = "Each cut is computed in the canonical edge direction, so adjacent polygons agree bit for bit and the cut equals clip_segment of the canonical segment, within the stated bound."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-013"
+summary = "Polygon overflow returns Overflow."
+status = "active"
 ```
 
 ## Fixtures
@@ -100,6 +138,20 @@ intersection is representable.
 | PC-TP-007 | Ties-to-even | PC-REQ-005 | Constructed ties at 1.5 and 0.5 raw round to 2 and 0. | `crates/bunny-geom/tests/plane_clip_tests.rs::pc_tp_007_parameter_ties_round_to_even` |
 | PC-TP-008 | Overflow | PC-REQ-006 | Distance and interpolation overflow return None. | `crates/bunny-geom/tests/plane_clip_tests.rs::pc_tp_008_overflow_returns_none` |
 | PC-TP-009 | Seeded sweep | PC-REQ-001..004, PC-REQ-007 | Exact i128 rational intersection, classification consistency, retained endpoints on the front. | `crates/bunny-geom/tests/plane_clip_tests.rs::pc_tp_009_seeded_sweep_matches_exact_reference` |
+| PC-TP-010 | Square crossing | PC-REQ-008 | Exact raw square clipped by x = 1; output starts at the first kept vertex; area sign positive. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_010_square_crossing_starts_at_first_kept_vertex` |
+| PC-TP-011 | One vertex on plane | PC-REQ-002, PC-REQ-010 | Touching apex is Outside; apex with front base unchanged; on-plane vertex gets no duplicate cut. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_011_one_vertex_on_the_plane` |
+| PC-TP-012 | All in, all out | PC-REQ-008, PC-REQ-009 | Unchanged / Outside, including one raw unit behind. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_012_all_in_and_all_out` |
+| PC-TP-013 | Edge in plane | PC-REQ-009 | Edge on plane with rest behind is Outside; rest in front is unchanged. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_013_edge_in_the_plane` |
+| PC-TP-014 | Coplanar polygon | PC-REQ-009 | Polygon inside the plane is returned unchanged. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_014_coplanar_polygon_is_unchanged` |
+| PC-TP-015 | Degenerate inputs | PC-REQ-009, PC-REQ-010 | Fewer than three vertices is an error; repeated input vertices are preserved; two on-plane vertices are Outside. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_015_degenerate_inputs_and_repeated_vertices` |
+| PC-TP-016 | Buffer bounds | PC-REQ-011 | A corner cut gives n + 1 vertices; n + 1 slots fit, n slots give OutputTooSmall; Outside needs none; tail untouched. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_016_output_buffer_bounds` |
+| PC-TP-017 | Shared edge, both directions | PC-REQ-012 | Two triangles traversing an edge in opposite directions contain the same canonical cut for 400 edges; clip_segment is shown asymmetric. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_017_shared_edge_cut_ignores_traversal_direction` |
+| PC-TP-018 | Canonical equals segment clip | PC-REQ-012 | The polygon cut equals clip_segment of the canonical segment for three vertex rotations. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_018_cut_equals_segment_clip_in_canonical_direction` |
+| PC-TP-019 | Golden, inexact | PC-REQ-005, PC-REQ-012 | t = 1/3 gives cut raw 4294967295 in a triangle with exact golden output list. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_019_golden_inexact_cut` |
+| PC-TP-020 | Winding, clockwise | PC-REQ-008 | Clockwise square stays clockwise with exact output. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_020_winding_survives_both_orientations` |
+| PC-TP-021 | Overflow | PC-REQ-013 | Distance and interpolation overflow return Overflow. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_021_overflow_is_an_error` |
+| PC-TP-022 | Seeded sweep | PC-REQ-008, PC-REQ-009, PC-REQ-011, PC-REQ-012 | 2000 convex polygons against an independent Sutherland-Hodgman and exact i128 cut bound; at most n + 1 vertices. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_022_seeded_sweep_matches_reference` |
+| PC-TP-023 | Sweep, reversed polygon | PC-REQ-012 | A polygon and its reverse clip to the same point set. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_023_sweep_reversed_polygon_gives_the_same_points` |
 
 ```toml
 [[case]]
@@ -182,6 +234,132 @@ test = "crates/bunny-geom/tests/plane_clip_tests.rs::pc_tp_009_seeded_sweep_matc
 oracle = "Exact i128 rational intersection, classification consistency, retained endpoints on the front."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "PC-TP-010"
+requirements = ["PC-REQ-008"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_010_square_crossing_starts_at_first_kept_vertex"
+oracle = "Exact raw square clipped by x = 1; output starts at the first kept vertex; area sign positive."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-011"
+requirements = ["PC-REQ-002", "PC-REQ-010"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_011_one_vertex_on_the_plane"
+oracle = "Touching apex is Outside; apex with front base unchanged; on-plane vertex gets no duplicate cut."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-012"
+requirements = ["PC-REQ-008", "PC-REQ-009"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_012_all_in_and_all_out"
+oracle = "Unchanged / Outside, including one raw unit behind."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-013"
+requirements = ["PC-REQ-009"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_013_edge_in_the_plane"
+oracle = "Edge on plane with rest behind is Outside; rest in front is unchanged."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-014"
+requirements = ["PC-REQ-009"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_014_coplanar_polygon_is_unchanged"
+oracle = "Polygon inside the plane is returned unchanged."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-015"
+requirements = ["PC-REQ-009", "PC-REQ-010"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_015_degenerate_inputs_and_repeated_vertices"
+oracle = "Fewer than three vertices is an error; repeated input vertices are preserved; two on-plane vertices are Outside."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-016"
+requirements = ["PC-REQ-011"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_016_output_buffer_bounds"
+oracle = "A corner cut gives n + 1 vertices; n + 1 slots fit, n slots give OutputTooSmall; Outside needs none; tail untouched."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-017"
+requirements = ["PC-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_017_shared_edge_cut_ignores_traversal_direction"
+oracle = "Two triangles traversing an edge in opposite directions contain the same canonical cut for 400 edges; clip_segment is shown asymmetric."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-018"
+requirements = ["PC-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_018_cut_equals_segment_clip_in_canonical_direction"
+oracle = "The polygon cut equals clip_segment of the canonical segment for three vertex rotations."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-019"
+requirements = ["PC-REQ-005", "PC-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_019_golden_inexact_cut"
+oracle = "t = 1/3 gives cut raw 4294967295 in a triangle with exact golden output list."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-020"
+requirements = ["PC-REQ-008"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_020_winding_survives_both_orientations"
+oracle = "Clockwise square stays clockwise with exact output."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-021"
+requirements = ["PC-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_021_overflow_is_an_error"
+oracle = "Distance and interpolation overflow return Overflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-022"
+requirements = ["PC-REQ-008", "PC-REQ-009", "PC-REQ-011", "PC-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_022_seeded_sweep_matches_reference"
+oracle = "2000 convex polygons against an independent Sutherland-Hodgman and exact i128 cut bound; at most n + 1 vertices."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-023"
+requirements = ["PC-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_023_sweep_reversed_polygon_gives_the_same_points"
+oracle = "A polygon and its reverse clip to the same point set."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -200,16 +378,18 @@ filesystem, locale or logging in any oracle.
 
 - A zero normal gives the constant signed distance `-offset` for every point.
 - A segment touching the plane at one end returns a degenerate segment.
+- A polygon touching the plane at a vertex or an edge is Outside.
 - Minimum and maximum raw coordinates overflow into `None`.
 
 ## Stress And Fuzz
 
-PC-TP-009 runs 2000 seeded segments against an exact reference. Any failure
+PC-TP-009 runs 2000 seeded segments and PC-TP-022 and PC-TP-023 run 2000 and
+1000 seeded convex polygons against exact references. Any failure
 must be minimized into a named regression case.
 
 ## Open Gaps
 
 | Gap | Blocking API |
 | --- | --- |
-| Polygon clipping. | flyingrobots/bunny#204. |
+| Concave polygon clipping. | A concrete consumer need. |
 | Normalized or validated plane constructors. | A concrete consumer need. |
