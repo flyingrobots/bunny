@@ -1814,7 +1814,9 @@ it was not accepted as free; the field form is recorded under
 local of the loop, `trace/closest_hit`, `_sah`, `_shuffled` and `trace/any_hit` are level or
 faster in both runs (-0.2 % to -1.5 % best p50), and `scene/closest_visitor` moved +0.9 % and
 +1.0 % in best p50 against a ±3 % band, so the selected form's cost is not measurable here.
-x86-64 is read from the pull request's CI perf job.
+On x86-64, the pull request's CI perf job (GitHub `ubuntu-latest`, run `43581831386`, the
+selected form) read `trace/closest_hit` -0.1 % / -0.0 %, `trace/any_hit` -0.9 % / -1.1 %,
+`trace/closest_hit_sah` -0.0 % / +0.2 % and `scene/closest_visitor` -0.3 % / -0.9 %.
 
 ## Tried And Rejected
 
