@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
+  `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
+  a tangent (no trigonometry) and return the new `ProjectionError`. The
+  coordinate law now defines the canonical NDC depth range `[0, 1]` (near to
+  `0`, far to `1`) and a `-Z` camera, with golden vectors that run natively and
+  under WebAssembly.
+* Added closest-hit and any-hit BVH ray traversal to `bunny-broadphase`:
+  `closest_hit`, `any_hit`, `ClosestHit` and `BvhView` (the borrowed node and
+  primitive-index buffers). The search is front to back over existing
+  `BvhNode` trees, uses `TraceRay::box_entry` for nodes and a caller closure
+  for primitives, skips subtrees whose entry bound is beyond the best hit, and
+  gives ties to the lowest primitive index. Its answer equals a test of every
+  primitive whatever the tree's shape, under the caller conditions stated in
+  the `docs/topics/ray-tracing/` chapter, which now documents the traversal
+  and its correctness argument. `intersect_ray` and the other existing
+  functions are unchanged.
 * Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
   `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
   test that never rejects a box the ray reaches and returns an entry bound
@@ -20,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates below 256.0 and direction components at most 1.0. Existing
   `bunny-query` functions are unchanged. See the new
   `docs/topics/ray-tracing/` chapter and test plan.
+* Added `FixedPlane3`, `PlaneSide`, `FixedSegment3` and `SegmentClip` to
+  `bunny-geom`: checked signed distance, three-way point classification, and
+  segment clipping to the closed front half-space (a point exactly on the plane
+  is kept). The clipped endpoint uses one checked division and rounds
+  ties-to-even. See `docs/topics/plane-clipping/`.
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same
@@ -66,6 +87,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Behaviour change (contract change, flyingrobots/bunny#211):**
+  `bunny_query::ray_intersects_aabb`, and so
+  `bunny_broadphase::intersect_ray`, no longer report a miss when a slab
+  distance or a coordinate difference overflows. The inputs that change are
+  exactly those for which the old function stopped on an overflowing
+  `bound - origin` subtraction or `(bound - origin) / direction` division:
+  a direction component of a few raw units (for a slab of half-width `k`
+  centred on the origin, any component of at most `2k` raw units), or a bound
+  2^31 units or more from the origin. For them the function now returns
+  `Some((t_enter, t_exit))` when the ray reaches the box ahead of its origin
+  and `None` when it truly misses, decided exactly with `i128` rationals; a
+  slab distance that does not fit Q32.32 saturates to the minimum or maximum
+  by sign, and coordinate differences are widened to `i128` instead of
+  saturated. Every hit the function reported before is reported with the same
+  bits, and every miss not caused by overflow is still a miss; a differential
+  test against the retained old implementation and an exact rational oracle
+  check both. The workspace version is not bumped here: per the Fidelity Rule
+  the next release must carry a version that signals this contract change.
 * Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
   toolchains no longer fails the gate.
 

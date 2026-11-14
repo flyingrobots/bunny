@@ -6,6 +6,8 @@ use bunny_geom::{FixedAabb3, FixedRay3, FixedSphere3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
+mod aabb_wide;
+
 /// Computes the intersection of a ray and a sphere.
 ///
 /// Returns the intersection point and the surface normal at the intersection,
@@ -73,25 +75,65 @@ fn positive_sphere_hit(t0: FixedQ32_32, t1: FixedQ32_32) -> Option<FixedQ32_32> 
 /// Returns `Some((t_enter, t_exit))` if the ray intersects the box, where
 /// `t_enter` is the hit distance of the entry point and `t_exit` is the
 /// hit distance of the exit point. Returns `None` if the ray misses the box.
+///
+/// # Distances
+///
+/// For each axis with a non-zero direction component, the slab distances are
+/// `(min - origin) / direction` and `(max - origin) / direction`, rounded to the
+/// nearest raw unit with ties to even (the rounding of
+/// [`FixedQ32_32::checked_div`]). `t_enter` is the largest near-slab distance and
+/// `t_exit` the smallest far-slab distance over the three axes. An axis with a zero
+/// component does not bound the interval; the ray misses if the origin lies outside
+/// that slab. When no axis bounds a side, it stays at `FixedQ32_32::MIN_RAW` or
+/// `FixedQ32_32::MAX_RAW`.
+///
+/// A slab distance that does not fit Q32.32 (a tiny direction component, or a
+/// bound about 2^31 units or more from the origin) saturates to `MIN_RAW` or
+/// `MAX_RAW` by its sign, so the interval is clamped by the other axes. The coordinate
+/// difference is taken in `i128`, so it is never saturated before the division.
+///
+/// # Hit decision
+///
+/// When every slab distance fits, the hit is decided from the rounded distances:
+/// `t_enter <= t_exit` and `t_exit >= 0`. A ray that misses an edge or corner, or
+/// leaves the box behind its origin, by less than half a raw unit can therefore
+/// report a hit whose rounded bounds are equal or whose exit is zero. When some slab
+/// distance does not fit, the hit is decided exactly with `i128` rational arithmetic
+/// before the bounds are rounded and saturated, so a saturated bound never turns a
+/// miss into a hit. Every reported hit has `t_enter <= t_exit` and `t_exit >= 0`.
+///
+/// Until flyingrobots/bunny#211 this function returned `None` whenever a slab
+/// distance or coordinate difference overflowed. Every hit it reported then is
+/// still reported with the same bits.
 #[must_use]
 pub fn ray_intersects_aabb(
     ray: &FixedRay3,
     aabb: &FixedAabb3,
 ) -> Option<(FixedQ32_32, FixedQ32_32)> {
-    let dir = ray.direction.into_inner();
-    let mut interval = RayInterval::unbounded();
-
-    interval.update(AxisBounds::new(ray.origin.x, dir.x, aabb.min.x, aabb.max.x))?;
-    interval.update(AxisBounds::new(ray.origin.y, dir.y, aabb.min.y, aabb.max.y))?;
-    interval.update(AxisBounds::new(ray.origin.z, dir.z, aabb.min.z, aabb.max.z))?;
-
-    if interval.is_miss() {
-        None
-    } else {
-        Some((interval.enter, interval.exit))
+    match rounded_slab_interval(ray, aabb) {
+        Ok(interval) => interval.hit(),
+        Err(SlabStop::Miss) => None,
+        Err(SlabStop::Overflow) => aabb_wide::exact_slab_hit(ray, aabb),
     }
 }
 
+fn rounded_slab_interval(ray: &FixedRay3, aabb: &FixedAabb3) -> Result<RayInterval, SlabStop> {
+    let mut interval = RayInterval::unbounded();
+    for axis in AxisBounds::of(ray, aabb) {
+        interval.update(axis)?;
+    }
+    Ok(interval)
+}
+
+/// Why the rounded slab test stopped before all three axes were applied.
+enum SlabStop {
+    /// The origin lies outside a slab whose direction component is zero.
+    Miss,
+    /// A slab distance does not fit Q32.32.
+    Overflow,
+}
+
+/// One axis of a ray/AABB slab test.
 #[derive(Clone, Copy)]
 struct AxisBounds {
     origin: FixedQ32_32,
@@ -109,6 +151,28 @@ impl AxisBounds {
     ) -> Self {
         Self { origin, direction, min_bound, max_bound }
     }
+
+    /// The x, y and z slabs of `aabb` for `ray`, in that order.
+    const fn of(ray: &FixedRay3, aabb: &FixedAabb3) -> [Self; 3] {
+        let dir = ray.direction.into_inner();
+        [
+            Self::new(ray.origin.x, dir.x, aabb.min.x, aabb.max.x),
+            Self::new(ray.origin.y, dir.y, aabb.min.y, aabb.max.y),
+            Self::new(ray.origin.z, dir.z, aabb.min.z, aabb.max.z),
+        ]
+    }
+
+    /// Whether the origin lies inside this slab (used when the direction is zero).
+    fn contains_origin(self) -> bool {
+        self.origin >= self.min_bound && self.origin <= self.max_bound
+    }
+
+    fn slab_distance(self, bound: FixedQ32_32) -> Result<FixedQ32_32, SlabStop> {
+        bound
+            .checked_sub(self.origin)
+            .and_then(|delta| delta.checked_div(self.direction))
+            .ok_or(SlabStop::Overflow)
+    }
 }
 
 struct RayInterval {
@@ -121,29 +185,22 @@ impl RayInterval {
         Self { enter: FixedQ32_32::from_raw(i64::MIN), exit: FixedQ32_32::from_raw(i64::MAX) }
     }
 
-    fn update(&mut self, axis: AxisBounds) -> Option<()> {
+    fn update(&mut self, axis: AxisBounds) -> Result<(), SlabStop> {
         if axis.direction == FixedQ32_32::ZERO {
-            return axis_contains_origin(axis.origin, axis.min_bound, axis.max_bound);
+            return if axis.contains_origin() { Ok(()) } else { Err(SlabStop::Miss) };
         }
 
-        let t0 = axis.min_bound.checked_sub(axis.origin)?.checked_div(axis.direction)?;
-        let t1 = axis.max_bound.checked_sub(axis.origin)?.checked_div(axis.direction)?;
+        let t0 = axis.slab_distance(axis.min_bound)?;
+        let t1 = axis.slab_distance(axis.max_bound)?;
         self.enter = max(self.enter, min(t0, t1));
         self.exit = min(self.exit, max(t0, t1));
-        Some(())
+        Ok(())
     }
 
-    fn is_miss(&self) -> bool {
-        self.enter > self.exit || self.exit < FixedQ32_32::ZERO
+    fn hit(&self) -> Option<(FixedQ32_32, FixedQ32_32)> {
+        let miss = self.enter > self.exit || self.exit < FixedQ32_32::ZERO;
+        (!miss).then_some((self.enter, self.exit))
     }
-}
-
-fn axis_contains_origin(
-    origin: FixedQ32_32,
-    min_bound: FixedQ32_32,
-    max_bound: FixedQ32_32,
-) -> Option<()> {
-    (origin >= min_bound && origin <= max_bound).then_some(())
 }
 
 /// Computes the intersection of a ray and a triangle defined by three vertices.
