@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-codec` reads ASCII PLY triangle meshes: `parse_ascii_ply` accepts
+  `format ascii 1.0` with `x`, `y`, `z` and any other scalar vertex properties
+  (skipped by their declaration) and `list uchar int vertex_indices` faces, and
+  returns a borrowed, validated `AsciiPlyMesh` with Q32.32 positions
+  (`AsciiPlyVertex`), forward iterators, and `AsciiPlyError` values that carry a
+  kind and a 1-based line number. Decimal coordinates convert to Q32.32 exactly,
+  with integer arithmetic only, by the rule `bunny-decimal-q32-32/1`: the exact value
+  times 2^32, rounded to nearest with ties to even; `parse_decimal_q32_32` exposes
+  it with typed errors `Invalid`, `Overflow` (decided after rounding) and `TooLong`
+  (more than 28 significant digits for a value of magnitude in [1e-10, 1e10)).
+  LF and CRLF line endings, blank lines, header comments and trailing whitespace each
+  have a stated rule; see `docs/topics/ascii-ply/` (flyingrobots/bunny#247). The
+  binary PLY reader is unchanged.
+
 * Code Dojo enforces every rule of Echo's `ban-nondeterminism` scan under
   Echo's rule IDs (`time-system`, `time-instant`, `thread-sleep`,
   `host-parallelism`, `random`, `host-callback`, `network`,
