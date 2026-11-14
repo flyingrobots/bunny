@@ -41,6 +41,8 @@ off, which is how a consumer without crates.io dependencies uses these readers.
 | APLY-REQ-011 | Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds. | `README.md#the-profile` |
 | APLY-REQ-012 | With default features off, the normal and build dependency graphs of `bunny-codec` and `bunny-mesh` hold only Bunny path crates, and every `bunny-codec` reader and its tests still build and pass. | `README.md#dependencies-and-features` |
 | APLY-REQ-013 | With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature. | `README.md#dependencies-and-features` |
+| APLY-REQ-014 | `parse_ascii_ply_with_limits` refuses a declared vertex count, a declared face count or a line over the inclusive limits of `AsciiPlyLimits`, with a typed error naming the limit, the maximum, the observed value and the line; values at the limit are accepted; the checks run in the documented order and the counts are checked before any body line is read. | `README.md#limits` |
+| APLY-REQ-015 | `parse_ascii_ply` is unchanged, and `parse_ascii_ply_with_limits` with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same `AsciiPlyError` otherwise. | `README.md#limits` |
 
 ```toml
 [[requirement]]
@@ -107,6 +109,16 @@ status = "active"
 id = "APLY-REQ-013"
 summary = "With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature."
 status = "active"
+
+[[requirement]]
+id = "APLY-REQ-014"
+summary = "parse_ascii_ply_with_limits refuses a declared vertex count, a declared face count or a line over the inclusive limits of AsciiPlyLimits, with a typed error naming the limit, the maximum, the observed value and the line; values at the limit are accepted; the checks run in the documented order and the counts are checked before any body line is read."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-015"
+summary = "parse_ascii_ply is unchanged, and parse_ascii_ply_with_limits with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same AsciiPlyError otherwise."
+status = "active"
 ```
 
 ## Test Cases
@@ -148,6 +160,12 @@ status = "active"
 | APLY-TP-052 | Dependencies, negative | APLY-REQ-012 | A seeded `cargo tree` listing with a crates.io crate, a deduplicated crates.io crate and a git crate among path crates reports exactly those three. | `xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported` |
 | APLY-TP-053 | Dependencies, look-alikes | APLY-REQ-012 | A listing of path crates only, with deduplication markers and a Windows path, reports nothing. | `xtask/src/feature_configs.rs::tests::path_crates_are_accepted` |
 | APLY-TP-054 | Public items | APLY-REQ-013 | The rustdoc item lists of both crates at `origin/main` and at the change are identical with default features; without them only `compute_mesh_hash` is gone. | [Feature Configurations](#feature-configurations) |
+| APLY-TP-055 | Counts at the limit | APLY-REQ-014 | A 3-vertex, 1-face mesh is accepted at limits 3 and 1 and refused at 2 and 0 with the exact limit, maximum, observed value and `element` line. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_055_counts_are_accepted_at_the_limit_and_refused_one_past_it` |
+| APLY-TP-056 | Early refusal | APLY-REQ-014 | A header declaring 4294967295 vertices and no body is `PayloadTooShort` for `parse_ascii_ply` and a `Vertices` limit error with the default limits; a count past `usize` keeps `IntegerOverflow`. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_056_a_huge_declared_count_is_refused_before_any_body_line_is_read` |
+| APLY-TP-057 | Line length | APLY-REQ-014 | A 60-byte header line is accepted at 60 and refused at 59 with LF and with CRLF; the `end_header` line, a blank body line, a blank line after the last record and a line of a million tokens are lines too, each with its exact length. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_057_line_length_counts_bytes_without_the_terminator` |
+| APLY-TP-058 | Order of the checks | APLY-REQ-014 | Each of the five steps of the documented order wins over the one after it, on one input per adjacent pair. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_058_the_checks_run_in_the_documented_order` |
+| APLY-TP-059 | Differential | APLY-REQ-015 | 20 000 generated valid and mutated inputs (10 761 accepted, 9 239 refused in the run that set the minimums of 8 000 and 5 000), with `UNLIMITED` and with limits equal to the input length: the same counts, vertices and triangles, or the same `AsciiPlyError`. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_059_generous_limits_change_no_accepted_input_and_no_profile_error` |
+| APLY-TP-060 | Malformed input | APLY-REQ-014 | 30 000 mutated, truncated and random inputs under small limits never panic; every limit error has `observed > maximum`, the named maximum, and for a line length the length of that line found by an independent split and no earlier line over the limit; at least 500 of each limit kind and 500 accepted inputs are required (4 650, 1 825, 5 763 and 1 751 in the run that set them). | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_060_malformed_input_under_small_limits_never_panics_and_limit_errors_are_true` |
 
 ```toml
 [[case]]
@@ -464,6 +482,60 @@ artifact = "docs/topics/ascii-ply/test-plan.md#feature-configurations"
 oracle = "Identical rustdoc item lists with default features; only `compute_mesh_hash` absent without them."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "APLY-TP-055"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_055_counts_are_accepted_at_the_limit_and_refused_one_past_it"
+oracle = "Exact limit errors one past each count limit; acceptance at it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-056"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_056_a_huge_declared_count_is_refused_before_any_body_line_is_read"
+oracle = "A 4294967295-vertex header without a body is a Vertices limit error."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-057"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_057_line_length_counts_bytes_without_the_terminator"
+oracle = "Exact line lengths at and one past the limit, LF and CRLF, header and body, blank lines."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-058"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_058_the_checks_run_in_the_documented_order"
+oracle = "One input per adjacent pair of checks."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-059"
+requirements = ["APLY-REQ-015"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_059_generous_limits_change_no_accepted_input_and_no_profile_error"
+oracle = "Differential: parse_ascii_ply against the limits entry point with unreachable limits, 20 000 generated inputs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-060"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_060_malformed_input_under_small_limits_never_panics_and_limit_errors_are_true"
+oracle = "Independent line split checks every line-length error; 30 000 generated inputs, no panic."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Fixtures
@@ -510,6 +582,17 @@ The tie rule `quotient + (quotient & 1)` in `round_half_even_div` was mutated to
 round half up and to round half down; `APLY-TP-025` and `APLY-TP-032` fail in both
 cases and every other conversion test still passes, because random inputs almost
 never land on an exact tie. Each mutant ran under `timeout 120`.
+
+The limit checks of `limits.rs` were mutated, each run under `timeout 120` with the sources
+touched before the rebuild, and each mutant fails the tests named:
+
+| Mutant | Fails |
+| --- | --- |
+| the inclusive comparison made exclusive (`>=`) | APLY-TP-055, 057, 060 |
+| the face-count check removed | APLY-TP-055, 060 |
+| the header line-length limit ignored | APLY-TP-057, 058, 060 |
+| blank body lines not checked | APLY-TP-057 |
+| `observed` reported one too high | APLY-TP-055, 056, 057, 058, 060 |
 
 ## Open Gaps
 
