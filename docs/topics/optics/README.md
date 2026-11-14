@@ -632,8 +632,8 @@ and each step adds `|N'_k| >= |N'|_1 / 3`. In the reference model 38 % of
 returns `None` when the point is not representable or the step leaves the
 trace domain (possible only for a point on its boundary), and for a hit that
 the trace kernel did not report for this ray and face, as when a caller
-changes `hit.distance` or `hit.front_face`. `SurfaceHit::try_new` gives the
-reason instead; see [Inputs And Refusals](#inputs-and-refusals). A hit point
+changes `hit.distance` or `hit.front_face`. `SurfaceHit::try_new`, the
+diagnostic path, gives the reason; see [Inputs And Refusals](#inputs-and-refusals). A hit point
 more than two raw units outside the trace domain is refused before the plane
 test, which keeps that test inside `i128`.
 
@@ -857,22 +857,45 @@ shadow, and a camera ray that sees the sky).
 | Hit point | Within two raw-unit steps of the arrival side | `None`; `NotOnArrivalSide` |
 | Start point | Inside the trace domain after its step | `None`; `StartOutsideTraceDomain` |
 
-Each of the three secondary-ray steps has a `try_` form that returns
-`Result<_, SecondaryRayError>`: `SurfaceHit::try_new`,
-`SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction`. The
-`Option` forms are those functions with the error dropped, so each returns
-`Some(x)` exactly when its `try_` form returns `Ok(x)`. Each variant carries
-the values the check saw: the hit distance, the hit point before any step, the
-stepped start point, or the sample as given. `try_new` checks in the order of
-the table: representable, near the domain, arrival side, inside the domain. A
-hit the trace kernel reported for a ray and triangle inside the domain can be
-refused only by the last check, on the domain's boundary; the other three mean
-the hit's distance or face does not belong to that ray and triangle.
-`try_bounce_ray` refuses a sample as `try_cosine_direction` does; its
-`BounceRayRefused` variant is defensive (`TraceRay::new` refusing the ray),
-and no input is known to reach it, because the start point is inside the
-domain and every bounce direction is nonzero with components in `-1.0..=1.0`.
-`SecondaryRayError` is `#[non_exhaustive]`.
+**Fast path and diagnostic path.** Each of the three secondary-ray steps
+comes in two forms. The `Option` forms, `SurfaceHit::new`,
+`SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction`, are the fast
+path: the 0.7.1 code, plus in `SurfaceHit::new` one comparison per coordinate
+that refuses a hit point beyond reach of the domain before the plane test (so
+that test stays inside `i128`). They say only whether an input was refused.
+The `try_` forms, `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
+`ShadingFrame::try_cosine_direction`, are the diagnostic path: they return
+`Result<_, SecondaryRayError>` and say why. A renderer calls the fast form per
+hit and calls the `try_` form only after a `None`:
+
+```rust
+let Some(start) = SurfaceHit::new(&surface, &ray, &hit) else {
+    let why = SurfaceHit::try_new(&surface, &ray, &hit).err();
+    return Err(RenderError::Shading(why));
+};
+```
+
+The two forms are separate code, so that richer errors cost nothing on the
+success path: routing the fast forms through the `try_` forms made the
+per-hit step about 4 % slower, even when the shared code carried only a
+one-byte refusal code (see the
+[performance chapter](../performance/README.md#typed-shading-refusals-flyingrobotsbunny280)).
+Their agreement is a tested contract (`OPTICS-REQ-043`): over generated
+inputs from a fixed and a fresh seed, and on every constructed refusal, the
+fast form returns `Some(x)` exactly when the `try_` form returns `Ok(x)`, with
+equal values, and both match the 0.7.1 code retained in the tests.
+
+Each variant carries the values the check saw: the hit distance, the hit point
+before any step, the stepped start point, or the sample as given. `try_new`
+checks in the order of the table: representable, near the domain, arrival
+side, inside the domain. A hit the trace kernel reported for a ray and
+triangle inside the domain can be refused only by the last check, on the
+domain's boundary; the other three mean the hit's distance or face does not
+belong to that ray and triangle. `try_bounce_ray` refuses a sample as
+`try_cosine_direction` does; its `BounceRayRefused` variant is defensive
+(`TraceRay::new` refusing the ray), and no input is known to reach it, because
+the start point is inside the domain and every bounce direction is nonzero
+with components in `-1.0..=1.0`. `SecondaryRayError` is `#[non_exhaustive]`.
 
 ### Accuracy And Cost
 

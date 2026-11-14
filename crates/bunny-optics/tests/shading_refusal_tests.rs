@@ -4,6 +4,8 @@
 
 mod shading_reference;
 
+use std::hash::{BuildHasher, Hasher};
+
 use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
@@ -341,9 +343,10 @@ fn check_sample(hit: &SurfaceHit, sample: [FixedQ32_32; 2], witness: &mut Witnes
     }
 }
 
-#[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_062_option_and_result_forms_agree_with_the_released_code() {
-    let mut seeds = Seeds(REFUSAL_TEST_SEED);
+/// Runs `OPTICS-TP-062`'s differential check over 1 500 seeded scenes from `seed`; every failure
+/// message names the seed, the case and the variant.
+fn check_agreement(seed: u64) {
+    let mut seeds = Seeds(seed);
     let mut witness = Witness::default();
     for case in 0..1_500 {
         let Some(scene) = seeded_scene(&mut seeds) else { continue };
@@ -354,7 +357,7 @@ fn optics_tp_062_option_and_result_forms_agree_with_the_released_code() {
         }
         variants[4].front_face = !reported.front_face;
         for (index, hit) in variants.iter().enumerate() {
-            let context = format!("seed {REFUSAL_TEST_SEED:#x}, case {case}, variant {index}");
+            let context = format!("seed {seed:#x}, case {case}, variant {index}");
             let Some(accepted) = check_hit(&scene, hit, &mut witness, &context) else { continue };
             for draw in 0..3 {
                 let sample = [seeds.coordinate(), seeds.coordinate()];
@@ -362,7 +365,7 @@ fn optics_tp_062_option_and_result_forms_agree_with_the_released_code() {
             }
         }
     }
-    let counts = format!("seed {REFUSAL_TEST_SEED:#x}: {witness:?}");
+    let counts = format!("seed {seed:#x}: {witness:?}");
     assert!(witness.hits >= 1_000, "{counts}");
     assert!(witness.unrepresentable >= 20, "{counts}");
     assert!(witness.beyond_reach >= 100 && witness.overflow >= 10, "{counts}");
@@ -371,4 +374,19 @@ fn optics_tp_062_option_and_result_forms_agree_with_the_released_code() {
     assert!(witness.directions >= 1_000 && witness.bounce_rays >= 1_000, "{counts}");
     assert!(witness.samples_refused >= 1_000, "{counts}");
     assert_eq!(witness.bounce_refused, 0, "{counts}: the defensive refusal is never reached");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_062_option_and_result_forms_agree_with_the_released_code() {
+    check_agreement(REFUSAL_TEST_SEED);
+}
+
+/// The same check from a seed that differs per run, so coverage accumulates across runs. The
+/// seed is printed in every failure message; rerun a failure with it as `REFUSAL_TEST_SEED`.
+/// (On `wasm32-unknown-unknown` the standard library's hash keys are fixed, so there the seed
+/// is the same every run.)
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed() {
+    let seed = std::collections::hash_map::RandomState::new().build_hasher().finish();
+    check_agreement(seed);
 }

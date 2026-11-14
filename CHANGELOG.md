@@ -18,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HitPointUnrepresentable { distance }`, `HitPointOutsideTraceDomain { point }`,
   `NotOnArrivalSide { point }`, `StartOutsideTraceDomain { start }`,
   `SampleOutsideUnitInterval { sample }` and the defensive
-  `BounceRayRefused { origin, direction }`. The existing `Option` functions are
-  now these with the error dropped; a differential test over generated inputs
-  shows they keep every output of the 0.7.1 code, retained in the tests
-  (flyingrobots/bunny#280).
+  `BounceRayRefused { origin, direction }`. They are the diagnostic path: the
+  existing `Option` functions stay the fast path, with their 0.7.1 bodies and
+  cost, and a caller asks the `try_` form for the reason only after a `None`.
+  A differential test over generated inputs (a fixed and a fresh seed) shows
+  that each fast form returns `Some(x)` exactly when its `try_` form returns
+  `Ok(x)` and that both keep every output of the 0.7.1 code, retained in the
+  tests (flyingrobots/bunny#280).
 
 ### Fixed
 
