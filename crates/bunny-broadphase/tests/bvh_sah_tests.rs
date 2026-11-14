@@ -3,7 +3,7 @@
 
 mod common;
 
-use bunny_broadphase::bvh::{SAH_MAX_DEPTH, SAH_MAX_LEAF_SIZE};
+use bunny_broadphase::bvh::SAH_MAX_LEAF_SIZE;
 use bunny_broadphase::{
     any_hit, build_bvh, build_bvh_sah, closest_hit, intersect_aabb, BvhNode, BvhView, ClosestHit,
 };
@@ -11,7 +11,7 @@ use bunny_geom::FixedAabb3;
 use bunny_num::FixedQ32_32;
 use bunny_query::{TraceRay, TraceTriangle};
 use common::{
-    aabb, build_with, check_structure, empty_node, sah_cost, tree_words, Seeds, Tree, ONE,
+    aabb, build_with, check_sah_structure, empty_node, sah_cost, tree_words, Seeds, Tree, ONE,
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -127,11 +127,11 @@ fn bvh_tp_004_seeded_trees_are_well_formed() {
     let mut seeds = Seeds(SAH_SEED);
     for count in [2, 3, 4, 5, 7, 16, 17, 100, 600] {
         let primitives = scattered_boxes(&mut seeds, count);
-        let shape = check_structure(&sah(&primitives), &primitives, true);
+        let shape = check_sah_structure(&sah(&primitives), &primitives);
         assert!(shape.largest_leaf <= SAH_MAX_LEAF_SIZE, "count={count}: {shape:?}");
     }
     for primitives in [clustered_boxes(&mut seeds), grid_on_ground()] {
-        let shape = check_structure(&sah(&primitives), &primitives, true);
+        let shape = check_sah_structure(&sah(&primitives), &primitives);
         assert!(shape.largest_leaf <= SAH_MAX_LEAF_SIZE, "{shape:?}");
     }
 }
@@ -162,7 +162,7 @@ fn bvh_tp_005_building_twice_gives_the_same_tree() {
 fn bvh_tp_006_identical_boxes_split_in_half_by_index() {
     let primitives = vec![unit_box(1, 2, 3); 1000];
     let tree = sah(&primitives);
-    let shape = check_structure(&tree, &primitives, true);
+    let shape = check_sah_structure(&tree, &primitives);
     assert!(shape.largest_leaf <= SAH_MAX_LEAF_SIZE, "{shape:?}");
     // Halving 1000 down to at most four takes eight levels.
     assert_eq!(shape.max_depth, 8);
@@ -179,7 +179,7 @@ fn bvh_tp_006_identical_boxes_split_in_half_by_index() {
 fn bvh_tp_007_equal_centroids_and_zero_extent_axes_build() {
     // Nested boxes around one centre: every centroid equal, sizes differ.
     let nested: Vec<FixedAabb3> = (1..=50).map(|i| aabb([-i * ONE; 3], [i * ONE; 3])).collect();
-    let shape = check_structure(&sah(&nested), &nested, true);
+    let shape = check_sah_structure(&sah(&nested), &nested);
     assert!(shape.largest_leaf <= SAH_MAX_LEAF_SIZE);
     // Flat boxes in one plane (zero z extent, all z centroids equal) and points.
     let mut seeds = Seeds(SAH_SEED ^ 0x7);
@@ -193,10 +193,10 @@ fn bvh_tp_007_equal_centroids_and_zero_extent_axes_build() {
         let p = seeds.point(5 * ONE);
         FixedAabb3::new(p, p)
     }));
-    check_structure(&sah(&flat), &flat, true);
+    check_sah_structure(&sah(&flat), &flat);
     // Points on one line along y.
     let line: Vec<FixedAabb3> = (0..64).map(|i| aabb([0, i * ONE, 0], [0, i * ONE, 0])).collect();
-    check_structure(&sah(&line), &line, true);
+    check_sah_structure(&sah(&line), &line);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -211,7 +211,7 @@ fn bvh_tp_008_one_huge_primitive_among_small_ones() {
         )
     }));
     let tree = sah(&primitives);
-    check_structure(&tree, &primitives, true);
+    check_sah_structure(&tree, &primitives);
     assert!(sah_cost(&tree) < sah_cost(&build_with(build_bvh, &primitives)));
 }
 
@@ -228,7 +228,7 @@ fn bvh_tp_009_boxes_at_the_ends_of_the_range_build_without_overflow() {
         aabb([high / 2; 3], [high; 3]),
     ];
     let tree = sah(&primitives);
-    check_structure(&tree, &primitives, true);
+    check_sah_structure(&tree, &primitives);
     let everywhere = aabb([low; 3], [high; 3]);
     let mut visited = 0;
     intersect_aabb(&tree.nodes, &tree.prim_indices, &everywhere, |_| visited += 1).unwrap();
@@ -248,8 +248,9 @@ fn bvh_tp_010_geometric_spacing_stays_within_the_depth_cap() {
         }
     }
     let tree = sah(&primitives);
-    let shape = check_structure(&tree, &primitives, true);
-    assert!(shape.max_depth <= SAH_MAX_DEPTH);
+    // `check_sah_structure` holds the depth to 60, a literal, not `SAH_MAX_DEPTH`.
+    let shape = check_sah_structure(&tree, &primitives);
+    assert!(shape.max_depth <= 60, "depth {}", shape.max_depth);
     let everywhere = aabb([i64::MIN; 3], [i64::MAX; 3]);
     let mut visited = 0;
     intersect_aabb(&tree.nodes, &tree.prim_indices, &everywhere, |_| visited += 1).unwrap();
@@ -307,7 +308,7 @@ impl Scene {
     fn new(triangles: Vec<TraceTriangle>) -> Self {
         let boxes: Vec<FixedAabb3> = triangles.iter().map(TraceTriangle::bounds).collect();
         let sah = sah(&boxes);
-        check_structure(&sah, &boxes, true);
+        check_sah_structure(&sah, &boxes);
         Self { old: build_with(build_bvh, &boxes), sah, triangles }
     }
 
