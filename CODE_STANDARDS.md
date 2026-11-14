@@ -285,6 +285,10 @@ Recommended stance:
 ```
 
 `clippy::nursery` must be cherry-picked. Blanket-denying nursery is banned because nursery lints are not mature enough to be a repository constitution.
+Each core crate names the nursery lints it denies in its `src/lib.rs`, with a reason for each.
+Code Dojo's `blanket-nursery` check fails the gate on a `deny`, `warn` or `forbid` of the whole
+group in a core crate's `src/lib.rs`, its manifest or the workspace manifest; see
+[`docs/topics/lint-policy/`](docs/topics/lint-policy/README.md).
 
 Clippy suggestions may be rejected when they reduce determinism, local reasoning, or API clarity.
 Rejected suggestions require a local allow comment with a reason.
