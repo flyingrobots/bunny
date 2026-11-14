@@ -317,12 +317,21 @@ fn variants(seeds: &mut Seeds, nodes: &[BvhNode], prims: usize) -> Vec<Vec<BvhNo
     out
 }
 
-/// Seventy interior levels, each keeping a leaf beside the next level: a valid tree deeper
-/// than the 64-entry stack, which `closest_hit` searches completely (70 interior visits of a
-/// budget of 70) and the box queries refuse with `StackOverflow`.
-fn comb() -> Vec<BvhNode> {
-    let shape: Vec<Option<u32>> = (0..141).map(|i| (i % 2 == 1 || i == 140).then_some(0)).collect();
-    buffer(&shape, &(0..70).map(|level| 2 * level + 1).collect::<Vec<_>>(), cube(-16, 16))
+/// A comb of `levels` interior nodes, each keeping a leaf beside the next level. Complete,
+/// 70 levels make a valid tree deeper than the 64-entry stack, which `closest_hit` searches
+/// completely (70 interior visits, the whole budget) and the box queries refuse with
+/// `StackOverflow`. Truncated, 64 levels end in a node whose children are out of range,
+/// reached when the box queries' stack is full: they must still say `StackOverflow`.
+fn comb(levels: u32, complete: bool) -> Vec<BvhNode> {
+    let count = 2 * levels + 1;
+    let shape: Vec<Option<u32>> =
+        (0..count).map(|i| (i % 2 == 1 || i + 1 == count).then_some(0)).collect();
+    let mut nodes =
+        buffer(&shape, &(0..levels).map(|level| 2 * level + 1).collect::<Vec<_>>(), cube(-16, 16));
+    if !complete {
+        nodes.truncate(nodes.len() - 2);
+    }
+    nodes
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -333,7 +342,7 @@ fn trace_tp_406_valid_trees_keep_every_result_and_callback() {
     {
         let (triangles, nodes, prims) = scene(&mut seeds, count, sah);
         let mut trees = variants(&mut seeds, &nodes, prims.len());
-        trees.push(comb());
+        trees.extend([comb(70, true), comb(64, false)]);
         for (tree, nodes) in trees.iter().enumerate() {
             let case = Case { nodes, prim_indices: &prims, triangles: &triangles };
             for ray_index in 0..60 {

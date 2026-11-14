@@ -143,12 +143,15 @@ impl TraversalStack {
         self.values.get(self.len).copied()
     }
 
+    /// Pushes an interior node's children, then spends one interior visit (after the pushes,
+    /// so a full stack still reports `StackOverflow` first).
     fn push_children(&mut self, node: &BvhNode) -> Result<(), TraversalError> {
-        self.interior_visits_left =
-            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
         let left_child = node.first_child_or_prim_idx;
         let right_child = left_child.checked_add(1).ok_or(TraversalError::InvalidNodeIndex)?;
         self.push(left_child)?;
-        self.push(right_child)
+        self.push(right_child)?;
+        self.interior_visits_left =
+            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
+        Ok(())
     }
 }

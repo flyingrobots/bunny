@@ -205,14 +205,15 @@ impl<'a> Search<'a> {
         if node.prim_count > 0 {
             return self.visit_leaf(node, hit);
         }
-        self.interior_visits_left =
-            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
         let left = node.first_child_or_prim_idx;
         let right = left.checked_add(1).ok_or(TraversalError::InvalidNodeIndex)?;
         let (near, far) = nearer_first((left, self.entry(left)?), (right, self.entry(right)?));
         // The farther child goes underneath, so the nearer one is visited first.
         self.push(far)?;
         self.push(near)?;
+        // Spent after the children's checks, so a tree's own errors always come first.
+        self.interior_visits_left =
+            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
         Ok(false)
     }
 
