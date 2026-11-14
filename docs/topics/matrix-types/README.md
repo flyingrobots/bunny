@@ -150,7 +150,7 @@ No matrix inverse API panics for singular input.
 claim camera transform, projection matrix, normal matrix, or bounds propagation
 semantics.
 
-`FixedMat4` is a matrix type. Apart from the projection builders below, it does
+`FixedMat4` is a matrix type. Apart from the projection and look-at builders below, it does
 not claim to be an affine transform, camera transform, normal matrix, or bounds
 propagation API.
 
@@ -179,6 +179,34 @@ golden tests use power-of-two parameters. There is no vector-transform,
 unprojection, ray, or viewport API for these matrices yet; multiply with
 `checked_mul_mat4` or apply the rows directly.
 
+## Look-At View Matrix
+
+`FixedMat4::try_look_at(eye, target, up)` builds a `view_from_world` matrix
+(`p_view = view_from_world * p_world`) in the right-handed frame of the
+[coordinate law](../coordinate-law/README.md#projection-and-ndc): the camera
+looks down `-Z`, `+X` is right, `+Y` is up. With `forward = normalize(target -
+eye)`, `right = normalize(forward x up)` and `true_up = right x forward`, the
+rows are `right`, `true_up` and `-forward`, each followed by the translation
+`-(row . eye)`; the last row is `(0, 0, 0, 1)`. Feed the result to a projection
+builder with `checked_mul_mat4`.
+
+Normalization works on exact `i128` raw vectors and rounds each component to
+nearest, so every basis component is within 1 raw unit of the ideal direction,
+whatever the input magnitude. The basis is therefore orthonormal only within
+rounding. The guaranteed bounds are: each basis vector's length is within 2 raw
+units of one, and each pairwise dot product is within 2 raw units of zero
+(`dot / 2^32`, raw). The bound does not depend on how close `up` is to the view
+direction, because each cross product is exact and so exactly perpendicular to
+its inputs before normalization. Axis-aligned cameras are exact.
+
+`LookAtError` names the failures; the function never panics:
+
+- `CoincidentEyeTarget`: `target == eye`.
+- `ParallelUp`: `up` is zero, or its cross product with the normalized view
+  direction is exactly zero. A nearly parallel `up` is accepted: the bounds hold
+  but the camera roll is set by rounding noise.
+- `Overflow`: a translation entry is outside the Q32.32 range.
+
 ## Required Tests
 
 The current repository must keep tests for:
@@ -196,4 +224,7 @@ The current repository must keep tests for:
 - right-to-left affine composition;
 - affine inverse round trips and singular inverse rejection;
 - exact golden rows and frustum-corner NDC values for both projection
-  builders, typed errors for invalid parameters, and seeded properties.
+  builders, typed errors for invalid parameters, and seeded properties;
+- exact axis-aligned and pinned diagonal look-at rows, a look-at composed with a
+  projection, typed look-at errors, and a seeded property for the orthonormality
+  bound.

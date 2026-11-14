@@ -172,6 +172,10 @@ depends on orientation, winding, units, or boundary contact.
 
 ## Projection and NDC
 
+`FixedMat4::try_look_at` builds the matching `view_from_world` matrix: rows
+right, up and `-forward` of the right-handed frame below, so the view axis maps
+to `-Z`.
+
 `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` in
 `bunny-linalg` are the canonical projection builders. Each returns a
 `clip_from_view` matrix that follows the transform convention above

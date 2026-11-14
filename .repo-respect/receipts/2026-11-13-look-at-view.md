@@ -48,6 +48,10 @@ See the pull request: `ParallelUp` means zero or exactly parallel after normaliz
 Checks run:
 RED: with `try_look_at` stubbed to return `Err`, `cargo test -p bunny-linalg --test
 look_at_tests` failed 6 of 7 (devrun --worktree); the Display test passes on the stub.
+GREEN: 7 of 7 pass, and the whole `bunny-linalg` suite passes, on the first run (the pinned
+diagonal rows were cross-checked beforehand against an independent decimal reference).
+Mutation: making `checked_negate` return its input (camera looks down +Z instead of -Z) failed 4
+of 7 tests (MT-TP-023, 024, 025, 026); reverted.
 
 Known risks:
 Pending until the final commit.

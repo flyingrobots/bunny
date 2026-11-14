@@ -25,6 +25,10 @@ math for graphics pipelines.
   `try_perspective` build `clip_from_view` matrices (NDC depth `[0, 1]`, camera
   looks down `-Z`) from a tangent, with no trigonometry and typed
   `ProjectionError`s.
+* **Look-At View Matrix**: `FixedMat4::try_look_at(eye, target, up)` builds a
+  right-handed `view_from_world` matrix (camera looks down `-Z`). The basis is
+  orthonormal within 2 raw units; degenerate input returns a typed
+  `LookAtError`.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
