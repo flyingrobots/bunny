@@ -16,8 +16,17 @@ use bunny_num::FixedQ32_32;
 /// With coordinates below this bound, every product in the exact triangle test fits `i128`.
 pub const TRACE_COORD_LIMIT_RAW: i64 = 1 << 40;
 
-/// Inclusive bound on the magnitude of every raw direction component (1.0).
+/// Inclusive bound on the magnitude of every raw direction component given to
+/// [`TraceRay::new`] (1.0).
 pub const TRACE_DIRECTION_LIMIT_RAW: i64 = 1 << 32;
+
+/// Inclusive bound on the magnitude of every raw direction component of a unit-direction ray
+/// given to [`TraceRay::from_ray`]: 1.0 plus one raw unit.
+///
+/// `FixedUnitVec3::try_from_unit` accepts a length within one raw unit of 1.0, so
+/// `(2^32 + 1, 0, 0)` is a unit vector; no component can be larger. Every width bound of
+/// the kernels still holds with this value (`docs/topics/ray-tracing/README.md#trace-domain`).
+pub const TRACE_UNIT_DIRECTION_LIMIT_RAW: i64 = TRACE_DIRECTION_LIMIT_RAW + 1;
 
 /// Reciprocals are `floor(2^63 / |d|)`.
 const RECIPROCAL_BITS: u32 = 63;
@@ -46,20 +55,27 @@ impl TraceRay {
     /// ([`TRACE_DIRECTION_LIMIT_RAW`]), or the direction is zero.
     #[must_use]
     pub fn new(origin: FixedVec3, direction: FixedVec3) -> Option<Self> {
-        let origin = raw3(origin);
-        let direction = raw3(direction);
-        let valid = origin.iter().all(|&c| in_trace_domain(c))
-            && direction.iter().all(|&c| in_direction_domain(c))
-            && direction != [0; 3];
-        valid.then(|| Self { origin, direction, reciprocal: direction.map(reciprocal) })
+        Self::prepare(origin, direction, TRACE_DIRECTION_LIMIT_RAW)
     }
 
     /// Prepares a ray from a unit-direction ray.
     ///
-    /// Returns `None` when the origin is outside the trace domain.
+    /// Returns `None` only when the origin is outside the trace domain
+    /// ([`TRACE_COORD_LIMIT_RAW`]). Every unit direction is accepted, including one with a
+    /// component of `2^32 + 1` raw ([`TRACE_UNIT_DIRECTION_LIMIT_RAW`]), which `new` refuses.
     #[must_use]
     pub fn from_ray(ray: &FixedRay3) -> Option<Self> {
-        Self::new(ray.origin, ray.direction.into_inner())
+        Self::prepare(ray.origin, ray.direction.into_inner(), TRACE_UNIT_DIRECTION_LIMIT_RAW)
+    }
+
+    /// `new` with the inclusive bound on direction components as a parameter.
+    fn prepare(origin: FixedVec3, direction: FixedVec3, direction_limit: i64) -> Option<Self> {
+        let origin = raw3(origin);
+        let direction = raw3(direction);
+        let valid = origin.iter().all(|&c| in_trace_domain(c))
+            && direction.iter().all(|&c| c.unsigned_abs() <= direction_limit.unsigned_abs())
+            && direction != [0; 3];
+        valid.then(|| Self { origin, direction, reciprocal: direction.map(reciprocal) })
     }
 
     /// The ray origin.
@@ -228,10 +244,6 @@ impl TriangleHit {
 
 const fn in_trace_domain(raw: i64) -> bool {
     raw.unsigned_abs() < TRACE_COORD_LIMIT_RAW.unsigned_abs()
-}
-
-const fn in_direction_domain(raw: i64) -> bool {
-    raw.unsigned_abs() <= TRACE_DIRECTION_LIMIT_RAW.unsigned_abs()
 }
 
 const fn raw3(v: FixedVec3) -> [i64; 3] {
