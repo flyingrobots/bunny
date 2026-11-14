@@ -54,7 +54,11 @@ RED: with the builders stubbed to return `Err`, `cargo test -p bunny-linalg --te
 projection_tests` failed 9 of 10 (devrun --worktree). GREEN: 10 of 10 pass.
 Mutation: removing the negation of the perspective `m23` entry failed 5 of 10 tests
 (CL-TP-004, CL-TP-005, MT-TP-017, MT-TP-018, MT-TP-022); reverted.
-Final-commit gates are listed in the pull request.
+At the final commit, via devrun: `cargo test --locked --workspace` (--commit HEAD) passed;
+`code-dojo --all` (--history origin/main..HEAD --network) reported "full gate clean". The
+first gate runs failed on rustfmt layout and clippy `missing_const_for_fn`; both fixed
+in follow-up commits. The gate compiles the core crates for wasm32-unknown-unknown but
+did not execute the wasm_bindgen_test suite in a headless browser or runtime.
 
 Known risks:
 Matrix entries round to nearest Q32.32, so depth endpoints of non-power-of-two
