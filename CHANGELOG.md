@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added the `scene` and `trace` feature groups to `bunny-perf`: a whole-scene
+  ray benchmark (27 650 triangles, 1 024 camera rays) timing closest hit through
+  the visitor API and through `closest_hit`, with a check that both choose the
+  same primitive on every ray, and added `bunny-broadphase` to the `xtask perf`
+  base crates. Ledger entry 3 in `docs/topics/performance/` records the
+  measurement.
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
   a tangent (no trigonometry) and return the new `ProjectionError`. The

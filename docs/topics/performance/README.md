@@ -68,7 +68,7 @@ How the comparison stays fair:
   median of each percentile across rounds and the best (lowest) p50; the speedup column and
   the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
-  `linalg`, `query`, …). When the base revision cannot compile a group (an API it does not
+  `linalg`, `query`, `scene`, `trace`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
 
 The temporary worktree is removed after the build. Build outputs stay under `target/perf/`.
@@ -189,8 +189,15 @@ No target-specific implementation exists yet.
 Add a closure to `crates/bunny-perf/src/cases.rs` under the group for the crate it
 exercises. A case for a new API goes in a new feature group (declared in the harness
 `Cargo.toml` and added to `default`), so comparisons against older revisions still build.
-Use seeded inputs only, and return a checksum of the results so the work is not optimized
-away.
+Use seeded inputs only, pass every result through `black_box`, and return a checksum of
+the results so the work is not optimized away.
+
+The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere of 27 648
+triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
+rays (a 32 by 32 grid). Where a case measures an old API against a new one, the harness
+also checks that both give the same answer on every input: `scene/closest_visitor` and
+`trace/closest_hit` must choose the same primitive on every ray. The harness runs that
+check before timing and exits with the differing ray indices if it fails.
 
 ## Optimization Ledger
 
@@ -333,6 +340,89 @@ each of the 4 096 segments (where Hermite error peaks). A float-free check
 deliberate mutation of the Hermite basis (`h11 = t3 + t2`) fails the golden, error and
 identity tests. The earlier claim of a 0.5001 raw-unit maximum over 4 196 611 angles has no
 test or tool in the repository and is withdrawn until it can be reproduced.
+
+### 3. Closest-hit traversal with pruning (new API)
+
+**Where:** `closest_hit`, `any_hit` and `BvhView` in `bunny-broadphase`, over the
+`TraceRay` and `TraceTriangle` kernels in `bunny-query`. The full contract and
+correctness argument are in the [ray-tracing chapter](../ray-tracing/README.md#closest-hit-traversal).
+
+**Technique.** The older way to find the nearest triangle (`scene/closest_visitor`) visits
+every primitive whose box the ray's line touches, in tree order, tests each with
+`ray_intersects_triangle` and keeps the nearest. The new path walks the tree front to back
+and skips any subtree that starts beyond the best hit found so far. Its box test is
+division-free and conservative, with one reciprocal per ray, and its triangle test is an
+exact integer test that divides only on a hit.
+
+**Fidelity: new APIs.** No existing function changed. What is exact and what is a stated
+bound is defined in the ray-tracing chapter, and is not restated here. The harness
+confirms that on this scene the two paths choose the same primitive on all 1 024 rays.
+
+**Trade-offs.**
+
+- *Domain limit.* The trace kernels accept coordinates below 256 units only.
+- *Two triangle tests.* `ray_intersects_triangle` and `TraceRay::hit_triangle` now both
+  exist and round differently, so a caller cannot assume they agree on every ray; the harness checks only this scene's rays.
+- *Distance units.* Distances are multiples of the ray's direction, which is not a unit
+  vector.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), 2026-11-13, two complete runs of:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Base revision `e4e4ee643cc5` (`origin/main`), which already contains `closest_hit` and
+`intersect_ray`, so both sides built every feature group and ran the same source. The
+comparison below is therefore **old API against new API within one run, on the same
+binary and the same rays**. It is not a before-and-after of one function. The
+`origin/main` against working tree columns serve as the noise reference (the `ray_intersects_aabb`
+overflow change of #211 is in both revisions). Best p50, nanoseconds per ray:
+
+| Case | Run 1 base | Run 1 head | Run 2 base | Run 2 head |
+| --- | ---: | ---: | ---: | ---: |
+| `scene/closest_visitor` (old APIs) | 3183.93 | 3181.00 | 3174.70 | 3182.75 |
+| `trace/closest_hit` (new API) | 221.52 | 223.11 | 220.26 | 223.11 |
+| `trace/any_hit` | 206.10 | 205.49 | 205.93 | 207.68 |
+| `trace/ray_prepare` (per ray) | 1.99 | 1.99 | 1.99 | 1.99 |
+
+Within each side of each run, `scene/closest_visitor` costs 14.3 to 14.4 times as much as
+`trace/closest_hit` (3183.93 / 221.52 = 14.4, 3181.00 / 223.11 = 14.3, 3174.70 / 220.26 =
+14.4, 3182.75 / 223.11 = 14.3). The median p50 ratios are 14.3 and 14.2 on the head
+side. The same cases moved by -0.3 % to +1.3 % between base and head, and the existing
+cases by at most about 1 percent except `query/ray_aabb`, the [bimodal case](#bimodal-cases)
+(-11.1 % in run 1, +6.0 % in run 2, with no code change).
+
+Full table of run 1 (p50 and best p50, nanoseconds per call; run 2 agreed within the same
+noise, and its scene and trace rows are in the table above):
+
+| Case | Before p50 | After p50 | Before best | After best |
+| --- | ---: | ---: | ---: | ---: |
+| `angle/sin_cos` | 11.11 | 11.11 | 11.07 | 11.11 |
+| `linalg/length` | 16.15 | 16.56 | 15.75 | 15.87 |
+| `linalg/normalize` | 42.20 | 41.99 | 41.26 | 41.22 |
+| `num/div` | 6.59 | 6.51 | 6.43 | 6.47 |
+| `num/mul` | 1.42 | 1.42 | 1.42 | 1.42 |
+| `num/sqrt` | 14.08 | 14.04 | 13.43 | 13.39 |
+| `query/ray_aabb` | 53.96 | 54.97 | 53.22 | 47.32 |
+| `query/ray_build` | 52.33 | 52.04 | 50.66 | 50.42 |
+| `query/ray_sphere_hit` | 70.64 | 67.38 | 64.98 | 65.67 |
+| `query/ray_sphere_miss` | 21.20 | 21.20 | 21.08 | 21.12 |
+| `query/ray_triangle` | 52.73 | 53.34 | 52.41 | 52.41 |
+| `scene/closest_visitor` | 3229.14 | 3226.21 | 3183.93 | 3181.00 |
+| `trace/any_hit` | 208.78 | 210.37 | 206.10 | 205.49 |
+| `trace/closest_hit` | 225.75 | 225.51 | 221.52 | 223.11 |
+| `trace/ray_prepare` | 1.99 | 1.99 | 1.99 | 1.99 |
+
+**One scene is one scene.** The ratio holds for a 27 650-triangle bumpy sphere with a
+ground plane, seen from one camera position through 1 024 rays, more than 600 of which hit the
+mesh. Another scene, ray distribution or tree shape can give a different ratio and do not
+follow from this one.
+
+**Unmeasured.** x86-64 and wasm32 (the CI platform job covers them only when started by
+hand), other scenes, other ray batches, thread scaling, and `closest_hit` against
+`intersect_ray` with a pruning triangle test (the old path here never prunes).
 
 ## Contract Change Cost Checks
 
