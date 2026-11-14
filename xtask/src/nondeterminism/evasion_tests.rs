@@ -196,6 +196,72 @@ fn compile_time_environment_macros_are_std_env() {
     );
 }
 
+#[test]
+fn sibling_names_in_banned_families_are_rejected() {
+    assert_rejects(
+        "thread-sleep",
+        &[
+            ("deprecated sleep_ms", "#[allow(deprecated)]\npub fn f() { std::thread::sleep_ms(1); }", 2),
+            ("park group", "use std::thread::{park, park_timeout_ms};", 1),
+            ("yield", "pub fn f() { std::thread::yield_now(); }", 1),
+            (
+                "park_timeout through an alias",
+                "use std::thread as host;\npub fn f() { host::park_timeout(core::time::Duration::ZERO); }",
+                2,
+            ),
+        ],
+    );
+    assert_rejects(
+        "time-system",
+        &[("clock error type", "pub fn f(_e: std::time::SystemTimeError) {}", 1)],
+    );
+}
+
+#[test]
+fn float_methods_with_no_float_token_are_float_boundary() {
+    assert_rejects(
+        "float-boundary",
+        &[
+            (
+                "mul_f64 of as_secs_f64",
+                "pub fn f(d: core::time::Duration) -> core::time::Duration { d.mul_f64(d.as_secs_f64()) }",
+                1,
+            ),
+            (
+                "from_secs_f64 of an inferred parse",
+                "pub fn f(text: &str) -> Option<core::time::Duration> {\n    \
+                 Some(core::time::Duration::from_secs_f64(text.parse().ok()?))\n}",
+                2,
+            ),
+            (
+                "div_duration_f32",
+                "pub fn f(d: core::time::Duration) -> u32 { d.div_duration_f32(d).to_bits() }",
+                1,
+            ),
+            (
+                "inside a macro",
+                "pub fn f(d: core::time::Duration) -> String { format!(\"{}\", d.as_secs_f32()) }",
+                1,
+            ),
+            ("Bunny's own egress", "pub fn f(x: Fixed) -> u32 { x.to_f32().to_bits() }", 1),
+        ],
+    );
+}
+
+/// Known gap, pinned with inverted meaning: a float whose type is only inferred, with no
+/// float token, float-suffixed name or float literal on the way, is beyond a syntactic
+/// gate. If this test starts failing the gate has learned to see it; move the case to the
+/// rejected forms and update `docs/CODE_DOJO.md`.
+#[test]
+fn an_inferred_float_with_no_float_name_is_not_seen() {
+    let source = "pub fn f(text: &str) -> Option<u64> { let x = text.parse().ok()?; Some(g(x)) }";
+
+    assert_eq!(
+        reported(CORE_PATH, source).into_iter().filter(|(_, rule)| rule == "float-boundary").count(),
+        0
+    );
+}
+
 /// Deterministic code next to the forms above that the rules must accept.
 const ACCEPTED: &[(&str, &str)] = &[
     ("raw identifier `r#type`", "pub fn f(r#type: u8) -> u8 { r#type }"),
@@ -220,6 +286,10 @@ const ACCEPTED: &[(&str, &str)] = &[
     ("a function named include", "fn include(x: u8) -> u8 { x }\npub fn f() -> u8 { include(1) }"),
     ("a binding named env", "pub fn f(env: u8) -> u8 { env }"),
     ("another crate's macro named include", "pub fn f() -> u8 { local::include!(1) }"),
+    ("whole seconds of a duration", "pub fn f(d: core::time::Duration) -> u64 { d.as_secs() }"),
+    ("integer widening", "pub fn f(x: u32) -> u64 { u64::from(x) }"),
+    ("scoped threads", "pub fn f() { std::thread::scope(|_| {}); }"),
+    ("a name that starts with f64", "pub fn f(x: Fixed) -> u64 { x.f64_bits() }"),
 ];
 
 #[test]
