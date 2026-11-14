@@ -151,8 +151,10 @@ impl Seeds {
         self.0 >> 11
     }
 
+    /// Reduced in `u64` first: a 53-bit draw does not fit the 32-bit `usize` of `wasm32`.
     fn below(&mut self, bound: usize) -> usize {
-        usize::try_from(self.next()).expect("fits") % bound
+        let bound = u64::try_from(bound).expect("fits");
+        usize::try_from(self.next() % bound).expect("below the bound")
     }
 
     fn point(&mut self, bound: i64) -> FixedVec3 {
