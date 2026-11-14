@@ -11,12 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+<<<<<<< HEAD
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
   a tangent (no trigonometry) and return the new `ProjectionError`. The
   coordinate law now defines the canonical NDC depth range `[0, 1]` (near to
   `0`, far to `1`) and a `-Z` camera, with golden vectors that run natively and
   under WebAssembly.
+||||||| be55424
+=======
+* Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
+  `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
+  test that never rejects a box the ray reaches and returns an entry bound
+  within `2^11 + 2` raw units plus `distance / 2^30`; `TraceRay::hit_triangle`
+  is an exact integer ray-triangle test (two-sided, inclusive edges, floored
+  distance, barycentrics on demand). Inputs are limited to a trace domain of
+  coordinates below 256.0 and direction components at most 1.0. Existing
+  `bunny-query` functions are unchanged. See the new
+  `docs/topics/ray-tracing/` chapter and test plan.
+>>>>>>> origin/main
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same
@@ -34,6 +47,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added the `docs/topics/performance/` chapter: the fidelity rule every
   optimization must satisfy, how measurements are made and read, and the
   optimization ledger.
+
+### Changed
+
+* `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
+  and the ray queries) now uses the table-seeded integer square root from the
+  core library: the same exact bits as before, 4.9 times faster for `sqrt`,
+  2.1 times for `normalize` and 1.6 times for a sphere hit (best p50, Apple
+  M5 Pro in the rust-dev container). Equivalence tests keep the old bit-by-bit loop as the reference;
+  the performance chapter's ledger records the method, trade-offs and full
+  measurements.
+
+### Fixed
+
+* Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
+  toolchains no longer fails the gate.
 
 ## [0.6.0] - 2026-06-26
 

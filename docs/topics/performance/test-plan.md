@@ -44,7 +44,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 [[requirement]]
 id = "PERF-REQ-001"
 summary = "An optimization either preserves every output bit or ships as a new API with a stated error bound."
-status = "reserved"
+status = "active"
 
 [[requirement]]
 id = "PERF-REQ-002"
@@ -67,8 +67,7 @@ summary = "The harness is built from the same source against each revision's own
 status = "active"
 ```
 
-PERF-REQ-001 is reserved until the first optimization lands; each optimization adds its
-equivalence or error-bound case here.
+Each optimization adds its equivalence or error-bound cases under PERF-REQ-001.
 
 ## Fixtures
 
@@ -84,6 +83,9 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-004 | Gate | PERF-REQ-003 | Only cases past the threshold are reported. | `xtask/src/perf_report.rs::tests::regressions_respect_the_threshold` |
 | PERF-TP-005 | Build | PERF-REQ-004 | Feature groups exclude `default` and comments. | `xtask/src/perf.rs::tests::feature_groups_skip_default_and_comments` |
 | PERF-TP-007 | Gate | PERF-REQ-003 | A bimodal case whose medians land in different modes does not fail the gate. | `xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes` |
+| PERF-TP-008 | Exact replacement | PERF-REQ-001 | The new square root equals the retained bit-by-bit reference on boundaries and perfect squares. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_boundaries` |
+| PERF-TP-009 | Exact replacement | PERF-REQ-001 | The new square root equals the reference on 20 000 seeded inputs across all magnitudes. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_seeded_inputs` |
+| PERF-TP-010 | Exact replacement | PERF-REQ-001 | `FixedQ32_32::sqrt` equals the reference for every raw value 0..=65 536. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value` |
 | PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
 | PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
 | PERF-TP-022 | Gate | PERF-REQ-003 | A run that measured no case on both sides fails instead of passing. | `xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing` |
@@ -151,6 +153,32 @@ requirements = ["PERF-REQ-003"]
 evidence = "test"
 test = "xtask/src/perf_report.rs::tests::the_gate_ignores_a_bimodal_case_whose_median_lands_in_different_modes"
 oracle = "A bimodal case whose medians land in different modes does not fail the gate."
+tier = "fast"
+status = "implemented"
+[[case]]
+id = "PERF-TP-008"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_boundaries"
+oracle = "The new square root equals the retained bit-by-bit reference on boundaries and perfect squares."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-009"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_seeded_inputs"
+oracle = "The new square root equals the reference on 20 000 seeded inputs across all magnitudes."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-010"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value"
+oracle = "FixedQ32_32::sqrt equals the reference for every raw value 0..=65 536."
 tier = "fast"
 status = "implemented"
 
