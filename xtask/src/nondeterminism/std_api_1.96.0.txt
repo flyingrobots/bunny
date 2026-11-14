@@ -1,0 +1,184 @@
+# Item lists of the std documentation for the pinned toolchain, read by
+# xtask/src/nondeterminism/std_api_tests.rs. Regenerate when rust-toolchain.toml
+# moves; the command is in docs/CODE_DOJO.md (Keeping The Name Lists Current).
+toolchain 1.96.0
+
+[std::thread]
+struct AccessError
+struct Builder
+struct JoinHandle
+struct LocalKey
+struct Scope
+struct ScopedJoinHandle
+struct Thread
+struct ThreadId
+fn available_parallelism
+fn current
+fn panicking
+fn park
+fn park_timeout
+fn park_timeout_ms
+fn scope
+fn sleep
+fn sleep_ms
+fn spawn
+fn yield_now
+fn add_spawn_hook
+fn current_id
+fn sleep_until
+type Result
+
+[std::time]
+struct Duration
+struct Instant
+struct SystemTime
+struct SystemTimeError
+struct TryFromFloatSecsError
+constant UNIX_EPOCH
+
+[std::time::Duration methods]
+abs_diff
+add
+add_assign
+as_micros
+as_millis
+as_millis_f32
+as_millis_f64
+as_nanos
+as_secs
+as_secs_f32
+as_secs_f64
+borrow
+borrow_mut
+checked_add
+checked_div
+checked_mul
+checked_sub
+clamp
+clone
+clone_from
+clone_into
+clone_to_uninit
+cmp
+default
+div
+div_assign
+div_duration_ceil
+div_duration_f32
+div_duration_f64
+div_duration_floor
+div_f32
+div_f64
+eq
+fmt
+from
+from_days
+from_hours
+from_micros
+from_millis
+from_mins
+from_nanos
+from_nanos_u128
+from_secs
+from_secs_f32
+from_secs_f64
+from_weeks
+ge
+gt
+hash
+hash_slice
+into
+is_zero
+le
+lt
+max
+min
+mul
+mul_assign
+mul_f32
+mul_f64
+ne
+new
+partial_cmp
+saturating_add
+saturating_mul
+saturating_sub
+sub
+sub_assign
+subsec_micros
+subsec_millis
+subsec_nanos
+sum
+to_owned
+try_from
+try_from_secs_f32
+try_from_secs_f64
+try_into
+type_id
+
+[std::path::Path methods]
+absolute
+ancestors
+as_mut_os_str
+as_os_str
+as_path
+as_ref
+borrow
+borrow_mut
+canonicalize
+clone
+clone_from
+clone_into
+clone_to_uninit
+cmp
+components
+display
+ends_with
+eq
+exists
+extension
+file_name
+file_prefix
+file_stem
+fmt
+from
+ge
+gt
+has_root
+has_trailing_sep
+hash
+into_iter
+into_path_buf
+is_absolute
+is_dir
+is_empty
+is_file
+is_relative
+is_symlink
+iter
+join
+le
+lt
+metadata
+ne
+new
+normalize_lexically
+parent
+partial_cmp
+read_dir
+read_link
+starts_with
+strip_prefix
+symlink_metadata
+to_owned
+to_path_buf
+to_str
+to_string_lossy
+trim_prefix
+trim_trailing_sep
+try_exists
+type_id
+with_added_extension
+with_extension
+with_file_name
+with_trailing_sep

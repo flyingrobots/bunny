@@ -9,8 +9,8 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro,
-    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, Lit, Macro,
-    Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
+    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, ItemUse, Lit,
+    Macro, Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath, UseTree,
 };
 
 use crate::git_helpers::git_command;
@@ -325,7 +325,7 @@ pub(super) fn dependency_violations(
                 0,
                 finding.rule,
                 format!(
-                    "normal dependency graph reaches `{}`, which deterministic crates must not use",
+                    "dependency graph reaches `{}`, which deterministic crates must not use",
                     finding.dependency
                 ),
             )
@@ -334,12 +334,59 @@ pub(super) fn dependency_violations(
 }
 
 fn check_dependency_rules() -> Result<(), DynError> {
-    let root = git_root()?;
+    let violations = dependency_rule_violations(&git_root()?, &|| Command::new("cargo"))?;
+    if violations.is_empty() {
+        println!("Code Dojo: deterministic dependency graph clean");
+        return Ok(());
+    }
+    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
+    Err(DojoError::new("deterministic dependency policy violations found").into())
+}
+
+/// The feature sets the dependency graph is listed with: what the workspace enables, and
+/// every feature, so a banned crate behind an optional dependency that no workspace crate
+/// turns on is still found (a downstream crate can turn it on).
+const DEPENDENCY_FEATURE_SETS: &[(&str, &[&str])] =
+    &[("default", &[]), ("all", &["--all-features"])];
+
+/// Lists the dependency graph of the deterministic crates of the workspace at `root` with
+/// `cargo tree`, over normal and build edges and once per feature set, and applies the
+/// dependency rules to it. `cargo` makes the `cargo` command. A finding reported under
+/// both feature sets is listed once, under the first.
+pub(super) fn dependency_rule_violations(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+) -> Result<Vec<Violation>, DynError> {
+    let manifest = |crate_name: &str| {
+        std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
+            .unwrap_or_default()
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    let mut violations = Vec::new();
+    for (label, features) in DEPENDENCY_FEATURE_SETS {
+        let tree = dependency_tree(root, cargo, features)?;
+        for violation in dependency_violations(&tree, &manifest) {
+            let key = (violation.path.clone(), violation.rule, violation.message.clone());
+            if seen.insert(key) {
+                let message = format!("{} ({label} features)", violation.message);
+                violations.push(Violation { message, ..violation });
+            }
+        }
+    }
+    violations.sort_by(|left, right| (&left.path, left.rule).cmp(&(&right.path, right.rule)));
+    Ok(violations)
+}
+
+fn dependency_tree(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+    features: &[&str],
+) -> Result<String, DynError> {
     let mut args = [
         "tree",
         "--locked",
         "--edges",
-        "normal",
+        "normal,build",
         "--target",
         "all",
         "--no-dedupe",
@@ -349,25 +396,15 @@ fn check_dependency_rules() -> Result<(), DynError> {
         "{p}",
     ]
     .into_iter()
+    .chain(features.iter().copied())
     .map(str::to_owned)
     .collect::<Vec<_>>();
     args.extend(package_args(NONDETERMINISM_CRATES));
-    let output = Command::new("cargo").args(&args).current_dir(&root).output()?;
+    let output = cargo().args(&args).current_dir(root).output()?;
     if !output.status.success() {
         return Err(command_error("cargo tree", &output.stderr).into());
     }
-    let tree = String::from_utf8(output.stdout)?;
-    let manifest = |crate_name: &str| {
-        std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
-            .unwrap_or_default()
-    };
-    let violations = dependency_violations(&tree, &manifest);
-    if violations.is_empty() {
-        println!("Code Dojo: deterministic dependency graph clean");
-        return Ok(());
-    }
-    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
-    Err(DojoError::new("deterministic dependency policy violations found").into())
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {
@@ -812,7 +849,9 @@ fn command_error(command: &str, stderr: &[u8]) -> DojoError {
     DojoError::new(format!("{command} failed: {}", detail.trim()))
 }
 
-fn is_rust_source(path: &Path) -> bool {
+/// Whether the gate lists `path` as a Rust source: a `.rs` file outside `target`, `.git`,
+/// `vendor` and `third_party`.
+pub(super) fn is_rust_source(path: &Path) -> bool {
     if path.extension() != Some(OsStr::new("rs")) {
         return false;
     }
@@ -910,7 +949,7 @@ fn check_ast(
 
 fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, file: &File) {
     if in_nondeterminism_scope(&context.path) {
-        let findings = crate::nondeterminism::source_findings(file)
+        let findings = crate::nondeterminism::source_findings(&context.path, file)
             .into_iter()
             .chain(crate::nondeterminism::text_findings(context.lines));
         for finding in findings {
@@ -1057,6 +1096,58 @@ impl PolicyVisitor<'_> {
         }
     }
 
+    /// A method such as `d.mul_f64(..)` or `d.as_secs_f64()` is float arithmetic even when
+    /// no float type is written.
+    fn check_float_method(&mut self, line: usize, method: &str) {
+        if self.category == Category::Core
+            && is_float_name(method)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                format!(
+                    "`{method}` takes or returns a float; core requires a boundary/proof waiver"
+                ),
+            );
+        }
+    }
+
+    /// A `use` leaf naming a float (`use core::f64::consts::PI as P`, a renamed `to_f32`)
+    /// is reported where it is imported, since the name it binds hides the float.
+    fn check_use_floats(&mut self, tree: &UseTree, prefix: &mut Vec<String>) {
+        let leaf = match tree {
+            UseTree::Path(path) => {
+                prefix.push(crate::nondeterminism::ident_name(&path.ident));
+                self.check_use_floats(&path.tree, prefix);
+                prefix.pop();
+                return;
+            }
+            UseTree::Group(group) => {
+                for item in &group.items {
+                    self.check_use_floats(item, prefix);
+                }
+                return;
+            }
+            UseTree::Name(name) => Some(&name.ident),
+            UseTree::Rename(rename) => Some(&rename.ident),
+            UseTree::Glob(_) => None,
+        };
+        let mut path = prefix.clone();
+        path.extend(leaf.map(crate::nondeterminism::ident_name));
+        let line = line_of(tree.span());
+        if self.category == Category::Core
+            && names_float(&path)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                "importing a float name in core requires a boundary/proof waiver",
+            );
+        }
+    }
+
     fn check_type_path(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
@@ -1144,6 +1235,7 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let line = line_of(node.span());
         let method = crate::nondeterminism::ident_name(&node.method);
+        self.check_float_method(line_of(node.method.span()), &method);
         if !self.limits.panics_allowed
             && (method == "unwrap" || method == "expect")
             && !self.waived(line, "panic-path")
@@ -1175,6 +1267,11 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     fn visit_macro(&mut self, node: &'ast Macro) {
         self.check_macro_floats(node);
         visit::visit_macro(self, node);
+    }
+
+    fn visit_item_use(&mut self, node: &'ast ItemUse) {
+        self.check_use_floats(&node.tree, &mut Vec::new());
+        visit::visit_item_use(self, node);
     }
 
     fn visit_type_path(&mut self, node: &'ast TypePath) {
@@ -1298,7 +1395,14 @@ fn in_nondeterminism_scope(path: &Path) -> bool {
 }
 
 fn names_float(segments: &[String]) -> bool {
-    segments.iter().any(|segment| segment == "f32" || segment == "f64")
+    segments.iter().any(|segment| is_float_name(segment))
+}
+
+/// `f32`, `f64`, and every name ending in `_f32` or `_f64`: `Duration::mul_f64`,
+/// `as_secs_f32`, `from_secs_f64` and Bunny's own `to_f32` take or return a float without
+/// a float token appearing at the call.
+fn is_float_name(name: &str) -> bool {
+    name == "f32" || name == "f64" || name.ends_with("_f32") || name.ends_with("_f64")
 }
 
 fn path_segments(path: &SynPath) -> Vec<String> {

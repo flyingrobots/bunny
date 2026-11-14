@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo's dependency check lists the deterministic crates' graph over
+  normal and build edges, with the workspace's features and with
+  `--all-features`, so a banned crate behind an optional dependency that no
+  workspace crate enables, or one used as a build-dependency, now fails the
+  gate. A fixture-workspace test runs the check through `cargo tree`. Main
+  still passes: no deterministic crate has a build script or
+  build-dependencies. Closes flyingrobots/bunny#322.
+
 * The published `bunny-codec` package no longer contains a test that cannot
   compile: `tests/ply_ascii_stanford_tests.rs` is excluded together with the
   Stanford fixture it reads with `include_bytes!`. `bunny-contract` had the same
@@ -224,6 +232,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests (flyingrobots/bunny#280).
 
 ### Fixed
+
+* Code Dojo enforces what `CODE_STANDARDS.md` Rule 4 says beyond Echo's
+  rule list: the `Path` methods that read the filesystem (`exists`,
+  `metadata`, `canonicalize` and seven more), `std::os::<platform>::fs`,
+  `io`, `prelude`, `net` and `process`, `std::os::fd`, `std::path::absolute`
+  and `std::io::pipe` are findings, terminal input is a new `host-input`
+  rule, and doc tests are scanned like other code. The docs compare the list
+  with Lumen's gate. Part of flyingrobots/bunny#321.
+
+* Code Dojo names every item of `std::thread` and `std::time` deliberately
+  instead of matching whole-segment prefixes, checked by a test against the
+  pinned toolchain's documentation: `sleep_ms`, `sleep_until`, `park`,
+  `park_timeout`, `park_timeout_ms` and `yield_now` are now `thread-sleep`
+  findings and `SystemTimeError` a `time-system` one. In core crates any name
+  ending in `_f32` or `_f64`, also in a `use` declaration, is a
+  `float-boundary` finding, so
+  `d.mul_f64(d.as_secs_f64())` and `Duration::from_secs_f64(..)` no longer
+  pass with no float token; six float DTO conversions in `bunny-linalg` and
+  `bunny-geom` that the gate could not see before now carry waivers. A waiver
+  between a doc comment and `fn` now covers the function. Part of
+  flyingrobots/bunny#321.
+
+* Code Dojo no longer lets code or host files into a deterministic crate
+  unscanned: `include!` is banned in every spelling (`include-source`), a
+  `#[path]` module (also under a nested `cfg_attr` or emitted by a macro)
+  must name a `.rs` file inside the crate directory that the gate scans, and
+  `include_str!`/`include_bytes!` must name a literal path inside it
+  (`include-data`). `env!` and `option_env!` are now `std-env` findings, as
+  in Lumen's gate; the `bunny-contract` test that reads `CARGO_PKG_VERSION`
+  and the committed generator outputs carries waivers. Part of
+  flyingrobots/bunny#321.
 
 * Code Dojo waivers are comments only. `dojo: allow` text inside a string,
   raw-string or byte-string literal, a doc comment, a `#[doc]` attribute or a

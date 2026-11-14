@@ -444,7 +444,6 @@ const ACCEPTED: &[(&str, &str)] = &[
     ("json-serialization", "pub fn f(bytes: &[u8]) -> usize { bytes.len() }"),
     ("float-op on fixed point", "pub fn f(x: Fixed, a: Angle) -> (Option<Fixed>, Fixed) { (x.sqrt(), a.sin()) }"),
     ("std-env", "mod env { pub fn name() -> &'static str { \"bunny\" } }\npub fn f() -> &'static str { env::name() }"),
-    ("compile-time env macro", "pub fn f() -> &'static str { env!(\"CARGO_PKG_VERSION\") }"),
     ("std-process", "mod process { pub fn run() {} }\npub fn f() { process::run(); }"),
 ];
 
@@ -465,6 +464,9 @@ pub(super) const FAMILY: &[&str] = &[
     "std-env",
     "std-fs",
     "std-process",
+    "include-source",
+    "include-data",
+    "host-input",
 ];
 
 #[test]

@@ -100,22 +100,22 @@ type position, a macro body and a glob import, as applicable. The tests are in
 
 | Echo rule ID | Code Dojo rule | What it bans in Bunny | Before #279 | Test |
 | --- | --- | --- | --- | --- |
-| `time-system` | `time-system` | `std::time::SystemTime`, `UNIX_EPOCH` | 2 of 9 (as `ambient-state`) | `time_system_rejects_every_seeded_form` |
+| `time-system` | `time-system` | `std::time::SystemTime`, `UNIX_EPOCH`; `SystemTimeError` since #321 | 2 of 9 (as `ambient-state`) | `time_system_rejects_every_seeded_form` |
 | `time-instant` | `time-instant` | `std::time::Instant` | 2 of 9 (as `ambient-state`) | `time_instant_rejects_every_seeded_form` |
-| `thread-sleep` | `thread-sleep` | `std::thread::sleep`, `tokio`/`async_std` sleeps; crates `tokio`, `async-std` | 0 of 7 | `thread_sleep_rejects_every_seeded_form` |
+| `thread-sleep` | `thread-sleep` | `std::thread::sleep`, `tokio`/`async_std` sleeps; crates `tokio`, `async-std`; since #321 also `sleep_ms`, `sleep_until`, `park`, `park_timeout`, `park_timeout_ms`, `yield_now` | 0 of 7 | `thread_sleep_rejects_every_seeded_form` |
 | `host-parallelism` | `host-parallelism` | `available_parallelism`, qualified or bare | 0 of 5 | `host_parallelism_rejects_every_seeded_form` |
 | `random` | `random` | `rand`, `getrandom`, `fastrand`, `thread_rng`; the same crates as dependencies | 2 of 7 (as `ambient-state`) | `random_rejects_every_seeded_form` |
 | `host-callback` | `host-callback` | `js_sys`, `wasm_bindgen`, `web_sys` paths; crates `js-sys`, `wasm-bindgen`, `web-sys` | 0 of 4 | `host_callback_rejects_every_seeded_form` |
-| `network` | `network` | `std::net`, `reqwest`, `ureq`; the same crates as dependencies | 1 of 6 (as `ambient-state`) | `network_rejects_every_seeded_form` |
+| `network` | `network` | `std::net`, `reqwest`, `ureq`; the same crates as dependencies; since #321 `std::os::<platform>::net` | 1 of 6 (as `ambient-state`) | `network_rejects_every_seeded_form` |
 | `unordered-container` | `unordered-container` | `HashMap`, `HashSet`, `FxHashMap`, `FxHashSet` by name; `std::collections::hash_map` and `hash_set` except `DefaultHasher`; `std::hash::RandomState`; `hashbrown`, `rustc_hash`; crates `hashbrown`, `rustc-hash` | 2 of 10 (as `nondeterministic-map`) | `unordered_container_rejects_every_seeded_form` |
 | `hand-hashed-table` | `hand-hashed-table` | a line, comments included, naming open addressing | 0 of 2 | `hand_hashed_table_rejects_every_seeded_form` |
 | `json-serialization` | `json-serialization` | `serde_json` paths and macros; crate `serde_json` | 0 of 5 | `json_serialization_rejects_every_seeded_form` |
 | `wasm-serde` | `wasm-serde` | `serde_wasm_bindgen`; crate `serde-wasm-bindgen` | 0 of 2 | `wasm_serde_rejects_every_seeded_form` |
 | `float-sentinel` | `float-boundary` | any `f32`/`f64` path in core, so `NAN`, `INFINITY`, `NEG_INFINITY`, `consts` | 0 of 5 | `float_sentinels_are_rejected_as_float_boundary` |
-| `float-op` | `float-boundary` | float types, float literals and float paths in core, also inside macros | 1 of 3 | `float_operations_are_rejected_as_float_boundary` |
-| `std-env` | `std-env` | `std::env` | 1 of 6 (as `ambient-state`) | `std_env_rejects_every_seeded_form` |
-| `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
-| `std-process` | `std-process` | `std::process` | 0 of 5 | `std_process_rejects_every_seeded_form` |
+| `float-op` | `float-boundary` | float types, float literals and float paths in core, also inside macros; since #321 names ending in `_f32`/`_f64` (`Duration::mul_f64`, `as_secs_f64`, `to_f32`) | 1 of 3 | `float_operations_are_rejected_as_float_boundary` |
+| `std-env` | `std-env` | `std::env`; `env!` and `option_env!` since #321 | 1 of 6 (as `ambient-state`) | `std_env_rejects_every_seeded_form` |
+| `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open`; since #321 `Path` methods that read the filesystem, `std::os::<platform>::fs`, `io`, `prelude`, and `std::os::fd` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
+| `std-process` | `std-process` | `std::process`; since #321 `std::os::<platform>::process` and `std::io::pipe` | 0 of 5 | `std_process_rejects_every_seeded_form` |
 
 flyingrobots/bunny#321 adds the constructions an independent review found
 getting past these rules, seeded in `xtask/src/nondeterminism/evasion_tests.rs`
@@ -128,7 +128,30 @@ and counted with the forms above:
 | `r#f64` as a type and a path | `float-boundary` | 0 of 2 | `raw_float_types_are_float_boundary` |
 | `use std::{self as s};` then `s::fs` | `std-fs`, `std-env` | 2 of 2 (no test failed when `self` was treated as a segment) | `self_in_a_use_group_names_the_module_itself` |
 
-With these the rule tests seed 106 forms; the gate before #321 caught 92.
+| `include!` in every spelling: a non-Rust file, a `.rs` file, a `concat!` path, `std::`/`core::`, renamed, in a macro | `include-source` (Bunny's own) | 0 of 8 | `include_of_source_is_rejected_however_it_is_named` |
+| `#[path]` to a non-`.rs` file, outside the crate, absolute, with backslashes, through `cfg_attr` | `include-source` | 0 of 5 | `path_attributes_must_name_a_scanned_file` |
+| `#[path]` emitted by a macro, under nested `cfg_attr`, second in a `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 6 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
+| `include_str!`/`include_bytes!` outside the crate, absolute, computed, renamed, in a macro | `include-data` (Bunny's own) | 0 of 5 | `included_data_must_come_from_inside_the_crate` |
+| `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")`, in a macro | `std-env` | 1 of 6 (`std::env!`, through the `std::env` prefix) | `compile_time_environment_macros_are_std_env` |
+
+| `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park`, `park_timeout_ms`, `yield_now`, `park_timeout` by alias; `SystemTimeError` | `thread-sleep`, `time-system` | 0 of 5 | `sibling_names_in_banned_families_are_rejected` |
+| `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64(text.parse().ok()?)`, `div_duration_f32`, `as_secs_f32` in `format!`, `x.to_f32()` | `float-boundary` | 0 of 5 | `float_methods_with_no_float_token_are_float_boundary` |
+| `use core::f64::consts::PI as P`, a renamed `to_f32`, the same in a group, a `core::f32::consts` glob (found in review) | `float-boundary` | 0 of 4 | `float_names_in_use_declarations_are_float_boundary` |
+
+| `p.exists()`, `try_exists`, `is_file`/`is_dir`, `metadata`, `canonicalize`, `read_dir`, `Path::exists(p)`, `PathBuf::is_symlink`, in `format!` | `std-fs` | 0 of 9 | `path_methods_that_read_the_filesystem_are_std_fs` |
+| `std::os::{unix,windows,linux}::fs`, `std::os::fd`, a platform `prelude` glob; `std::os::unix::net`; `std::os::unix::process`, `std::io::pipe`; `std::path::absolute`, `.absolute()` | `std-fs`, `network`, `std-process`, `std-env` | 0 of 10 | `platform_filesystem_modules_are_banned` |
+| `std::io::stdin`, `Stdin`, `IsTerminal`, `.is_terminal()`, by alias, in `format!` | `host-input` (Bunny's own) | 0 of 6 | `terminal_input_is_host_input` |
+| banned code in `///` and `//!` doc tests, behind a hidden `# ` line, in `rust,no_run`, in `/** */` | `std-fs`, `time-instant`, `unordered-container`, `thread-sleep`, `std-env` | 0 of 5 | `doc_tests_are_scanned` |
+
+With these the rule tests seed 180 forms; the gate before #321 caught 93.
+Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
+documented items of `std::thread` and `std::time` as a path and as a `use`
+(58 probes, 14 of which the gate before #321 got wrong) and each of the 14
+float methods of `Duration` as a method call and as a path (28 probes, all
+missed before).
+`env!` was an accepted look-alike before #321; it is banned now, as in
+Lumen's gate (flyingrobots/lumen, ADR 0006), and the one use on main, in a
+`bunny-contract` test, carries a waiver.
 
 Where the names differ:
 
@@ -148,6 +171,97 @@ Where the names differ:
   deterministic crate has `js-sys` or `wasm-bindgen` as a normal dependency
   (`wasm-bindgen-test` is a dev-dependency of their tests and is accepted).
   The dependency check is what keeps it that way.
+
+### What The Rules Do Not Cover
+
+The source rules read syntax and each file's own imports. After
+flyingrobots/bunny#321 these remain outside them:
+
+- A float whose type is only inferred, with no float type, literal or
+  `_f32`/`_f64` name on the way (`text.parse()` passed to a float parameter,
+  `x.into()` to an `f64`); pinned as a known gap by
+  `an_inferred_float_with_no_float_name_is_not_seen`.
+- A banned type that reaches a file only as another crate's return type, or
+  only through a `crate::` re-export declared in another file (the re-export
+  itself is reported where it is declared), and code that a dependency's
+  procedural macro generates.
+- Symbolic links behind an `include_str!`, `include_bytes!` or `#[path]`
+  target, and doc text brought in with `#[doc = include_str!(..)]`.
+- Writing to standard output or standard error, and threads: both permitted on
+  purpose (see Lumen below for the difference on threads).
+- Dev-dependencies, in the dependency check.
+
+Known over-reports, each resolvable with a waiver: a zero-argument method of
+Bunny's own named `exists`, `metadata`, `absolute`, `is_terminal` or like the
+other filesystem `Path` methods; a user macro called by the bare name
+`include`, `env` or `option_env`; a `#[path]` inside an inline module, which
+the compiler resolves against a deeper directory; any name ending in `_f32`
+or `_f64` that involves no float.
+
+### Compared With Lumen's Gate
+
+Lumen's gate (flyingrobots/lumen, `docs/adr/0006-nondeterminism-gate.md`)
+uses the same Echo rule IDs. Since flyingrobots/bunny#321 the two lists
+agree on `Path::exists` (Bunny also bans the nine other `Path` methods that
+read the filesystem), `env!` and `option_env!`, module imports and renames,
+glob imports, `std::hash::RandomState`, and float literals and float names
+inside macro bodies. They still differ:
+
+- **Threads.** Lumen bans `std::thread::spawn`, `scope` and `Builder`
+  (`thread-spawn`) outside its scheduler. Bunny permits them: Rule 6 admits
+  parallelism that does not change results, and tests, not the gate, show
+  that. Both ban `available_parallelism` and sleeping.
+- **How floats are caught.** Lumen bans the `f32` and `f64` types through
+  Clippy and denies `clippy::float_arithmetic`, which also sees arithmetic on
+  an inferred float. Bunny's `float-boundary` is syntactic: float types,
+  literals, paths and `_f32`/`_f64` names, with waivers for boundary
+  conversions; an inferred float with no float name is not seen.
+- **Mechanism.** Lumen's first layer is Clippy's `disallowed-types`,
+  `disallowed-methods` and `disallowed-macros`, which resolve paths exactly,
+  re-exports included; Bunny reads syntax with `syn` and resolves through
+  the file's own imports. Lumen's dependency rule is `cargo-deny` allowing no
+  registry at all; Bunny lists banned crates over `cargo tree`.
+- **Bunny only.** `include-source`, `include-data`, `host-input`, the
+  platform modules of `std::os`, `std::path::absolute`, `std::io::pipe`, and
+  doc tests.
+- **Waivers.** Lumen's waiver covers its line or the line below, and a waiver
+  that waives nothing fails; Bunny's covers the item or statement below it,
+  and an unused waiver is not reported.
+
+### Keeping The Name Lists Current
+
+`std::time` and `std::thread` are banned item by item, not as modules, so a
+sibling such as the deprecated `sleep_ms` cannot slip past a prefix. The item
+lists of the pinned toolchain's documentation are committed as
+`xtask/src/nondeterminism/std_api_<version>.txt`; `std_api_tests.rs` fails
+when the documentation lists an item its classification table does not name,
+when the gate reports anything but the classified rule for an item, and when
+`rust-toolchain.toml` pins a toolchain other than the one the file was read
+from. When the toolchain moves, regenerate the lists in the container (the
+documentation pages are the source; the image has no `rust-src` or
+`rust-docs`):
+
+```sh
+python3 ~/git/devcontainers/bin/devrun bunny <worktree> --worktree --network -- bash -c '
+  V=<version>; echo "toolchain $V"; echo
+  for m in thread time; do echo "[std::$m]"
+    curl -fsSL https://doc.rust-lang.org/$V/std/$m/index.html |
+      grep -oE "class=\"(fn|struct|macro|type|enum|trait|constant)\" href=\"[^\"]+\"" |
+      sed -E "s/class=\"([a-z]+)\" href=\"[a-z]+\.([A-Za-z0-9_]+)\.html\"/\1 \2/"
+    echo
+  done
+  for page in time/Duration path/Path; do echo "[std::${page%/*}::${page#*/} methods]"
+    curl -fsSL https://doc.rust-lang.org/$V/std/${page%/*}/struct.${page#*/}.html |
+      grep -oE "id=\"method\.[a-z0-9_]+\"" | sed -E "s/id=\"method\.(.*)\"/\1/" | LC_ALL=C sort -u
+    echo
+  done'
+```
+
+prefix its three comment lines and save the output as the new
+`std_api_<version>.txt` (the first run reproduced the 1.96.0 file
+exactly), classify each new item in
+the test's table and in the rules, and read the release notes for renamed
+items.
 
 ### How the source rules read code
 
@@ -169,16 +283,24 @@ third-party crates for that reason.
 
 ### Dependency Check
 
-The full gate runs `cargo tree --locked --edges normal --target all
---no-dedupe` for the deterministic library crates and rejects any of these in
-their normal dependency graph: `rand`, `getrandom`, `fastrand` (`random`);
-`js-sys`, `wasm-bindgen`, `web-sys` (`host-callback`); `reqwest`, `ureq`
-(`network`); `hashbrown`, `rustc-hash` (`unordered-container`); `serde_json`
-(`json-serialization`); `serde-wasm-bindgen` (`wasm-serde`); `tokio`,
-`async-std` (`thread-sleep`). A finding names the deterministic crate whose
-manifest declares the path to the banned crate; a crate reached through
-another deterministic crate is reported against that crate only. Dev and
-build dependencies are not part of the check.
+The full gate runs `cargo tree --locked --edges normal,build --target all
+--no-dedupe` for the deterministic library crates twice, with the features the
+workspace enables and with `--all-features`, and rejects any of these in either
+graph: `rand`, `getrandom`, `fastrand` (`random`); `js-sys`, `wasm-bindgen`,
+`web-sys` (`host-callback`); `reqwest`, `ureq` (`network`); `hashbrown`,
+`rustc-hash` (`unordered-container`); `serde_json` (`json-serialization`);
+`serde-wasm-bindgen` (`wasm-serde`); `tokio`, `async-std` (`thread-sleep`).
+`--all-features` finds a banned crate behind an optional dependency that no
+workspace crate enables, which a downstream crate could still turn on. Build
+edges find a banned crate a build script could use; a build script's own
+source (`build.rs`) is a Rust file of the crate and is read by the source
+rules. No deterministic crate has a build script or build-dependencies today.
+A finding names the deterministic crate whose manifest declares the path to
+the banned crate and the feature set that found it first; a crate reached
+through another deterministic crate is reported against that crate only.
+Dev-dependencies are not part of the check: core tests depend on
+`wasm-bindgen-test`, which brings `wasm-bindgen` and `js-sys` into test builds
+only.
 
 ### No-Default-Features Check
 
@@ -233,7 +355,10 @@ What a waiver covers:
 - On a line that also holds code, that line only.
 - On a line of its own, that line, the comment lines below it, and every line
   of the outermost item, statement, field, enum variant, match arm or
-  struct-literal field that starts on the next line holding code. A waiver
+  struct-literal field that starts on the next line holding code. A node
+  starts on its first line and again on its first line after its attributes
+  and doc comments, so a waiver between a doc comment and `fn` covers the
+  function. A waiver
   above a function covers the whole function and nothing after it; a waiver
   above one statement does not cover the next statement. When no such node
   starts on that line (inside a macro's tokens, or on a continuation line of
