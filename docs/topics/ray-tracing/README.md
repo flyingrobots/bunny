@@ -558,7 +558,7 @@ These are the definitions of the benchmark profile's replica (`box_calls`,
 `BvhNode` tree: a compact tree makes the same box tests in the same order. The
 profile's "nodes popped" is `popped_skipped + interior_visits + leaf_visits`.
 The check that every count agrees with the replica on all 1 024 benchmark rays
-is planned as `TRACE-TP-415`.
+is planned as `TRACE-TP-418`.
 
 **Adding counts.** `+` and `+=` sum each counter, saturating at `u64::MAX`,
 and keep the larger `peak_stack`, so a sum over rays is a total per counter

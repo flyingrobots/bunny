@@ -39,7 +39,7 @@ CHANGELOG.md
 Topic docs:
 docs/topics/ray-tracing/README.md (Counting Traversals: functions, counter definitions,
 identities, sums, overflow argument, errors, which to call); docs/topics/ray-tracing/test-plan.md
-(TRACE-REQ-033, TRACE-TP-412 to TRACE-TP-417, counting mutation checks; TRACE-TP-415 planned for
+(TRACE-REQ-035, TRACE-TP-415 to TRACE-TP-420, counting mutation checks; TRACE-TP-418 planned for
 the follow-up that adds the bunny-perf group); docs/topics/performance/README.md (contract change
 cost check, and the shared-loop design's readings).
 
@@ -47,7 +47,7 @@ Generated artifacts:
 None.
 
 Checks run:
-The new tests against a stub whose counting tally records nothing (TRACE-TP-412 and 413 fail),
+The new tests against a stub whose counting tally records nothing (TRACE-TP-415 and 416 fail),
 then against the implementation; the broadphase and bunny-perf tests; fmt and workspace Clippy;
 the mutation runs under `timeout 120`; an A/A perf reading and the perf runs with `--exclusive`;
 the full Code Dojo gate. Results are in the pull request.

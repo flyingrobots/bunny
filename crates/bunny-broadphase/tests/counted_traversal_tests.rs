@@ -86,7 +86,7 @@ fn both(
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values() {
+fn trace_tp_415_counts_on_constructed_trees_are_the_hand_derived_values() {
     let none = TraversalCounts::default();
     assert_eq!(both(None, &[], &[], &[]), [(None, none), (None, none)], "empty tree");
     // One leaf of three: root box tested and entered, one leaf, three tests (any: one).
@@ -128,7 +128,7 @@ fn trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_416_adding_counts_sums_saturates_and_keeps_the_peak() {
+fn trace_tp_419_adding_counts_sums_saturates_and_keeps_the_peak() {
     let a = counts([1, 2, 3, 4, 5, 6, 7]);
     let b = counts([10, 20, 30, 40, 50, 60, 3]);
     assert_eq!(a + b, counts([11, 22, 33, 44, 55, 66, 7]));
@@ -326,7 +326,7 @@ fn corpus() -> Vec<(Builder, usize, usize)> {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_413_counts_equal_a_recursive_reference_search() {
+fn trace_tp_416_counts_equal_a_recursive_reference_search() {
     let mut seeds = Seeds(COUNT_SEED);
     let (mut hits, mut skips) = (0, 0);
     for (case, (build, count, rays)) in corpus().into_iter().enumerate() {
@@ -382,7 +382,7 @@ fn corrupt(scene: &mut Scene, seeds: &mut Seeds) {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_414_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees() {
+fn trace_tp_417_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees() {
     let mut seeds = Seeds(COUNT_SEED ^ 1);
     let mut scenes = Vec::new();
     for (build, count, _) in corpus() {
