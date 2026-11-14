@@ -50,7 +50,8 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - for the [smooth normal](#smooth-normal) (`bunny-smooth-normal/1`):
   `smooth_normal` and `SMOOTH_NORMAL_ID`, with `bunny_query::BarycentricNumerators`;
 - for [smooth shading](#smooth-shading) (`bunny-smooth-shading/1`):
-  `SmoothHit` (`new`, `surface_hit`, `frame`, `light_sample`) and
+  `SmoothHit` (`new`, `surface_hit`, `frame`, `light_sample`,
+  `is_above_surface`, `bounce`), `SmoothBounce` (`Ray`, `BelowSurface`) and
   `SMOOTH_SHADING_ID`.
 
 Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
@@ -541,8 +542,7 @@ decision uses, the loop over pixels and samples, and the pixel value
 textures, reflection and refraction are not defined here. Per-vertex normals
 for a mesh are ([Vertex Normals](#vertex-normals)), and so is their
 interpolation at a hit ([Smooth Normal](#smooth-normal)) and a hit shaded with
-it ([Smooth Shading](#smooth-shading)); a bounce direction around the shading
-normal is not yet.
+it ([Smooth Shading](#smooth-shading)), including its bounce.
 
 ### Shading Identity
 
@@ -774,12 +774,39 @@ the geometric one and the radiance is
 whose cosine is clamped at zero: a light above the surface but behind the
 shading normal keeps its shadow ray and contributes nothing.
 
-**Estimator.** Against `bunny-diffuse-shading/1` the direct term changes only
-in its cosine, which uses the shading normal; visibility, the start point and
-the shadow ray do not change. A bounce direction around the shading frame,
-and what happens to one that points at or below the geometric surface, are not
-defined yet.
+**The bounce.** `bounce(sample)` takes the cosine-weighted direction `d` of the
+shading frame for the sampler point (`ShadingFrame::cosine_direction`, so
+`None` for a sample outside the unit square). When `is_above_surface(d)`, that
+is `d . N > 0` exact (each product below `2^115`), it returns
+`SmoothBounce::Ray`, the ray from the surface hit's start point along `d`, to
+be queried with a minimum distance of zero as before. Otherwise it returns
+`SmoothBounce::BelowSurface`: no ray is traced and the bounce contributes
+zero. A direction along the plane (`d . N = 0`) is below. The reason is the
+start-point rule: the start point is only one or two raw units above the
+plane, so a ray along or under it would hit its own triangle or a neighbour at
+once, a self-shadowing artifact rather than light.
 
+**Estimator.** Against `bunny-diffuse-shading/1`, in its
+[order of operations](#order-of-operations), three things change and nothing
+else does:
+
+- the direct term's cosine uses the shading normal (visibility, the start point
+  and the shadow ray do not change);
+- the bounce direction is sampled around the shading normal;
+- a bounce at or below the geometric surface contributes `B = 0` instead of the
+  sky's or a second hit's radiance, and no ray is traced for it.
+
+The cosine-weighted sampling still cancels the cosine against its density, so
+an accepted bounce has weight `albedo`, as before. Rejection loses energy, on
+purpose: where the shading normal tilts away from the geometric one, the part
+of its hemisphere below the surface is dark, so grazing and strongly tilted
+shading normals reflect less of the bounce light than a flat shading normal
+would: with a shading normal 53 degrees from the geometric one, 49 of a 16 by
+16 grid of sampler points are rejected in the test plan's case, and none with
+the shading normal along the geometric one. That is the documented,
+deterministic choice of this identity.
+
+### Orthonormal Frame
 ### Orthonormal Frame
 
 `ShadingFrame::new(normal)` builds the tangent and bitangent of Duff,

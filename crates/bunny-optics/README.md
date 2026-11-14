@@ -68,7 +68,8 @@ every buffer.
 * `SmoothHit` (`bunny-smooth-shading/1`): a surface hit shaded with that
   normal, turned to the arrival side by the exact plane (or the geometric frame
   when it lies along the surface or is missing); its light term uses the
-  shading cosine and the geometric shadow test.
+  shading cosine and the geometric shadow test; `bounce` rejects a direction
+  at or below the exact geometric plane (`SmoothBounce::BelowSurface`).
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
