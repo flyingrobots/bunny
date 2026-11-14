@@ -41,6 +41,8 @@ off, which is how a consumer without crates.io dependencies uses these readers.
 | APLY-REQ-011 | Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds. | `README.md#the-profile` |
 | APLY-REQ-012 | With default features off, the normal and build dependency graphs of `bunny-codec` and `bunny-mesh` hold only Bunny path crates, and every `bunny-codec` reader and its tests still build and pass. | `README.md#dependencies-and-features` |
 | APLY-REQ-013 | With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature. | `README.md#dependencies-and-features` |
+| APLY-REQ-016 | The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is `UnsupportedProperty`. | `README.md#the-conversion-rule` |
+| APLY-REQ-017 | The chapter's statements match the code at three points: a face element before the vertex element or before `x`, `y`, `z` are declared is `MissingVertexElement` at the `element face` line; a face count that is not digits is `InvalidIndex` and a run of digits other than 3 is `NonTriangularFace`, with `03` accepted; and the `end_header` line is where a missing coordinate is reported when no face element follows. | `README.md#faces` |
 
 ```toml
 [[requirement]]
@@ -107,6 +109,16 @@ status = "active"
 id = "APLY-REQ-013"
 summary = "With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature."
 status = "active"
+
+[[requirement]]
+id = "APLY-REQ-016"
+summary = "The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is UnsupportedProperty."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-017"
+summary = "The chapter's statements match the code at three points: a face element before the vertex element or before x, y, z are declared is MissingVertexElement at the element face line; a face count that is not digits is InvalidIndex and a run of digits other than 3 is NonTriangularFace, with 03 accepted; and the end_header line is where a missing coordinate is reported when no face element follows."
+status = "active"
 ```
 
 ## Test Cases
@@ -148,6 +160,11 @@ status = "active"
 | APLY-TP-052 | Dependencies, negative | APLY-REQ-012 | A seeded `cargo tree` listing with a crates.io crate, a deduplicated crates.io crate and a git crate among path crates reports exactly those three. | `xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported` |
 | APLY-TP-053 | Dependencies, look-alikes | APLY-REQ-012 | A listing of path crates only, with deduplication markers and a Windows path, reports nothing. | `xtask/src/feature_configs.rs::tests::path_crates_are_accepted` |
 | APLY-TP-054 | Public items | APLY-REQ-013 | The rustdoc item lists of both crates at `origin/main` and at the change are identical with default features; without them only `compute_mesh_hash` is gone. | [Feature Configurations](#feature-configurations) |
+| APLY-TP-061 | Magnitude shortcuts | APLY-REQ-016 | 32-digit values of at least 1e10 (both signs, with an exponent) are `Overflow`; just below 1e10 the value is `TooLong`; 32-digit values below 1e-10 are zero and one place higher are `TooLong`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_061_the_magnitude_shortcuts_decide_before_the_digit_count` |
+| APLY-TP-062 | Skipped property types | APLY-REQ-016 | Four undeclared or list-typed skipped properties are `UnsupportedProperty` at their line; each of the sixteen scalar types is accepted with a non-numeric column. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_062_a_skipped_vertex_property_needs_a_scalar_type` |
+| APLY-TP-063 | Missing coordinate line | APLY-REQ-017 | A missing `x` or `z` before the face element is `MissingVertexElement` at the `element face` line; with no face element, and with no vertex element, at the `end_header` line. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up` |
+| APLY-TP-064 | Face count kinds | APLY-REQ-017 | Seven counts that are not digits are `InvalidIndex`, six runs of digits other than 3 (one of 26 digits) are `NonTriangularFace`, and `3`, `03`, `0003` are accepted. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index` |
+| APLY-TP-065 | Face before vertex | APLY-REQ-017 | A face element before the vertex element is `MissingVertexElement` at its line; a repeated vertex element is `UnsupportedElement`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element` |
 
 ```toml
 [[case]]
@@ -464,6 +481,51 @@ artifact = "docs/topics/ascii-ply/test-plan.md#feature-configurations"
 oracle = "Identical rustdoc item lists with default features; only `compute_mesh_hash` absent without them."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "APLY-TP-061"
+requirements = ["APLY-REQ-016"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_061_the_magnitude_shortcuts_decide_before_the_digit_count"
+oracle = "Exact errors and zero on both sides of each magnitude shortcut, with 32-digit values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-062"
+requirements = ["APLY-REQ-016"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_062_a_skipped_vertex_property_needs_a_scalar_type"
+oracle = "UnsupportedProperty at the line for unknown and list types; all sixteen scalar types accepted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-063"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up"
+oracle = "Exact kind and line for four missing-coordinate headers."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-064"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index"
+oracle = "Exact kind for thirteen face counts, and acceptance of 03."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-065"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element"
+oracle = "Exact kind and line for a reordered header and a repeated vertex element."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Fixtures
@@ -510,6 +572,18 @@ The tie rule `quotient + (quotient & 1)` in `round_half_even_div` was mutated to
 round half up and to round half down; `APLY-TP-025` and `APLY-TP-032` fail in both
 cases and every other conversion test still passes, because random inputs almost
 never land on an exact tie. Each mutant ran under `timeout 120`.
+
+The constants and the type check behind APLY-TP-061 and APLY-TP-062 were mutated, each run under
+`timeout 120` with the sources touched before the rebuild, against the older conversion and reader
+tests and against the new file:
+
+| Mutant | Older tests failing | New tests failing |
+| --- | --- | --- |
+| `CERTAIN_OVERFLOW_MAGNITUDE` 11 to 12 | 0 | APLY-TP-061 |
+| `CERTAIN_OVERFLOW_MAGNITUDE` 11 to 10 | 5 | APLY-TP-061 |
+| `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -11 | 2 | APLY-TP-061 |
+| `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -9 | 8 | APLY-TP-061 |
+| the `SCALAR_TYPES` check disabled | 0 | APLY-TP-062 |
 
 ## Open Gaps
 
