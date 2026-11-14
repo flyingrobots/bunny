@@ -235,7 +235,10 @@ sampler point per hit: `shade/surface_new` (the per-triangle `TriangleSurface`),
 `shade/bounce_direction` (a cosine-weighted direction from a held frame) and
 `shade/hit_shading` (the whole per-hit step: start point, light sample and shadow ray, bounce
 ray, reflection). Traversal is not included; the readings are in the optics chapter's
-[Accuracy And Cost](../optics/README.md#accuracy-and-cost).
+[Accuracy And Cost](../optics/README.md#accuracy-and-cost). The `normals` group
+(`crates/bunny-perf/src/normals.rs`) adds `shade/vertex_normals`: one whole `VertexNormals::new`
+of a seeded 32 by 32 height-field grid (1 024 vertices, 1 922 triangles) per batch, so a call is
+one vertex (entry 12).
 
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
@@ -1375,6 +1378,44 @@ one codegen unit left; the best-p50 column swings between runs, which is the
 grows slightly where they are called, and the speed they give is still the compiler's
 choice (`#[inline]` is a hint). A later crate change can still move other paths; this
 only removes the pixel path's dependence on the split.
+
+### 12. Area-weighted vertex normals (new API)
+
+**Where:** `crates/bunny-optics/src/shading/vertex_normals.rs` (part of flyingrobots/bunny#289).
+
+**Technique.** Each face's unnormalized cross product, exact in `i128`, is already weighted by
+twice its area, so a vertex's normal is one exact sum of its faces' cross products and one
+normalization: no square root or division per face. See the
+[optics chapter](../optics/README.md#vertex-normals).
+
+**Fidelity.** A new API with its own identity (`bunny-vertex-normals/1`): a stated bound (each
+component within one raw unit of the exact unit vector), an exact big-integer oracle and golden
+vectors. No existing function changed.
+
+**Measured.** Apple M5 Pro, `aarch64-linux`, `rust-dev:1.96.0` container, `--exclusive`, base
+`3c395f9950ac` (`origin/main`), two runs of
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter shade/
+```
+
+nanoseconds per call, change in p50 / best p50:
+
+| Case | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| `shade/vertex_normals` (per vertex, new) | 68.08 p50, 67.22 best | 68.48 p50, 65.14 best |
+| `shade/surface_new` (control) | -0.5 % / -1.4 % | +0.6 % / -0.7 % |
+| `shade/hit_shading` (control) | +0.0 % / +0.2 % | -0.1 % / +0.0 % |
+| `shade/bounce_direction` (control) | +0.1 % / -0.9 % | +0.1 % / -4.9 % |
+
+The existing `shade/` cases are unchanged code and moved within the noise band in both runs.
+A vertex costs about 68 ns, less than one `TriangleSurface::new` (85 ns), which normalizes a face
+and builds its frame; a mesh has about half as many vertices as triangles. The cost per vertex
+includes its share of the cross products and of two allocations.
+
+**Trade-offs.** Area weighting lets large faces dominate a vertex, which is the intended
+weighting here; angle weighting would need an angle per corner, which has no exact integer form.
+The sums take 48 bytes per vertex while the build runs.
 
 ## Profile of `closest_hit` on the benchmark scene
 

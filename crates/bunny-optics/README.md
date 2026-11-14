@@ -56,6 +56,11 @@ every buffer.
   `ShadingFrame::try_cosine_direction`, called after a `None`, say why an
   input was refused, with a `SecondaryRayError` that carries the values it
   saw.
+* `VertexNormals` (`bunny-vertex-normals/1`): one area-weighted unit normal
+  per vertex of an indexed triangle mesh, from the exact sum of its faces'
+  cross products, within one raw unit of the exact unit vector and independent
+  of face order; `None` for a vertex with no face or a zero sum, and a typed
+  `VertexNormalError` for a mesh outside the trace domain.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.

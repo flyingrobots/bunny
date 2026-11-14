@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics` computes area-weighted vertex normals for an indexed triangle
+  mesh: `VertexNormals::new(&positions, &triangles)` (`bunny-vertex-normals/1`,
+  `VERTEX_NORMALS_ID`) sums the exact `i128` cross products of each vertex's
+  faces and normalizes once, as `TriangleSurface::new` does, so each component is
+  within one raw unit of the exact unit vector and the result does not depend on
+  face order, corner order or vertex labels. A vertex with no face or a zero sum
+  has `None`; positions outside the trace domain, an out-of-range index or more
+  than `MAX_NORMAL_TRIANGLES` (`2^32`) triangles return a `VertexNormalError`.
+  No existing output changes. The `bunny-perf` group `normals` times a build
+  (`shade/vertex_normals`). Part of flyingrobots/bunny#289; see
+  `docs/topics/optics/README.md#vertex-normals`.
+
 * `bunny-codec` reads ASCII PLY triangle meshes: `parse_ascii_ply` accepts
   `format ascii 1.0` with `x`, `y`, `z` and any other scalar vertex properties
   (skipped by their declaration) and `list uchar int vertex_indices` faces, and

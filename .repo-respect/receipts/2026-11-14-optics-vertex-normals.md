@@ -56,6 +56,12 @@ the correctly rounded unit vector).
 Mutations (test plan, Vertex-Normal Mutation Checks): seven, each with `timeout 120`; each fails
 at least one case; the restored source passes.
 cargo fmt, clippy -D warnings (workspace, all targets) and the bunny-optics tests.
+Timing: `cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+--filter shade/` through devrun with --exclusive, two runs (Apple M5 Pro, rust-dev:1.96.0, base
+3c395f9950ac). shade/vertex_normals (new) 68.08 and 68.48 ns p50 per vertex; the unchanged
+shade/ cases moved -0.5 % to +0.6 % in median p50. Recorded as ledger entry 12 in the
+performance chapter.
+code-dojo --all at the final commit (see the PR).
 
 Known risks:
 The triangle-count refusal (`TooManyTriangles`, more than 2^32 triangles) cannot be reached

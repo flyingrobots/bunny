@@ -43,7 +43,10 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `reflected_radiance`), `LightSample` (`shadow_ray`, `radiance`), `SkyLight`
   (`new`, `radiance`), `Albedo` (`new`, `channels`, `reflect`),
   `ShadingError`, `SecondaryRayError`, `SHADING_ID`, `PI`, `FRAC_1_PI`,
-  `MAX_LIGHT_RAW`, `SHADOW_T_MAX` and `MIN_BOUNCE_COSINE_RAW`.
+  `MAX_LIGHT_RAW`, `SHADOW_T_MAX` and `MIN_BOUNCE_COSINE_RAW`;
+- for [vertex normals](#vertex-normals) (`bunny-vertex-normals/1`):
+  `VertexNormals` (`new`, `normals`), `VertexNormalError`,
+  `MAX_NORMAL_TRIANGLES` and `VERTEX_NORMALS_ID`.
 
 Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
 attenuation and materials other than diffuse (the rest of #160) are not part
@@ -530,7 +533,9 @@ loading and vertex transforms, the acceleration structure and the
 closest-hit and any-hit queries (`bunny-broadphase`), which sampler pair each
 decision uses, the loop over pixels and samples, and the pixel value
 ([Pixel Values](#pixel-values)). Materials other than diffuse, other lights,
-textures, smooth shading, reflection and refraction are not defined here.
+textures, reflection and refraction are not defined here. Per-vertex normals
+for a mesh are ([Vertex Normals](#vertex-normals)); interpolating them across a
+triangle into a shading normal is not yet.
 
 ### Shading Identity
 
@@ -573,7 +578,85 @@ roots and three divisions, and the frame three more divisions, so the
 renderer builds a `TriangleSurface` per triangle, not per hit (84 ns each, see
 [Accuracy And Cost](#accuracy-and-cost)); a hit then needs no square root or
 division for its normal. The geometric normal of a two-sided triangle is used
-for shading; vertex normals are not part of version 1.
+for shading; [vertex normals](#vertex-normals) are a separate identity that
+no step of version 1 uses.
+
+### Vertex Normals
+
+`VertexNormals::new(&positions, &triangles)` gives each vertex of an indexed
+triangle mesh one unit normal from the faces around it: the first half of
+smooth shading. The mesh is a slice of `FixedVec3` positions and a slice of
+`[u32; 3]` triangles, each three indices into the positions, as Lumen's PLY
+loader and `bunny-mesh::Triangle32` hold them. The rule has its own identity,
+`bunny-vertex-normals/1` (`VERTEX_NORMALS_ID`); it is not part of
+`bunny-diffuse-shading/1`, whose steps all use the geometric normal.
+
+**Area weighting.** Each triangle `[a, b, c]` contributes its exact `i128`
+cross product `N = (p[b] - p[a]) x (p[c] - p[a])` to each of its three
+vertices, and a vertex's normal is the unit vector along the sum `S` of its
+faces' `N`. `|N|` is twice the face's area, so the sum is already
+area-weighted: no face needs a square root or a division, and listing a
+face's corners from another one (a cyclic rotation) gives the same `N`. The
+alternatives cost more and are not exact: equal weights need each face
+normalized first (a square root per face), and angle weights need each
+corner's angle (an arccosine or a two-argument arctangent). Area weighting is
+the rule whose sum is exact in integers, and it lets a large face count for
+more than a sliver at the same vertex.
+
+**One rounding.** `S` is normalized exactly as `TriangleSurface::new`
+normalizes `N`: scaled by the power of two that puts its largest component
+magnitude in `[2^61, 2^62)` (exact when it scales up; an arithmetic shift,
+floored, when it scales down), then `FixedUnitVec3::new` (the floor of the
+integer square root of the sum of squares, and each component divided by it,
+rounded to nearest, ties to even). Each component is within one raw unit of
+the exact `S / |S|`. On a flat mesh every vertex therefore gets its plane's
+unit normal to within that unit, the same bound as each face's
+`TriangleSurface`. The flat meshes of the test plan (in an axis plane, and in
+a plane with normal `(0, 3, 4) / 5`, where every prescale is exact) give the
+same bits at every vertex, whatever its number of faces.
+
+**Domain and widths.** Every position must be inside the trace domain (each
+coordinate magnitude below `TRACE_COORD_LIMIT_RAW`, `2^40` raw), the domain of
+the triangles a renderer traces. Then each edge component is below `2^41`,
+each component of `N` below `2 * (2^41)^2 = 2^83`, and with at most
+`MAX_NORMAL_TRIANGLES = 2^32` triangles a vertex's sum stays below `2^115`,
+well inside `i128`. After the prescale each component is below `2^62`, so the
+sum of squares (below `3 * 2^124`) fits `u128` and each division's numerator
+(below `2^94`) fits `i128`.
+
+**Order.** The sums are exact integer additions, which are commutative and
+associative when nothing overflows, so `S` is a function of the set of faces
+at the vertex: the order of the triangles, which corner each lists first, and
+how a caller might split the work cannot change a bit. Relabelling the
+vertices relabels the normals. Reversing a face's winding negates its `N`, so
+a mesh must be wound consistently: faces wound against their neighbours
+cancel at the vertices they share.
+
+**No normal.** A vertex that no triangle lists, or whose `S` is exactly zero
+(only zero-area faces, or faces that cancel, such as one triangle listed with
+both windings), has `None`, not a substitute vector; the caller decides what
+to shade it with, for example the geometric normal.
+
+**No welding.** Vertices are identified by index, not position. Two vertices
+at the same position (scanned meshes such as the Stanford models list some
+positions more than once) each get the normal of only the faces that list
+them, so a seam can show where a surface was split. Welding is not provided.
+
+| Input | Accepted | Refusal (`VertexNormalError`, checked in this order) |
+| --- | --- | --- |
+| Triangle count | At most `MAX_NORMAL_TRIANGLES` (`2^32`) | `TooManyTriangles { count }` |
+| Position | Each coordinate magnitude below `2^40` raw | `PositionOutsideTraceDomain { vertex, position }`, the first such vertex |
+| Index | Below the number of positions | `IndexOutOfRange { triangle, index, vertex_count }`, the first such triangle and its first such corner |
+
+There is one form, returning `Result`, because a build runs once per mesh and
+its refusals need their reason; there is no `Option` fast path.
+`VertexNormalError` is `#[non_exhaustive]`.
+
+**Cost.** One cross product (six `i128` multiplications) and nine `i128`
+additions per triangle, one normalization (two integer square roots and
+three divisions) per vertex, and two allocations: the sums (48 bytes per
+vertex) and the normals. The measured cost per vertex is under
+[Accuracy And Cost](#accuracy-and-cost).
 
 ### Orthonormal Frame
 
@@ -851,6 +934,7 @@ shadow, and a camera ray that sees the sky).
 | Light irradiance, sky radiance | Each channel in `0..=MAX_LIGHT_RAW` | `NegativeRadiance` when one is negative, else `RadianceTooLarge` |
 | Albedo | Each channel in `0..=1.0` | `ShadingError::AlbedoOutOfRange` |
 | Triangle | Nonzero area | `TriangleSurface::new` returns `None` |
+| Mesh for vertex normals | See [Vertex Normals](#vertex-normals) | `VertexNormalError` |
 | Sampler point | Each coordinate in `[0, 1)` | `cosine_direction` and `bounce_ray` return `None`; `SampleOutsideUnitInterval` |
 | Hit point | `point_at(ray, hit.distance)` representable | `SurfaceHit::new` returns `None`; `HitPointUnrepresentable` |
 | Hit point | Each coordinate below `TRACE_COORD_LIMIT_RAW + 2` raw units in magnitude | `None`; `HitPointOutsideTraceDomain` |
@@ -906,6 +990,7 @@ with components in `-1.0..=1.0`. `SecondaryRayError` is `#[non_exhaustive]`.
 | Start point | At most 2 raw-unit steps along one axis from `point_at` | 1 step |
 | Bounce direction | Within 4 raw units of the ideal map; length within 8; `d . n >= 2^15` | 2.1; 3 |
 | Light cosine | Within 3 raw units, clamped to `0..=1.0` | 1.2 |
+| Vertex normal | Each component within 1 raw unit of the exact unit vector along the face sum | — |
 
 Timings on an Apple M5 Pro in the `rust-dev:1.96.0` container, run alone: the
 `shade/` cases are the p50 across 11 interleaved rounds of `cargo run --locked
@@ -919,6 +1004,7 @@ scale. A reading, not a speed claim:
 | `shade/surface_new` (per triangle, once) | 84.1 |
 | `shade/bounce_direction` | 26.9 |
 | `shade/hit_shading` (start point, light sample and shadow ray, bounce ray, reflection) | 73.7 |
+| `shade/vertex_normals` (per vertex of a whole-mesh build; base `3c395f9`, where it is new) | 68.1 |
 | `sample/sampler_point` | 19.7 |
 | `trace/closest_hit` (one camera ray through the benchmark scene) | 226.8 |
 
