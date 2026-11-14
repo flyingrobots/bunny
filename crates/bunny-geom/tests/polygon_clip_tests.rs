@@ -155,16 +155,27 @@ fn pc_tp_017_shared_edge_cut_ignores_traversal_direction() {
     let plane = plane_x1();
     // Triangles over the edge a-b, traversed in opposite directions.
     let (c, d) = (pt(3 * UNIT, UNIT, 9), pt(5 * UNIT, 2 * UNIT, 11));
-    let mut found_asymmetry = false;
     for k in 0..400_i64 {
         let (a, b) = (pt(k, 3 * k, 5 * k), pt(3 * UNIT + 7 * k + 5, 11 * k, 3 * UNIT - k));
         let canonical = cut_of(plane, a, b);
         assert!(clip(plane, &[a, b, c]).contains(&canonical), "crack at k = {k}");
         assert!(clip(plane, &[b, a, d]).contains(&canonical), "crack at k = {k}");
-        found_asymmetry |= cut_of(plane, b, a) != canonical;
     }
-    // clip_segment itself is not symmetric, which is why polygons canonicalize.
-    assert!(found_asymmetry);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn pc_tp_024_rounding_tie_makes_clip_segment_asymmetric_but_polygons_agree() {
+    // Plane z = 0; da = -1 raw, db = 1 raw, so t = 1/2 exactly and the x offset
+    // 1 * t = 0.5 raw is a tie. Ties-to-even gives 0 from a, but -0.5 gives 0 from b.
+    let plane = FixedPlane3::new(pt(0, 0, UNIT), raw(0));
+    let (a, b) = (pt(0, 0, -1), pt(1, 0, 1));
+    assert_eq!(cut_of(plane, a, b).x, raw(0));
+    assert_eq!(cut_of(plane, b, a).x, raw(1));
+    // Polygons traversing the edge either way get the canonical cut (from a).
+    let (c, d) = (pt(0, UNIT, UNIT), pt(1, UNIT, UNIT));
+    assert!(clip(plane, &[a, b, c]).contains(&cut_of(plane, a, b)));
+    assert!(clip(plane, &[b, a, d]).contains(&cut_of(plane, a, b)));
+    assert!(!clip(plane, &[b, a, d]).contains(&cut_of(plane, b, a)));
 }
 
 #[wasm_bindgen_test(unsupported = test)]

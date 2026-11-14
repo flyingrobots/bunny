@@ -22,7 +22,7 @@ evidence exist.
 | [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, affine point/vector transforms, determinants, inverses, and transform-boundary reservations. |
 | [`topics/performance/`](topics/performance/) | The fidelity rule for optimizations, the `bunny-perf` harness, `cargo xtask perf` before/after comparisons, CI regression gating, and the ledger of landed speedups. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | The ray-tracing kernels: trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, and rounding of distances and barycentrics. |
-| [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, and segment clipping with its rounding contract. |
+| [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, segment and convex polygon clipping with its rounding contract. |
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |
 | [`NUMERIC_CONSTITUTION.md`](NUMERIC_CONSTITUTION.md) | Q32.32 arithmetic law, construction policy, rounding, overflow, and numeric golden-vector expectations. |
 | [`MATH_GEOMETRY_CAPABILITY_MAP.md`](MATH_GEOMETRY_CAPABILITY_MAP.md) | Bunny's durable math/geometry ownership boundary, non-goals, missing surface, and build order. |

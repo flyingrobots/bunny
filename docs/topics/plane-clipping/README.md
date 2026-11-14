@@ -123,8 +123,11 @@ unspecified but memory-safe and may report `OutputTooSmall`.
 ### Cut points and shared edges
 
 `crossing` is not symmetric in its endpoints: `a + (b - a) * t` with
-`t = da / (da - db)` rounds differently from `b + (a - b) * t'`, and
+`t = da / (da - db)` and `b + (a - b) * t'` can round differently, and
 `clip_segment(a, b)` and `clip_segment(b, a)` can return different cut points.
+The difference needs a rounding tie: for the plane `z = 0`, `a = (0, 0, -1)`
+and `b = (1, 0, 1)` in raw units give `t = 1/2` and an x offset of half a raw
+unit, so ties-to-even returns x = 0 from `a` and x = 1 from `b`.
 Two adjacent polygons traverse a shared edge in opposite directions, so a cut
 computed in traversal direction would open a crack between them. The polygon
 path therefore computes every cut in the canonical direction of the edge:

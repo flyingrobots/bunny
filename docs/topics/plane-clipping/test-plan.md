@@ -145,13 +145,14 @@ intersection is representable.
 | PC-TP-014 | Coplanar polygon | PC-REQ-009 | Polygon inside the plane is returned unchanged. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_014_coplanar_polygon_is_unchanged` |
 | PC-TP-015 | Degenerate inputs | PC-REQ-009, PC-REQ-010 | Fewer than three vertices is an error; repeated input vertices are preserved; two on-plane vertices are Outside. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_015_degenerate_inputs_and_repeated_vertices` |
 | PC-TP-016 | Buffer bounds | PC-REQ-011 | A corner cut gives n + 1 vertices; n + 1 slots fit, n slots give OutputTooSmall; Outside needs none; tail untouched. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_016_output_buffer_bounds` |
-| PC-TP-017 | Shared edge, both directions | PC-REQ-012 | Two triangles traversing an edge in opposite directions contain the same canonical cut for 400 edges; clip_segment is shown asymmetric. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_017_shared_edge_cut_ignores_traversal_direction` |
+| PC-TP-017 | Shared edge, both directions | PC-REQ-012 | Two triangles traversing an edge in opposite directions contain the same canonical cut for 400 edges. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_017_shared_edge_cut_ignores_traversal_direction` |
 | PC-TP-018 | Canonical equals segment clip | PC-REQ-012 | The polygon cut equals clip_segment of the canonical segment for three vertex rotations. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_018_cut_equals_segment_clip_in_canonical_direction` |
 | PC-TP-019 | Golden, inexact | PC-REQ-005, PC-REQ-012 | t = 1/3 gives cut raw 4294967295 in a triangle with exact golden output list. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_019_golden_inexact_cut` |
 | PC-TP-020 | Winding, clockwise | PC-REQ-008 | Clockwise square stays clockwise with exact output. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_020_winding_survives_both_orientations` |
 | PC-TP-021 | Overflow | PC-REQ-013 | Distance and interpolation overflow return Overflow. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_021_overflow_is_an_error` |
 | PC-TP-022 | Seeded sweep | PC-REQ-008, PC-REQ-009, PC-REQ-011, PC-REQ-012 | 2000 convex polygons against an independent Sutherland-Hodgman and exact i128 cut bound; at most n + 1 vertices. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_022_seeded_sweep_matches_reference` |
 | PC-TP-023 | Sweep, reversed polygon | PC-REQ-012 | A polygon and its reverse clip to the same point set. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_023_sweep_reversed_polygon_gives_the_same_points` |
+| PC-TP-024 | Rounding tie asymmetry | PC-REQ-012 | Constructed tie: clip_segment differs by direction, polygons both emit the canonical cut. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_024_rounding_tie_makes_clip_segment_asymmetric_but_polygons_agree` |
 
 ```toml
 [[case]]
@@ -303,7 +304,7 @@ id = "PC-TP-017"
 requirements = ["PC-REQ-012"]
 evidence = "test"
 test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_017_shared_edge_cut_ignores_traversal_direction"
-oracle = "Two triangles traversing an edge in opposite directions contain the same canonical cut for 400 edges; clip_segment is shown asymmetric."
+oracle = "Two triangles traversing an edge in opposite directions contain the same canonical cut for 400 edges."
 tier = "fast"
 status = "implemented"
 
@@ -358,6 +359,15 @@ requirements = ["PC-REQ-012"]
 evidence = "test"
 test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_023_sweep_reversed_polygon_gives_the_same_points"
 oracle = "A polygon and its reverse clip to the same point set."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-024"
+requirements = ["PC-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_024_rounding_tie_makes_clip_segment_asymmetric_but_polygons_agree"
+oracle = "Constructed tie: clip_segment differs by direction, polygons both emit the canonical cut."
 tier = "fast"
 status = "implemented"
 ```
