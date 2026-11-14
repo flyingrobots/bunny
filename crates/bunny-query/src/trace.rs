@@ -107,9 +107,6 @@ impl TraceRay {
         t_max: FixedQ32_32,
     ) -> Option<TriangleHit> {
         let Crossing { u, v, t, det, front_face } = self.crossing(triangle)?;
-        if certainly_beyond(t, det, t_max) {
-            return None;
-        }
         let distance = FixedQ32_32::from_raw(shifted_quotient(t, det)?);
         (t_min <= distance && distance <= t_max).then_some(TriangleHit {
             distance,
@@ -310,26 +307,6 @@ const fn cross(lhs: Wide3, rhs: Wide3) -> Wide3 {
 const fn dot(lhs: Wide3, rhs: Wide3) -> i128 {
     let ([a0, a1, a2], [b0, b1, b2]) = (lhs, rhs);
     a0 * b0 + a1 * b1 + a2 * b2
-}
-
-/// Whether `floor(t * 2^32 / det) > t_max` is certain without dividing, for `det > 0`.
-///
-/// With `c = ceil(det / 2^32)`, `det <= c * 2^32`. If `t >= (t_max + 1) * c` and
-/// `t_max >= 0`, then `t * 2^32 >= (t_max + 1) * c * 2^32 >= (t_max + 1) * det`, so the
-/// distance is at least `t_max + 1`. If `t_max < 0`, a crossing is a miss either way: a
-/// negative `t` is behind the origin and a non-negative `t` gives a distance of at least
-/// zero. A product that overflows `i128` exceeds every `t`, so it proves nothing and the
-/// caller divides. `false` means only "not provable here", never "within the limit".
-#[inline]
-fn certainly_beyond(t: i128, det: i128, t_max: FixedQ32_32) -> bool {
-    let next = i128::from(t_max.raw()) + 1;
-    next.checked_mul(ceil_shift(det)).is_some_and(|bound| t >= bound)
-}
-
-/// `ceil(value / 2^32)` for a non-negative value.
-#[inline]
-const fn ceil_shift(value: i128) -> i128 {
-    (value + (1 << FixedQ32_32::FRACTIONAL_BITS) - 1) >> FixedQ32_32::FRACTIONAL_BITS
 }
 
 /// `floor(numerator * 2^32 / denominator)` for a positive denominator, or `None` when the
