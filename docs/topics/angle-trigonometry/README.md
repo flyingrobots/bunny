@@ -54,10 +54,10 @@ There are no conversions out of `FixedAngle` yet.
 `sin`, `cos` and `sin_cos` return Q32.32 values in `[-1, 1]`.
 
 **Error bound: at most one raw Q32.32 unit (2⁻³² ≈ 2.3 × 10⁻¹⁰) from the exact value of the
-angle.** The largest error measured over 4 196 611 angles (four million seeded angles plus
-a sweep of segment boundaries and their neighbours) was 0.5001 raw units: the 0.5 is the
-final rounding to Q32.32, and interpolation adds about 0.0001. The bound is checked against
-`f64` trigonometry, whose own error is about a million times smaller than one raw unit.
+angle.** Final rounding to Q32.32 contributes up to 0.5 raw units and interpolation
+a small fraction of a unit more. The bound is checked in tests (see the test plan) against
+`f64` trigonometry, whose own error is about a million times smaller than one raw unit, and
+by a float-free `sin^2 + cos^2` identity check.
 
 Exact by construction:
 
@@ -91,10 +91,11 @@ time, and there is no generator script or checked-in table to keep in sync.
 | 62-bit table values | Interpolation error stays far below the output's resolution. | 64-bit entries rather than 32-bit. |
 | Binary angles | Exact wraparound and quadrant boundaries; reduction is free. | Radians and degrees round once at the boundary; callers must convert explicitly. |
 
-Measured cost on an Apple M5 Pro (best p50 of 11 rounds): `sin_cos` 10.2 ns per call,
-`from_radians` 0.9 ns, and `f64::sin_cos` on the same angles 2.8 ns. Bit-exact integer
-trigonometry therefore costs about 3.6 times the platform's float routine, which is not
-deterministic across targets. See the [performance ledger](../performance/README.md#optimization-ledger).
+Measured cost (Apple M5 Pro, inside the rust-dev container, best p50 of 11 rounds, two
+runs): `sin_cos` about 10.4 to 11.1 ns per call, `from_radians` about 0.9 ns, and
+`f64::sin_cos` on the same angles in the same harness about 4.2 ns, a float routine that is
+not deterministic across targets. Method, command and caveats are in the
+[performance ledger](../performance/README.md#optimization-ledger).
 
 ## Non-Goals
 

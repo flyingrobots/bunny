@@ -39,18 +39,25 @@ Generated artifacts:
 None. The sine table is computed at compile time by a const fn.
 
 Checks run:
-cargo test --locked -p bunny-num --test fixed_angle_tests (7 passed)
+cargo test --locked -p bunny-num --test fixed_angle_tests (8 passed, in the container)
+cargo test --locked --workspace (container)
+Mutation: h11 = t3 + t2 in hermite fails at_tp_001, at_tp_004 and at_tp_004b.
 cargo run --locked -p xtask -- topic-docs
 cargo run --locked -p xtask -- code-dojo --all
-Local error sweep: max 0.5001 raw units over 4 196 611 angles against f64 sin/cos.
+Earlier local error sweep (max 0.5001 raw units over 4 196 611 angles) had no retained
+tool; the claim is withdrawn from the docs until reproduced.
 Golden values for 30 degrees, 60 degrees, 1 radian and mid-segment angles checked against
 60-digit decimal arithmetic.
 Harness timing (merged perf/bunny-perf-harness; angle group added to crates/bunny-perf):
 cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter angle/
-best p50 sin_cos 10.21 ns, from_radians 0.89 ns, f64 sin_cos reference 2.81 ns (an earlier
-scratch estimate of 6.8 ns for f64 was wrong and is not used). Ledger entry 2 and
+re-measured 2026-11-13 after merging main's black_box harness, in the container, two runs,
+base be55424fef16: sin_cos p50 11.15/11.07 ns, from_radians 0.94/0.94 ns, f64 sin_cos
+reference 4.27/4.19 ns. The earlier 10.21/0.89/2.81 ns figures are superseded. Ledger entry 2 and
 PERF-TP-011 added to docs/topics/performance/; crates/bunny-perf/Cargo.toml and
 src/cases.rs edited.
+
+Also edited after merging main: bunny-perf cases black_box whole results; probe of every
+segment added to the error test; AT-TP-008 (pythagorean identity).
 
 Known risks:
 The error bound is checked on sampled angles, not exhaustively; the Hermite error analysis

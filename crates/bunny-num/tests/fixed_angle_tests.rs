@@ -79,6 +79,11 @@ fn at_tp_004_error_is_within_one_raw_unit() {
     let mut state = ANGLE_PROPERTY_SEED ^ 0x5EED_0000_0000_0002;
     let mut angles: Vec<u64> = (0..ANGLE_PROPERTY_CASES).map(|_| next_seed(&mut state)).collect();
     angles.extend((0..=1_u64 << 12).map(|k| k << 50));
+    // Hermite error peaks inside a segment: probe every segment at a quarter, half and
+    // three quarters of its width, plus the units next to each boundary.
+    for k in 0..1_u64 << 12 {
+        angles.extend([1, 1 << 50, 1 << 51, 3 << 50, (1 << 52) - 1].map(|offset| (k << 52) + offset));
+    }
     for raw in angles {
         let (sin, cos) = FixedAngle::from_raw(raw).sin_cos();
         // Oracle: f64 trigonometry, whose error (~1e-16) is far below one raw unit (~2.3e-10).
@@ -94,6 +99,22 @@ fn at_tp_004_error_is_within_one_raw_unit() {
         for error in errors {
             assert!(error <= 1.0, "angle={raw:#018x} error={error} raw units");
         }
+    }
+}
+
+/// A float-free cross-check of the bound: `sin^2 + cos^2` stays within what two errors of at
+/// most one raw unit can explain, so a bad table entry is caught without any oracle at all.
+#[wasm_bindgen_test(unsupported = test)]
+fn at_tp_004b_pythagorean_identity_holds_within_the_bound() {
+    let mut state = ANGLE_PROPERTY_SEED ^ 0x5EED_0000_0000_0004;
+    for case in 0..ANGLE_PROPERTY_CASES {
+        let (sin, cos) = FixedAngle::from_raw(next_seed(&mut state)).sin_cos();
+        let (s, c) = (i128::from(sin.raw()), i128::from(cos.raw()));
+        let one = i128::from(ONE_RAW);
+        let drift = (s * s + c * c - one * one).abs();
+        // d(s^2) = 2 s ds with |ds| <= 1, plus the ds^2 terms.
+        let allowed = 2 * (s.abs() + c.abs()) + 2;
+        assert!(drift <= allowed, "case={case} drift={drift} allowed={allowed}");
     }
 }
 

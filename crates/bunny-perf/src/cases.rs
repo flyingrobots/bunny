@@ -222,7 +222,7 @@ fn angle_cases() -> Vec<Case> {
             angles
                 .iter()
                 .map(|&a| {
-                    let (sin, cos) = black_box(a).sin_cos();
+                    let (sin, cos) = black_box(black_box(a).sin_cos());
                     sin.raw() ^ cos.raw()
                 })
                 .fold(0, i64::wrapping_add)
@@ -230,7 +230,7 @@ fn angle_cases() -> Vec<Case> {
         case("angle/from_radians", move || {
             radians
                 .iter()
-                .map(|&r| FixedAngle::from_radians(black_box(r)).raw().cast_signed())
+                .map(|&r| black_box(FixedAngle::from_radians(black_box(r))).raw().cast_signed())
                 .fold(0, i64::wrapping_add)
         }),
         #[allow(clippy::cast_possible_truncation)]
@@ -238,7 +238,7 @@ fn angle_cases() -> Vec<Case> {
             float_angles
                 .iter()
                 .map(|&a| {
-                    let (sin, cos) = black_box(a).sin_cos();
+                    let (sin, cos) = black_box(black_box(a).sin_cos());
                     (sin * 4_294_967_296.0) as i64 ^ (cos * 4_294_967_296.0) as i64
                 })
                 .fold(0, i64::wrapping_add)

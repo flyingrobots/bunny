@@ -95,7 +95,8 @@ an independent high-precision oracle when you do.
 | AT-TP-001 | Golden vectors | AT-REQ-008, AT-REQ-002 | Exact raw `sin` and `cos` for 20 cardinal, diagonal, boundary, segment and converted angles. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_001_golden_vectors_are_bit_exact` |
 | AT-TP-002 | Exact values | AT-REQ-003 | Exact raw values at the four quarter turns. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_002_cardinal_angles_are_exact` |
 | AT-TP-003 | Symmetry | AT-REQ-004, AT-REQ-001 | Bit equality of `sin(-a)` with `-sin(a)` and `cos(-a)` with `cos(a)` over 20 000 seeded angles. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_003_negation_symmetry_is_bit_exact` |
-| AT-TP-004 | Error bound | AT-REQ-002 | At most one raw unit from `f64` sine and cosine over 20 000 seeded angles and 4 097 segment-aligned angles. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit` |
+| AT-TP-004 | Error bound | AT-REQ-002 | At most one raw unit from `f64` sine and cosine over 20 000 seeded angles, 4 097 segment-aligned angles and five probes in each of the 4 096 segments (a quarter, half and three quarters across, and the units next to each boundary). | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit` |
+| AT-TP-008 | Error bound | AT-REQ-002 | Without any oracle, `sin^2 + cos^2` stays within the drift two errors of one raw unit allow, over 20 000 seeded angles. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004b_pythagorean_identity_holds_within_the_bound` |
 | AT-TP-005 | Conversion | AT-REQ-005, AT-REQ-001 | Exact raw angles for fractional, multi-turn and negative turns, and wrapping arithmetic. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_005_turns_wrap_exactly` |
 | AT-TP-006 | Conversion | AT-REQ-006 | Exact raw angles for 0, ±90, 180, 270, 360 and 450 degrees. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_006_whole_quarter_degrees_convert_exactly` |
 | AT-TP-007 | Conversion | AT-REQ-007 | `from_radians(-x)` equals the wrapped negation of `from_radians(x)` over 20 000 seeded values. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_007_radians_round_to_the_nearest_unit_symmetrically` |
@@ -134,6 +135,15 @@ requirements = ["AT-REQ-002"]
 evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit"
 oracle = "At most one raw unit from f64 sine and cosine over seeded and segment-aligned angles."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "AT-TP-008"
+requirements = ["AT-REQ-002"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004b_pythagorean_identity_holds_within_the_bound"
+oracle = "sin^2 + cos^2 stays within the drift two errors of one raw unit allow."
 tier = "fast"
 status = "implemented"
 
