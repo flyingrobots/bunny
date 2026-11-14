@@ -1984,7 +1984,7 @@ nanoseconds per ray, median p50 / best p50:
 | 2 | 169.39 / 166.71 | 176.80 / 175.05 | +4.4 % / +5.0 % | 146.04 / 143.80 | 165.41 / 164.39 | +13.3 % / +14.3 % |
 | 3 | 166.38 / 162.52 | 176.72 / 173.18 | +6.2 % / +6.6 % | 145.26 / 141.85 | 165.73 / 164.51 | +14.1 % / +16.0 % |
 
-Counting costs about 8 to 11 ns a ray (5 to 7 %) on the closest-hit search, which makes about 20
+Counting costs about 7 to 11 ns a ray (5 to 7 %) on the closest-hit search, which makes about 20
 box tests a ray, and about 20 ns (13 to 16 %) on the any-hit search, which makes slightly fewer;
 why any-hit pays twice as much in absolute time was not investigated (not checked in the
 assembly). The counted forms are for statistics and debug views, not for rendering.
