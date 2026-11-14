@@ -80,9 +80,11 @@ may end at the end of the input without a terminator.
 
 ### Whitespace, Blank Lines And Comments
 
-- Words are separated by runs of spaces and tabs. Leading and trailing spaces and tabs
-  on any line are ignored, including on the `ply` line and the `end_header` line.
-  No other byte (form feed, vertical tab, `\r`) counts as whitespace.
+- Words are separated by runs of spaces and tabs. On every header line except the first,
+  leading and trailing spaces and tabs are ignored. The `ply` line may have trailing spaces
+  and tabs but no leading ones (` ply` is `InvalidMagic`). The `end_header` line may have
+  both. On body lines, leading and trailing spaces and tabs are ignored. No other byte
+  (form feed, vertical tab, `\r`) counts as whitespace.
 - Header: blank lines are ignored. A line whose first word is `comment` or `obj_info`
   is ignored whatever follows. Any other first word that is not `format`, `element` or
   `property` is `InvalidHeaderLine`. The header must be valid UTF-8 (`HeaderUtf8`),

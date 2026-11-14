@@ -36,6 +36,7 @@ line, whitespace and comment rules, the conversion rule, and the error contract.
 | APLY-REQ-008 | Errors are typed, carry a 1-based line number, and display it. | `README.md#errors-and-line-numbers` |
 | APLY-REQ-009 | The reader allocates nothing and never reserves memory from a declared count; the body must hold exactly the declared records. | `README.md#counts-and-allocation` |
 | APLY-REQ-010 | The binary reader is unchanged. | `README.md#relation-to-the-binary-reader` |
+| APLY-REQ-011 | Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds. | `README.md#the-profile` |
 
 ```toml
 [[requirement]]
@@ -87,6 +88,11 @@ status = "active"
 id = "APLY-REQ-010"
 summary = "The binary reader is unchanged."
 status = "active"
+
+[[requirement]]
+id = "APLY-REQ-011"
+summary = "Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds."
+status = "active"
 ```
 
 ## Test Cases
@@ -123,6 +129,7 @@ status = "active"
 | APLY-TP-032 | Exhaustive ties | APLY-REQ-002 | 2,000 consecutive exact ties against the even-neighbour rule and the oracle. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_032_every_tie_in_a_range_goes_to_even` |
 | APLY-TP-033 | Oracle check | APLY-REQ-002 | The oracle against hand-derived values. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_033_oracle_agrees_with_hand_derived_vectors` |
 | APLY-TP-040 | Allocation | APLY-REQ-009 | Zero allocation blocks for parse and iteration after warm-up, and for a huge declared count. | `crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up` |
+| APLY-TP-051 | Real asset | APLY-REQ-011 | Exact length, 1889 vertices, 3851 faces and per-axis bounds equal to the conversion of the manifest's decimal bounds, for the committed Stanford fixture. | `crates/bunny-codec/tests/ply_ascii_stanford_tests.rs::aply_tp_051_geordi_stanford_bunny_asset_reads_with_exact_bounds` |
 | APLY-TP-050 | Sibling, unchanged | APLY-REQ-010 | The existing binary reader's golden test passes unchanged. | `crates/bunny-codec/tests/ply_tests.rs::parses_binary_triangle_ply_as_borrowed_view` |
 
 ```toml
@@ -397,6 +404,15 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "APLY-TP-051"
+requirements = ["APLY-REQ-011"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_stanford_tests.rs::aply_tp_051_geordi_stanford_bunny_asset_reads_with_exact_bounds"
+oracle = "Exact byte length, declared counts, and the conversion of the manifest's decimal bounds."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "APLY-TP-050"
 requirements = ["APLY-REQ-010"]
 evidence = "test"
@@ -408,9 +424,10 @@ status = "implemented"
 
 ## Fixtures
 
-No checked-in fixtures: every input is a short text written in the test, and the
-expected raw values are derived in comments. The real Stanford bunny PLY used as
-evidence for the pull request is not copied into the repository.
+Every input but one is a short text written in the test, with expected raw values
+derived in comments. The exception is `tests/fixtures/stanford-bunny-ascii/`, Stanford's
+data byte-identical to Geordi's asset, with its provenance in that directory's README;
+it is marked `-text` in `.gitattributes` and excluded from the published package.
 
 ## Oracle
 
