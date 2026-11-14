@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tie away from zero passed every test. No library function changes
   (flyingrobots/bunny#298).
 
+* `bunny-query` tests check `TraceRay::hit_triangle` against an independent
+  signed-volume oracle in 256-bit integers (TRACE-TP-315): 40 000 generated
+  cases on and within three numerator units of every edge and vertex, with
+  domain-corner, scaled, long-direction, grazing and degenerate families, and
+  asserted minimum counts of each kind. Before it, relaxing the edge rule by one
+  numerator unit failed only the comparison with the frozen copy of the kernel.
+  TRACE-TP-005 and TRACE-TP-203 now count their three crossings. No library
+  function changes (flyingrobots/bunny#294).
+
 * `bunny-optics`'s `SmoothHit::bounce` samples the bounce around the shading
   normal and returns a `SmoothBounce`: `Ray` when the direction is strictly
   above the exact geometric plane (`SmoothHit::is_above_surface`, an exact

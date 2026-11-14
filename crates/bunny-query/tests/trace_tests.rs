@@ -11,6 +11,10 @@ use bunny_query::{
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
+#[path = "support/volume_oracle.rs"]
+#[allow(dead_code, reason = "these tests read only the oracle's hit, not its classification")]
+mod volume_oracle;
+
 const TRACE_SEED: u64 = 0xB002_7ACE_0000_0001;
 /// Barycentric weights in the constructed cases are multiples of `1 / WEIGHT_STEPS`.
 const WEIGHT_STEPS: i64 = 64;
@@ -212,24 +216,29 @@ fn trace_tp_004_a_shared_edge_never_leaks() {
 fn trace_tp_005_extreme_domain_values_do_not_overflow() {
     let limit = TRACE_COORD_LIMIT_RAW - 1;
     let unit = TRACE_DIRECTION_LIMIT_RAW;
+    let mut hits = 0;
     for signs in 0..8_u8 {
         let sign = |bit: u8| if signs & (1 << bit) == 0 { 1 } else { -1 };
         let corner = [sign(0) * limit, sign(1) * limit, sign(2) * limit];
-        let triangle = TraceTriangle::new(
-            vec3(corner),
-            vec3([-corner[0], corner[1], corner[2]]),
-            vec3([corner[0], -corner[1], -corner[2]]),
-        )
-        .expect("corners are in the trace domain");
+        let vertices =
+            [corner, [-corner[0], corner[1], corner[2]], [corner[0], -corner[1], -corner[2]]];
+        let triangle = TraceTriangle::new(vec3(vertices[0]), vec3(vertices[1]), vec3(vertices[2]))
+            .expect("corners are in the trace domain");
         for direction in [[unit, unit, unit], [-unit, unit, -unit], [unit, -unit, 1], [1, 1, -1]] {
-            let ray = TraceRay::new(vec3([-corner[0], -corner[1], corner[2]]), vec3(direction))
-                .expect("ray is in the trace domain");
-            // The arithmetic is checked in test builds: reaching this line is the assertion.
-            let hit = ray.hit_triangle(&triangle, FixedQ32_32::ZERO, FAR);
-            let _ = hit.map(|hit| hit.barycentrics());
-            assert!(ray.box_entry(&triangle.bounds(), FAR).is_some() || hit.is_none());
+            let origin = [-corner[0], -corner[1], corner[2]];
+            let ray =
+                TraceRay::new(vec3(origin), vec3(direction)).expect("ray is in the trace domain");
+            // The arithmetic is checked in test builds, and the result must equal the
+            // independent signed-volume oracle's.
+            volume_oracle::assert_kernel_agrees(origin, direction, vertices, "TRACE-TP-005");
+            let Some(hit) = ray.hit_triangle(&triangle, FixedQ32_32::ZERO, FAR) else { continue };
+            let _ = hit.barycentrics();
+            hits += 1;
+            assert!(ray.box_entry(&triangle.bounds(), FAR).is_some(), "a hit's box is reached");
         }
     }
+    // Counted with the oracle (and a separate exact model): three of the 32 cases cross.
+    assert_eq!(hits, 3, "corner cases that hit");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
