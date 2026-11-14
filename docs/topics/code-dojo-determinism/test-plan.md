@@ -144,7 +144,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
 | ND-TP-047 | include of source | ND-REQ-006 | Eight `include!` forms (item and expression position, a `.rs` target, a `concat!` path, `std::` and `core::` paths, a renamed import, a macro body) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::include_of_source_is_rejected_however_it_is_named` |
 | ND-TP-048 | path attributes | ND-REQ-006 | `#[path]` naming a non-`.rs` file, a file outside the crate directory, an absolute path, a path with backslashes, or set through `cfg_attr` is reported as `include-source` at the attribute's line. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_must_name_a_scanned_file` |
-| ND-TP-069 | path attributes the review found | ND-REQ-006 | `#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
+| ND-TP-069 | path attributes the review found | ND-REQ-006 | `#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, a second `path` in a `cfg_attr` after one the compiler may drop, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`. | `xtask/src/nondeterminism/evasion_tests.rs::path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
 | ND-TP-049 | included data | ND-REQ-006 | `include_str!`/`include_bytes!` of a path outside the crate, an absolute path, a computed path, through a renamed import or in a macro body is reported as `include-data`. | `xtask/src/nondeterminism/evasion_tests.rs::included_data_must_come_from_inside_the_crate` |
 | ND-TP-050 | compile-time environment | ND-REQ-001 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!` of `CARGO_PKG_VERSION` and `env!` in a macro body are each reported as `std-env`. | `xtask/src/nondeterminism/evasion_tests.rs::compile_time_environment_macros_are_std_env` |
 
@@ -613,7 +613,7 @@ id = "ND-TP-069"
 requirements = ["ND-REQ-006"]
 evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected"
-oracle = "`#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`."
+oracle = "`#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, a second `path` in a `cfg_attr` after one the compiler may drop, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`."
 tier = "fast"
 status = "implemented"
 
