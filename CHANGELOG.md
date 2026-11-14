@@ -38,6 +38,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/CODE_DOJO.md` maps each Echo rule to its Code Dojo rule
   (flyingrobots/bunny#279).
 
+* `bunny_optics::SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
+  `ShadingFrame::try_cosine_direction` return `Result<_, SecondaryRayError>`
+  and say why an input was refused. `SecondaryRayError` (`#[non_exhaustive]`)
+  has one variant per cause, each carrying the values the check saw:
+  `HitPointUnrepresentable { distance }`, `HitPointOutsideTraceDomain { point }`,
+  `NotOnArrivalSide { point }`, `StartOutsideTraceDomain { start }`,
+  `SampleOutsideUnitInterval { sample }` and the defensive
+  `BounceRayRefused { origin, direction }`. They are the diagnostic path: the
+  existing `Option` functions stay the fast path, with their 0.7.1 bodies and
+  cost, and a caller asks the `try_` form for the reason only after a `None`.
+  A differential test over generated inputs (a fixed and a fresh seed) shows
+  that each fast form returns `Some(x)` exactly when its `try_` form returns
+  `Ok(x)` and that both keep every output of the 0.7.1 code, retained in the
+  tests (flyingrobots/bunny#280).
+
+### Fixed
+
+* `bunny_optics::SurfaceHit::new` no longer overflows `i128` for a hit whose
+  point is far outside the trace domain (for example a `hit.distance` of
+  `-2^30` units set by the caller): 0.7.1 panicked there in debug builds and
+  returned `None` in release builds; it now returns `None` in both. Hits the
+  trace kernel reports are not affected (flyingrobots/bunny#280).
+
 ### Changed
 
 * Code Dojo's `ambient-state` rule is split into the Echo rule IDs above,
@@ -47,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `f64::from_bits` and floats inside macro bodies in core crates. Three
   `f32::from_bits` calls in `bunny_num::fixed_q32_32::to_f32`, the
   documented float egress, carry waivers; no code changed.
+
+* `bunny-optics` no longer denies the whole `clippy::nursery` group, which
+  `CODE_STANDARDS.md` Rule 10 bans; it denies three nursery lints by name
+  (`missing_const_for_fn`, `redundant_pub_crate`, `use_self`), each with its
+  reason, and every lint allowance in the crate now states its reason. Rule 9
+  of `CODE_STANDARDS.md` lists `bunny-optics` as a core crate, as `xtask`
+  already enforced (flyingrobots/bunny#280).
 
 ## [0.7.1] - 2026-11-14
 

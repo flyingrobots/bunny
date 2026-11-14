@@ -227,6 +227,7 @@ Applies to:
 - `bunny-query`
 - `bunny-broadphase`
 - `bunny-mesh`
+- `bunny-optics`
 
 Targets:
 

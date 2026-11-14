@@ -6,6 +6,8 @@
 
 mod accumulate;
 mod srgb;
+// The knot table is `pub` inside this private module, as `clippy::redundant_pub_crate` asks;
+// the workspace's `unreachable_pub` lint disagrees, and is allowed here.
 #[allow(unreachable_pub)]
 mod srgb_knots;
 mod tone;

@@ -1376,8 +1376,6 @@ grows slightly where they are called, and the speed they give is still the compi
 choice (`#[inline]` is a hint). A later crate change can still move other paths; this
 only removes the pixel path's dependence on the split.
 
-||||||| 6b808d4
-
 ## Profile of `closest_hit` on the benchmark scene
 
 This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
@@ -1698,10 +1696,74 @@ p50: inside the noise band, with no consistent direction. Its rays all reach the
 without overflow, so the cases time the common path only; the exact path's cost is not
 measured and is paid only by inputs that used to return a false miss.
 
+### Typed shading refusals (flyingrobots/bunny#280)
+
+**Change.** `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
+`ShadingFrame::try_cosine_direction` say why a secondary-ray step refused its input
+(`SecondaryRayError`). The `Option` functions keep their 0.7.1 bodies as the fast path;
+`SurfaceHit::new` gains one comparison per coordinate that refuses a hit point beyond reach of
+the trace domain before the exact plane test, which 0.7.1 let overflow `i128` (a panic in debug
+builds). The `try_` forms are a separate diagnostic path, kept in agreement by
+`OPTICS-REQ-043`. See the [optics chapter](../optics/README.md#inputs-and-refusals).
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), through the guarded container runner with `--exclusive` and the branch's
+commits as history, base revision `8e3d2079e78d` (`origin/main`, 0.7.1):
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter shade/
+```
+
+Change in p50 / best p50 (nanoseconds per call before → after for `shade/hit_shading`):
+
+| Version (commit) | `shade/hit_shading` | `shade/bounce_direction` | `shade/surface_new` (control, unchanged) |
+| --- | ---: | ---: | ---: |
+| `Option` forms wrap the `try_` forms (`1f82e42`) | +8.2 % / +9.1 % (64.49 → 70.39) | +1.2 % / +0.9 % | +4.1 % / -0.6 % |
+| ... with `#[inline]` on the `try_` forms (`4a8e243`) | +7.5 % / +6.9 % | +0.7 % / -0.1 % | -0.5 % / -3.4 % |
+| shared start-point core, errors built lazily, `bounce_ray` on the `Option` direction (`f340827`) | +3.5 % / +3.7 % | +1.5 % / +0.6 % | -0.7 % / -0.1 % |
+| the same, split to the function limit (`ae0535d`) | +4.1 % / +4.1 % | +0.6 % / +0.4 % | -0.2 % / -0.9 % |
+| shared core returns a one-byte private refusal code, values rebuilt on the error path (`8b52606`) | +4.0 % / +4.1 % | +0.1 % / +0.0 % | -0.1 % / -0.0 % |
+| **fast path: 0.7.1 bodies plus the overflow guard (`8d081e8`)** | **+0.9 % / -0.2 %** (66.24 → 66.12) | +0.0 % / -0.2 % | -1.0 % / +0.1 % |
+| the same code, second run (`ca19adf87aa8`) | +1.5 % / +0.7 % | -0.1 % / -1.4 % | -2.6 % / -1.2 % |
+| the same code, third run (`ca19adf87aa8`) | +1.8 % / +0.4 % | +0.1 % / -0.3 % | +1.6 % / +2.2 % |
+
+The selected version's only difference from 0.7.1 on the measured path is the overflow guard.
+Across its three runs `shade/hit_shading` moved -0.2 % to +0.7 % in best p50 and +0.9 % to
++1.8 % in median p50 (at most about 1.2 ns of 66 ns), while the unchanged control
+`shade/surface_new` moved between -2.6 % and +2.2 % in the same runs. The guard's cost is
+therefore inside the noise band; it is kept because it turns an `i128` overflow (a panic in
+debug builds) on a caller-modified hit into a refusal. `shade/bounce_direction` is level.
+
+The rejected versions are recorded under [Tried And Rejected](#shared-core-for-typed-shading-refusals).
+
 ## Tried And Rejected
 
 Experiments that kept exact results but did not pay off. They are recorded so the same idea
 is not retried without new evidence (a different target, or a changed design).
+
+### Shared core for typed shading refusals
+
+**Where tried:** `crates/bunny-optics/src/shading/{hit,frame}.rs` on the branch of
+flyingrobots/bunny#280 (commits `e074c4d` to `8b52606`), superseded in the same PR.
+
+**Idea.** One implementation of each secondary-ray step: the `Option` functions are the `try_`
+functions with the error dropped, or both call one private core.
+
+**Fidelity.** Exact: every output and refusal agreed with the 0.7.1 code over generated inputs.
+
+**Result.** `shade/hit_shading` stayed 3.5 % to 9.1 % slower in every arrangement (table under
+[Typed shading refusals](#typed-shading-refusals-flyingrobotsbunny280)): wrapping
+(+9.1 % best p50), `#[inline]` (+6.9 %), a shared core with lazily built errors (+3.7 %), and a
+shared core returning a one-byte refusal code with the observed values rebuilt only on the
+error path (+4.1 %). The one-byte code did recover `shade/bounce_direction`, because there the
+`Option` body is the 0.7.1 code and the `try_` form only attaches the sample to its `None`. Direct
+harness runs (not interleaved, so readings only) showed that routing `bounce_ray` through
+`try_bounce_ray` alone cost about 3.5 ns and that `#[inline(always)]` on the core did not help;
+the rest of the cost sat in how `SurfaceHit::new` compiled through the shared core, not in the
+width of the error.
+
+**Why it lost.** The success path paid for the diagnostic path. The selected design keeps the
+0.7.1 bodies as the fast path and makes agreement a tested contract instead of a structural one.
 
 ### Division-free `normalize`
 

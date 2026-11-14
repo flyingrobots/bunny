@@ -5,17 +5,20 @@
 //! start of secondary rays ([`SurfaceHit`]), the cosine-weighted bounce direction
 //! ([`ShadingFrame::cosine_direction`]), the directional light's term and its shadow ray
 //! ([`DirectionalLight`], [`LightSample`]), the sky ([`SkyLight`]) and the diffuse reflection
-//! that combines them ([`Albedo::reflect`]). See `docs/topics/optics/README.md#diffuse-shading`.
+//! that combines them ([`Albedo::reflect`]). The `try_` forms of the secondary-ray steps name
+//! each refusal with a [`SecondaryRayError`]. See `docs/topics/optics/README.md#diffuse-shading`.
 
 mod frame;
 mod hit;
 mod light;
+mod refusal;
 mod surface;
 mod wide;
 
 pub use frame::ShadingFrame;
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
+pub use refusal::SecondaryRayError;
 pub use surface::TriangleSurface;
 
 use core::fmt;

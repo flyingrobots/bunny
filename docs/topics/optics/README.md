@@ -36,13 +36,14 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`;
 - for [diffuse shading](#diffuse-shading) (`bunny-diffuse-shading/1`):
   `TriangleSurface` (`new`, `frame`, `facing_frame`), `ShadingFrame` (`new`,
-  `flipped`, `tangent`, `bitangent`, `normal`, `cosine_direction`),
-  `SurfaceHit` (`new`, `point`, `frame`, `bounce_ray`, `light_sample`),
+  `flipped`, `tangent`, `bitangent`, `normal`, `cosine_direction`,
+  `try_cosine_direction`), `SurfaceHit` (`new`, `try_new`, `point`, `frame`,
+  `bounce_ray`, `try_bounce_ray`, `light_sample`),
   `DirectionalLight` (`new`, `toward_light`, `irradiance`, `cosine`,
   `reflected_radiance`), `LightSample` (`shadow_ray`, `radiance`), `SkyLight`
   (`new`, `radiance`), `Albedo` (`new`, `channels`, `reflect`),
-  `ShadingError`, `SHADING_ID`, `PI`, `FRAC_1_PI`, `MAX_LIGHT_RAW`,
-  `SHADOW_T_MAX` and `MIN_BOUNCE_COSINE_RAW`.
+  `ShadingError`, `SecondaryRayError`, `SHADING_ID`, `PI`, `FRAC_1_PI`,
+  `MAX_LIGHT_RAW`, `SHADOW_T_MAX` and `MIN_BOUNCE_COSINE_RAW`.
 
 Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
 attenuation and materials other than diffuse (the rest of #160) are not part
@@ -629,7 +630,12 @@ coordinate by at most half a raw unit, so `N' . p - N' . v0 >= -|N'|_1 / 2`,
 and each step adds `|N'_k| >= |N'|_1 / 3`. In the reference model 38 % of
 400 000 seeded hits needed one step and none needed two. `SurfaceHit::new`
 returns `None` when the point is not representable or the step leaves the
-trace domain (possible only for a point on its boundary).
+trace domain (possible only for a point on its boundary), and for a hit that
+the trace kernel did not report for this ray and face, as when a caller
+changes `hit.distance` or `hit.front_face`. `SurfaceHit::try_new`, the
+diagnostic path, gives the reason; see [Inputs And Refusals](#inputs-and-refusals). A hit point
+more than two raw units outside the trace domain is refused before the plane
+test, which keeps that test inside `i128`.
 
 Secondary rays are queried with a minimum distance of zero and no primitive
 excluded. Because the start point is strictly on the arrival side and every
@@ -689,7 +695,7 @@ Guarantees, each checked by the test plan:
 
 - **Range.** Each component is in `-1.0..=1.0` (the clamp), so the direction
   is a valid trace direction as returned. `None` when `u` or `v` is outside
-  `[0, 1)`.
+  `[0, 1)` (`try_cosine_direction` returns `SampleOutsideUnitInterval`).
 - **Above the surface.** `u <= 1 - 2^-32`, so `height >= sqrt(2^-32) = 2^-16`:
   raw 65 536. The frame's dot products and the rounding change `d . n` by
   fewer than 50 raw units, so `d . n >= 2^15` raw units
@@ -845,8 +851,51 @@ shadow, and a camera ray that sees the sky).
 | Light irradiance, sky radiance | Each channel in `0..=MAX_LIGHT_RAW` | `NegativeRadiance` when one is negative, else `RadianceTooLarge` |
 | Albedo | Each channel in `0..=1.0` | `ShadingError::AlbedoOutOfRange` |
 | Triangle | Nonzero area | `TriangleSurface::new` returns `None` |
-| Sampler point | Each coordinate in `[0, 1)` | `cosine_direction` and `bounce_ray` return `None` |
-| Start point | Representable and inside the trace domain | `SurfaceHit::new` returns `None` |
+| Sampler point | Each coordinate in `[0, 1)` | `cosine_direction` and `bounce_ray` return `None`; `SampleOutsideUnitInterval` |
+| Hit point | `point_at(ray, hit.distance)` representable | `SurfaceHit::new` returns `None`; `HitPointUnrepresentable` |
+| Hit point | Each coordinate below `TRACE_COORD_LIMIT_RAW + 2` raw units in magnitude | `None`; `HitPointOutsideTraceDomain` |
+| Hit point | Within two raw-unit steps of the arrival side | `None`; `NotOnArrivalSide` |
+| Start point | Inside the trace domain after its step | `None`; `StartOutsideTraceDomain` |
+
+**Fast path and diagnostic path.** Each of the three secondary-ray steps
+comes in two forms. The `Option` forms, `SurfaceHit::new`,
+`SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction`, are the fast
+path: the 0.7.1 code, plus in `SurfaceHit::new` one comparison per coordinate
+that refuses a hit point beyond reach of the domain before the plane test (so
+that test stays inside `i128`). They say only whether an input was refused.
+The `try_` forms, `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
+`ShadingFrame::try_cosine_direction`, are the diagnostic path: they return
+`Result<_, SecondaryRayError>` and say why. A renderer calls the fast form per
+hit and calls the `try_` form only after a `None`:
+
+```rust
+let Some(start) = SurfaceHit::new(&surface, &ray, &hit) else {
+    let why = SurfaceHit::try_new(&surface, &ray, &hit).err();
+    return Err(RenderError::Shading(why));
+};
+```
+
+The two forms are separate code, so that richer errors cost nothing on the
+success path: routing the fast forms through the `try_` forms made the
+per-hit step about 4 % slower, even when the shared code carried only a
+one-byte refusal code (see the
+[performance chapter](../performance/README.md#typed-shading-refusals-flyingrobotsbunny280)).
+Their agreement is a tested contract (`OPTICS-REQ-043`): over generated
+inputs from a fixed and a fresh seed, and on every constructed refusal, the
+fast form returns `Some(x)` exactly when the `try_` form returns `Ok(x)`, with
+equal values, and both match the 0.7.1 code retained in the tests.
+
+Each variant carries the values the check saw: the hit distance, the hit point
+before any step, the stepped start point, or the sample as given. `try_new`
+checks in the order of the table: representable, near the domain, arrival
+side, inside the domain. A hit the trace kernel reported for a ray and
+triangle inside the domain can be refused only by the last check, on the
+domain's boundary; the other three mean the hit's distance or face does not
+belong to that ray and triangle. `try_bounce_ray` refuses a sample as
+`try_cosine_direction` does; its `BounceRayRefused` variant is defensive
+(`TraceRay::new` refusing the ray), and no input is known to reach it, because
+the start point is inside the domain and every bounce direction is nonzero
+with components in `-1.0..=1.0`. `SecondaryRayError` is `#[non_exhaustive]`.
 
 ### Accuracy And Cost
 

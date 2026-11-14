@@ -1,7 +1,14 @@
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
-#![deny(clippy::nursery)]
+// `clippy::nursery` is cherry-picked, not denied as a group (CODE_STANDARDS.md, Rule 10):
+// - `missing_const_for_fn` keeps the integer helpers usable in constant expressions;
+// - `redundant_pub_crate` keeps crate-private items `pub` inside private modules, the
+//   convention the module allowances below rely on;
+// - `use_self` keeps `Self` in impls, so a renamed type changes one line.
+#![deny(clippy::missing_const_for_fn)]
+#![deny(clippy::redundant_pub_crate)]
+#![deny(clippy::use_self)]
 #![deny(missing_docs)]
 
 //! Deterministic camera, sampling, diffuse shading and pixel-value math for Bunny.
@@ -24,7 +31,9 @@
 //! and [`ShadingFrame`], a [`SurfaceHit`] applies the facing rule and starts secondary rays
 //! strictly on the arrival side of the surface, [`ShadingFrame::cosine_direction`] maps a sampler
 //! point to a cosine-weighted bounce direction, a [`DirectionalLight`] gives the direct term and
-//! its shadow ray, and [`Albedo::reflect`] combines the direct and indirect radiance.
+//! its shadow ray, and [`Albedo::reflect`] combines the direct and indirect radiance. The
+//! `try_` forms of the surface hit, the bounce direction and the bounce ray name each refusal
+//! with a [`SecondaryRayError`].
 //!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
@@ -35,9 +44,15 @@
 // asks; the workspace's `unreachable_pub` lint disagrees, and is allowed on those modules.
 #[allow(unreachable_pub)]
 mod basis;
-#[allow(clippy::module_name_repetitions)]
+#[allow(
+    clippy::module_name_repetitions,
+    reason = "`CameraSpec` and `PinholeCamera` are the public names; the module is private"
+)]
 mod camera;
-#[allow(clippy::module_name_repetitions)]
+#[allow(
+    clippy::module_name_repetitions,
+    reason = "`CameraError` is the public name; the module is private"
+)]
 mod error;
 #[allow(unreachable_pub)]
 mod hash;
@@ -64,7 +79,8 @@ pub use pixel::{
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
-    Albedo, DirectionalLight, LightSample, ShadingError, ShadingFrame, SkyLight, SurfaceHit,
-    TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX,
+    Albedo, DirectionalLight, LightSample, SecondaryRayError, ShadingError, ShadingFrame, SkyLight,
+    SurfaceHit, TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID,
+    SHADOW_T_MAX,
 };
 pub use xoroshiro::Xoroshiro128Plus;

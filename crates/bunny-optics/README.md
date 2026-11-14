@@ -50,7 +50,12 @@ every buffer.
   the ideal map and never below the surface), `DirectionalLight` (irradiance
   convention: a white surface reflects `E * cos / pi`; the shadow ray and its
   limit `SHADOW_T_MAX`), `SkyLight` and `Albedo::reflect`
-  (`albedo * (direct + indirect)`; the bounce term has no `pi`).
+  (`albedo * (direct + indirect)`; the bounce term has no `pi`). The
+  `Option` forms are the fast path; the diagnostic `try_` forms
+  `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
+  `ShadingFrame::try_cosine_direction`, called after a `None`, say why an
+  input was refused, with a `SecondaryRayError` that carries the values it
+  saw.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.

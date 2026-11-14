@@ -3,6 +3,7 @@
 use bunny_linalg::{FixedUnitVec3, FixedVec3};
 use bunny_num::{FixedAngle, FixedQ32_32};
 
+use super::refusal::SecondaryRayError;
 use super::wide::{div_round, dot, narrow, pick, round_shift, wide, Wide, ONE};
 
 /// A tangent, a bitangent and a normal, orthonormal to within a few raw units and right-handed
@@ -82,7 +83,10 @@ impl ShadingFrame {
     /// ideal map on this frame, and the dot product with the normal is at least
     /// [`super::MIN_BOUNCE_COSINE_RAW`] raw units.
     ///
-    /// Returns `None` when a coordinate is outside `[0, 1)`.
+    /// Returns `None` when a coordinate is outside `[0, 1)`, exactly when
+    /// [`Self::try_cosine_direction`] returns an error. This is the fast path (the 0.7.1
+    /// code); `try_cosine_direction` is the diagnostic path, for a caller that needs the reason
+    /// after a `None`.
     #[must_use]
     pub fn cosine_direction(&self, sample: [FixedQ32_32; 2]) -> Option<FixedVec3> {
         let [u, v] = sample;
@@ -96,6 +100,24 @@ impl ShadingFrame {
         let weights =
             [radius * i128::from(cos.raw()), radius * i128::from(sin.raw()), height * ONE];
         Some(narrow(self.combine(weights)))
+    }
+
+    /// The diagnostic path of [`Self::cosine_direction`]: call it when `cosine_direction`
+    /// returns `None`. Its only refusal is a sample outside the
+    /// unit square (`FixedQ32_32::sqrt` refuses only a negative value, and both square roots
+    /// are of non-negative values for a sample inside it), so this is that function with the
+    /// sample attached to its `None`.
+    ///
+    /// # Errors
+    ///
+    /// [`SecondaryRayError::SampleOutsideUnitInterval`] when a coordinate of `sample` is
+    /// outside `[0, 1)`.
+    #[inline]
+    pub fn try_cosine_direction(
+        &self,
+        sample: [FixedQ32_32; 2],
+    ) -> Result<FixedVec3, SecondaryRayError> {
+        self.cosine_direction(sample).ok_or(SecondaryRayError::SampleOutsideUnitInterval { sample })
     }
 
     /// `weights . (tangent_i, bitangent_i, normal_i)` for each axis `i`, in units of `2^-96`

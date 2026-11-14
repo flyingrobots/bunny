@@ -35,13 +35,17 @@ and `point_at`:
 - `write_rgba8` and the versioned identities;
 - the diffuse shading model `bunny-diffuse-shading/1` (`TriangleSurface`,
   `ShadingFrame`, `SurfaceHit`, `DirectionalLight`, `LightSample`, `SkyLight`,
-  `Albedo`, `ShadingError` and the constants `PI`, `FRAC_1_PI`,
+  `Albedo`, `ShadingError`, `SecondaryRayError` and the constants `PI`, `FRAC_1_PI`,
   `MAX_LIGHT_RAW`, `SHADOW_T_MAX`, `MIN_BOUNCE_COSINE_RAW`, `SHADING_ID`):
   golden vectors for every step, the normal, frame, hemisphere and cosine
   bounds against floating-point and exact integer oracles, a distribution
   guard, energy sanity, the self-intersection rule on constructed scenes, the
   shadow-ray limit, refusals, and composed paths that lock the order of
   operations.
+- the typed refusals of `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray`
+  and `ShadingFrame::try_cosine_direction`: one constructed case per
+  reachable `SecondaryRayError` variant, and a seeded differential case that
+  the `Option` forms keep the 0.7.1 outputs and agree with the `try_` forms.
 
 Projection matrices (flyingrobots/bunny#201, #202), and reflection, refraction
 and other material helpers (#160) are out of scope.
@@ -111,6 +115,9 @@ formatting.
 | OPTICS-REQ-038 | The directional light's shadow ray starts at the surface hit's start point along `toward_light` when the light is strictly on the arrival side of the exact plane (none otherwise, and no light); `SHADOW_T_MAX` (`2^41` raw, 512 units) covers every occluder in the trace domain. | `README.md#directional-light` |
 | OPTICS-REQ-039 | `DirectionalLight::new` refuses a direction whose largest component magnitude is not exactly 1.0; lights and skies refuse a negative channel or one above `MAX_LIGHT_RAW` (65 536.0); `Albedo::new` refuses a channel outside `0..=1.0`; `SurfaceHit::new` refuses a start point outside the trace domain. | `README.md#inputs-and-refusals` |
 | OPTICS-REQ-040 | The shading model has the identity `bunny-diffuse-shading/1` (`SHADING_ID`), and one path composed in the reference order of operations gives locked radiance bits. | `README.md#order-of-operations` |
+| OPTICS-REQ-041 | `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction` name each refusal with a `SecondaryRayError` variant carrying the observed values, checked in this order: `HitPointUnrepresentable { distance }` when `point_at(ray, hit.distance)` is not representable, `HitPointOutsideTraceDomain { point }` when a coordinate of that point is more than two raw units outside the trace domain, `NotOnArrivalSide { point }` when no step of at most two raw units reaches the arrival side, `StartOutsideTraceDomain { start }` when the stepped start point is outside the trace domain, `SampleOutsideUnitInterval { sample }` when a sample coordinate is outside `[0, 1)`, and the defensive `BounceRayRefused { origin, direction }` when `TraceRay::new` refuses the bounce ray. | `README.md#inputs-and-refusals` |
+| OPTICS-REQ-042 | `SurfaceHit::new`, `SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction` keep every output of 0.7.1: each returns `Some(x)` exactly when its `try_` form returns `Ok(x)`, with the same value, and agrees with the 0.7.1 code on every input, except that a hit point far enough outside the trace domain to overflow the 0.7.1 plane test in `i128` (a panic in debug builds) returns `None`, as 0.7.1 release builds did. | `README.md#inputs-and-refusals` |
+| OPTICS-REQ-043 | The fast path and the diagnostic path agree: `SurfaceHit::new`, `SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction` (the fast path, the 0.7.1 bodies plus the plane-test overflow guard) return `Some(x)` exactly when `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction` (the diagnostic path) return `Ok(x)`, with equal values, on generated inputs from a fixed and a fresh seed and on the constructed refusals; a change to either side alone breaks it. | `README.md#inputs-and-refusals` |
 
 ```toml
 [[requirement]]
@@ -292,6 +299,21 @@ status = "active"
 id = "OPTICS-REQ-040"
 summary = "The shading model has the identity bunny-diffuse-shading/1 (SHADING_ID), and one path composed in the reference order of operations gives locked radiance bits."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-041"
+summary = "SurfaceHit::try_new, SurfaceHit::try_bounce_ray and ShadingFrame::try_cosine_direction name each refusal with a SecondaryRayError variant carrying the observed values, checked in this order: HitPointUnrepresentable { distance } when point_at(ray, hit.distance) is not representable, HitPointOutsideTraceDomain { point } when a coordinate of that point is more than two raw units outside the trace domain, NotOnArrivalSide { point } when no step of at most two raw units reaches the arrival side, StartOutsideTraceDomain { start } when the stepped start point is outside the trace domain, SampleOutsideUnitInterval { sample } when a sample coordinate is outside [0, 1), and the defensive BounceRayRefused { origin, direction } when TraceRay::new refuses the bounce ray."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-042"
+summary = "SurfaceHit::new, SurfaceHit::bounce_ray and ShadingFrame::cosine_direction keep every output of 0.7.1: each returns Some(x) exactly when its try_ form returns Ok(x), with the same value, and agrees with the 0.7.1 code on every input, except that a hit point far enough outside the trace domain to overflow the 0.7.1 plane test in i128 (a panic in debug builds) returns None, as 0.7.1 release builds did."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-043"
+summary = "The fast path and the diagnostic path agree: SurfaceHit::new, SurfaceHit::bounce_ray and ShadingFrame::cosine_direction (the fast path, the 0.7.1 bodies plus the plane-test overflow guard) return Some(x) exactly when SurfaceHit::try_new, SurfaceHit::try_bounce_ray and ShadingFrame::try_cosine_direction (the diagnostic path) return Ok(x), with equal values, on generated inputs from a fixed and a fresh seed and on the constructed refusals; a change to either side alone breaks it."
+status = "active"
 ```
 
 ## Fixtures
@@ -453,6 +475,15 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-054 | Nearby surfaces | OPTICS-REQ-033 | A cover 2^-20 units above the ground shadows a ground point beside it through a shadow ray at slope 2^-4, which a distance epsilon of 2^-10 would miss; a cover 4 raw units above the ground shadows the point under it; both start points stay below the cover. | `crates/bunny-optics/tests/shading_property_tests.rs::optics_tp_054_nearby_surfaces_are_not_skipped` |
 | OPTICS-TP-055 | Shading mutations | OPTICS-REQ-032, OPTICS-REQ-033, OPTICS-REQ-034, OPTICS-REQ-036, OPTICS-REQ-038 | The facing rule, the hemisphere map, the convention's pi, the self-intersection rule and the light's arrival-side test, each broken on purpose, make at least one case above fail. | [Shading mutation checks](#shading-mutation-checks) |
 | OPTICS-TP-056 | Shading timing | OPTICS-REQ-033, OPTICS-REQ-034 | `shade/surface_new`, `shade/bounce_direction` and `shade/hit_shading` in `bunny-perf` time the per-triangle and per-hit steps. | [Timing](#timing) |
+| OPTICS-TP-057 | Unrepresentable hit point | OPTICS-REQ-041, OPTICS-REQ-043 | A real ground hit with its distance replaced by the most negative Q32.32 value: `-1.0 * distance` overflows, so `try_new` returns `HitPointUnrepresentable` with that distance, its `Display` text names the raw value, and `new` returns None. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_057_an_unrepresentable_hit_point_names_its_distance` |
+| OPTICS-TP-058 | Hit point beyond the domain | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | A real ground hit with its distance replaced by -1 024 units and by -2^30 units: the point is 1 026 and 2^30 + 2 units above the ground, more than two raw units outside the domain, so `try_new` returns `HitPointOutsideTraceDomain` with that point (hand computed) and `new` returns None; at 2^30 units the 0.7.1 plane test needed 2^134 and overflowed `i128`. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_058_a_hit_point_beyond_the_domain_is_refused_before_the_plane_test` |
+| OPTICS-TP-059 | Hit not on the arrival side | OPTICS-REQ-041, OPTICS-REQ-043 | A real ground hit from 2 units above with its face flipped and its distance set to zero: the point is the ray origin, 2 units on the wrong side, so `try_new` returns `NotOnArrivalSide` with that point and `new` returns None. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_059_a_hit_off_the_arrival_side_names_its_point` |
+| OPTICS-TP-060 | Start point outside the domain | OPTICS-REQ-041, OPTICS-REQ-043 | The edge of OPTICS-TP-046: the ray arrives exactly at `y = 2^40 - 1` raw and the one step goes to `y = 2^40`, so `try_new` returns `StartOutsideTraceDomain` with start `(0, 2^40, 0)` raw (hand computed) and `new` returns None. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_060_a_start_point_outside_the_domain_names_the_stepped_point` |
+| OPTICS-TP-061 | Sample outside the unit interval | OPTICS-REQ-041, OPTICS-REQ-043 | `u` or `v` of 1.0, `-2^-32` and the extreme raw values: `try_cosine_direction` and `try_bounce_ray` return `SampleOutsideUnitInterval` with the sample as given, and the `Option` forms return None. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_061_a_sample_outside_the_unit_interval_is_named` |
+| OPTICS-TP-062 | Fast and diagnostic paths agree | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | Seeded triangles and rays, each hit also given seeded distances (full raw range, large positive and negative, near either end of the raw range, within two raw units of the domain's boundary on the ray's dominant axis, a few raw units from the reported one) and the other face, and seeded samples inside and outside `[0, 1)`: the 0.7.1 code retained in the test (`tests/shading_reference/mod.rs`) gives the same start point, frame, direction and bounce ray as the `Option` form, the fast (`Option`) form is `Some` exactly when the diagnostic (`try_`) form is `Ok` with the same value, and every `Err` is the variant and values the reference names, except that a hit point beyond reach of the domain is expected as `HitPointOutsideTraceDomain` (where the 0.7.1 plane test overflows there, the reference checks the arithmetic instead). Witness counts require every reachable outcome, and at least ten overflowing inputs, to occur and `BounceRayRefused` never to. The seed and case are printed on failure. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_062_option_and_result_forms_agree_with_the_released_code` |
+| OPTICS-TP-063 | Refusal mutations | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | Each side of the fast/diagnostic pair broken alone (the stepped-point domain check of either, the overflow guard of the fast path, the beyond-reach check of the diagnostic path), the stepped start point reported as the unstepped one, and a sample coordinate of exactly 1.0 accepted, each make at least one case above fail. | [Shading mutation checks](#shading-mutation-checks) |
+| OPTICS-TP-064 | Agreement from a fresh seed | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The check of OPTICS-TP-062 from a seed drawn per run (`RandomState`), printed in every failure message, so coverage accumulates across runs; 30 consecutive runs passed. On `wasm32-unknown-unknown` the standard library's hash keys are fixed, so there the seed repeats. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed` |
+| OPTICS-TP-065 | Defensive bounce refusal | OPTICS-REQ-041 | `BounceRayRefused` built directly (no input reaches it through the public API; OPTICS-TP-062 and OPTICS-TP-064 count zero occurrences): its values and `Display` text. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_defensive_bounce_refusal_names_its_ray` |
 
 ```toml
 [[case]]
@@ -913,6 +944,87 @@ artifact = "docs/topics/optics/test-plan.md#timing"
 oracle = "shade/surface_new, shade/bounce_direction and shade/hit_shading in bunny-perf time the per-triangle and per-hit shading steps; a reading, not a speed claim."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-057"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_057_an_unrepresentable_hit_point_names_its_distance"
+oracle = "Exact construction: -1.0 times the most negative raw distance is not representable, so the variant and its distance are known in advance; the Display text is specified."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-058"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_058_a_hit_point_beyond_the_domain_is_refused_before_the_plane_test"
+oracle = "Hand computed: the ray straight down from 2 units above the ground, taken 1 024 and 2^30 units backward, gives the points (0, 1 026, 0) and (0, 2^30 + 2, 0) units, both beyond the domain; the second makes the 0.7.1 plane test exceed i128."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-059"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_059_a_hit_off_the_arrival_side_names_its_point"
+oracle = "Exact construction: at distance zero the point is the ray origin, 2 units on the side the flipped face points away from, which two raw-unit steps cannot cross."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-060"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_060_a_start_point_outside_the_domain_names_the_stepped_point"
+oracle = "Hand computed: the ray along y = 2^40 - 1 raw arrives exactly on the plane 2x + 4y = 4(2^40 - 1) at x = 0, and one step up the dominant y axis gives (0, 2^40, 0)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-061"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_061_a_sample_outside_the_unit_interval_is_named"
+oracle = "Specified: coordinates of 1.0, -2^-32, i64::MIN and i64::MAX raw are outside [0, 1), so the variant carries the sample as given."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-062"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_062_option_and_result_forms_agree_with_the_released_code"
+oracle = "Cross-version differential: the 0.7.1 code of SurfaceHit::new and ShadingFrame::cosine_direction, retained in the test over the public API, names the expected result and refusal cause of every generated input; witness counts show each reachable outcome occurs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-063"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#shading-mutation-checks"
+oracle = "Each side of the fast/diagnostic pair broken alone, the stepped start point reported as the unstepped one, and a sample coordinate of exactly 1.0 accepted, each make at least one implemented case fail."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-064"
+requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed"
+oracle = "The cross-version differential and fast/diagnostic agreement of OPTICS-TP-062, from a per-run seed printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-065"
+requirements = ["OPTICS-REQ-041"]
+evidence = "test"
+test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_defensive_bounce_refusal_names_its_ray"
+oracle = "Specified: the variant carries the origin and direction it is given, and its Display text names both as raw components."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1001,6 +1113,25 @@ coplanar neighbour at distance zero.
 | --- | --- | --- |
 | A start point on the plane accepted (`>= offset` for `> offset`) | Strictly on the arrival side | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054 |
 | No step and a start point on the plane accepted | Both | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054 |
+
+The typed refusals (`OPTICS-TP-063`) were checked the same way, with `timeout
+120 cargo test --locked -p bunny-optics --no-fail-fast --test
+shading_property_tests --test shading_refusal_tests --test shading_tests` per
+mutation; the restored source passed every case. The first four break one
+side of the fast/diagnostic pair alone, which the agreement cases must catch.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Fast path: a stepped point one raw unit past the domain accepted | Fast and diagnostic paths agree | OPTICS-TP-046, OPTICS-TP-060, OPTICS-TP-062, OPTICS-TP-064 |
+| Fast path: the overflow guard removed (the 0.7.1 body) | The plane test stays inside `i128` | OPTICS-TP-058, OPTICS-TP-062, OPTICS-TP-064 (each panics: "attempt to multiply with overflow") |
+| Diagnostic path: a stepped point one raw unit past the domain accepted | Fast and diagnostic paths agree | OPTICS-TP-060, OPTICS-TP-062, OPTICS-TP-064 |
+| Diagnostic path: the beyond-reach check removed | Far points are named before the plane test | OPTICS-TP-058, OPTICS-TP-062, OPTICS-TP-064 |
+| `StartOutsideTraceDomain` carries the unstepped hit point | The variant names the stepped start point | OPTICS-TP-060 |
+| A sample coordinate of exactly 1.0 accepted (`<=` for `<`) | Samples are in `[0, 1)` | OPTICS-TP-043, OPTICS-TP-061, OPTICS-TP-062, OPTICS-TP-064 |
+
+The second row is the 0.7.1 failure itself: its plane test overflows `i128` on
+a point `2^30` units above the ground (a panic in a debug build; release
+builds return `None`).
 
 ## Timing
 
@@ -1118,6 +1249,10 @@ Current tests cover:
   the surface, along it and below it; a cover `2^-20` units and 4 raw units
   above the surface;
 - light directions whose largest component is one raw unit either side of 1.0.
+- hit distances of the most negative raw value, zero with the face flipped,
+  large positive and negative values and a few raw units from the reported
+  distance; sample coordinates of exactly 1.0, `-2^-32` and the extreme raw
+  values.
 
 ## Stress And Fuzz
 
@@ -1138,5 +1273,7 @@ case with a stable test name.
 | Stratification evidence above 1 024 samples per pixel (the property is proven for every `k` up to 32 and tested to 10). | None; a slow-tier case. |
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
 | An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |
+| Shrinking for `OPTICS-TP-062` and `OPTICS-TP-064`: a failure reports its seed, case and variant, not a reduced input. | None; a property-testing harness or a hand-written reducer. |
+| A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
 | A start point needing two steps off the plane: the proof allows two, the seeded cases and a 400 000-hit search in the reference model needed at most one. | None; an exact constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |
