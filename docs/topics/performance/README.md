@@ -768,6 +768,185 @@ that needs its own measurement.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
 
+### 7. A straight-line `TraceRay::box_entry` in `i64` (exact replacement)
+
+**Where:** `TraceRay::box_entry` and its helpers in `crates/bunny-query/src/trace.rs`
+(flyingrobots/bunny#258). The [profile](#profile-of-closest_hit-on-the-benchmark-scene)
+put box tests at about 60 % of a ray; this entry makes each one cheaper. `TraceRay` keeps
+its three fields (72 bytes), its derived `PartialEq` and `Debug`, and its public API.
+
+**Technique.** The bounds are computed exactly as before (see the
+[ray-tracing chapter](../ray-tracing/README.md#conservative-box-test)); only the code
+shape changed:
+
+1. **Slab differences in `i64`.** For a negative direction component the origin and both
+   planes are flipped with bitwise not, which reverses the order of `i64` and keeps
+   `!a - !b = b - a`, so every axis is crossed forwards. A signed comparison decides
+   whether a plane lies ahead of the origin, and once `a >= b` is known the wrapping
+   `i64` difference read as `u64` is the exact difference (it lies in `0..2^64`). The old
+   code widened to `i128` and subtracted with borrow chains.
+2. **Parallel axes in the same path.** A zero component is a forward crossing with a zero
+   reciprocal: lower bound 0, upper bound saturated to `u64::MAX` by a step of `u64::MAX`
+   instead of 1, plus a rejection when the near plane is ahead of the origin.
+3. **Straight-line code with one validity flag.** All three axes, both bounds and the
+   comparison with `t_max` are computed with no early return and combined with `&`, so the
+   test has no data-dependent branch of its own (about 100 lines of aarch64 assembly for the
+   whole test, from about 190, read from `--emit asm` of a non-inlined wrapper). The only branch left is the caller's on the result.
+
+**Fidelity: exact replacement.** For every ray, box and limit the new test returns the same
+`Option<FixedQ32_32>` as the old one, which is kept verbatim in
+`crates/bunny-query/tests/support/box_entry_reference.rs`. `TRACE-TP-301` to `TRACE-TP-304`
+compare them on the golden and oracle corpora, 300 000 seeded trace-domain cases, a sweep
+of every pair of 15 extreme coordinates (`i64::MIN`, `i64::MAX`, inverted pairs) plus
+200 000 seeded near-extreme boxes, and every box test of the benchmark scene, each at ten
+limits including `i64::MIN`, -1, 0 and the entry bound and its neighbours. The existing
+tests, including the exact rational oracle `TRACE-TP-007` and the traversal's equality with
+a test of every primitive (`TRACE-TP-101`), pass unmodified. Fourteen deliberate mutations
+(`TRACE-TP-305`) each fail at least one case; three of them (the upper multiplier `r + 1`
+made `r`, the upper step `+ 1` made `+ 0`, and `enter <= exit` made strict) pass every case
+that existed before and are caught only by the new corpora.
+
+**Each step, measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(aarch64 Linux), 2026-11-13, every run with `--exclusive`:
+`cargo run --locked -p xtask -- perf --base <previous step> --rounds 11 --align-code --filter trace/`.
+Best-p50 change against the step before:
+
+| Step | `kernel_box_entry` | `kernel_box_entry_chain` | `closest_hit` | `any_hit` | Kept |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1. `i64` differences (base `origin/main`) | -24.9 % | -24.2 % | -7.5 % | -8.7 % | yes |
+| 2. Parallel axes in the slab path | -0.8 % | -1.7 % | -0.6 % | +2.6 % | yes, neutral (see below) |
+| 3. All rejections first, return before the upper products when `enter > t_max` | -0.9 % | -1.5 % | -4.2 % | -3.4 % | superseded by 4 |
+| 4. Straight-line code with one flag | +6.3 % | +8.4 % | -5.6 % | -0.2 % | yes |
+| 5. Exit decided by one 128-bit comparison `(enter - 1) * 2^31 <= far * (r + 1)` | +2.8 % | +3.1 % | +1.4 % | -3.7 % | no, reverted |
+| 6. `r + 1` and the flipped origin precomputed in `TraceRay` (72 to 120 bytes) | -2.6 % | -5.7 % | -2.5 % | -1.3 % | no, reverted |
+
+The triangle replays, which these changes do not touch, moved by at most 2.6 % best p50
+in these runs. Notes on the decisions:
+
+- Step 2 is within noise. It stays because steps 3 and 4 are written over its single path;
+  it removes the special case from the source, though the compiler re-derived a branch on
+  zero until step 4.
+- Step 4 is slower than step 3 in the isolated replay (a replay that rejects early is
+  cheaper when the rejections are predictable from the replayed sequence) but faster in the
+  real search, where the box test's own branches mispredict. The search is what callers
+  run, so step 4 was kept. Step 3's early return is not in the final code.
+- Step 5 was slower in three of four cases: the 128-bit comparison is about as many
+  instructions as the shift, saturation and minimum it replaces.
+- Step 6 looked like a small gain in its `trace/`-only run, but a full-table run against
+  step 4 read `closest_hit` -0.3 %, `kernel_box_entry` +1.1 %, `any_hit` +0.0 %, while
+  `trace/ray_prepare` rose from 1.87 to 2.36 ns and `TraceRay` grew by 48 bytes. Reverted.
+
+**Final build.** Two complete runs of
+`cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code`
+(all cases, `--exclusive`), base `origin/main` at `cda15ecc020a`, head the branch's final
+code (the box test is identical in both runs).
+
+Run 1:
+
+| Case | Before p50 | After p50 | Before best | After best | Best change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | 4.15 | 4.15 | +0.0% |
+| `angle/from_radians` | 0.94 | 0.94 | 0.94 | 0.94 | +0.0% |
+| `angle/sin_cos` | 11.11 | 11.11 | 11.07 | 11.07 | +0.0% |
+| `linalg/length` | 16.07 | 16.03 | 15.38 | 14.89 | -3.2% |
+| `linalg/normalize` | 41.46 | 41.99 | 40.77 | 41.14 | +0.9% |
+| `num/div` | 6.75 | 6.75 | 6.63 | 6.63 | +0.0% |
+| `num/mul` | 1.42 | 1.42 | 1.34 | 1.34 | +0.0% |
+| `num/sqrt` | 14.08 | 13.83 | 12.66 | 13.43 | +6.1% |
+| `prepared/div` | 4.27 | 4.35 | 3.50 | 4.07 | +16.3% |
+| `prepared/ray_aabb` | 23.44 | 35.44 | 21.04 | 21.81 | +3.7% |
+| `prepared/ray_prepare` | 26.45 | 26.45 | 25.92 | 26.00 | +0.3% |
+| `query/ray_aabb` | 51.55 | 51.84 | 49.28 | 51.23 | +4.0% |
+| `query/ray_build` | 52.37 | 52.08 | 50.62 | 50.58 | -0.1% |
+| `query/ray_sphere_hit` | 67.59 | 67.46 | 65.92 | 66.37 | +0.7% |
+| `query/ray_sphere_miss` | 21.08 | 21.08 | 19.82 | 20.96 | +5.8% |
+| `query/ray_triangle` | 52.82 | 52.53 | 52.53 | 52.37 | -0.3% |
+| `sample/sampler_new_point` | 24.82 | 24.82 | 23.52 | 23.40 | -0.5% |
+| `sample/sampler_point` | 19.61 | 19.61 | 19.29 | 18.47 | -4.3% |
+| `sample/stream_bits` | 0.53 | 0.53 | 0.49 | 0.49 | +0.0% |
+| `scene/closest_visitor` | 3198.12 | 3179.00 | 3162.15 | 3150.03 | -0.4% |
+| `trace/any_hit` | 208.46 | 181.97 | 204.51 | 180.58 | -11.7% |
+| `trace/box_entry` | 6.02 | 4.44 | 5.66 | 4.39 | -22.4% |
+| `trace/box_ray_prepare` | 1.91 | 1.91 | 1.83 | 1.83 | +0.0% |
+| `trace/closest_hit` | 224.89 | 185.71 | 220.78 | 184.20 | -16.6% |
+| `trace/kernel_box_entry` | 132.85 | 104.98 | 131.06 | 104.21 | -20.5% |
+| `trace/kernel_box_entry_chain` | 135.46 | 110.35 | 133.75 | 108.97 | -18.5% |
+| `trace/kernel_tri_all_chain` | 39.59 | 44.72 | 39.39 | 44.64 | +13.3% |
+| `trace/kernel_tri_divided` | 26.16 | 28.24 | 25.43 | 27.83 | +9.4% |
+| `trace/kernel_tri_rejected` | 16.36 | 17.86 | 16.28 | 17.78 | +9.2% |
+| `trace/ray_prepare` | 1.99 | 2.03 | 1.99 | 1.99 | +0.0% |
+| `trace/triangle_beyond_limit` | 30.11 | 29.95 | 29.79 | 29.75 | -0.1% |
+| `trace/triangle_hit` | 29.99 | 29.79 | 29.74 | 29.66 | -0.3% |
+
+Run 2:
+
+| Case | Before p50 | After p50 | Before best | After best | Best change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.15 | 4.19 | 4.15 | 4.15 | +0.0% |
+| `angle/from_radians` | 0.94 | 0.94 | 0.90 | 0.89 | -1.1% |
+| `angle/sin_cos` | 11.11 | 11.11 | 11.07 | 11.07 | +0.0% |
+| `linalg/length` | 15.95 | 16.15 | 15.01 | 15.30 | +1.9% |
+| `linalg/normalize` | 41.38 | 42.24 | 38.90 | 40.41 | +3.9% |
+| `num/div` | 6.71 | 6.75 | 6.43 | 6.47 | +0.6% |
+| `num/mul` | 1.42 | 1.42 | 1.34 | 1.34 | +0.0% |
+| `num/sqrt` | 13.88 | 14.00 | 12.61 | 13.47 | +6.8% |
+| `prepared/div` | 4.31 | 3.95 | 3.50 | 3.46 | -1.1% |
+| `prepared/ray_aabb` | 23.44 | 23.68 | 21.52 | 21.73 | +1.0% |
+| `prepared/ray_prepare` | 26.37 | 26.37 | 26.00 | 25.80 | -0.8% |
+| `query/ray_aabb` | 51.27 | 52.37 | 49.48 | 49.44 | -0.1% |
+| `query/ray_build` | 51.39 | 51.96 | 50.37 | 51.23 | +1.7% |
+| `query/ray_sphere_hit` | 67.18 | 66.85 | 66.12 | 65.96 | -0.2% |
+| `query/ray_sphere_miss` | 21.12 | 21.08 | 21.00 | 20.96 | -0.2% |
+| `query/ray_triangle` | 52.73 | 52.61 | 52.45 | 52.29 | -0.3% |
+| `sample/sampler_new_point` | 24.82 | 24.82 | 23.36 | 23.36 | +0.0% |
+| `sample/sampler_point` | 19.61 | 19.61 | 18.43 | 18.51 | +0.4% |
+| `sample/stream_bits` | 0.53 | 0.53 | 0.49 | 0.49 | +0.0% |
+| `scene/closest_visitor` | 3196.82 | 3185.88 | 3163.21 | 3149.70 | -0.4% |
+| `trace/any_hit` | 211.26 | 182.58 | 204.10 | 180.99 | -11.3% |
+| `trace/box_entry` | 6.02 | 4.44 | 5.98 | 4.19 | -29.9% |
+| `trace/box_ray_prepare` | 1.95 | 1.95 | 1.83 | 1.83 | +0.0% |
+| `trace/closest_hit` | 225.30 | 185.30 | 219.81 | 183.31 | -16.6% |
+| `trace/kernel_box_entry` | 133.02 | 105.02 | 131.18 | 104.21 | -20.6% |
+| `trace/kernel_box_entry_chain` | 134.68 | 110.15 | 133.59 | 108.97 | -18.4% |
+| `trace/kernel_tri_all_chain` | 39.51 | 44.76 | 39.27 | 44.64 | +13.7% |
+| `trace/kernel_tri_divided` | 26.20 | 28.28 | 25.59 | 27.75 | +8.4% |
+| `trace/kernel_tri_rejected` | 16.40 | 17.82 | 16.19 | 17.74 | +9.6% |
+| `trace/ray_prepare` | 1.99 | 2.03 | 1.95 | 1.99 | +2.1% |
+| `trace/triangle_beyond_limit` | 30.68 | 30.15 | 29.91 | 29.62 | -1.0% |
+| `trace/triangle_hit` | 30.97 | 29.91 | 29.87 | 29.62 | -0.8% |
+
+**Reading.** `trace/closest_hit` is 16.6 % faster in both runs (best p50 220.8 to 184.2 ns
+and 219.8 to 183.3 ns, 1.20x), `trace/any_hit` 11.7 % and 11.3 %, the replayed box tests of
+a ray 20.5 % and 20.6 % (independent) and 18.5 % and 18.4 % (chained), and the standalone
+`trace/box_entry` 22.4 % and 29.9 % (from about 6.0 to 4.4 ns per call). The box tests of a
+ray fall by about 27 ns of the 37 ns saved, so the rest of the search gains about 10 ns as
+well, consistent with fewer mispredicted branches inside the box test (an interpretation, not
+measured: no branch counters were read). Untouched cases
+moved by at most a few percent, except the known noisy ones (`prepared/div`,
+`prepared/ray_aabb` median, `num/sqrt` best).
+
+**One unexplained reading.** The three `trace/kernel_tri_*` replays, which time
+`hit_triangle` (unchanged), read 8 to 14 % slower in all four full-table runs of the
+final code, and in a full-table run against step 4. In every `trace/`-only run, and in a
+run with `--filter trace/kernel_tri` against `origin/main` (best p50 39.27 to 39.27 ns,
+22.42 to 22.54 ns, 16.24 to 16.24 ns), they are unchanged, and the two standalone triangle
+cases (`trace/triangle_hit`, `trace/triangle_beyond_limit`) are unchanged in every run. So
+the effect depends on which cases ran before in the same process, not on the triangle
+code; its mechanism is not established. The whole-search cases, which include every
+triangle test, are the ones to trust.
+
+**Trade-offs.**
+
+- *Code.* The test is three small helpers instead of one; the `!` flip and the parallel-axis
+  rule need the comments beside them. Two `#[allow(clippy::needless_bitwise_bool)]` mark
+  the deliberate `&` on booleans.
+- *Isolated replay against search.* The straight-line form gives up about 6 % in a replay
+  of box tests alone to win in the search.
+- *No new state.* `TraceRay` is unchanged in size; `trace/ray_prepare` is unchanged.
+- *Inlining.* `box_entry` stays `#[inline]`, as on `main`; no inlining attribute changed.
+
+**Not measured here:** x86-64 (the pull request's CI perf job reads it) and wasm32.
+
 ## Profile of `closest_hit` on the benchmark scene
 
 This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not

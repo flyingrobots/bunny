@@ -49,8 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   negative direction into a forward one) instead of `i128`, parallel axes in
   the same path, and no data-dependent branch of its own. `TraceRay` is
   unchanged (72 bytes, same fields). On the benchmark scene (Apple M5 Pro,
-  container) `trace/closest_hit` is about FINAL_CLOSEST faster and the replayed box tests
-  FINAL_KERNEL; see ledger entry 7 in the performance chapter. The pre-#258 box test
+  container) `trace/closest_hit` is about 17 % faster and the replayed box tests
+  of a ray about 20 %; see ledger entry 7 in the performance chapter. The pre-#258 box test
   is kept as a reference oracle (`crates/bunny-query/tests/support/box_entry_reference.rs`)
   with equivalence tests over seeded, extreme-coordinate and benchmark-scene
   corpora (`TRACE-TP-301` to `TRACE-TP-305`).
