@@ -18,7 +18,7 @@ is described in
 counterpart: the same `(enter, exit)` bits as `ray_intersects_aabb` on every input, with a
 prepared divisor per axis. It is for callers that need those exact distances for many boxes
 per ray. For traversal, `TraceRay::box_entry` is the faster test; the measured comparison is
-ledger entry 4 in [Performance](../performance/README.md).
+ledger entry 5 in [Performance](../performance/README.md).
 
 ## Status
 

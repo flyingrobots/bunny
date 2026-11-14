@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Möller–Granlund division by an invariant integer): `divisor.checked_div(a)`
   returns exactly `a.checked_div(divisor)`, `None` included. Best p50 on an
   Apple M5 Pro: 3.4 ns against 6.5 to 6.7 ns for `FixedQ32_32::checked_div`
-  (two runs, ledger entry 4).
+  (two runs, ledger entry 5).
 * Added `PreparedRay3` and `ray_intersects_aabb_prepared`: the same
   `(enter, exit)` bits as `ray_intersects_aabb` on every input, including the
   overflow inputs that `ray_intersects_aabb` now decides exactly

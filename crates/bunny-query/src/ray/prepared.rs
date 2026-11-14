@@ -13,7 +13,7 @@ use super::{aabb_wide, AxisBounds, RayInterval, SlabStop};
 /// Use it when many boxes are tested against one ray and the exact `(enter, exit)` bits of
 /// [`ray_intersects_aabb`] are needed. A ray tracer that only needs a conservative entry bound
 /// should use [`crate::TraceRay::box_entry`], which is faster per box and per ray (ledger
-/// entry 4 in `docs/topics/performance/README.md`).
+/// entry 5 in `docs/topics/performance/README.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PreparedRay3 {
     ray: FixedRay3,

@@ -609,7 +609,7 @@ Run 1:
 | `query/ray_sphere_miss` | 21.16 | 21.12 | -0.2% | 21.00 | 21.00 | +0.0% | 1.00× | 21.28 | 21.20 |
 | `query/ray_triangle` | 52.04 | 52.37 | +0.6% | 51.59 | 51.64 | +0.1% | 1.00× | 54.65 | 55.38 |
 | `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.98 | 5.98 | +0.0% | 1.00× | 6.02 | 6.06 |
-| `trace/ray_prepare` | 2.03 | 1.95 | -3.9% | 1.87 | 1.83 | -2.1% | 1.02× | 2.08 | 1.99 |
+| `trace/box_ray_prepare` | 2.03 | 1.95 | -3.9% | 1.87 | 1.83 | -2.1% | 1.02× | 2.08 | 1.99 |
 
 Run 2:
 
@@ -632,7 +632,7 @@ Run 2:
 | `query/ray_sphere_miss` | 21.16 | 21.08 | -0.4% | 21.04 | 21.00 | -0.2% | 1.00× | 21.28 | 21.20 |
 | `query/ray_triangle` | 51.72 | 52.45 | +1.4% | 51.35 | 51.96 | +1.2% | 0.99× | 54.77 | 55.42 |
 | `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.98 | 5.98 | +0.0% | 1.00× | 6.06 | 6.06 |
-| `trace/ray_prepare` | 1.95 | 1.95 | +0.0% | 1.83 | 1.83 | +0.0% | 1.00× | 1.99 | 1.99 |
+| `trace/box_ray_prepare` | 1.95 | 1.95 | +0.0% | 1.83 | 1.83 | +0.0% | 1.00× | 1.99 | 1.99 |
 
 The `prepared/*` and the base's missing cases report as new. The cases below time the same
 rays and box (`query/ray_aabb`, `prepared/ray_aabb`, `trace/box_entry`), best p50 in
@@ -646,7 +646,7 @@ nanoseconds, run 1 and run 2:
 | `prepared/ray_aabb` (the same exact bits) | 21.81 | 21.00 |
 | `prepared/ray_prepare` (once per ray) | 26.12 | 26.29 |
 | `trace/box_entry` (conservative, no distances) | 5.98 | 5.98 |
-| `trace/ray_prepare` (once per ray) | 1.83 | 1.83 |
+| `trace/box_ray_prepare` (once per ray) | 1.83 | 1.83 |
 
 A prepared division is 1.9 to 2.0 times faster than `checked_div`; a prepared box test is
 1.8 to 2.0 times faster than `ray_intersects_aabb`, and with its 26 ns preparation it

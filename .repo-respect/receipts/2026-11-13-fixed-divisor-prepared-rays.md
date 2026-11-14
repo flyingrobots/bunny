@@ -37,8 +37,8 @@ docs/topics/performance/test-plan.md
 .repo-respect/receipts/2026-11-13-fixed-divisor-prepared-rays.md
 
 Topic docs:
-docs/topics/performance/README.md (ledger entry 4)
-docs/topics/performance/test-plan.md (PERF-TP-024 to PERF-TP-031)
+docs/topics/performance/README.md (ledger entry 5)
+docs/topics/performance/test-plan.md (PERF-TP-028 to PERF-TP-035)
 
 Generated artifacts:
 None.
@@ -52,8 +52,8 @@ cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code,
 base b2fe36638429, 2026-11-13, Apple M5 Pro in the container; best p50, runs 1 and 2:
 prepared/div 3.46 and 3.42 ns vs num/div 6.75 and 6.71; prepared/ray_aabb 21.81 and
 21.00 vs query/ray_aabb 39.92 and 40.97; prepared/ray_prepare 26.12 and 26.29;
-trace/box_entry 5.98 and 5.98; trace/ray_prepare 1.83 and 1.83. The earlier host numbers
-are superseded. Full tables: ledger entry 4 and the pull request.
+trace/box_entry 5.98 and 5.98; trace/box_ray_prepare 1.83 and 1.83. The earlier host numbers
+are superseded. Full tables: ledger entry 5 and the pull request.
 cargo run --locked -p xtask -- topic-docs
 cargo run --locked -p xtask -- code-dojo --all
 
