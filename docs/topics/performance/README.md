@@ -781,7 +781,7 @@ that needs its own measurement.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
 
-### 7. Compact node layout with both child boxes in the parent (new API)
+### 8. Compact node layout with both child boxes in the parent (new API)
 
 **Where:** `compact_bvh`, `compact_closest_hit`, `compact_any_hit` and their types in
 `bunny-broadphase` (`src/compact.rs`, `src/compact_hit.rs`), flyingrobots/bunny#215.
@@ -1092,7 +1092,7 @@ today). A real change gets a fraction of it. Nothing below was tried.
    arithmetic time, so that share is unmeasured. With integer-only arithmetic and no SIMD
    in the core crates, expect a layout change alone to pay a small part of the box row.
    (Tried in flyingrobots/bunny#215: the layout paid 10 to 12 % of the ray, by removing one
-   dependent load per step rather than by cutting bytes; see ledger entry 7.)
+   dependent load per step rather than by cutting bytes; see ledger entry 8.)
 3. **A 4-wide BVH: #216.** Bound: the 44 to 50 ns residual (20 to 23 %), not the box row.
    A 4-wide node tests four boxes per visit and halves the depth, so the box tests along a
    path stay about the same (4 per wide level against 2 per binary level, over half the
@@ -1165,7 +1165,7 @@ Reading:
 That made a layout worth building, but for a different reason than bytes: the builder's
 layout needs two dependent loads per step (the popped node, for its child index, and then
 its children's boxes), the compact layout one. The result is
-[ledger entry 7](#7-compact-node-layout-with-both-child-boxes-in-the-parent-new-api).
+[ledger entry 8](#8-compact-node-layout-with-both-child-boxes-in-the-parent-new-api).
 
 **A two-box replica of `box_entry`.** The same module holds a harness replica of
 `box_entry`'s arithmetic from per-ray values prepared once (`floor(2^63 / |d|)` from the

@@ -42,7 +42,7 @@ CHANGELOG.md
 .repo-respect/receipts/2026-11-13-compact-node-layout.md
 
 Topic docs:
-docs/topics/performance/README.md (memory share of a box test, ledger entry 7)
+docs/topics/performance/README.md (memory share of a box test, ledger entry 8)
 docs/topics/performance/test-plan.md (PERF-REQ-008, PERF-TP-042..046)
 docs/topics/ray-tracing/README.md (Compact Layout)
 docs/topics/ray-tracing/test-plan.md (TRACE-REQ-028, TRACE-TP-301..307, mutation checks)

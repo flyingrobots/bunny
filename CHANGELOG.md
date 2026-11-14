@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calls and return the same results as `closest_hit` and `any_hit` on the source
   tree; malformed input is a typed error, including reference cycles. On the
   benchmark scene both searches are 10 to 12 % faster on an Apple M5 Pro (ledger
-  entry 7). Existing functions are unchanged.
+  entry 8). Existing functions are unchanged.
 * Added `bunny-perf` cases that estimate the memory share of a box test
   (`trace/kernel_box_load`, `trace/kernel_box_load_chain`,
   `trace/kernel_box_entry_addr_chain`), a two-box replica of the box test
