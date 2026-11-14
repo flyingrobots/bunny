@@ -96,6 +96,7 @@ impl ShadingFrame {
     ///
     /// [`SecondaryRayError::SampleOutsideUnitInterval`] when a coordinate of `sample` is
     /// outside `[0, 1)`.
+    #[inline]
     pub fn try_cosine_direction(
         &self,
         sample: [FixedQ32_32; 2],

@@ -60,6 +60,7 @@ impl SurfaceHit {
     /// `ray` on this triangle and face); [`SecondaryRayError::StartOutsideTraceDomain`] when
     /// the stepped start point is outside the trace domain. The trace kernel's hits on a ray
     /// and triangle inside the domain reach only the last of these, on the domain's boundary.
+    #[inline]
     pub fn try_new(
         surface: &TriangleSurface,
         ray: &TraceRay,
@@ -114,6 +115,7 @@ impl SurfaceHit {
     /// [`SecondaryRayError::SampleOutsideUnitInterval`] when a coordinate of `sample` is
     /// outside `[0, 1)`; the defensive [`SecondaryRayError::BounceRayRefused`] if
     /// `TraceRay::new` refuses the ray, which no input is known to reach.
+    #[inline]
     pub fn try_bounce_ray(&self, sample: [FixedQ32_32; 2]) -> Result<TraceRay, SecondaryRayError> {
         let direction = self.frame.try_cosine_direction(sample)?;
         TraceRay::new(self.point, direction)
