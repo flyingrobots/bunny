@@ -30,7 +30,8 @@ pub(super) struct Finding {
     pub(super) message: &'static str,
 }
 
-/// A banned crate in the normal dependency graph of a deterministic library crate.
+/// A banned crate in the dependency graph (normal and build edges) of a deterministic
+/// library crate.
 pub(super) struct DependencyFinding {
     pub(super) root: String,
     pub(super) dependency: String,
@@ -561,7 +562,7 @@ pub(super) fn token_float_literal_lines(tokens: &TokenStream) -> Vec<usize> {
     lines
 }
 
-/// Crates whose presence in a deterministic crate's normal dependency graph is banned,
+/// Crates whose presence in a deterministic crate's dependency graph is banned,
 /// with the Echo rule each one belongs to.
 const BANNED_DEPENDENCIES: &[(&str, &str)] = &[
     ("rand", "random"),
