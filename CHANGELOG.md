@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo's dependency check holds every crate a deterministic crate
+  depends on (normal and build edges, workspace and all features) to the
+  scanned set: another deterministic crate at its own directory, or a
+  crates.io crate on a reviewed allow list (`sha2` and its nine dependencies,
+  today's whole registry graph). Any other path crate, such as a new workspace
+  crate or `bunny-perf`, is `unscanned-dependency`, and any other crate, from
+  crates.io, git or another registry, `unlisted-dependency`; before, only 14
+  banned names were checked. Neither can be waived in a manifest. A
+  deterministic crate may no longer have a build script (`build-script`),
+  inside its directory or not (`build = "../../scripts/x.rs"` was accepted
+  and its file never scanned), nor a target path outside its directory
+  (`target-outside-crate`), and every workspace member must be a
+  deterministic, generator or tooling crate (`unclassified-crate`). Main
+  passes unchanged. Closes flyingrobots/bunny#349.
+
 * Code Dojo's `blanket-nursery` check parses the manifests as TOML
   (`toml_edit`, already in the lockfile through `bunny-wesley`'s `toml`; the
   lockfile gains only the edge from `xtask`), so `nursery.level = "deny"`, a

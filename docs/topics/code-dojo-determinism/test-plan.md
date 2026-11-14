@@ -50,6 +50,8 @@ topic-docs`.
 | ND-REQ-011 | Every module and macro the pinned toolchain documents directly below `std`, `core` and `alloc` is classified as banned whole, banned item by item or permitted, and the gate reports the classified rule for each and `unclassified-std` for any other; `std::backtrace`, `std::panic::Location`, `std::arch`, `std::random`, `last_os_error` and the platform modules of `std::os` other than `raw` are banned. | `README.md#the-std-classification` |
 | ND-REQ-012 | `float-boundary` bans the float types in core under every spelling: `f16`, `f32`, `f64`, `f128`, `c_float` and `c_double` under any path, and every name a core crate binds to a float with `type` or a renamed `use`, resolved to a fixed point across the core crates; a file's own non-float item of the same name is not a float. | `README.md#scope` |
 | ND-REQ-013 | A file is test code when every `mod` declaration reaching it from a crate root is under `cfg(test)` (or `all(.., test, ..)`), or when no root reaches it and it is under its crate's top-level `tests/` directory; a directory or file named `tests` compiled into the library is library code and gets the library's rules. | `README.md#scope` |
+| ND-REQ-014 | Every crate in the normal and build graph of a deterministic crate, with the workspace's features and with all features, is another deterministic crate at its own `crates/<name>` directory or a crates.io crate on `ALLOWED_REGISTRY_CRATES`: a banned crate keeps its rule, any other path crate is `unscanned-dependency` and any other crate (crates.io, git or another registry) `unlisted-dependency`; neither can be waived in a manifest. | `README.md#dependency-rules` |
+| ND-REQ-015 | A deterministic crate has no build script (`build.rs` that Cargo would build, or any `build` key but `false`) and no target whose `path` leaves its directory, and every workspace member is a deterministic, generator or tooling crate. | `README.md#dependency-rules` |
 
 ```toml
 [[requirement]]
@@ -115,6 +117,16 @@ status = "active"
 [[requirement]]
 id = "ND-REQ-013"
 summary = "A file is test code when every `mod` declaration reaching it from a crate root is under `cfg(test)` (or `all(.., test, ..)`), or when no root reaches it and it is under its crate's top-level `tests/` directory; a directory or file named `tests` compiled into the library is library code and gets the library's rules."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-014"
+summary = "Every crate in the normal and build graph of a deterministic crate, with the workspace's features and with all features, is another deterministic crate at its own `crates/<name>` directory or a crates.io crate on `ALLOWED_REGISTRY_CRATES`: a banned crate keeps its rule, any other path crate is `unscanned-dependency` and any other crate (crates.io, git or another registry) `unlisted-dependency`; neither can be waived in a manifest."
+status = "active"
+
+[[requirement]]
+id = "ND-REQ-015"
+summary = "A deterministic crate has no build script (`build.rs` that Cargo would build, or any `build` key but `false`) and no target whose `path` leaves its directory, and every workspace member is a deterministic, generator or tooling crate."
 status = "active"
 ```
 
@@ -210,7 +222,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-062 | doc tests | ND-REQ-008 | Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it. | `xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned` |
 | ND-TP-063 | host-access look-alikes | ND-REQ-003 | A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family. | `xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted` |
 | ND-TP-064 | documented Path methods | ND-REQ-008 | Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented. | `xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule` |
-| ND-TP-065 | optional and build dependencies | ND-REQ-005 | On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is. | `xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate` |
+| ND-TP-065 | optional and build dependencies | ND-REQ-005, ND-REQ-014, ND-REQ-015 | On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them; so are the issue forms of flyingrobots/bunny#349 (`bunny-geom` on the workspace member `crates/zz-probe-crate`, `bunny-num` with `build = "../../scripts/zz_build.rs"`), `bunny-mesh`'s `build.rs` and the three workspace members no list names, and nothing else is. | `xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate` |
 | ND-TP-071 | macro metavariables | ND-REQ-009 | Fifteen transcribers (the issue's `std::time::$t::now()`, `$m!($p)` and `#[path = $p]`; a segment below the root, a first segment, a bracketed call, a whole and an inner attribute, `path` in `cfg_attr`, a method and a turbofish method name, a `::` repetition, a repetition after `::`, a nested `format!`, a `use`) are each `macro-metavariable` at the stated line. | `xtask/src/nondeterminism/macro_tests.rs::metavariables_in_unresolvable_positions_are_rejected` |
 | ND-TP-072 | metavariable look-alikes | ND-REQ-003, ND-REQ-009 | `::` separators in a matcher, `$crate::..`, `<$t>::MAX`, `$a != $b`, a field access, a `doc` attribute value, matcher fragments, an expression and a repetition of values produce no finding in the rule family. | `xtask/src/nondeterminism/macro_tests.rs::metavariable_look_alikes_are_accepted` |
 | ND-TP-073 | standard macros by any path | ND-REQ-010 | `include!` through `std::prelude::v1` (the call and the import), `core::prelude::v1`, a module alias of a prelude and a `use` group; `env!` and `option_env!` through the preludes; `file!` bare, beside a function imported as `file` (a function import does not change the macro namespace), under `core` and renamed; `option_env!` imported under another name inside a macro body; `include_str!` of a host file through a prelude; `is_x86_feature_detected!` and `std::arch::is_aarch64_feature_detected!` are each reported under their rule. | `xtask/src/nondeterminism/macro_tests.rs::banned_macros_are_found_through_every_std_path` |
@@ -230,6 +242,11 @@ real `cargo tree` output and the real manifests.
 | ND-TP-087 | declaration forms | ND-REQ-013 | Twelve fixtures: `cfg(test)` on a directory module, on a `tests.rs` below a file module, the file's own `#![cfg(test)]`, an enclosing inline module, `all(test, ..)`, a test parent's child and a `#[path]` file's child are test code; `tests.rs` without `cfg`, `any(test, ..)`, `not(test)`, a file declared twice (once outside tests) and an unreached file under `src/` are not. | `xtask/src/module_tree/tests.rs::a_module_is_test_code_only_when_every_declaration_is_under_cfg_test` |
 | ND-TP-088 | crate roots | ND-REQ-013 | An integration test, the module it declares and an unreached file under `tests/` are test code; `benches/`, `examples/`, `src/bin/` and `build.rs` roots are not. | `xtask/src/module_tree/tests.rs::the_crate_tests_directory_is_test_code_and_other_roots_are_not` |
 | ND-TP-089 | the repository's test modules | ND-REQ-013 | The two test modules inside `src/` on main (`bvh/sah/tests/mod.rs`, `vertex_normals/tests/mod.rs`) are test code by their `cfg(test)` declarations, and `bvh/sah.rs` is not. | `xtask/src/module_tree/tests.rs::the_repository_test_modules_inside_src_are_still_tests` |
+| ND-TP-090 | unscanned and unlisted crates | ND-REQ-014 | Ten listings: the issue's `crates/zz-probe-crate`, `bunny-perf` and `chrono`; a path crate outside the workspace; a crate named `bunny-num` at another path; `sha2` from git; `digest` from another registry; an unlisted procedural macro; an unlisted crate below an allowed one; and a banned crate beside an unlisted one each give exactly the stated rule and crate. | `xtask/src/nondeterminism/dependency_scope_tests.rs::crates_the_gate_does_not_scan_are_findings` |
+| ND-TP-091 | the graph on main | ND-REQ-014 | The listing of main's registry graph (`sha2` and its nine dependencies below `bunny-mesh`), with Windows paths for two deterministic crates, gives no finding. | `xtask/src/nondeterminism/dependency_scope_tests.rs::the_graph_on_main_is_accepted` |
+| ND-TP-092 | no waiver for the scope rules | ND-REQ-014 | Reasoned manifest waivers for `unlisted-dependency` and `unscanned-dependency` leave both findings reported. | `xtask/src/nondeterminism/dependency_scope_tests.rs::the_new_dependency_rules_cannot_be_waived_in_a_manifest` |
+| ND-TP-093 | build scripts and targets | ND-REQ-015 | Eleven manifests: the issue's `build = "../../scripts/zz_build.rs"`, a build script inside the crate, `build = true` and a `build.rs` Cargo finds are `build-script` at the stated line; `build = false` beside a `build.rs` is none; a `[lib]`, `[[test]]`, absolute `[[bench]]` and inline example `path` outside the crate are `target-outside-crate`; paths that stay inside are none; invalid TOML is an error. | `xtask/src/crate_manifests/tests.rs::a_deterministic_crate_has_no_build_script_and_no_target_outside_it` |
+| ND-TP-094 | workspace members classified | ND-REQ-015 | Of five members (one through a `dir/*` glob), the two no list names are `unclassified-crate` at their lines. | `xtask/src/crate_manifests/tests.rs::every_workspace_member_is_classified` |
 
 ```toml
 [[case]]
@@ -855,10 +872,10 @@ status = "implemented"
 
 [[case]]
 id = "ND-TP-065"
-requirements = ["ND-REQ-005"]
+requirements = ["ND-REQ-005", "ND-REQ-014", "ND-REQ-015"]
 evidence = "test"
 test = "xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate"
-oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is."
+oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them; so are the issue forms of flyingrobots/bunny#349 (`bunny-geom` on the workspace member `crates/zz-probe-crate`, `bunny-num` with `build = '../../scripts/zz_build.rs'`), `bunny-mesh`'s `build.rs` and the three workspace members no list names, and nothing else is."
 tier = "fast"
 status = "implemented"
 
@@ -1030,6 +1047,51 @@ requirements = ["ND-REQ-013"]
 evidence = "test"
 test = "xtask/src/module_tree/tests.rs::the_repository_test_modules_inside_src_are_still_tests"
 oracle = "The two test modules inside `src/` on main (`bvh/sah/tests/mod.rs`, `vertex_normals/tests/mod.rs`) are test code by their `cfg(test)` declarations, and `bvh/sah.rs` is not."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-090"
+requirements = ["ND-REQ-014"]
+evidence = "test"
+test = "xtask/src/nondeterminism/dependency_scope_tests.rs::crates_the_gate_does_not_scan_are_findings"
+oracle = "Ten listings: the issue's `crates/zz-probe-crate`, `bunny-perf` and `chrono`; a path crate outside the workspace; a crate named `bunny-num` at another path; `sha2` from git; `digest` from another registry; an unlisted procedural macro; an unlisted crate below an allowed one; and a banned crate beside an unlisted one each give exactly the stated rule and crate."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-091"
+requirements = ["ND-REQ-014"]
+evidence = "test"
+test = "xtask/src/nondeterminism/dependency_scope_tests.rs::the_graph_on_main_is_accepted"
+oracle = "The listing of main's registry graph (`sha2` and its nine dependencies below `bunny-mesh`), with Windows paths for two deterministic crates, gives no finding."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-092"
+requirements = ["ND-REQ-014"]
+evidence = "test"
+test = "xtask/src/nondeterminism/dependency_scope_tests.rs::the_new_dependency_rules_cannot_be_waived_in_a_manifest"
+oracle = "Reasoned manifest waivers for `unlisted-dependency` and `unscanned-dependency` leave both findings reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-093"
+requirements = ["ND-REQ-015"]
+evidence = "test"
+test = "xtask/src/crate_manifests/tests.rs::a_deterministic_crate_has_no_build_script_and_no_target_outside_it"
+oracle = "Eleven manifests: the issue's `build = '../../scripts/zz_build.rs'`, a build script inside the crate, `build = true` and a `build.rs` Cargo finds are `build-script` at the stated line; `build = false` beside a `build.rs` is none; a `[lib]`, `[[test]]`, absolute `[[bench]]` and inline example `path` outside the crate are `target-outside-crate`; paths that stay inside are none; invalid TOML is an error."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-094"
+requirements = ["ND-REQ-015"]
+evidence = "test"
+test = "xtask/src/crate_manifests/tests.rs::every_workspace_member_is_classified"
+oracle = "Of five members (one through a `dir/*` glob), the two no list names are `unclassified-crate` at their lines."
 tier = "fast"
 status = "implemented"
 ```
