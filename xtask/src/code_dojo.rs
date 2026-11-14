@@ -325,7 +325,7 @@ pub(super) fn dependency_violations(
                 0,
                 finding.rule,
                 format!(
-                    "normal dependency graph reaches `{}`, which deterministic crates must not use",
+                    "dependency graph reaches `{}`, which deterministic crates must not use",
                     finding.dependency
                 ),
             )
@@ -334,12 +334,59 @@ pub(super) fn dependency_violations(
 }
 
 fn check_dependency_rules() -> Result<(), DynError> {
-    let root = git_root()?;
+    let violations = dependency_rule_violations(&git_root()?, &|| Command::new("cargo"))?;
+    if violations.is_empty() {
+        println!("Code Dojo: deterministic dependency graph clean");
+        return Ok(());
+    }
+    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
+    Err(DojoError::new("deterministic dependency policy violations found").into())
+}
+
+/// The feature sets the dependency graph is listed with: what the workspace enables, and
+/// every feature, so a banned crate behind an optional dependency that no workspace crate
+/// turns on is still found (a downstream crate can turn it on).
+const DEPENDENCY_FEATURE_SETS: &[(&str, &[&str])] =
+    &[("default", &[]), ("all", &["--all-features"])];
+
+/// Lists the dependency graph of the deterministic crates of the workspace at `root` with
+/// `cargo tree`, over normal and build edges and once per feature set, and applies the
+/// dependency rules to it. `cargo` makes the `cargo` command. A finding reported under
+/// both feature sets is listed once, under the first.
+pub(super) fn dependency_rule_violations(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+) -> Result<Vec<Violation>, DynError> {
+    let manifest = |crate_name: &str| {
+        std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
+            .unwrap_or_default()
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    let mut violations = Vec::new();
+    for (label, features) in DEPENDENCY_FEATURE_SETS {
+        let tree = dependency_tree(root, cargo, features)?;
+        for violation in dependency_violations(&tree, &manifest) {
+            let key = (violation.path.clone(), violation.rule, violation.message.clone());
+            if seen.insert(key) {
+                let message = format!("{} ({label} features)", violation.message);
+                violations.push(Violation { message, ..violation });
+            }
+        }
+    }
+    violations.sort_by(|left, right| (&left.path, left.rule).cmp(&(&right.path, right.rule)));
+    Ok(violations)
+}
+
+fn dependency_tree(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+    features: &[&str],
+) -> Result<String, DynError> {
     let mut args = [
         "tree",
         "--locked",
         "--edges",
-        "normal",
+        "normal,build",
         "--target",
         "all",
         "--no-dedupe",
@@ -349,25 +396,15 @@ fn check_dependency_rules() -> Result<(), DynError> {
         "{p}",
     ]
     .into_iter()
+    .chain(features.iter().copied())
     .map(str::to_owned)
     .collect::<Vec<_>>();
     args.extend(package_args(NONDETERMINISM_CRATES));
-    let output = Command::new("cargo").args(&args).current_dir(&root).output()?;
+    let output = cargo().args(&args).current_dir(root).output()?;
     if !output.status.success() {
         return Err(command_error("cargo tree", &output.stderr).into());
     }
-    let tree = String::from_utf8(output.stdout)?;
-    let manifest = |crate_name: &str| {
-        std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
-            .unwrap_or_default()
-    };
-    let violations = dependency_violations(&tree, &manifest);
-    if violations.is_empty() {
-        println!("Code Dojo: deterministic dependency graph clean");
-        return Ok(());
-    }
-    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
-    Err(DojoError::new("deterministic dependency policy violations found").into())
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {

@@ -25,7 +25,8 @@ rule exists for that reason.
 - Prove that waivers need a reason and are scoped to one rule.
 - Prove that deterministic look-alikes are not rejected.
 - Prove which crates are in scope and which are not.
-- Prove that banned crates in the normal dependency graph are found and
+- Prove that banned crates in the dependency graph (normal and build edges,
+  default and all features) are found and
   attributed to the crate that declares the path.
 
 ## Requirements
@@ -40,7 +41,7 @@ topic-docs`.
 | ND-REQ-002 | A waiver is a comment (never literal, doc or macro text) holding exactly one `dojo: allow <rule> -- <reason>` clause with a reason of at least eight characters; it covers its own line when it follows code, and otherwise the comment lines below it and the whole outermost item, statement, field, variant, arm or struct-literal field starting on the next code line; a refused waiver does not hide a valid one, and a manifest waiver is a whole-line TOML comment. | `README.md#waivers` |
 | ND-REQ-003 | Deterministic look-alikes of banned forms are accepted. | `README.md#rules` |
 | ND-REQ-004 | The source rules cover the core crates, `bunny-codec` and `bunny-contract`, including their tests; `xtask`, `bunny-perf` and `bunny-wesley` are outside them; `float-boundary` stays core-only. | `README.md#scope` |
-| ND-REQ-005 | The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
+| ND-REQ-005 | The dependency graph of each deterministic library crate, over normal and build edges and with both the workspace's features and all features, contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
 | ND-REQ-006 | No code reaches a deterministic crate without being scanned and no included data comes from outside it: `include!` is banned in every spelling, a `#[path]` module must name a `.rs` file inside the crate directory, and `include_str!`/`include_bytes!` must name one string literal inside the crate directory. | `README.md#compile-time-file-access` |
 | ND-REQ-007 | The time and thread rules name every documented item of `std::thread` and `std::time` deliberately, banned or permitted, from a snapshot of the pinned toolchain's documentation that a test ties to `rust-toolchain.toml`; every documented float method of `Duration` is `float-boundary` in core. | `docs/CODE_DOJO.md#keeping-the-name-lists-current` |
 | ND-REQ-008 | Host access that `CODE_STANDARDS.md` Rule 4 forbids beyond Echo's list is rejected in deterministic crates: `Path` methods that read the filesystem, platform `fs`, `fd`, `net` and `process` modules, `std::path::absolute`, `std::io::pipe` and terminal input; doc tests are scanned like other code. | `README.md#host-access-beyond-echo` |
@@ -68,7 +69,7 @@ status = "active"
 
 [[requirement]]
 id = "ND-REQ-005"
-summary = "The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason."
+summary = "The dependency graph of each deterministic library crate, over normal and build edges and with both the workspace's features and all features, contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason."
 status = "active"
 
 [[requirement]]
@@ -96,7 +97,12 @@ Each rejecting form states the rule ID and the line that must be reported; the
 failure message lists every form that slipped through together with what the
 gate did report, so a red run records the exact gap.
 
-Dependency cases pass a hand-written `cargo tree --prefix depth --format {p}
+ND-TP-065 builds a fixture workspace in a temporary directory (nine crates
+named like the deterministic ones, and two path crates named `rand` and
+`serde_json`) and runs the gate's own `code_dojo::dependency_rule_violations`
+on it, with `cargo` offline and its own `CARGO_HOME`, so the feature sets and
+edge kinds the gate asks Cargo for are tested end to end. The other
+dependency cases pass a hand-written `cargo tree --prefix depth --format {p}
 --no-dedupe -e normal` listing and a manifest lookup to
 `code_dojo::dependency_violations`, the function the full gate calls with the
 real `cargo tree` output and the real manifests.
@@ -174,6 +180,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-062 | doc tests | ND-REQ-008 | Banned code in an outer and an inner doc test, behind a hidden `# ` line, in a `rust,no_run` block and in a block doc comment is reported at the line of the doc comment that holds it. | `xtask/src/nondeterminism/host_access_tests.rs::doc_tests_are_scanned` |
 | ND-TP-063 | host-access look-alikes | ND-REQ-003 | A method `exists` with an argument, a field named `metadata`, lexical `Path` operations, `std::io::stdout`, `std::os::raw` types, a `text` code block and prose naming `HashMap` produce no finding in the rule family. | `xtask/src/nondeterminism/host_access_tests.rs::host_access_look_alikes_are_accepted` |
 | ND-TP-064 | documented Path methods | ND-REQ-008 | Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented. | `xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule` |
+| ND-TP-065 | optional and build dependencies | ND-REQ-005 | On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is. | `xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate` |
 
 ```toml
 [[case]]
@@ -794,6 +801,15 @@ requirements = ["ND-REQ-008"]
 evidence = "test"
 test = "xtask/src/nondeterminism/std_api_tests.rs::every_host_method_of_path_gets_its_rule"
 oracle = "Of the 65 `Path` methods the 1.96.0 documentation lists, the ten that read the filesystem are `std-fs` and `absolute` is `std-env`, as a zero-argument call and as a `Path::` path; every other method produces no finding, and every classified method is documented."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-065"
+requirements = ["ND-REQ-005"]
+evidence = "test"
+test = "xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate"
+oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is."
 tier = "fast"
 status = "implemented"
 ```
