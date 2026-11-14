@@ -306,7 +306,50 @@ Malformed buffers are reported as `TraversalError::InvalidNodeIndex` or
 `TraversalError::InvalidPrimitiveRange` when the search reaches the malformed
 node; a malformed node the search prunes is not inspected. A tree deeper than
 the 64-entry stack allows returns `TraversalError::StackOverflow`. An empty
-node buffer is a miss.
+node buffer is a miss. A buffer that is not a tree is bounded as described
+next.
+
+### Malformed Buffers
+
+`BvhNode` buffers are public data, so a caller can hand any of the four plain
+traversals (`intersect_aabb`, `intersect_ray`, `closest_hit`, `any_hit`) a
+buffer whose child index names an ancestor (a cycle) or in which two interior
+nodes name the same child pair (a shared subtree). Every index can be in range
+and the stack need never fill, so without a bound a cycle is searched forever.
+
+Each traversal therefore allows at most `nodes.len() / 2` interior visits and
+returns `TraversalError::InvalidNodeIndex` when a visit would exceed them. The
+count is a countdown in a local of the search loop. The box queries spend it
+after an interior visit has pushed its children, so a full stack still reports
+`StackOverflow` first; `closest_hit` and `any_hit` spend it when they pop an
+interior node.
+
+**Why a tree never reaches the bound.** In a tree every node has at most one
+parent and the root has none, so a search reaches each node at most once, and
+`i` interior visits whose children are all inside the slice name `2i + 1`
+distinct nodes: `2i + 1 <= n`, so `i <= n / 2`. A child outside the slice ends
+the search with the error it always had. The box queries pop the right child
+next, which is out of range whenever either child is (the children are `first`
+and `first + 1`), with no callback in between. In `closest_hit` and `any_hit`
+the count can run out only at an interior node whose children are not both in
+range (the visits before it already name every node), and that visit would
+return the same `InvalidNodeIndex` before calling anything. So on every buffer in
+which no node is reached twice, including ones whose only faults are
+out-of-range indices, bad leaf ranges or a depth past 64, the results, errors
+and callback calls are exactly those of the functions before
+flyingrobots/bunny#269, which a differential test against frozen copies checks.
+
+**What a buffer that is not a tree returns.** A cycle is `InvalidNodeIndex`
+after at most `n / 2` interior visits, with the leaf callbacks those visits
+reached. A cycle the stack used to overflow on first now returns
+`InvalidNodeIndex` instead of `StackOverflow`. A shared subtree is searched as
+the tree it unfolds into while the unfolding needs at most `n / 2` interior
+visits (a leaf shared by two parents is then reported twice) and is
+`InvalidNodeIndex` beyond that; with a query that reaches every node this is
+exactly the rule by which `compact_bvh` returns `NotATree`. The bound limits
+work; it is not a check that the buffer is a tree, and it does not inspect
+nodes the search does not reach. `InvalidNodeIndex` does not say whether the
+index was out of range or the bound ran out.
 
 ### Correctness: The Answer Does Not Depend On The Tree
 
@@ -420,10 +463,8 @@ fields are public, a hand-built compact tree can contain a reference cycle
 (a child that names an ancestor); a search that pushes only one child per
 visit would then loop forever without filling the stack. A tree visits each
 node at most once, so the search counts interior visits and returns
-`InvalidNodeIndex` once they exceed the number of compact nodes. (`closest_hit`
-on a malformed `BvhNode` buffer whose child index names an ancestor has the
-same exposure; it is unchanged here and noted as an open gap in the test
-plan.)
+`InvalidNodeIndex` once they exceed the number of compact nodes, the
+counterpart of the [bound on the plain traversals](#malformed-buffers).
 
 The layout is a second representation to keep in step with the first: a
 change to the search order or pruning rule must be made in both
