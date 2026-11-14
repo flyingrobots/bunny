@@ -54,7 +54,15 @@ Checks run:
 All inside flyingrobots/rust-dev:1.96.0 through devrun; nothing on the host.
 Red evidence at the test-first commit (stubbed reader): cargo test --locked -p bunny-codec
 --tests --no-fail-fast: 27 of 31 new tests fail, the existing tests pass.
-Final checks are listed in the pull request.
+cargo fmt --all; cargo clippy --locked -p bunny-codec --all-targets -- -D warnings;
+cargo test --locked -p bunny-codec --no-fail-fast: all pass (14 decimal, 15 mesh, 1 allocation
+test, existing 13 binary PLY tests unchanged); xtask topic-docs: contract graph clean.
+Mutation of the tie rule in round_half_even_div (half up, half down), each under
+timeout 120: APLY-TP-025 and APLY-TP-032 fail, 12 other decimal tests pass.
+Real asset (scratch test, not committed): Geordi's bun_zipper_res3.ply reads as 1889
+vertices and 3851 faces; converted min and max equal the conversion of the manifest
+bounds and an independent Python Fraction computation.
+Full gate at the final commit: see the pull request.
 
 Known risks:
 The conversion refuses a value of magnitude in [1e-10, 1e10) with more than 28

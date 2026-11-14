@@ -423,8 +423,9 @@ reader. `APLY-TP-033` checks the oracle itself against hand-derived values.
 ## Mutation Check
 
 The tie rule `quotient + (quotient & 1)` in `round_half_even_div` was mutated to
-round half up and to round half down; `APLY-TP-025`, `APLY-TP-031` and
-`APLY-TP-032` fail in both cases. See the pull request for the recorded run.
+round half up and to round half down; `APLY-TP-025` and `APLY-TP-032` fail in both
+cases and every other conversion test still passes, because random inputs almost
+never land on an exact tie. Each mutant ran under `timeout 120`.
 
 ## Open Gaps
 

@@ -188,4 +188,5 @@ vectors (exact ties both ways, negative values, exponents, both ends of the rang
 overflow and refusals), against an independent oracle that uses decimal-string
 arithmetic (repeated doubling, digit shifts and digit comparison, with no division
 and no machine-word arithmetic) on 20,000 seeded inputs, and across 2,000 consecutive
-exact ties. One mutation of the tie rule was run and caught; see the pull request.
+exact ties. Mutations of the tie rule (half up, half down) are caught by the tie tests; see
+the test plan.
