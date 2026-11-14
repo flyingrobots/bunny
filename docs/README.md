@@ -20,6 +20,7 @@ evidence exist.
 | [`topics/coordinate-law/`](topics/coordinate-law/) | Coordinate spaces, handedness, units, winding, transform naming, and projection reservations. |
 | [`topics/deterministic-contract-profile/`](topics/deterministic-contract-profile/) | Bunny-owned scalar profile vocabulary, generated witnesses, and wire-profile boundaries for future codecs. |
 | [`topics/matrix-types/`](topics/matrix-types/) | Fixed matrix layout, affine point/vector transforms, determinants, inverses, and transform-boundary reservations. |
+| [`topics/optics/`](topics/optics/) | The pinhole camera: inputs and refusals, the right-handed camera frame, the image convention (bottom-left pixel origin), ray generation, the direction scaling rule, its accuracy bound, and what trace distances mean for unnormalized directions. |
 | [`topics/performance/`](topics/performance/) | The fidelity rule for optimizations, the `bunny-perf` harness, `cargo xtask perf` before/after comparisons, CI regression gating, and the ledger of landed speedups. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | The ray-tracing kernels: trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, and rounding of distances and barycentrics. |
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |

@@ -17,12 +17,9 @@ pub enum CameraError {
     TangentTooLarge,
     /// The look direction is the zero vector.
     ZeroLook,
-    /// The up hint is zero, or parallel (or so nearly parallel that their cross product
-    /// cannot be normalized) to the look direction, so it fixes no roll.
+    /// The up hint is zero, or parallel or nearly parallel to the look direction (every
+    /// component of `unit(look) x unit(up)` below `2^16` raw units), so it fixes no roll.
     UpParallelToLook,
-    /// The look direction or up hint cannot be normalized: its length overflows Q32.32, or
-    /// it is so short that rounding breaks the unit-length invariant of `FixedUnitVec3`.
-    Unnormalizable,
     /// No scale keeps every ray direction inside the trace domain with a positive forward
     /// component. This is a defensive refusal: no accepted input is known to reach it.
     Unrepresentable,
@@ -38,7 +35,6 @@ impl fmt::Display for CameraError {
             Self::TangentTooLarge => "tangent of half the field of view exceeds the limit",
             Self::ZeroLook => "look direction is zero",
             Self::UpParallelToLook => "up hint is zero or parallel to the look direction",
-            Self::Unnormalizable => "look direction or up hint cannot be normalized",
             Self::Unrepresentable => "no scale keeps every ray inside the trace domain",
         })
     }

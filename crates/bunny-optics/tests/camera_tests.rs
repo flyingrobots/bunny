@@ -25,6 +25,9 @@ const NEG_Z: [i64; 3] = [0, 0, -ONE];
 /// Basis dot products must be below this many raw-squared units: a cosine below 2^-28.
 const ORTHOGONALITY_LIMIT: i128 = 1 << 36;
 
+/// A spec edit and the construction result it must produce.
+type RefusalCase = (fn(&mut CameraSpec), Result<(), CameraError>);
+
 struct Seeds(u64);
 
 impl Seeds {
@@ -97,7 +100,13 @@ fn basis(camera: &PinholeCamera) -> [[i64; 3]; 3] {
 }
 
 /// The exact image-plane oracle of the test plan: `-D - slack < d * D - S <= slack`.
-fn check_image_plane(camera: &PinholeCamera, sample: PixelSample, d: [i64; 3]) -> Result<(), String> {
+// The short names are those of the oracle formula in the test plan.
+#[allow(clippy::many_single_char_names)]
+fn check_image_plane(
+    camera: &PinholeCamera,
+    sample: PixelSample,
+    d: [i64; 3],
+) -> Result<(), String> {
     let (w, h) = (i128::from(camera.width()), i128::from(camera.height()));
     let k = camera.scale_shift();
     let a = (2 * i128::from(sample.x) - w) * i128::from(ONE) + 2 * i128::from(sample.sub_x.raw());
@@ -130,6 +139,13 @@ fn optics_tp_001_golden_basis_is_right_handed() {
         // A look vector of any length gives the same forward.
         ([0, 0, -5 * ONE], POS_Y, [NEG_Z, POS_X, POS_Y]),
     ];
+    // Look vectors one raw unit long and as long as Q32.32 allows normalize to full precision:
+    // round(2^32 / sqrt(2)) and round(2^32 / sqrt(3)).
+    for (look, forward) in
+        [([1, 1, 0], [3_037_000_500, 3_037_000_500, 0]), ([i64::MAX; 3], [2_479_700_525; 3])]
+    {
+        assert_eq!(raw3(camera(&spec(look, POS_Y, ONE, (2, 2))).forward().into_inner()), forward);
+    }
     for (index, (look, up, expected)) in goldens.into_iter().enumerate() {
         let camera = camera(&spec(look, up, ONE, (2, 2)));
         assert_eq!(basis(&camera), expected, "golden {index}");
@@ -288,21 +304,30 @@ fn optics_tp_005_degenerate_cameras_are_refused() {
         PinholeCamera::new(&spec).map(|_| ())
     };
     let edge = TRACE_COORD_LIMIT_RAW;
-    let cases: [(fn(&mut CameraSpec), Result<(), CameraError>); 22] = [
+    let cases: [RefusalCase; 24] = [
         (|_| {}, Ok(())),
         (|s| s.look = vec3(ORIGIN), Err(CameraError::ZeroLook)),
         (|s| s.up = vec3(ORIGIN), Err(CameraError::UpParallelToLook)),
         (|s| s.up = vec3(NEG_Z), Err(CameraError::UpParallelToLook)),
         (|s| s.up = vec3(POS_Z), Err(CameraError::UpParallelToLook)),
         (|s| s.up = vec3([0, 0, 5 * ONE]), Err(CameraError::UpParallelToLook)),
-        // (1, 1, 0) raw normalizes to (1.0, 1.0, 0), which is not unit length.
-        (|s| s.look = vec3([1, 1, 0]), Err(CameraError::Unnormalizable)),
-        (|s| s.look = vec3([i64::MAX; 3]), Err(CameraError::Unnormalizable)),
-        (|s| s.up = vec3([i64::MAX; 3]), Err(CameraError::Unnormalizable)),
+        // A hint 2^17 raw units off parallel is accepted; one 2^15 off is refused.
+        (|s| s.up = vec3([0, 1 << 17, -ONE]), Ok(())),
+        (|s| s.up = vec3([0, 1 << 15, -ONE]), Err(CameraError::UpParallelToLook)),
+        // Vectors of any length are prescaled, so the shortest and longest still normalize.
+        (|s| s.look = vec3([1, 1, 0]), Ok(())),
+        (|s| s.look = vec3([i64::MAX; 3]), Ok(())),
+        (|s| s.up = vec3([i64::MIN; 3]), Ok(())),
         (|s| s.position = vec3([TRACE_COORD_LIMIT_RAW - 1, 0, 0]), Ok(())),
         (|s| s.position = vec3([0, 1 - TRACE_COORD_LIMIT_RAW, 0]), Ok(())),
-        (|s| s.position = vec3([0, 0, TRACE_COORD_LIMIT_RAW]), Err(CameraError::PositionOutsideTraceDomain)),
-        (|s| s.position = vec3([-TRACE_COORD_LIMIT_RAW, 0, 0]), Err(CameraError::PositionOutsideTraceDomain)),
+        (
+            |s| s.position = vec3([0, 0, TRACE_COORD_LIMIT_RAW]),
+            Err(CameraError::PositionOutsideTraceDomain),
+        ),
+        (
+            |s| s.position = vec3([-TRACE_COORD_LIMIT_RAW, 0, 0]),
+            Err(CameraError::PositionOutsideTraceDomain),
+        ),
         (|s| s.width = 0, Err(CameraError::EmptyImage)),
         (|s| s.height = 0, Err(CameraError::EmptyImage)),
         (|s| s.width = MAX_IMAGE_DIMENSION, Ok(())),
@@ -378,9 +403,8 @@ fn optics_tp_008_point_at_rounds_and_refuses_overflow() {
     // than one raw unit of distance times |d_z| <= 1.0, plus the rounding of the product.
     let camera = camera(&spec(NEG_Z, POS_Y, ONE, (5, 3)));
     let plane = |x: i64, y: i64| [x * 64 * ONE, y * 64 * ONE, -4 * ONE];
-    let triangle =
-        TraceTriangle::new(vec3(plane(-1, -1)), vec3(plane(1, -1)), vec3(plane(0, 1)))
-            .expect("in the trace domain");
+    let triangle = TraceTriangle::new(vec3(plane(-1, -1)), vec3(plane(1, -1)), vec3(plane(0, 1)))
+        .expect("in the trace domain");
     for (x, y) in [(0, 0), (4, 2), (2, 1), (1, 2)] {
         let ray = camera.ray(PixelSample::centre(x, y)).expect("in range");
         let hit = ray.hit_triangle(&triangle, fixed(0), fixed(i64::MAX)).expect("hits");

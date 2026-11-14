@@ -12,6 +12,12 @@ use bunny_query::TraceRay;
 /// when a product or sum is not representable.
 #[must_use]
 pub fn point_at(ray: &TraceRay, distance: FixedQ32_32) -> Option<FixedVec3> {
-    let _ = (ray, distance);
-    None
+    let (origin, direction) = (ray.origin(), ray.direction());
+    let axis =
+        |start: FixedQ32_32, step: FixedQ32_32| start.checked_add(step.checked_mul(distance)?);
+    Some(FixedVec3::new(
+        axis(origin.x, direction.x)?,
+        axis(origin.y, direction.y)?,
+        axis(origin.z, direction.z)?,
+    ))
 }

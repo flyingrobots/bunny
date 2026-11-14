@@ -12,10 +12,16 @@
 //! ray. Directions are not normalized; every component is at most 1.0 in magnitude, as the
 //! trace kernels require. See `docs/topics/optics/README.md`.
 
+// The internal modules mark crate-private items `pub`, as `clippy::redundant_pub_crate`
+// asks; the workspace's `unreachable_pub` lint disagrees, and is allowed on those modules.
+#[allow(unreachable_pub)]
+mod basis;
 #[allow(clippy::module_name_repetitions)]
 mod camera;
 #[allow(clippy::module_name_repetitions)]
 mod error;
+#[allow(unreachable_pub)]
+mod plane;
 mod point;
 
 pub use camera::{

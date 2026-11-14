@@ -184,6 +184,15 @@ Viewport conversion must explicitly name the viewport origin and `y` direction.
 OpenGL, WebGPU, DirectX, image buffers, and UI systems disagree here; Bunny must
 not hide that disagreement behind ambient defaults.
 
+## Camera Image Convention
+
+The pinhole camera in `bunny-optics` names its image convention explicitly:
+its basis is right-handed (`right = forward x up`), so a camera looking down
+`-Z` with up `+Y` has right `+X`; pixel `(0, 0)` is the bottom-left pixel,
+columns grow toward right and rows grow toward up, matching positive NDC `y`.
+The contract and its evidence live in
+[the optics chapter](../optics/README.md).
+
 ## External Format Boundaries
 
 Mesh, scene, renderer, and file formats often carry their own conventions.

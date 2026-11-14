@@ -40,7 +40,7 @@ formatting.
 
 | ID | Requirement | Current Source |
 | --- | --- | --- |
-| OPTICS-REQ-001 | Construction refuses a zero look direction, an up hint that is zero or parallel to the look direction, a look or up vector that cannot be normalized, a position outside the trace domain, a zero or too-large image dimension, and a non-positive or too-large tangent, each with its own `CameraError`. | `README.md#construction` |
+| OPTICS-REQ-001 | Construction refuses a zero look direction, an up hint that is zero or within about `2^-16` of parallel to the look direction, a position outside the trace domain, a zero or too-large image dimension, and a non-positive or too-large tangent, each with its own `CameraError`; look and up vectors of any other length, from one raw unit to the full Q32.32 range, are accepted. | `README.md#construction` |
 | OPTICS-REQ-002 | The basis is right-handed: forward is the normalized look direction, up is on the up hint's side and orthogonal to forward, and right is `forward x up`; a camera looking down `-Z` with up `+Y` has right `+X`. | `README.md#camera-frame` |
 | OPTICS-REQ-003 | Pixel `(0, 0)` is the bottom-left pixel: column `x` grows toward right, row `y` grows toward up, a sub-pixel offset of one half is the pixel centre, pixels are square and the image spans `-tan..=tan` vertically on the plane one unit ahead. | `README.md#image-convention` |
 | OPTICS-REQ-004 | For every accepted camera and every in-range sample, `ray` returns a `TraceRay` whose direction components are at most 1.0 in magnitude and whose direction has a positive forward component. | `README.md#direction-scaling` |
@@ -53,7 +53,7 @@ formatting.
 ```toml
 [[requirement]]
 id = "OPTICS-REQ-001"
-summary = "Construction refuses a zero look direction, an up hint that is zero or parallel to the look direction, a look or up vector that cannot be normalized, a position outside the trace domain, a zero or too-large image dimension, and a non-positive or too-large tangent, each with its own CameraError."
+summary = "Construction refuses a zero look direction, an up hint that is zero or within about 2^-16 of parallel to the look direction, a position outside the trace domain, a zero or too-large image dimension, and a non-positive or too-large tangent, each with its own CameraError; look and up vectors of any other length, from one raw unit to the full Q32.32 range, are accepted."
 status = "active"
 
 [[requirement]]
@@ -137,7 +137,7 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-002 | Golden rays | OPTICS-REQ-003, OPTICS-REQ-005, OPTICS-REQ-006, OPTICS-REQ-009 | Hand-computed raw directions and scale shifts for five cameras, including a corner sample exactly at 1.0, a 2:1 image that needs one halving, a 3x3 image whose directions are floored thirds, and a moved camera along `+X`. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_002_golden_rays_lock_raw_outputs` |
 | OPTICS-TP-003 | Image-plane property | OPTICS-REQ-002, OPTICS-REQ-004, OPTICS-REQ-005 | The exact integer image-plane oracle over 2 000 seeded camera specifications (at least 1 990 must construct) and four samples each; the basis is orthogonal to within `2^-28`, right-handed and on the up hint's side. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_003_rays_pass_through_the_intended_image_plane_point` |
 | OPTICS-TP-004 | Domain extremes | OPTICS-REQ-004, OPTICS-REQ-005, OPTICS-REQ-006 | At the widest accepted tangent, the largest image, the most extreme aspect ratios, the narrowest tangent and a tangent just above 1.0, with axis-aligned and diagonal look directions, every corner pixel at sub-pixel offsets 0 and `1 - 2^-32` yields a ray with a positive forward component that satisfies the image-plane oracle. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_004_corner_samples_of_extreme_cameras_stay_in_the_trace_domain` |
-| OPTICS-TP-005 | Construction refusals | OPTICS-REQ-001 | Each degenerate input returns its error; values at each accepted bound construct and values one raw unit or one pixel past it are refused. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_005_degenerate_cameras_are_refused` |
+| OPTICS-TP-005 | Construction refusals | OPTICS-REQ-001 | Each degenerate input returns its error; values at each accepted bound construct and values one raw unit or one pixel past it are refused; the shortest and longest look and up vectors construct. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_005_degenerate_cameras_are_refused` |
 | OPTICS-TP-006 | Sample refusals | OPTICS-REQ-007 | Columns and rows at the image size, sub-pixel offsets of 1.0 and below zero return `None`; offsets 0 and `1 - 2^-32` return rays. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_006_samples_outside_the_image_are_refused` |
 | OPTICS-TP-007 | Image orientation | OPTICS-REQ-002, OPTICS-REQ-003 | For a camera looking down `-Z` with up `+Y`, pixel `(0, 0)` points left and down, the last pixel points right and up, and moving one column or row changes the direction only along right or up. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_007_pixel_origin_is_bottom_left_and_rows_grow_upward` |
 | OPTICS-TP-008 | Point at a distance | OPTICS-REQ-008 | Exact points for whole distances, ties rounded to even, an overflow refused, and a camera ray's triangle hit point within two raw units of the hit plane. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_008_point_at_rounds_and_refuses_overflow` |
@@ -151,7 +151,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_001_golden_basis_is_right_handed"
 oracle = "Exact raw forward, right and up for cameras looking down -Z, along +X and along +Y, and for an up hint tilted toward the viewer; right equals forward x up exactly for each."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-002"
@@ -160,7 +160,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_002_golden_rays_lock_raw_outputs"
 oracle = "Hand-computed raw directions and scale shifts for five cameras, including a corner sample exactly at 1.0, a 2:1 image that needs one halving, a 3x3 image whose directions are floored thirds, and a moved camera along +X."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-003"
@@ -169,7 +169,7 @@ evidence = "property"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_003_rays_pass_through_the_intended_image_plane_point"
 oracle = "The exact integer image-plane oracle over 2 000 seeded camera specifications (at least 1 990 must construct) and four samples each; the basis is orthogonal to within 2^-28, right-handed and on the up hint's side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-004"
@@ -178,16 +178,16 @@ evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_004_corner_samples_of_extreme_cameras_stay_in_the_trace_domain"
 oracle = "At the widest accepted tangent, the largest image, the most extreme aspect ratios, the narrowest tangent and a tangent just above 1.0, with axis-aligned and diagonal look directions, every corner pixel at sub-pixel offsets 0 and 1 - 2^-32 yields a ray with a positive forward component that satisfies the image-plane oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-005"
 requirements = ["OPTICS-REQ-001"]
 evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_005_degenerate_cameras_are_refused"
-oracle = "Each degenerate input returns its error; values at each accepted bound construct and values one raw unit or one pixel past it are refused."
+oracle = "Each degenerate input returns its error; values at each accepted bound construct and values one raw unit or one pixel past it are refused; the shortest and longest look and up vectors construct."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-006"
@@ -196,7 +196,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_006_samples_outside_the_image_are_refused"
 oracle = "Columns and rows at the image size, sub-pixel offsets of 1.0 and below zero return None; offsets 0 and 1 - 2^-32 return rays."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-007"
@@ -205,7 +205,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_007_pixel_origin_is_bottom_left_and_rows_grow_upward"
 oracle = "For a camera looking down -Z with up +Y, pixel (0, 0) points left and down, the last pixel points right and up, and moving one column or row changes the direction only along right or up."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-008"
@@ -214,7 +214,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/camera_tests.rs::optics_tp_008_point_at_rounds_and_refuses_overflow"
 oracle = "Exact points for whole distances, ties rounded to even, an overflow refused, and a camera ray's triangle hit point within two raw units of the hit plane."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-009"
@@ -223,15 +223,28 @@ evidence = "manual-audit"
 artifact = "docs/topics/optics/test-plan.md#mutation-checks"
 oracle = "Each scaling or rounding rule, broken on purpose, makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: break the scaling rule (skip the scale search, check pixel-centre
-corners instead of rectangle corners, make the direction limit exclusive) and
-the final floor (round to nearest instead) in a container copy of the source,
-and record which cases fail.
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/plane.rs`, and the camera tests were run
+(`cargo test --locked -p bunny-optics --test camera_tests`). Every mutation
+made at least one case fail; the restored source passed all eight.
+
+| Mutation in `plane.rs` | Rule broken | Failing cases |
+| --- | --- | --- |
+| Scale search limited to `k = 0` (`.take(1)`) | The scaling rule: some cameras need a halving | OPTICS-TP-001 to OPTICS-TP-008 (construction refuses the shared fixtures) |
+| Corners at pixel centres (`+-(width - 1)`, `+-(height - 1)`) instead of the rectangle corners | The corners checked must bound every sample | OPTICS-TP-004, OPTICS-TP-006 |
+| Direction limit made exclusive (`< 1.0`) | The limit is inclusive of 1.0, as in the trace domain | OPTICS-TP-002, OPTICS-TP-007 |
+| Final floor replaced by rounding to nearest | Every rounding in ray generation is a floor | OPTICS-TP-002, OPTICS-TP-003, OPTICS-TP-004 |
+
+The pixel-centre mutation is caught by the camera with tangent `1 + 2^-20`
+on a 1024-pixel square image in `OPTICS-TP-004`: its pixel-centre corners fit
+at `k = 0`, but a sample at the very corner of the image has a component of
+`-(1 + 2^-20)`, which `TraceRay::new` refuses. That case was added for this
+reason.
 
 ## Determinism Obligations And Evidence
 
@@ -247,11 +260,11 @@ the corners of the accepted domain into a test failure.
 
 ## Known Failures
 
-Planned cases fail until the camera is implemented.
+The current executable surface has no known failing cases.
 
 ## Edge Cases And Unusual Inputs
 
-Planned cases cover:
+Current tests cover:
 
 - a corner sample whose direction component is exactly 1.0;
 - a 1x1 image and images of one row or one column at the largest width;
@@ -261,7 +274,8 @@ Planned cases cover:
 - look directions along an axis and along a diagonal;
 - an up hint that is zero, equal to, opposite to or a multiple of the look
   direction, and one tilted toward the viewer;
-- look vectors too long or too short to normalize;
+- look and up vectors one raw unit long and as long as Q32.32 allows;
+- up hints just inside and just outside the near-parallel threshold;
 - positions one raw unit inside and outside the trace domain;
 - sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero.
 
