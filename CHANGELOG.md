@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returned `None` in release builds; it now returns `None` in both. Hits the
   trace kernel reports are not affected (flyingrobots/bunny#280).
 
+### Changed
+
+* `bunny-optics` no longer denies the whole `clippy::nursery` group, which
+  `CODE_STANDARDS.md` Rule 10 bans; it denies three nursery lints by name
+  (`missing_const_for_fn`, `redundant_pub_crate`, `use_self`), each with its
+  reason, and every lint allowance in the crate now states its reason. Rule 9
+  of `CODE_STANDARDS.md` lists `bunny-optics` as a core crate, as `xtask`
+  already enforced (flyingrobots/bunny#280).
+
 ## [0.7.1] - 2026-11-14
 
 This is the first 0.7 release on crates.io. `0.7.0` was tagged and has a GitHub release,
