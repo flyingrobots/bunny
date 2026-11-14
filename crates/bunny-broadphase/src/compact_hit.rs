@@ -5,6 +5,10 @@
 //! primitive calls. Only where the boxes are read from differs: an interior visit reads one
 //! [`CompactNode`] that holds both children's boxes, and a stack entry carries the child's
 //! reference, so a leaf is visited without reading a node at all.
+//!
+//! One search loop serves both the plain functions and their `_counted` forms: it is generic
+//! over a [`Tally`], which is the zero-sized [`NoTally`] for the plain functions and
+//! [`TraversalCounts`] for the counted ones, so both run the same steps.
 
 use bunny_geom::FixedAabb3;
 use bunny_num::FixedQ32_32;
@@ -12,6 +16,7 @@ use bunny_query::TraceRay;
 
 use crate::closest_hit::ClosestHit;
 use crate::compact::{CompactChild, CompactNode, CompactRoot};
+use crate::counts::{NoTally, Tally, TraversalCounts};
 use crate::traversal::TraversalError;
 
 const STACK_CAPACITY: usize = 64;
@@ -51,7 +56,7 @@ pub fn compact_closest_hit<F>(
 where
     F: FnMut(u32, FixedQ32_32) -> Option<FixedQ32_32>,
 {
-    Search::new(bvh, ray, t_max, false).run(hit)
+    Search::<NoTally>::new(bvh, ray, t_max, false).run(hit).map(|(best, NoTally)| best)
 }
 
 /// Reports whether `ray` hits any primitive within `0..=t_max` in a compact tree, stopping
@@ -68,12 +73,50 @@ pub fn compact_any_hit<F>(
 where
     F: FnMut(u32) -> bool,
 {
-    let search = Search::new(bvh, ray, t_max, true);
-    let found = search.run(|primitive, _| hit(primitive).then_some(FixedQ32_32::ZERO))?;
+    let search = Search::<NoTally>::new(bvh, ray, t_max, true);
+    let (found, NoTally) =
+        search.run(|primitive, _| hit(primitive).then_some(FixedQ32_32::ZERO))?;
     Ok(found.is_some())
 }
 
-struct Search<'a> {
+/// [`compact_closest_hit`], also returning the work the search did.
+///
+/// Returns the same result and calls `hit` with the same primitives and limits in the same
+/// order as [`compact_closest_hit`]; the counts are defined in [`TraversalCounts`].
+///
+/// # Errors
+/// Returns the error [`compact_closest_hit`] returns, and no counts.
+pub fn compact_closest_hit_counted<F>(
+    bvh: CompactView<'_>,
+    ray: &TraceRay,
+    t_max: FixedQ32_32,
+    hit: F,
+) -> Result<(Option<ClosestHit>, TraversalCounts), TraversalError>
+where
+    F: FnMut(u32, FixedQ32_32) -> Option<FixedQ32_32>,
+{
+    Search::<TraversalCounts>::new(bvh, ray, t_max, false).run(hit)
+}
+
+/// [`compact_any_hit`], also returning the work the search did up to its first hit.
+///
+/// # Errors
+/// Returns the error [`compact_any_hit`] returns, and no counts.
+pub fn compact_any_hit_counted<F>(
+    bvh: CompactView<'_>,
+    ray: &TraceRay,
+    t_max: FixedQ32_32,
+    mut hit: F,
+) -> Result<(bool, TraversalCounts), TraversalError>
+where
+    F: FnMut(u32) -> bool,
+{
+    let search = Search::<TraversalCounts>::new(bvh, ray, t_max, true);
+    let (found, counts) = search.run(|primitive, _| hit(primitive).then_some(FixedQ32_32::ZERO))?;
+    Ok((found.is_some(), counts))
+}
+
+struct Search<'a, T> {
     bvh: CompactView<'a>,
     ray: &'a TraceRay,
     limit: FixedQ32_32,
@@ -84,10 +127,11 @@ struct Search<'a> {
     /// Interior visits so far. A tree visits each node at most once, so more visits than
     /// nodes means a reference cycle in a malformed tree.
     visits: usize,
+    tally: T,
 }
 
-impl<'a> Search<'a> {
-    const fn new(
+impl<'a, T: Tally> Search<'a, T> {
+    fn new(
         bvh: CompactView<'a>,
         ray: &'a TraceRay,
         t_max: FixedQ32_32,
@@ -102,10 +146,11 @@ impl<'a> Search<'a> {
             stack: [(CompactChild { first: 0, prim_count: 0 }, FixedQ32_32::ZERO); STACK_CAPACITY],
             len: 0,
             visits: 0,
+            tally: T::default(),
         }
     }
 
-    fn run<F>(mut self, mut hit: F) -> Result<Option<ClosestHit>, TraversalError>
+    fn run<F>(mut self, mut hit: F) -> Result<(Option<ClosestHit>, T), TraversalError>
     where
         F: FnMut(u32, FixedQ32_32) -> Option<FixedQ32_32>,
     {
@@ -118,17 +163,20 @@ impl<'a> Search<'a> {
                 break;
             }
         }
-        Ok(self.best)
+        Ok((self.best, self.tally))
     }
 
-    fn entry(&self, bounds: &FixedAabb3) -> Option<FixedQ32_32> {
-        self.ray.box_entry(bounds, self.limit)
+    fn entry(&mut self, bounds: &FixedAabb3) -> Option<FixedQ32_32> {
+        let enter = self.ray.box_entry(bounds, self.limit);
+        self.tally.box_test(enter.is_some());
+        enter
     }
 
     fn push(&mut self, (child, enter): Entry) -> Result<(), TraversalError> {
         let Some(enter) = enter else { return Ok(()) };
         *self.stack.get_mut(self.len).ok_or(TraversalError::StackOverflow)? = (child, enter);
         self.len += 1;
+        self.tally.depth(self.len);
         Ok(())
     }
 
@@ -140,6 +188,7 @@ impl<'a> Search<'a> {
             if enter <= self.limit {
                 return Ok(Some(child));
             }
+            self.tally.skipped();
         }
         Ok(None)
     }
@@ -158,6 +207,7 @@ impl<'a> Search<'a> {
         }
         let node =
             self.bvh.nodes.get(child.first as usize).ok_or(TraversalError::InvalidNodeIndex)?;
+        self.tally.interior();
         let ([left, right], [left_box, right_box]) = (node.children, &node.bounds);
         let (left, right) = ((left, self.entry(left_box)), (right, self.entry(right_box)));
         let (near, far) = nearer_first(left, right);
@@ -177,7 +227,9 @@ impl<'a> Search<'a> {
             .ok_or(TraversalError::InvalidPrimitiveRange)?;
         let primitives =
             self.bvh.prim_indices.get(start..end).ok_or(TraversalError::InvalidPrimitiveRange)?;
+        self.tally.leaf();
         for &primitive in primitives {
+            self.tally.primitive();
             let accepted = hit(primitive, self.limit).is_some_and(|t| self.accept(primitive, t));
             if accepted && self.stop_at_first {
                 return Ok(true);
