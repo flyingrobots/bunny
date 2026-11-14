@@ -202,6 +202,14 @@ also checks that both give the same answer on every input: `scene/closest_visito
 `trace/closest_hit` must choose the same primitive on every ray. The harness runs that
 check before timing and exits with the differing ray indices if it fails.
 
+`bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
+`closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
+the search loop in `crates/bunny-perf/src/profile.rs`, built on public APIs only, so the core
+crates carry no counters; a test checks that it tests the same primitives in the same order as
+the shipped functions on every ray. The same module provides the `trace/kernel_*` cases, which
+replay the box and triangle tests the search makes and time them in isolation. See the
+[profile](#profile-of-closest_hit-on-the-benchmark-scene).
+
 ## Optimization Ledger
 
 Each landed optimization is recorded here with its technique, fidelity, trade-offs and
@@ -745,6 +753,228 @@ that needs its own measurement.
   equivalence tests against `checked_div` are the guard.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
+
+## Profile of `closest_hit` on the benchmark scene
+
+This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
+a ledger entry. It says where the time of `trace/closest_hit` goes, so that the stage 2
+experiments can be chosen by evidence. No library function changed.
+
+### Method
+
+- **Counters live in the harness.** `crates/bunny-perf/src/profile.rs` replicates the search
+  loop of `closest_hit` and `any_hit` using only public items (`TraceRay::box_entry`,
+  `BvhNode`, `TraceRay::hit_triangle`) and counts events. The core crates carry no counters.
+  `bunny-perf --stats` prints the tables below.
+- **The replica is checked against the shipped functions.** On every one of the 1 024 rays
+  the replica calls the primitive test with the same primitives, the same limits and in the
+  same order as `closest_hit` (the same primitives in the same order as `any_hit`), and
+  returns the same hit. Swapping the order of the two pushes in the replica makes both tests
+  fail.
+- **Triangle stages** are redone from the public inputs in `i128` and compared with
+  `hit_triangle` on every test: the stage counter never disagreed. A test that passes the
+  edge checks with a negative distance numerator returns before dividing, so it is counted
+  as `behind_origin`, not as divided (none occur on this scene).
+- **Ray classes** come from the hit `closest_hit` finds: sphere (primitive below 27 648),
+  ground only, or nothing.
+- **Time split.** The replica records every box test (node, limit) and triangle test
+  (primitive, limit) of all 1 024 `closest_hit` searches. The `trace/kernel_*` cases replay
+  exactly those calls on the real node boxes and triangles, in the order the search made
+  them, and report nanoseconds per ray (a batch is the calls of 1 024 rays). The `_chain`
+  cases make each call's limit depend on the previous result, which measures latency instead
+  of overlapped throughput.
+
+### The tree
+
+| | |
+| --- | ---: |
+| nodes | 55 277 |
+| leaves | 27 639 |
+| interior nodes | 27 638 |
+| maximum leaf depth (root is 0) | 19 |
+| mean leaf depth | 15.44 |
+| leaf sizes (primitives: leaves) | 1: 27 628, 2: 11 |
+| interior surface area / root surface area, summed | 3.13 |
+| primitive-weighted leaf area / root area, summed | 1.86 |
+
+The last two rows are the traversal and intersection terms of the surface-area heuristic
+with unit costs (total 4.99 in those units). The root box is dominated by the 40-unit ground
+triangles, so they serve as a baseline for comparing builders, not as a prediction of ray
+cost. The builder's leaves of up to four primitives are almost never used: 99.96 % of
+leaves hold one triangle. The tree is close to the smallest binary tree over these
+primitives, and its mean leaf depth (15.4) is near the 14.8 of a perfectly balanced tree
+with 27 650 leaves.
+
+### Counts per ray: `closest_hit`
+
+| counter per ray | all rays | hit the sphere | hit only the ground | hit nothing |
+| --- | ---: | ---: | ---: | ---: |
+| rays | 1 024 | 236 | 448 | 340 |
+| nodes popped | 11.37 | 30.78 | 7.58 | 2.89 |
+| popped and skipped (entry bound beyond best) | 0.79 | 3.44 | 0.00 | 0.00 |
+| interior nodes visited | 9.38 | 24.14 | 6.54 | 2.89 |
+| leaves visited | 1.20 | 3.21 | 1.04 | 0.00 |
+| `box_entry` calls | 19.76 | 49.27 | 14.08 | 6.78 |
+| `box_entry` returned a bound | 11.37 | 30.78 | 7.58 | 2.89 |
+| `box_entry` rejected | 8.39 | 18.49 | 6.50 | 3.89 |
+| interior visits pushing both children | 2.05 | 7.07 | 0.80 | 0.21 |
+| interior visits pushing one child | 6.27 | 15.65 | 4.98 | 1.46 |
+| interior visits pushing no child | 1.06 | 1.42 | 0.76 | 1.21 |
+| peak stack depth | 2.49 | 6.15 | 1.56 | 1.16 |
+| triangle tests | 1.63 | 3.21 | 2.04 | 0.00 |
+| failed at the determinant | 0.00 | 0.00 | 0.00 | 0.00 |
+| failed the first barycentric check | 0.49 | 1.13 | 0.53 | 0.00 |
+| failed the second barycentric check | 0.44 | 0.95 | 0.51 | 0.00 |
+| passed the edges, behind the origin (no division) | 0.00 | 0.00 | 0.00 | 0.00 |
+| reached the division | 0.70 | 1.13 | 1.00 | 0.00 |
+| divided, then beyond the distance limit | 0.02 | 0.10 | 0.00 | 0.00 |
+| divided, in range but not better | 0.00 | 0.00 | 0.00 | 0.00 |
+| divided, accepted as the new best | 0.67 | 1.03 | 1.00 | 0.00 |
+
+Each class column averages over that class's rays; "all rays" averages over 1 024. Sphere
+rays are 23 % of the rays and 57 % of the box tests (236 x 49.27 of 20 238).
+
+### Counts per ray: `any_hit`
+
+Rays are classed by what `closest_hit` finds, so the columns match.
+
+| counter per ray | all rays | hit the sphere | hit only the ground | hit nothing |
+| --- | ---: | ---: | ---: | ---: |
+| nodes popped | 9.74 | 24.29 | 7.27 | 2.89 |
+| interior nodes visited | 8.69 | 21.74 | 6.23 | 2.89 |
+| leaves visited | 1.04 | 2.55 | 1.04 | 0.00 |
+| `box_entry` calls | 18.39 | 44.48 | 13.45 | 6.78 |
+| `box_entry` returned a bound | 10.77 | 28.64 | 7.34 | 2.89 |
+| triangle tests | 1.26 | 2.55 | 1.55 | 0.00 |
+| reached the division | 0.67 | 1.00 | 1.00 | 0.00 |
+
+`any_hit` costs 91 to 93 % of `closest_hit` because stopping early saves little here. Over
+all rays it makes 93 % of the box tests, 86 % of the pops and 77 % of the triangle tests
+of `closest_hit`. Rays that hit nothing (33 %) do identical work in both. Ground rays
+save 4 % of their box tests and sphere rays 10 % of theirs (21 % of their pops). Read from
+the counts, not tested: the nearer-first descent reaches a first hit early, so stopping
+there only avoids the 3.4 skipped pops and the nearby subtrees the closest search still
+checks, and the descent to the first leaf, which both pay for, dominates.
+
+### Where the time goes
+
+Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container (`aarch64-linux`),
+2026-11-13, two complete runs (run with `--exclusive`, so no other container run
+overlapped) of:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter trace/
+```
+
+Base revision `e395090e8cd5` (`origin/main`). The harness source is the same on both
+sides, so the base and head columns of a run are a noise reference: no case moved by more
+than about 2 % in best p50 (the `ray_prepare` p50 moved 6 % on 0.1 ns). Head side, best
+p50, nanoseconds per ray:
+
+| Case | Run 1 | Run 2 | What it times |
+| --- | ---: | ---: | --- |
+| `trace/closest_hit` | 216.23 | 213.50 | the whole search |
+| `trace/any_hit` | 197.35 | 198.32 | the whole search |
+| `trace/kernel_box_entry` | 128.58 | 126.59 | the 19.76 box tests of a ray, independent calls |
+| `trace/kernel_box_entry_chain` | 129.96 | 131.88 | the same, each limit depending on the last result |
+| `trace/kernel_tri_rejected` | 15.34 | 15.30 | the 0.93 triangle tests of a ray that do not divide |
+| `trace/kernel_tri_divided` | 22.50 | 22.09 | the 0.70 triangle tests of a ray that divide |
+| `trace/kernel_tri_all_chain` | 37.11 | 38.05 | all 1.63 triangle tests, chained |
+
+The split of one ray (about 214 to 216 ns), from the two replay styles:
+
+| Part | ns per ray | Share | Per call |
+| --- | ---: | ---: | --- |
+| box tests (19.76 calls) | 127 to 132 | 59 to 61 % | 6.4 to 6.7 ns |
+| triangle tests that fail before dividing (0.93) | 15 | 7 % | about 16 ns |
+| triangle tests that divide (0.70) | 22 | 10 % | about 32 ns |
+| everything else | 44 to 50 | 20 to 23 % | about 4 ns per pop |
+
+"Everything else" is the stack, the pop and skip decisions, branch mispredictions, the
+closure call, bounds checks and any cache misses the replays do not repeat.
+
+A divided test costs about 15 ns more than a rejected one. That difference includes the
+products for `qvec` and `t` as well as `shifted_quotient`, so the division is at most about
+15 x 0.70 = 10 ns per ray (under 5 %), and less than that.
+
+**How "everything else" was estimated, and how uncertain it is.** It is the whole-search
+time minus the replayed kernel times, so it is a residual, not a measurement. Two
+effects move it. A replay calls the kernels from a tight loop over inputs known in advance,
+so branch prediction and out-of-order overlap are easier than in the real search, which
+picks the next node from the previous result; any extra cost of that sits in the residual.
+The chained replays bound the overlap effect from the other side: they cost 1 to 5 ns per
+ray more than the independent ones, so hidden latency is small for these kernels. The
+replays do read the real nodes in the search's order, so they include the cache behaviour
+of the 3 MB node array (55 277 nodes of 56 bytes, not checked against this chip's cache
+sizes). Treat the "everything else" row as good to plus or minus 15 ns; the box-test row
+is the better pinned one. The x86-64 CI runner reads about 1.85 times as long for
+`trace/closest_hit` (412 ns, ledger entry 4); this split was not measured there.
+
+### Neighbouring rays
+
+For square blocks of neighbouring camera rays, the box tests the rays make in total
+against the distinct nodes they test (`bunny-perf --stats`):
+
+| block | box tests, summed | distinct nodes | shared |
+| --- | ---: | ---: | ---: |
+| 1 x 1 rays | 20 238 | 20 238 | 0 % |
+| 2 x 2 rays | 20 238 | 10 316 | 49 % |
+| 4 x 4 rays | 20 238 | 7 346 | 64 % |
+| 8 x 8 rays | 20 238 | 6 518 | 68 % |
+
+### Ranked opportunities
+
+"Bound" means the ray's time if that part were free, from the numbers above (about 215 ns
+today). A real change gets a fraction of it. Nothing below was tried.
+
+1. **Fewer box tests per ray: #213 (builder), #216 (4-wide), #217 (packets).** Box tests are
+   127 to 132 ns (60 %); free, the ray would cost about 87 ns. 42 % of them (8.39 of 19.76)
+   reject. Sphere rays make 57 % of all box tests and 24.1 interior visits each where one
+   descent to a leaf takes about 15, so about 9 visits (18 box tests, about 115 ns) are
+   excess for them; averaged over all rays that is about 26 ns of box tests plus about
+   8 ns of pops. **#213 can therefore pay at most about 30 to 35 ns (15 %)** on this scene,
+   and only if the builder makes sphere rays descend almost one path. It cannot shrink the
+   tree: it already has one triangle per leaf and near-minimal depth. It can only reduce
+   box overlap.
+2. **A cheaper box test: #215 (compact node layout).** Bound: the box row, 127 to 132 ns.
+   A box test costs about 6.5 ns, and the chained replay is no slower than 5 ns per ray
+   above the independent one, so the test is limited by its own arithmetic (`i128`
+   products) more than by waiting for loads. A compact node cuts bytes per test, which
+   helps only the load share of that time; the replays do not separate load time from
+   arithmetic time, so that share is unmeasured. With integer-only arithmetic and no SIMD
+   in the core crates, expect a layout change alone to pay a small part of the box row.
+3. **A 4-wide BVH: #216.** Bound: the 44 to 50 ns residual (20 to 23 %), not the box row.
+   A 4-wide node tests four boxes per visit and halves the depth, so the box tests along a
+   path stay about the same (4 per wide level against 2 per binary level, over half the
+   levels) and the 20 238 box tests per 1 024 rays do not fall. What falls is pops, pushes
+   and steps between nodes, by up to about half of the residual, minus the cost of
+   ordering four children. Without SIMD a wide node does not make one box test cheaper.
+   Expect at most 15 to 25 ns.
+4. **Ray packets: #217.** Neighbouring rays do test the same nodes: 49 % of box tests in a
+   2 x 2 block, 64 % in 4 x 4, 68 % in 8 x 8 are repeats. If one test per node served a
+   whole 4 x 4 block, the box row could fall by up to 64 %, to about 47 ns, and the ray
+   would cost about 134 ns. That is a ceiling: each ray still needs its own entry bound
+   to order its children, so only a conservative whole-packet test saves anything, and it
+   saves less as rays diverge. These are primary camera rays on one smooth surface; secondary
+   rays share far less. #217 has the largest ceiling of the five and the least certain
+   payoff.
+5. **Rejecting far triangle hits before dividing: #214 cannot pay off on this scene.** Only
+   0.02 of the 0.70 divisions per ray are rejected by the distance limit afterwards, worth
+   about 0.3 ns. Accepted divisions are 1.03 per sphere ray and 1.00 per ground ray, one
+   per hit plus 0.03, so there is no division left to avoid. All triangle tests together are
+   37 to 38 ns (17 %): free, the ray would cost about 178 ns, and the division is at most
+   10 ns of that. A cheaper rejecting test (15 ns per ray) is a different idea from #214.
+
+No single item reaches the stage 2 target of under 100 ns per ray: free box tests give about
+87 ns, and nothing else comes close. The target needs both fewer box tests (builder,
+packets) and a lower cost per box test or per visit (layout, 4-wide).
+
+### Unmeasured
+
+x86-64 and wasm32; other scenes and ray batches (secondary rays share less between
+neighbours); the split of a box test into arithmetic and loads; whether a packet or a
+4-wide node would reach its ceiling; the effect of another builder on the sphere rays'
+excess visits (the 30 to 35 ns is an arithmetic ceiling, not a trial).
 
 ## Contract Change Cost Checks
 

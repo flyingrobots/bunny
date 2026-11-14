@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `(width + height) / 2^33` of the exact image-plane point. `point_at` gives the
   point at a hit distance. Images up to 32768 pixels per side and tangents up
   to 256.0 are accepted. See the new `docs/topics/optics/` chapter and test plan.
+* Added `bunny-perf --stats` and the `trace/kernel_*` cases: per-ray counters
+  for `closest_hit` and `any_hit` (nodes, box tests, triangle-test stages,
+  divisions, tree shape, shared nodes between neighbouring rays) from a harness
+  replica of the search loop that a test checks against the shipped functions on
+  every benchmark ray, and timed replays of the box and triangle tests the
+  search makes. The performance chapter's new profile section says where the
+  time of `trace/closest_hit` goes and ranks the stage 2 options. No library
+  function changed and the core crates carry no counters.
 * Added `FixedDivisor`, a Q32.32 divisor prepared for repeated exact division
   (Möller–Granlund division by an invariant integer): `divisor.checked_div(a)`
   returns exactly `a.checked_div(divisor)`, `None` included. Best p50 on an
