@@ -10,7 +10,7 @@
 // is in range by construction (a vertex index below 13, a limb below 2^32, a draw reduced first).
 #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
 
-use std::cmp::Ordering;
+mod exact;
 
 use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
@@ -18,6 +18,8 @@ use bunny_num::FixedQ32_32;
 use bunny_optics::{VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTEX_NORMALS_ID};
 use bunny_query::TRACE_COORD_LIMIT_RAW;
 use wasm_bindgen_test::wasm_bindgen_test;
+
+use exact::within_unit;
 
 const ONE: i64 = ONE_RAW;
 /// `round(0.6 * 2^32)`: the exact value is 2 576 980 377.6.
@@ -161,67 +163,6 @@ fn optics_tp_068_meshes_outside_the_domain_are_refused_in_order() {
     assert_eq!(MAX_NORMAL_TRIANGLES, 1 << 32);
 }
 
-/// An unsigned integer of any size: little-endian base-`2^32` limbs, no trailing zero limb.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Big(Vec<u32>);
-
-impl Big {
-    fn new(value: u128) -> Self {
-        let limbs = (0..4).map(|k| (value >> (32 * k)) as u32).collect();
-        Self(limbs).trim()
-    }
-
-    fn trim(mut self) -> Self {
-        while self.0.last() == Some(&0) {
-            self.0.pop();
-        }
-        self
-    }
-
-    fn mul(&self, other: &Self) -> Self {
-        let mut out = vec![0_u64; self.0.len() + other.0.len() + 1];
-        for (i, &a) in self.0.iter().enumerate() {
-            let mut carry = 0_u64;
-            for (j, &b) in other.0.iter().enumerate() {
-                let t = out[i + j] + u64::from(a) * u64::from(b) + carry;
-                out[i + j] = t & 0xFFFF_FFFF;
-                carry = t >> 32;
-            }
-            out[i + other.0.len()] += carry;
-        }
-        Self(out.into_iter().map(|limb| limb as u32).collect()).trim()
-    }
-
-    fn add(&self, other: &Self) -> Self {
-        let mut out = Vec::new();
-        let mut carry = 0_u64;
-        for k in 0..=self.0.len().max(other.0.len()) {
-            let limb = |b: &Self| u64::from(b.0.get(k).copied().unwrap_or(0));
-            let t = limb(self) + limb(other) + carry;
-            out.push((t & 0xFFFF_FFFF) as u32);
-            carry = t >> 32;
-        }
-        Self(out).trim()
-    }
-
-    fn compare(&self, other: &Self) -> Ordering {
-        self.0.len().cmp(&other.0.len()).then_with(|| self.0.iter().rev().cmp(other.0.iter().rev()))
-    }
-}
-
-/// Whether `a * sqrt(q) <= s * 2^32`, exactly.
-fn at_most(a: i128, s: i128, q: &Big) -> bool {
-    let a_magnitude = Big::new(a.unsigned_abs());
-    let lhs = a_magnitude.mul(&a_magnitude).mul(q);
-    let s_scaled = Big::new(s.unsigned_abs()).mul(&Big::new(1 << 32));
-    let rhs = s_scaled.mul(&s_scaled);
-    if s >= 0 {
-        a <= 0 || lhs.compare(&rhs) != Ordering::Greater
-    } else {
-        a < 0 && lhs.compare(&rhs) != Ordering::Less
-    }
-}
-
 fn shoelace(a: [i128; 3], b: [i128; 3], c: [i128; 3]) -> [i128; 3] {
     let cross = |p: [i128; 3], q: [i128; 3]| {
         [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]]
@@ -249,13 +190,8 @@ fn check_vertex(normal: Option<Raw3>, sum: [i128; 3]) -> Result<(), String> {
     if sum == [0; 3] {
         return Err(format!("{raw:?} for a zero sum"));
     }
-    let square = |s: i128| Big::new(s.unsigned_abs()).mul(&Big::new(s.unsigned_abs()));
-    let q = sum.iter().fold(Big::new(0), |q, &s| q.add(&square(s)));
-    for (component, s) in raw.iter().zip(sum) {
-        let r = i128::from(*component);
-        if !(at_most(r - BOUND_RAW, s, &q) && at_most(-(r + BOUND_RAW), -s, &q)) {
-            return Err(format!("{raw:?} is not within {BOUND_RAW} raw of the unit {sum:?}"));
-        }
+    if !within_unit(raw, sum, BOUND_RAW) {
+        return Err(format!("{raw:?} is not within {BOUND_RAW} raw of the unit {sum:?}"));
     }
     Ok(())
 }

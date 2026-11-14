@@ -78,6 +78,7 @@ formatting.
 | TRACE-REQ-027 | hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit. | `README.md#exact-triangle-test` |
 | TRACE-REQ-028 | compact_bvh converts a built tree into the compact layout deterministically (the same bytes on every target) and reports malformed input as a typed error; compact_closest_hit and compact_any_hit on the result make the same primitive calls in the same order and return the same answers as closest_hit and any_hit on the source tree. | `README.md#compact-layout` |
 | TRACE-REQ-029 | box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included. | `README.md#conservative-box-test` |
+| TRACE-REQ-030 | TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det. | `README.md#exact-triangle-test` |
 
 ```toml
 [[requirement]]
@@ -194,6 +195,11 @@ status = "active"
 id = "TRACE-REQ-029"
 summary = "box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-030"
+summary = "TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det."
+status = "active"
 ```
 
 ## Fixtures
@@ -297,6 +303,8 @@ Regenerating them is a contract change.
 | TRACE-TP-310 | Reference at the ends of i64 | TRACE-REQ-029 | Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range` |
 | TRACE-TP-311 | Reference on the benchmark scene | TRACE-REQ-029 | Every box test the closest_hit and any_hit searches make on the benchmark scene's 1 024 camera rays returns the same Option as the retained reference at the recorded limit, at i64::MAX, 0, -1 and at the reference's entry bound and one below it. | `crates/bunny-perf/src/profile.rs::tests::every_recorded_box_test_matches_the_reference_box_test` |
 | TRACE-TP-312 | Deliberate mutations of the faster box test | TRACE-REQ-029 | Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-308 to TRACE-TP-311 fail. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-313 | Exact numerators of constructed hits | TRACE-REQ-030 | 4 000 seeded constructed hits (as in TRACE-TP-001, small triangles near the origin and large ones near the domain limit) through the point with weights `(b, c) / 64`: `64 u = b det` and `64 v = c det` exactly, `det < 2^117`, and `BarycentricNumerators::new` accepts the returned values unchanged. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits` |
+| TRACE-TP-314 | Numerators off the triangle | TRACE-REQ-030 | `new` accepts the corners, an interior point and `det = i128::MAX`, and refuses `det <= 0`, a negative `u` or `v`, `u + v > det` and a `u + v` that overflows. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the_triangle_are_refused` |
 
 ```toml
 [[case]]
@@ -783,6 +791,24 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-308 to TRACE-TP-311 fail."
 tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-313"
+requirements = ["TRACE-REQ-030"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits"
+oracle = "Constructed exact weights: the hit point has weights (b, c) / 64 by construction."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-314"
+requirements = ["TRACE-REQ-030"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the_triangle_are_refused"
+oracle = "Specified: the conditions of the exact triangle test."
+tier = "fast"
 status = "implemented"
 ```
 

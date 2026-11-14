@@ -5,7 +5,10 @@ use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
-use bunny_query::{TraceRay, TraceTriangle, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW};
+use bunny_query::{
+    BarycentricNumerators, TraceRay, TraceTriangle, TRACE_COORD_LIMIT_RAW,
+    TRACE_DIRECTION_LIMIT_RAW,
+};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const TRACE_SEED: u64 = 0xB002_7ACE_0000_0001;
@@ -445,4 +448,52 @@ fn trace_tp_011_degenerate_triangles_parallel_rays_and_far_hits_miss() {
     assert_eq!(ray(far_start, [0, 0, -1]).hit_triangle(&flat, FixedQ32_32::ZERO, FAR), None);
     let near_enough = ray(far_start, [0, 0, -one]).hit_triangle(&flat, FixedQ32_32::ZERO, FAR);
     assert_eq!(near_enough.map(|hit| hit.distance.raw()), Some(1 << 39));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits() {
+    let mut seeds = Seeds(TRACE_SEED ^ 0x0313);
+    let mut checked = 0;
+    for (case, (coord_bound, step_bound)) in [(8 * ONE_RAW, ONE_RAW / 256), (1 << 38, 1 << 31)]
+        .into_iter()
+        .cycle()
+        .take(4000)
+        .enumerate()
+    {
+        let built = Constructed::seeded(&mut seeds, coord_bound, step_bound);
+        let b = seeds.signed(WEIGHT_STEPS).abs();
+        let c = seeds.signed(WEIGHT_STEPS - b).abs();
+        let (Some(triangle), Some(ray)) = (built.triangle(), built.ray(b, c, 2)) else {
+            continue;
+        };
+        let Some(hit) = ray.hit_triangle(&triangle, FixedQ32_32::ZERO, FAR) else {
+            continue;
+        };
+        // The point has weights (b, c) / 64 exactly, so u / det and v / det are those ratios,
+        // and the values satisfy the triangle test's own conditions.
+        let n = hit.barycentric_numerators();
+        let steps = i128::from(WEIGHT_STEPS);
+        assert_eq!(
+            (n.u() * steps, n.v() * steps),
+            (i128::from(b) * n.det(), i128::from(c) * n.det()),
+            "case={case}"
+        );
+        assert_eq!(BarycentricNumerators::new(n.u(), n.v(), n.det()), Some(n), "case={case}");
+        assert!(n.det() < 1 << 117, "case={case}");
+        checked += 1;
+    }
+    assert!(checked > 3000, "{checked} hits checked");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_314_numerators_off_the_triangle_are_refused() {
+    let new = BarycentricNumerators::new;
+    assert!(new(0, 0, 1).is_some() && new(1, 0, 1).is_some() && new(0, 1, 1).is_some());
+    assert!(new(3, 4, 7).is_some() && new(0, 0, i128::MAX).is_some());
+    for (u, v, det) in [(0, 0, 0), (0, 0, -1), (-1, 0, 1), (0, -1, 1), (1, 1, 1), (4, 4, 7)] {
+        assert_eq!(new(u, v, det), None, "({u}, {v}, {det})");
+    }
+    assert_eq!(new(i128::MAX, 1, i128::MAX), None, "u + v overflows");
+    let n = new(3, 4, 7).expect("on the triangle");
+    assert_eq!((n.u(), n.v(), n.det()), (3, 4, 7));
 }

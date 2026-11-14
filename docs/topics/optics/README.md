@@ -46,7 +46,9 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `MAX_LIGHT_RAW`, `SHADOW_T_MAX` and `MIN_BOUNCE_COSINE_RAW`;
 - for [vertex normals](#vertex-normals) (`bunny-vertex-normals/1`):
   `VertexNormals` (`new`, `normals`), `VertexNormalError`,
-  `MAX_NORMAL_TRIANGLES` and `VERTEX_NORMALS_ID`.
+  `MAX_NORMAL_TRIANGLES` and `VERTEX_NORMALS_ID`;
+- for the [smooth normal](#smooth-normal) (`bunny-smooth-normal/1`):
+  `smooth_normal` and `SMOOTH_NORMAL_ID`, with `bunny_query::BarycentricNumerators`.
 
 Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
 attenuation and materials other than diffuse (the rest of #160) are not part
@@ -534,8 +536,9 @@ closest-hit and any-hit queries (`bunny-broadphase`), which sampler pair each
 decision uses, the loop over pixels and samples, and the pixel value
 ([Pixel Values](#pixel-values)). Materials other than diffuse, other lights,
 textures, reflection and refraction are not defined here. Per-vertex normals
-for a mesh are ([Vertex Normals](#vertex-normals)); interpolating them across a
-triangle into a shading normal is not yet.
+for a mesh are ([Vertex Normals](#vertex-normals)), and so is their
+interpolation at a hit ([Smooth Normal](#smooth-normal)); a shading frame built
+from it, and its rule against the geometric normal, are not yet.
 
 ### Shading Identity
 
@@ -657,6 +660,73 @@ additions per triangle, one normalization (two integer square roots and
 three divisions) per vertex, and two allocations: the sums (48 bytes per
 vertex) and the normals. The measured cost per vertex is under
 [Accuracy And Cost](#accuracy-and-cost).
+
+### Smooth Normal
+
+`smooth_normal(normals, weights)` interpolates a triangle's three vertex unit
+normals (in the order `v0`, `v1`, `v2`) at a point given by its exact
+barycentric numerators, and returns the unit shading normal there. The weights
+come from `TriangleHit::barycentric_numerators` (see the
+[ray-tracing chapter](../ray-tracing/README.md#exact-triangle-test)): the
+integers `u`, `v` and `det > 0` the exact triangle test decided the hit with,
+so the weights of the vertices are `w = (det - u - v, u, v) / det` with no
+rounding. The rule has its own identity, `bunny-smooth-normal/1`
+(`SMOOTH_NORMAL_ID`); no step of `bunny-diffuse-shading/1` uses it.
+
+1. **Shared normal.** When every vertex with a nonzero weight has the same
+   normal, that normal is returned unchanged. A hit on a corner, on an edge
+   between equal normals, or on a face whose three normals are equal (a flat
+   part of a mesh) gets its vertex normal bit for bit. Without this step the
+   normal would be normalized again, which can move a component by a raw
+   unit: `FixedUnitVec3` holds vectors whose length is within one raw unit of
+   1.0, not exactly 1.0.
+2. **Shift.** Each exact `w_i` is shifted right, floored, by the same `k`: the
+   smallest that puts `det >> k` below `2^62` (zero when `det` already is).
+   `det` reaches about `2^117` (`3 * 2^115`), and a weight times a normal
+   component (up to `2^32 + 1` raw) would need about `2^150`; after the shift
+   each product is below `2^95`. Each weight is shifted on its own, so the
+   shifted weights need not sum to `det >> k`.
+3. **Combine.** `m = sum (w_i >> k) n_i`, exact in `i128`. Nothing divides by
+   `det`: the normalization makes any positive scale cancel.
+4. **Normalize.** `m` is normalized exactly as `TriangleSurface::new`
+   normalizes a face normal: a power-of-two prescale to a largest component in
+   `[2^61, 2^62)` (exact when it scales up, floored when it scales down), the
+   floor of the integer square root of the sum of squares, and each component
+   divided by it, rounded to nearest with ties to even.
+
+`None` means `m` is exactly zero: vertex normals that cancel at this point,
+such as opposite normals at the midpoint of their edge. The caller chooses
+what to shade with then, for example the geometric normal.
+
+**Bound.** Let `rho = |sum w_i n_i| / (2^32 det)` be the length, in units, of
+the exact interpolation of the given raw normals (1.0 where they agree, less
+where they spread apart, 0 where they cancel). Each component is within
+`1 + 2^-26 / rho` raw units of the exact unit vector along `sum w_i n_i`, and
+within 1 raw unit when `k = 0`:
+
+- one raw unit from step 4, which is the bound of the face normal;
+- the floors of step 2 change `m` by `e = sum f_i n_i` with each `f_i` in
+  `[0, 1)`, so `|e| < 3 (2^32 + 2)`; with `k > 0`, `det >> k` is at least
+  `2^61`, so `|m|` is at least `rho 2^93`, and the unit vector moves by at
+  most `2 |e| / |m| < 6 (2^32 + 2) / (rho 2^93)`: below `2^-26 / rho` raw
+  units.
+
+For `rho >= 2^-26` that is within 2 raw units. For nearly cancelling normals
+the direction itself is ill-conditioned, and the bound grows as `rho` falls.
+
+**Every rounding is pinned.** The rule rounds in four places: the weight shift
+(floor), the prescale (floor when it scales down), the length (floor of the
+square root) and the division (to nearest, ties to even). The test plan has an
+input for each that sits on its boundary, with a neighbour on either side
+where one applies: a tied weight that the floor sends to zero, a component that
+is exactly half a raw unit after the division, a squared length above
+`(L + 1/2)^2` where a rounded square root would differ, and a prescale whose
+dropped bits are above one half. Changing any of the four rules fails a test.
+
+**Cost.** One comparison of up to three normals, three shifts, nine `i128`
+multiplications and one normalization (two integer square roots and three
+divisions) per hit; no division by `det`. The measured cost is not yet in this
+chapter.
 
 ### Orthonormal Frame
 
@@ -991,6 +1061,7 @@ with components in `-1.0..=1.0`. `SecondaryRayError` is `#[non_exhaustive]`.
 | Bounce direction | Within 4 raw units of the ideal map; length within 8; `d . n >= 2^15` | 2.1; 3 |
 | Light cosine | Within 3 raw units, clamped to `0..=1.0` | 1.2 |
 | Vertex normal | Each component within 1 raw unit of the exact unit vector along the face sum | — |
+| Smooth normal | Each component within `1 + 2^-26 / rho` raw units of the exact interpolation's unit vector (1 when `det < 2^62`); a shared normal exactly | — |
 
 Timings on an Apple M5 Pro in the `rust-dev:1.96.0` container, run alone: the
 `shade/` cases are the p50 across 11 interleaved rounds of `cargo run --locked
