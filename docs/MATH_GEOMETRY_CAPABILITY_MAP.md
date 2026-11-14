@@ -96,7 +96,7 @@ policy from their consumers.
 | Collision and contact | Ray and closest queries | Narrowphase coverage |
 | Acceleration | BVH, sweep-and-prune | Dynamic structures |
 | Mesh and codecs | Quantized mesh, PLY/OBJ, decoder | Topology and encoder |
-| Visibility and optics | Trace kernels, pinhole camera, pixel values | Projection and visibility math |
+| Visibility and optics | Trace kernels, pinhole camera, sampling, diffuse shading, pixel values | Projection and visibility math |
 | SIMD and performance | Scalar reference | Parity and benchmarks |
 | Consumer confidence | Docs, witnesses, gates | Examples and fixtures |
 
@@ -272,6 +272,11 @@ Current surface:
 - `bunny-optics` pixel values: exact sample accumulation, sRGB and linear tone
   curves, 8-bit and 16-bit codes over caller-provided slices
   (`docs/topics/optics/`)
+- `bunny-optics` diffuse shading (`bunny-diffuse-shading/1`): triangle unit
+  normals and frames, the facing rule, an exact start rule for secondary rays,
+  cosine-weighted bounce directions, a directional light's term and shadow
+  ray, a uniform sky and the diffuse reflection, with a reference order of
+  operations (`docs/topics/optics/`)
 - coordinate law reservations for future projection work
 
 Open work:
@@ -281,7 +286,7 @@ Open work:
 | Occlusion and visibility queries | #158 |
 | Ray tracing hit suites | #159 |
 | Projection matrices; camera models beyond the pinhole | #138, #201, #202 |
-| Lighting and BRDF inputs | #160 |
+| Reflection, refraction, attenuation and BRDFs beyond diffuse | #160 |
 
 ### SIMD and Performance
 

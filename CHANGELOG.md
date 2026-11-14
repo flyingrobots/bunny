@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added diffuse shading for a one-bounce path tracer to `bunny-optics`, as
+  `bunny-diffuse-shading/1` (`SHADING_ID`), integer-only, with golden vectors
+  and stated bounds (flyingrobots/bunny#160, the diffuse slice).
+  `TriangleSurface` holds a triangle's exact plane, a unit normal within one
+  raw unit, and the Duff et al. orthonormal frame (`ShadingFrame`); zero-area
+  triangles return `None`. `SurfaceHit` applies the facing rule (the frame
+  faces the incoming ray, from `TriangleHit::front_face`) and starts every
+  secondary ray at the hit point moved at most two raw units along one axis to
+  lie strictly on the arrival side of the exact plane, so bounce and shadow
+  rays never hit their own triangle, a coplanar neighbour or a coincident
+  duplicate, with no distance epsilon. `ShadingFrame::cosine_direction` maps a
+  sampler point to a cosine-weighted direction (polar disk lifted to the
+  hemisphere) within 4 raw units of the ideal map, with every component within
+  1.0 and a dot product with the normal of at least `2^15` raw units.
+  `DirectionalLight` takes irradiance on a perpendicular surface (a white
+  surface reflects `E * cos / pi`, with `FRAC_1_PI` raw 1 367 130 551; `PI` is
+  raw 13 493 037 705), gives the shadow ray along `toward_light` and the
+  any-hit limit `SHADOW_T_MAX` (`2^41`, which covers the trace domain).
+  `SkyLight` and `Albedo::reflect` (`albedo * (direct + indirect)`; the
+  cosine-weighted bounce has no `pi`) complete the step, and the optics chapter
+  states the order of operations for one path. Adds the `shade` group to
+  `bunny-perf`. No existing function changes.
 * Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
   `trace/triangle_beyond_limit`, which time `TraceRay::hit_triangle` alone on the
   benchmark scene's nearest hits with no limit and with the limit one raw unit
