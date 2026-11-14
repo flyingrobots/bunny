@@ -78,20 +78,28 @@ fn hits() -> Vec<Shot> {
     hits
 }
 
-pub(crate) fn shade_cases() -> Vec<Case> {
-    let all = hits();
-    let triangles: Vec<TraceTriangle> = all.iter().map(|h| h.triangle).collect();
-    let frames: Vec<(ShadingFrame, [FixedQ32_32; 2])> =
-        all.iter().map(|h| (h.surface.facing_frame(h.hit.front_face), h.sample)).collect();
+/// The light, sky and albedo the per-hit cases shade with.
+pub(crate) type Lighting = (DirectionalLight, SkyLight, Albedo);
+
+pub(crate) fn lighting() -> Option<Lighting> {
     let one = FixedQ32_32::from_raw(ONE_RAW);
     let toward = FixedVec3::new(
         one / FixedQ32_32::from_raw(2 * ONE_RAW),
         one,
         one / FixedQ32_32::from_raw(4 * ONE_RAW),
     );
-    let light = DirectionalLight::new(toward, [FixedQ32_32::from_raw(3 * ONE_RAW); 3]).ok();
-    let sky = SkyLight::new([FixedQ32_32::from_raw(ONE_RAW / 3); 3]).ok();
-    let albedo = Albedo::new([FixedQ32_32::from_raw(ONE_RAW * 7 / 10); 3]).ok();
+    let light = DirectionalLight::new(toward, [FixedQ32_32::from_raw(3 * ONE_RAW); 3]).ok()?;
+    let sky = SkyLight::new([FixedQ32_32::from_raw(ONE_RAW / 3); 3]).ok()?;
+    let albedo = Albedo::new([FixedQ32_32::from_raw(ONE_RAW * 7 / 10); 3]).ok()?;
+    Some((light, sky, albedo))
+}
+
+pub(crate) fn shade_cases() -> Vec<Case> {
+    let all = hits();
+    let triangles: Vec<TraceTriangle> = all.iter().map(|h| h.triangle).collect();
+    let frames: Vec<(ShadingFrame, [FixedQ32_32; 2])> =
+        all.iter().map(|h| (h.surface.facing_frame(h.hit.front_face), h.sample)).collect();
+    let lighting = lighting();
     vec![
         // The per-triangle preparation: unit normal, frame and exact plane.
         case("shade/surface_new", move || {
@@ -115,7 +123,7 @@ pub(crate) fn shade_cases() -> Vec<Case> {
         // The whole per-hit step: the surface hit (facing and start point), the light sample
         // with its shadow ray, the bounce ray, and the reflection of direct plus sky.
         case("shade/hit_shading", move || {
-            let (Some(light), Some(sky), Some(albedo)) = (light, sky, albedo) else { return 0 };
+            let Some((light, sky, albedo)) = lighting else { return 0 };
             all.iter()
                 .map(|h| {
                     let Some(surface_hit) = SurfaceHit::new(black_box(&h.surface), &h.ray, &h.hit)

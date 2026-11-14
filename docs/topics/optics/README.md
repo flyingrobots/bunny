@@ -733,8 +733,14 @@ dropped bits are above one half. Changing any of the four rules fails a test.
 
 **Cost.** One comparison of up to three normals, three shifts, nine `i128`
 multiplications and one normalization (two integer square roots and three
-divisions) per hit; no division by `det`. The measured cost is not yet in this
-chapter.
+divisions) per hit; no division by `det`. On the benchmark scene's sphere hits
+it measures about 72 ns per hit. The alternative that floors two
+`barycentrics` weights (two long divisions) and then takes the same steps takes
+14 % to 18 % longer, has a looser bound (each component within
+`1 + 8 (1 + 2^-32) / rho` raw units, from its two floors), and gives other bits
+on 451 of those 1 024 hits, by one raw unit (447) or two (4) in a component
+(OPTICS-TP-086). See [Accuracy And Cost](#accuracy-and-cost) and the
+[performance ledger](../performance/README.md#13-smooth-normal-from-exact-barycentric-numerators-new-api).
 
 ### Smooth Shading
 
@@ -805,6 +811,14 @@ would: with a shading normal 53 degrees from the geometric one, 49 of a 16 by
 16 grid of sampler points are rejected in the test plan's case, and none with
 the shading normal along the geometric one. That is the documented,
 deterministic choice of this identity.
+
+**Cost.** A whole smooth-shaded hit (`SurfaceHit::new`, `SmoothHit::new`,
+`light_sample`, `bounce` and the reflection) measures about 171 ns on the
+benchmark scene's sphere hits, against about 67 ns for the flat step on the
+same hits: about 104 ns more, 2.5 times the flat cost. Besides `smooth_normal`
+(about 72 ns), `SmoothHit::new` builds a frame around the interpolated normal
+(three rounded `i128` divisions, which the flat step takes from the prepared
+`TriangleSurface`); see [Accuracy And Cost](#accuracy-and-cost).
 
 ### Orthonormal Frame
 ### Orthonormal Frame
@@ -1172,6 +1186,9 @@ scale. A reading, not a speed claim:
 | `shade/bounce_direction` | 26.9 |
 | `shade/hit_shading` (start point, light sample and shadow ray, bounce ray, reflection) | 73.7 |
 | `shade/vertex_normals` (per vertex of a whole-mesh build; base `3c395f9`, where it is new) | 68.1 |
+| `shade/smooth_normal` (per sphere hit of the benchmark scene; run 1 of ledger entry 13, base `e7a4fab`) | 72.4 |
+| `shade/smooth_hit_shading` (the whole smooth-shaded step on the same hits) | 171.2 |
+| `shade/flat_hit_shading_mesh` (the flat step of `shade/hit_shading` on the same hits) | 67.5 |
 | `sample/sampler_point` | 19.7 |
 | `trace/closest_hit` (one camera ray through the benchmark scene) | 226.8 |
 

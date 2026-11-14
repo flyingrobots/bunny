@@ -66,6 +66,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::shade::shade_cases());
     #[cfg(feature = "normals")]
     cases.extend(crate::normals::normal_cases());
+    #[cfg(feature = "smooth")]
+    cases.extend(crate::smooth::smooth_cases());
     cases
 }
 
