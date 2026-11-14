@@ -14,7 +14,7 @@ path = "src/main.rs"
 workspace = true
 
 [features]
-default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared"]
+default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "trace_compact"]
 # Each group compiles only against the APIs it times, so `cargo xtask perf --base <rev>` can
 # build the same harness against an older Bunny that lacks a newer group.
 num = []
@@ -26,6 +26,8 @@ angle = []
 # `trace` uses `closest_hit` and the trace kernels.
 scene = []
 trace = []
+# The compact node layout (`compact_bvh` and its traversals), timed against `trace`.
+trace_compact = []
 
 [dependencies]
 bunny-broadphase = { path = "../bunny-broadphase", version = "0.6.0" }

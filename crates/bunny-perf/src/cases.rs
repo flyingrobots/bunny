@@ -50,6 +50,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::profile::kernel_cases());
     #[cfg(feature = "trace")]
     cases.extend(crate::memory::memory_cases());
+    #[cfg(feature = "trace_compact")]
+    cases.extend(crate::compact::compact_cases());
     cases
 }
 
