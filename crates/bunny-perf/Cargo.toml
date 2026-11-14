@@ -14,7 +14,7 @@ path = "src/main.rs"
 workspace = true
 
 [features]
-default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "build", "sah"]
+default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "build", "sah"]
 # Each group compiles only against the APIs it times, so `cargo xtask perf --base <rev>` can
 # build the same harness against an older Bunny that lacks a newer group.
 num = []
@@ -26,6 +26,8 @@ angle = []
 # `trace` uses `closest_hit` and the trace kernels.
 scene = []
 trace = []
+# The sample hash and pixel sampler of `bunny-optics`.
+sample = []
 # `build` times `build_bvh` on the scene; `sah` times `build_bvh_sah` and traces the same rays
 # through its tree.
 build = []
@@ -36,4 +38,5 @@ bunny-broadphase = { path = "../bunny-broadphase", version = "0.7.0" }
 bunny-geom = { path = "../bunny-geom", version = "0.7.0" }
 bunny-linalg = { path = "../bunny-linalg", version = "0.7.0" }
 bunny-num = { path = "../bunny-num", version = "0.7.0" }
+bunny-optics = { path = "../bunny-optics", version = "0.7.0" }
 bunny-query = { path = "../bunny-query", version = "0.7.0" }

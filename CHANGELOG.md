@@ -26,8 +26,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for both builders (`build/bvh`, `build/bvh_sah`) and the benchmark rays traced
   through the SAH tree (`trace/closest_hit_sah`, `trace/any_hit_sah`), with a
   check that both trees give the same `closest_hit` and `any_hit` answers on
-  every ray. Ledger entry 6 in `docs/topics/performance/` records the
+  every ray. Ledger entry 7 in `docs/topics/performance/` records the
   measurement.
+* Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
+  `trace/triangle_beyond_limit`, which time `TraceRay::hit_triangle` alone on the
+  benchmark scene's nearest hits with no limit and with the limit one raw unit
+  short. Added a frozen reference copy of the triangle test's arithmetic
+  (`crates/bunny-query/tests/support/trace_reference.rs`) with equivalence
+  tests over seeded, constructed and domain-corner corpora at limits around the
+  true distance, and scene tests that compare every triangle test of
+  `trace/closest_hit` with it and count how many reach the division. No library
+  function changes. A pre-check that rejects hits beyond the limit before the
+  division (flyingrobots/bunny#214) was measured and not shipped: only 24 of 714
+  crossings on the scene are beyond the limit, and the result is within noise;
+  see "Tried And Rejected" in the performance chapter.
+* Added deterministic sampling to `bunny-optics`. `PixelStream`
+  (`bunny-sample-hash/1`) is a counter-based hash: 64 mixed bits per (seed,
+  pixel x, pixel y, sample index, dimension) from three chained SplitMix64
+  absorptions, with no state, so values do not depend on evaluation order or
+  thread count; keys that differ only in the pixel, or only in (sample,
+  dimension), never collide. `fraction_from_bits` and `PixelStream::fraction`
+  give the top 32 bits as a Q32.32 fraction in `[0, 1)`, never 1.0.
+  `PixelSampler` (`bunny-sobol-owen/1`) gives points in `[0, 1)^2` per (seed,
+  pixel, sample, dimension pair): the first two Sobol dimensions with a
+  hash-based Owen scramble (Burley 2020), where every aligned block of `2^k`
+  samples is a (0, k, 2)-net, and `camera_sample` returns pair 0 as a
+  `PixelSample` for `PinholeCamera::ray`. `Xoroshiro128Plus` carries Echo's
+  `warp-math` `Prng` bit for bit (an empty `next_int` range returns `None`
+  instead of panicking; `next_unit` is `next_f32` as exact Q32.32). Golden
+  vectors, an exact stratification property, order-independence and
+  avalanche guards run natively and under WebAssembly. The `bunny-perf`
+  harness has a new `sample` group, and `cargo xtask perf` now leaves out of
+  the base manifest any harness crate the base revision lacks.
 
 ## [0.7.0] - 2026-11-13
 

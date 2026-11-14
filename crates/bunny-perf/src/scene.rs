@@ -21,6 +21,8 @@ use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
 
+#[cfg(feature = "trace")]
+use crate::cases::BATCH;
 use crate::cases::{case, Case};
 
 /// Quads along each edge of each cube face: 6 * 48 * 48 * 2 = 27 648 triangles.
@@ -215,6 +217,56 @@ pub(crate) fn trace_closest(
     black_box(hit).ok().flatten()
 }
 
+/// One triangle test: a camera ray, the triangle it hits first, and that hit's distance.
+#[cfg(feature = "trace")]
+type TriangleTest = (bunny_query::TraceRay, bunny_query::TraceTriangle, FixedQ32_32);
+
+/// The camera rays that hit the scene, each with its nearest triangle, repeated to fill one
+/// batch.
+#[cfg(feature = "trace")]
+fn nearest_triangle_tests(
+    scene: &Scene,
+    triangles: &[bunny_query::TraceTriangle],
+) -> Vec<TriangleTest> {
+    let hits: Vec<TriangleTest> = trace_rays()
+        .into_iter()
+        .filter_map(|ray| {
+            let hit = trace_closest(scene, triangles, &ray)?;
+            Some((ray, *triangles.get(hit.primitive as usize)?, hit.distance))
+        })
+        .collect();
+    let calls = if hits.is_empty() { 0 } else { BATCH };
+    hits.iter().copied().cycle().take(calls).collect()
+}
+
+/// Runs `hit_triangle` on each test, with no upper limit or (`below`) with the limit one raw
+/// unit below the true distance.
+#[cfg(feature = "trace")]
+fn time_triangle_tests(tests: &[TriangleTest], below: bool) -> i64 {
+    let far = FixedQ32_32::from_raw(i64::MAX);
+    tests
+        .iter()
+        .map(|(ray, triangle, distance)| {
+            let limit = if below { FixedQ32_32::from_raw(distance.raw() - 1) } else { far };
+            let hit = black_box(ray).hit_triangle(black_box(triangle), FixedQ32_32::ZERO, limit);
+            black_box(hit).map_or(0, |hit| hit.distance.raw())
+        })
+        .fold(0, i64::wrapping_add)
+}
+
+/// `hit_triangle` alone on the scene's nearest hits: with no limit (the hit divides), and
+/// with the limit one raw unit short of the hit (a hit behind a nearer one, which the
+/// traversal rejects).
+#[cfg(feature = "trace")]
+fn triangle_cases(tests: Vec<TriangleTest>) -> Vec<Case> {
+    let tests = std::rc::Rc::new(tests);
+    let beyond = std::rc::Rc::clone(&tests);
+    vec![
+        case("trace/triangle_hit", move || time_triangle_tests(&tests, false)),
+        case("trace/triangle_beyond_limit", move || time_triangle_tests(&beyond, true)),
+    ]
+}
+
 /// The checksum of `trace_closest` over every ray. One function for every tree, so the
 /// quartile-tree and SAH-tree cases run the same machine code.
 #[cfg(feature = "trace")]
@@ -274,7 +326,9 @@ fn traversal_cases(scene: Scene, names: [&'static str; 2]) -> Vec<Case> {
 /// Closest hit and any hit with `closest_hit`, `any_hit` and the trace kernels.
 #[cfg(feature = "trace")]
 pub(crate) fn trace_cases() -> Vec<Case> {
-    let mut cases = traversal_cases(scene(), ["trace/closest_hit", "trace/any_hit"]);
+    let scene = scene();
+    let triangle_tests = nearest_triangle_tests(&scene, &trace_triangles(&scene));
+    let mut cases = traversal_cases(scene, ["trace/closest_hit", "trace/any_hit"]);
     cases.push(case("trace/ray_prepare", {
         let (origin, directions) = camera();
         move || {
@@ -287,6 +341,7 @@ pub(crate) fn trace_cases() -> Vec<Case> {
                 .fold(0, i64::wrapping_add)
         }
     }));
+    cases.extend(triangle_cases(triangle_tests));
     cases
 }
 
@@ -378,6 +433,12 @@ pub(crate) fn sah_disagreeing_rays() -> Vec<usize> {
     }
     bad
 }
+
+/// A frozen reference copy of `TraceRay::hit_triangle`'s arithmetic, the oracle for the scene
+/// tests below (shared with `bunny-query`'s equivalence tests).
+#[cfg(all(test, feature = "trace"))]
+#[path = "../../bunny-query/tests/support/trace_reference.rs"]
+mod trace_reference;
 
 // These tests need the default feature groups (`scene`, `trace`, `sah`), as `cargo test` uses.
 #[cfg(test)]
@@ -499,5 +560,110 @@ mod tests {
             );
         }
         assert!(sah_cost_milli(&new.nodes) < sah_cost_milli(&old.nodes));
+    }
+
+    use super::trace_reference;
+    use bunny_query::{TraceRay, TraceTriangle};
+
+    /// How the triangle tests that `trace/closest_hit` makes end, judged by the reference.
+    #[derive(Debug, Default)]
+    struct TriangleTestCounts {
+        /// Calls of the triangle test.
+        calls: u64,
+        /// Calls whose ray crosses the triangle at `t >= 0`: these reach the division.
+        divided: u64,
+        /// Divided calls whose distance is beyond the limit passed: the division was wasted.
+        beyond_limit: u64,
+        /// Divided calls that the pre-check tried in flyingrobots/bunny#214,
+        /// `t >= (t_max + 1) * ceil(det / 2^32)`, would have rejected without dividing.
+        pre_checked: u64,
+    }
+
+    impl TriangleTestCounts {
+        fn record(&mut self, ray: &TraceRay, triangle: &TraceTriangle, limit: FixedQ32_32) {
+            self.calls += 1;
+            let Some(crossing) = trace_reference::crossing(ray, triangle) else { return };
+            if crossing.t < 0 {
+                return;
+            }
+            self.divided += 1;
+            let distance = trace_reference::shifted_quotient(crossing.t, crossing.det);
+            self.beyond_limit += u64::from(distance.is_none_or(|d| d > limit.raw()));
+            let pre_check = (i128::from(limit.raw()) + 1)
+                .checked_mul((crossing.det + (1 << 32) - 1) >> 32)
+                .is_some_and(|bound| crossing.t >= bound);
+            // Soundness of the inequality: it only fires on a hit that is beyond the limit.
+            assert!(!pre_check || distance.is_none_or(|d| d > limit.raw()), "unsound");
+            self.pre_checked += u64::from(pre_check);
+        }
+    }
+
+    /// The limits worth comparing for one triangle test: the one the traversal passed, the
+    /// true distance and one raw unit either side, zero, negative and the maximum.
+    fn limits_around(passed: FixedQ32_32, distance: Option<i64>) -> Vec<i64> {
+        let mut limits = vec![passed.raw(), 0, -1, i64::MIN, i64::MAX];
+        if let Some(d) = distance {
+            limits.extend([d.saturating_sub(1), d, d.saturating_add(1)]);
+        }
+        limits
+    }
+
+    /// Compares `hit_triangle` with the reference on one triangle test of the traversal, at
+    /// the limit passed and at the limits around the true distance.
+    fn assert_matches_reference(ray: &TraceRay, triangle: &TraceTriangle, passed: FixedQ32_32) {
+        let true_distance = trace_reference::hit_triangle(ray, triangle, FixedQ32_32::ZERO, FAR)
+            .map(|(distance, _, _)| distance);
+        for limit in limits_around(passed, true_distance).into_iter().map(FixedQ32_32::from_raw) {
+            for (t_min, t_max) in [(FixedQ32_32::ZERO, limit), (limit, FAR)] {
+                let got = ray.hit_triangle(triangle, t_min, t_max).map(|hit| {
+                    let (u, v) = hit.barycentrics();
+                    (hit.distance.raw(), hit.front_face, (u.raw(), v.raw()))
+                });
+                let want = trace_reference::hit_triangle(ray, triangle, t_min, t_max);
+                assert_eq!(got, want, "limits {t_min:?}..={t_max:?}");
+            }
+        }
+    }
+
+    const FAR: FixedQ32_32 = FixedQ32_32::from_raw(i64::MAX);
+
+    /// Runs `trace/closest_hit`'s traversal on every camera ray, calling `each` on every
+    /// triangle test it makes with the limit it passed.
+    fn for_each_triangle_test(mut each: impl FnMut(&TraceRay, &TraceTriangle, FixedQ32_32)) {
+        let scene = scene();
+        let triangles = trace_triangles(&scene);
+        let bvh = bunny_broadphase::BvhView::new(&scene.nodes, &scene.prim_indices);
+        for ray in &trace_rays() {
+            let found = bunny_broadphase::closest_hit(bvh, ray, FAR, |primitive, limit| {
+                let triangle = triangles.get(primitive as usize)?;
+                each(ray, triangle, limit);
+                ray.hit_triangle(triangle, FixedQ32_32::ZERO, limit).map(|hit| hit.distance)
+            });
+            assert!(found.is_ok(), "the scene's tree is well formed");
+        }
+    }
+
+    #[test]
+    fn hit_triangle_matches_the_reference_on_the_scene_traversal() {
+        let mut tests = 0_u64;
+        for_each_triangle_test(|ray, triangle, limit| {
+            assert_matches_reference(ray, triangle, limit);
+            tests += 1;
+        });
+        assert!(tests > 1024, "the traversal must test triangles: {tests}");
+    }
+
+    /// How much work a shortcut on the distance limit can remove on this scene. Run with
+    /// `--nocapture` to see the counts; the performance chapter records them
+    /// (`docs/topics/performance/README.md`, entry 6).
+    #[test]
+    fn count_the_divisions_the_scene_traversal_makes() {
+        let mut counts = TriangleTestCounts::default();
+        for_each_triangle_test(|ray, triangle, limit| counts.record(ray, triangle, limit));
+        println!("trace/closest_hit triangle tests: {counts:?}");
+        // The performance chapter's entry 6 quotes these numbers; a change to the scene, the
+        // camera or the traversal must update it.
+        let found = (counts.calls, counts.divided, counts.beyond_limit, counts.pre_checked);
+        assert_eq!(found, (1_673, 714, 24, 24), "update entry 6 of the performance chapter");
     }
 }

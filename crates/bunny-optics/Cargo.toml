@@ -1,10 +1,10 @@
 [package]
 name = "bunny-optics"
-description = "Deterministic camera and ray-generation math for Bunny."
+description = "Deterministic camera, ray-generation and sampling math for Bunny."
 authors.workspace = true
 categories = ["game-development", "graphics", "mathematics"]
 edition.workspace = true
-keywords = ["bunny", "camera", "ray-tracing", "fixed-point"]
+keywords = ["bunny", "camera", "ray-tracing", "fixed-point", "sampling"]
 license.workspace = true
 readme = "README.md"
 repository.workspace = true

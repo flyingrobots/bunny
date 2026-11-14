@@ -266,6 +266,9 @@ Current surface:
 - ray-tracing kernels (`TraceRay`, `TraceTriangle`)
 - `bunny-optics` pinhole camera: deterministic per-pixel trace-ray generation
   (`docs/topics/optics/`)
+- `bunny-optics` sampling: a counter-based sample hash (`bunny-sample-hash/1`)
+  and an Owen-scrambled Sobol pixel sampler (`bunny-sobol-owen/1`) whose values
+  depend only on (seed, pixel, sample, dimension)
 - coordinate law reservations for future projection work
 
 Open work:
