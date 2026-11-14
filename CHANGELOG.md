@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The basis is orthonormal within 2 raw units in length and pairwise dot
   product; eye equal to target, a zero or parallel `up`, and overflow return
   typed errors. Golden vectors run natively and under WebAssembly.
+* Added the `scene` and `trace` feature groups to `bunny-perf`: a whole-scene
+  ray benchmark (27 650 triangles, 1 024 camera rays) timing closest hit through
+  the visitor API and through `closest_hit`, with a check that both choose the
+  same primitive on every ray, and added `bunny-broadphase` to the `xtask perf`
+  base crates. Ledger entry 4 in `docs/topics/performance/` records the
+  measurement.
 * Added `FixedPlane3::clip_polygon`, `PolygonClip` and `PolygonClipError` to
   `bunny-geom`: Sutherland-Hodgman clipping of a convex polygon to the closed
   front half-space, written into a caller-provided buffer (`n + 1` slots always

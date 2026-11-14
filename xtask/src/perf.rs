@@ -19,7 +19,8 @@ use crate::perf_report::{add_run, compare, regressions, render, Heading, Runs};
 
 const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_ROUNDS: usize = 5;
-const BASE_CRATES: &[&str] = &["bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"];
+const BASE_CRATES: &[&str] =
+    &["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"];
 
 struct PerfOptions {
     base: String,
@@ -363,6 +364,14 @@ mod tests {
         assert!(manifest.contains("num = []\n"));
         assert!(manifest.contains("bunny-num = { path = \"/tmp/base/crates/bunny-num\" }"));
         assert!(manifest.contains("[workspace]"));
+    }
+
+    #[test]
+    fn harness_manifest_includes_every_crate_the_cases_use() {
+        let manifest = harness_manifest(Path::new("/tmp/base"), &["scene".to_owned()]);
+        for name in ["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"] {
+            assert!(manifest.contains(&format!("{name} = {{ path = ")), "{name} is missing");
+        }
     }
 
     #[test]
