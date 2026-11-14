@@ -88,7 +88,9 @@ Outside the rules, each for a stated reason:
   regenerates them and compares the bytes.
 
 `float-boundary` keeps its older, narrower scope: core crates only, test files
-excluded. `bunny-codec` parses float text and bytes by design.
+excluded. `bunny-codec` parses float text and bytes by design. Test files are
+decided by the module tree, not by a directory name
+([scope](topics/code-dojo-determinism/README.md#scope)).
 
 ### Mapping
 
@@ -162,6 +164,24 @@ another rule. Every module and macro at the roots of `std`, `core` and
 classification](topics/code-dojo-determinism/README.md#the-std-classification));
 `std_modules_tests.rs` probes the 245 documented names and the eight platform
 modules of `std::os` against the gate.
+
+flyingrobots/bunny#348 adds two more, seeded in
+`xtask/src/nondeterminism/float_alias_tests.rs` and
+`xtask/src/module_tree/tests.rs`:
+
+| Construction | Rules seeded | Caught before #348 | Test |
+| --- | --- | --- | --- |
+| `core::ffi::c_double` with `sqrt`, `std::os::raw::c_float`, `core::ffi::c_float::from`, an imported `c_double`, `std::ffi::c_float`, `libc::c_double`, `core::primitive::f64`, `std::primitive::f32`, `f16`, `f128`, `c_double` in a macro | `float-boundary` | 2 of 11 (the two `primitive` paths, by their `f64`/`f32` segment) | `c_float_aliases_and_unstable_floats_are_float_boundary` |
+| uses of a waived float alias: `type Real = f64`, an alias of an alias in either order, a `c_double` alias, a renamed float import, in a macro, in an inline module; and `bunny-num`'s `Scalar` used in `bunny-geom` | `float-boundary` | 0 of 8 | `uses_of_a_float_alias_are_float_boundary`, `a_float_alias_of_another_core_crate_is_float_boundary` |
+| `src/tests/float.rs` compiled into the library by `pub mod tests;` | `float-boundary`, `indexing` | 0 of 1 (any path with a `tests` component was test code) | `the_issue_form_is_reported_under_the_core_rules` |
+
+On main the alias rule found 18 findings on 15 lines: `bunny_num::is_finite`, which takes the
+f32 DTO alias `Scalar`, and the uses of `Scalar` in `bunny-linalg`'s `Vec2`
+and `Vec3` and `bunny-geom`'s `Sphere3` and its validation, including a float
+comparison in `validate_sphere3`. All are the documented f32 DTO boundary and
+now carry waivers; no code changed. The module tree changed no file's
+category on main: the two test modules inside `src/` are declared under
+`cfg(test)`.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14
@@ -195,6 +215,9 @@ Where the names differ:
 The source rules read syntax and each file's own imports. After
 flyingrobots/bunny#321 these remain outside them:
 
+- A float alias declared outside the core crates (no core crate depends on
+  one), and a name shared by a float alias and an unrelated item of another
+  core crate, which over-reports.
 - A float whose type is only inferred, with no float type, literal or
   `_f32`/`_f64` name on the way (`text.parse()` passed to a float parameter,
   `x.into()` to an `f64`); pinned as a known gap by
@@ -241,9 +264,16 @@ inside macro bodies. They still differ:
   that. Both ban `available_parallelism` and sleeping.
 - **How floats are caught.** Lumen bans the `f32` and `f64` types through
   Clippy and denies `clippy::float_arithmetic`, which also sees arithmetic on
-  an inferred float. Bunny's `float-boundary` is syntactic: float types,
-  literals, paths and `_f32`/`_f64` names, with waivers for boundary
-  conversions; an inferred float with no float name is not seen.
+  an inferred float. Bunny's `float-boundary` is syntactic: float types under
+  every spelling (`c_double`, `f16`, the core crates' aliases), literals,
+  paths and `_f32`/`_f64` names, with waivers for boundary conversions; an
+  inferred float with no float name is not seen. flyingrobots/lumen#156
+  reports that `core::ffi::c_double` passes both of Lumen's layers at its
+  main.
+- **Test files.** Both gates decide test code by the module tree (Lumen
+  since flyingrobots/lumen#124, Bunny since flyingrobots/bunny#348) with the
+  same rule: every declaration under `cfg(test)`, or unreached under the
+  crate's `tests/`.
 - **Mechanism.** Lumen's first layer is Clippy's `disallowed-types`,
   `disallowed-methods` and `disallowed-macros`, which resolve paths exactly,
   re-exports included; Bunny reads syntax with `syn` and resolves through

@@ -30,6 +30,7 @@ pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
 // dojo: allow float-boundary -- scalar DTO boundary; canonical math uses FixedQ32_32
 pub type Scalar = f32;
 
+// dojo: allow float-boundary -- boundary check of the f32 DTO alias `Scalar` above
 /// Returns true when the scalar can participate in canonical Bunny contracts.
 #[must_use]
 pub const fn is_finite(value: Scalar) -> bool {

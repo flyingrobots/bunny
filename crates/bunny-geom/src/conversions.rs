@@ -1,5 +1,6 @@
 use crate::{vec3_is_finite, Aabb3, FixedAabb3, FixedRay3, FixedSphere3, GeomError, Ray3, Sphere3};
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
+// dojo: allow float-boundary -- imports the f32 DTO alias for the ingress checks
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
 fn fixed_vec3_from_float(value: Vec3) -> Result<FixedVec3, GeomError> {
@@ -42,6 +43,7 @@ fn validate_aabb3(min: Vec3, max: Vec3) -> Result<(), GeomError> {
     Ok(())
 }
 
+// dojo: allow float-boundary -- validates the f32 DTO sphere before fixed-point ingress
 fn validate_sphere3(center: Vec3, radius: Scalar) -> Result<(), GeomError> {
     if !vec3_is_finite(center) {
         return Err(GeomError::NonFiniteCoordinate);
@@ -120,6 +122,7 @@ impl Aabb3 {
 }
 
 impl Sphere3 {
+    // dojo: allow float-boundary -- validated constructor of the f32 DTO sphere
     /// Creates a float sphere that is valid for fixed-point boundary conversion.
     ///
     /// # Errors

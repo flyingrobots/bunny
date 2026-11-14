@@ -38,7 +38,7 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `host-platform` | every other part of `std::os` (`std::os::unix::thread`, `std::os::windows::ffi`, `use std::os;`); `std::os::raw` is permitted |
 | `unclassified-std` | a path through a module or macro directly below `std`, `core` or `alloc` that the [classification](#the-std-classification) does not name |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
-| `float-boundary` | in core crates only: `f32` and `f64` types, float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
+| `float-boundary` | in core crates only: `f32`, `f64`, `f16`, `f128`, `c_float` and `c_double` types and the core crates' aliases of them ([scope](#scope)), float literals, any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), and any path segment or method named with an `_f32` or `_f64` suffix (`Duration::mul_f64`, `d.as_secs_f64()`, Bunny's own `to_f32`), also inside macro bodies and in `use` declarations, so a rename (`use core::f64::consts::PI as P`) cannot hide one |
 
 A banned path bans everything below it: `std::fs` covers `std::fs::read` and
 `std::fs::File::open`. `std::time` and `std::thread` are not banned as
@@ -234,6 +234,32 @@ The rules cover every Rust file, tests included, in `bunny-num`,
 `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase`, `bunny-mesh`,
 `bunny-optics`, `bunny-codec` and `bunny-contract`. `float-boundary` applies
 only to the non-test files of the first seven, the core crates.
+
+A file is test code when every `mod` declaration that reaches it from a crate
+root is under `#[cfg(test)]` (or a `cfg(all(..))` that requires `test`), on
+the declaration, on an enclosing inline module, through a test parent, or as
+the file's own `#![cfg(test)]`; or when no root reaches it and it lies under
+its crate's top-level `tests/` directory. The roots are `src/lib.rs`,
+`src/main.rs`, `src/bin/`, `build.rs`, `benches/` and `examples/` (library
+code) and `tests/*.rs` (test code); a file reached both ways is library code.
+A file or directory named `tests` decides nothing: `pub mod tests;` without
+`cfg(test)` compiles `src/tests/` into the library, and its files get the
+library's rules (`float-boundary`, `panic-path`, `indexing` and the size
+limits). Module files are found as `rustc` finds them
+(`xtask/src/module_tree.rs`); a `#[path]` under `cfg_attr` is not followed,
+and the pre-commit gate reads the tree from the index. Before
+flyingrobots/bunny#348 any path with a `tests` component was test code.
+
+`float-boundary` bans the float types, not their spellings: `f16`, `f32`,
+`f64`, `f128` and the C aliases `c_float` and `c_double` under any path
+(`core::ffi`, `std::os::raw`, `libc`), names ending in `_f32` or `_f64`, and
+every name a core crate binds to a float with `type` or a renamed `use`.
+Those aliases are resolved together over all core files, to a fixed point, so
+`pub type Scalar = f32;` in `bunny-num` makes every use of `Scalar` in
+`bunny-geom` a finding unless it is waived there. The match is by name: a
+file that defines its own non-float item of the same name keeps it, and in
+any other core file a segment of that name counts as the float (an
+over-report a waiver resolves).
 
 `bunny-perf`, `xtask` and `bunny-wesley` are outside the rules: they time
 code, run Git and Cargo, and read and write files by design.
