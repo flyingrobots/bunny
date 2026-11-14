@@ -43,6 +43,8 @@ off, which is how a consumer without crates.io dependencies uses these readers.
 | APLY-REQ-013 | With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature. | `README.md#dependencies-and-features` |
 | APLY-REQ-014 | `parse_ascii_ply_with_limits` refuses a declared vertex count, a declared face count or a line over the inclusive limits of `AsciiPlyLimits`, with a typed error naming the limit, the maximum, the observed value and the line; values at the limit are accepted; the checks run in the documented order and the counts are checked before any body line is read. | `README.md#limits` |
 | APLY-REQ-015 | `parse_ascii_ply` is unchanged, and `parse_ascii_ply_with_limits` with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same `AsciiPlyError` otherwise. | `README.md#limits` |
+| APLY-REQ-016 | The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is `UnsupportedProperty`. | `README.md#the-conversion-rule` |
+| APLY-REQ-017 | The chapter's statements match the code at three points: a face element before the vertex element or before `x`, `y`, `z` are declared is `MissingVertexElement` at the `element face` line; a face count that is not digits is `InvalidIndex` and a run of digits other than 3 is `NonTriangularFace`, with `03` accepted; and the `end_header` line is where a missing coordinate is reported when no face element follows. | `README.md#faces` |
 
 ```toml
 [[requirement]]
@@ -119,6 +121,16 @@ status = "active"
 id = "APLY-REQ-015"
 summary = "parse_ascii_ply is unchanged, and parse_ascii_ply_with_limits with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same AsciiPlyError otherwise."
 status = "active"
+
+[[requirement]]
+id = "APLY-REQ-016"
+summary = "The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is UnsupportedProperty."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-017"
+summary = "The chapter's statements match the code at three points: a face element before the vertex element or before x, y, z are declared is MissingVertexElement at the element face line; a face count that is not digits is InvalidIndex and a run of digits other than 3 is NonTriangularFace, with 03 accepted; and the end_header line is where a missing coordinate is reported when no face element follows."
+status = "active"
 ```
 
 ## Test Cases
@@ -166,6 +178,11 @@ status = "active"
 | APLY-TP-058 | Order of the checks | APLY-REQ-014 | Each of the five steps of the documented order wins over the one after it, on one input per adjacent pair. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_058_the_checks_run_in_the_documented_order` |
 | APLY-TP-059 | Differential | APLY-REQ-015 | 20 000 generated valid and mutated inputs (10 761 accepted, 9 239 refused in the run that set the minimums of 8 000 and 5 000), with `UNLIMITED` and with limits equal to the input length: the same counts, vertices and triangles, or the same `AsciiPlyError`. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_059_generous_limits_change_no_accepted_input_and_no_profile_error` |
 | APLY-TP-060 | Malformed input | APLY-REQ-014 | 30 000 mutated, truncated and random inputs under small limits never panic; every limit error has `observed > maximum`, the named maximum, and for a line length the length of that line found by an independent split and no earlier line over the limit; at least 500 of each limit kind and 500 accepted inputs are required (4 650, 1 825, 5 763 and 1 751 in the run that set them). | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_060_malformed_input_under_small_limits_never_panics_and_limit_errors_are_true` |
+| APLY-TP-061 | Magnitude shortcuts | APLY-REQ-016 | 32-digit values of at least 1e10 (both signs, with an exponent) are `Overflow`; just below 1e10 the value is `TooLong`; 32-digit values below 1e-10 are zero and one place higher are `TooLong`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_061_the_magnitude_shortcuts_decide_before_the_digit_count` |
+| APLY-TP-062 | Skipped property types | APLY-REQ-016 | Four undeclared or list-typed skipped properties are `UnsupportedProperty` at their line; each of the sixteen scalar types is accepted with a non-numeric column. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_062_a_skipped_vertex_property_needs_a_scalar_type` |
+| APLY-TP-063 | Missing coordinate line | APLY-REQ-017 | A missing `x` or `z` before the face element is `MissingVertexElement` at the `element face` line; with no face element, and with no vertex element, at the `end_header` line. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up` |
+| APLY-TP-064 | Face count kinds | APLY-REQ-017 | Seven counts that are not digits are `InvalidIndex`, six runs of digits other than 3 (one of 26 digits) are `NonTriangularFace`, and `3`, `03`, `0003` are accepted. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index` |
+| APLY-TP-065 | Face before vertex | APLY-REQ-017 | A face element before the vertex element is `MissingVertexElement` at its line; a repeated vertex element is `UnsupportedElement`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element` |
 
 ```toml
 [[case]]
@@ -536,6 +553,51 @@ test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_060_malforme
 oracle = "Independent line split checks every line-length error; 30 000 generated inputs, no panic."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "APLY-TP-061"
+requirements = ["APLY-REQ-016"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_061_the_magnitude_shortcuts_decide_before_the_digit_count"
+oracle = "Exact errors and zero on both sides of each magnitude shortcut, with 32-digit values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-062"
+requirements = ["APLY-REQ-016"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_062_a_skipped_vertex_property_needs_a_scalar_type"
+oracle = "UnsupportedProperty at the line for unknown and list types; all sixteen scalar types accepted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-063"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up"
+oracle = "Exact kind and line for four missing-coordinate headers."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-064"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index"
+oracle = "Exact kind for thirteen face counts, and acceptance of 03."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-065"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element"
+oracle = "Exact kind and line for a reordered header and a repeated vertex element."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Fixtures
@@ -593,6 +655,18 @@ touched before the rebuild, and each mutant fails the tests named:
 | the header line-length limit ignored | APLY-TP-057, 058, 060 |
 | blank body lines not checked | APLY-TP-057 |
 | `observed` reported one too high | APLY-TP-055, 056, 057, 058, 060 |
+
+The constants and the type check behind APLY-TP-061 and APLY-TP-062 were mutated, each run under
+`timeout 120` with the sources touched before the rebuild, against the older conversion and reader
+tests and against the new file:
+
+| Mutant | Older tests failing | New tests failing |
+| --- | --- | --- |
+| `CERTAIN_OVERFLOW_MAGNITUDE` 11 to 12 | 0 | APLY-TP-061 |
+| `CERTAIN_OVERFLOW_MAGNITUDE` 11 to 10 | 5 | APLY-TP-061 |
+| `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -11 | 2 | APLY-TP-061 |
+| `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -9 | 8 | APLY-TP-061 |
+| the `SCALAR_TYPES` check disabled | 0 | APLY-TP-062 |
 
 ## Open Gaps
 

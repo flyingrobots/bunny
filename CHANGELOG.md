@@ -30,6 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manifests it fails and names both tests. No library code changes
   (flyingrobots/bunny#283).
 
+### Fixed
+
+* The ASCII PLY chapter states what the reader does at three points where it said
+  otherwise; no code changes. A face element before the vertex element, or before `x`, `y`
+  and `z` are all declared, is `MissingVertexElement` at its `element face` line (not the
+  `end_header` line). A face count that is not a run of digits (`+3`, `3.0`, `x`) is
+  `InvalidIndex`, and a run of digits other than 3 is `NonTriangularFace`; `03` is accepted
+  as 3. New tests pin these, the certain-overflow and certain-underflow shortcuts of the
+  decimal conversion (changing `CERTAIN_OVERFLOW_MAGNITUDE` from 11 to 12 passed every test
+  before) and the type check of skipped vertex properties (removing it passed every test
+  before) (flyingrobots/bunny#323).
+
 ### Added
 
 * `bunny-codec`'s `parse_ascii_ply_with_limits(input, &AsciiPlyLimits)` refuses an ASCII
