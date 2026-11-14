@@ -25,6 +25,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have a stated rule; see `docs/topics/ascii-ply/` (flyingrobots/bunny#247). The
   binary PLY reader is unchanged.
 
+* Code Dojo enforces every rule of Echo's `ban-nondeterminism` scan under
+  Echo's rule IDs (`time-system`, `time-instant`, `thread-sleep`,
+  `host-parallelism`, `random`, `host-callback`, `network`,
+  `unordered-container`, `hand-hashed-table`, `json-serialization`,
+  `wasm-serde`, `std-env`, `std-fs`, `std-process`) in the core crates,
+  `bunny-codec` and `bunny-contract`, tests included. The rules resolve
+  paths through `use` declarations, so renamed imports, module aliases,
+  `use` groups and glob imports are caught, and they read macro bodies.
+  The full gate also rejects banned crates (`rand`, `js-sys`,
+  `serde_json` and others) in those crates' normal dependency graphs.
+  `docs/CODE_DOJO.md` maps each Echo rule to its Code Dojo rule
+  (flyingrobots/bunny#279).
+
+### Changed
+
+* Code Dojo's `ambient-state` rule is split into the Echo rule IDs above,
+  and `nondeterministic-map` is renamed `unordered-container`; a waiver now
+  names one ban. No waiver in the repository used the old names.
+* `float-boundary` also rejects float paths such as `f32::NAN` or
+  `f64::from_bits` and floats inside macro bodies in core crates. Three
+  `f32::from_bits` calls in `bunny_num::fixed_q32_32::to_f32`, the
+  documented float egress, carry waivers; no code changed.
+
 ## [0.7.1] - 2026-11-14
 
 This is the first 0.7 release on crates.io. `0.7.0` was tagged and has a GitHub release,

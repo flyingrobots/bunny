@@ -2,6 +2,7 @@
 
 mod code_dojo;
 mod git_helpers;
+mod nondeterminism;
 mod perf;
 mod perf_report;
 mod repo_respect;
