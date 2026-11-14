@@ -41,10 +41,10 @@ CHANGELOG.md
 Topic docs:
 docs/topics/ray-tracing/README.md (how the box test computes its unchanged bounds:
 i64 differences with bitwise-not flipping, parallel axes in the same path, straight-line
-code, precomputed fields and TraceRay's size)
+code)
 docs/topics/ray-tracing/test-plan.md (TRACE-REQ-028, TRACE-TP-301..305, mutation checks)
-docs/topics/performance/README.md (ledger entry 7, and the rejected single-comparison exit
-test under the entry)
+docs/topics/performance/README.md (ledger entry 8, including the two rejected steps: a
+single 128-bit exit comparison and precomputed TraceRay fields)
 
 Generated artifacts:
 None.
@@ -58,15 +58,14 @@ cargo test --locked -p bunny-perf (TRACE-TP-304 and the replica tests)
 14 deliberate mutations of the new box test in a container copy (test plan, Mutation
 Checks); each failed at least one case.
 cargo run --locked -p xtask -- perf --base <rev> --rounds 11 --align-code [--filter trace/],
-with --exclusive, once per step and twice for the final build (ledger entry 7).
+with --exclusive, once per step and twice for the final build (ledger entry 8).
 cargo test --locked --workspace
 cargo run --locked -p xtask -- code-dojo --all
 
 Known risks:
 x86-64 and wasm32 codegen of the straight-line version are not measured locally; the CI
-perf job gives the x86-64 reading. TraceRay grows from 72 to 120 bytes, which costs about
-0.4 ns in `trace/ray_prepare`. The replayed triangle-kernel cases read slower in full-table
-runs only (see ledger entry 7); the function they time is unchanged.
+perf job gives the x86-64 reading. TraceRay is unchanged. The replayed triangle-kernel cases read slower in full-table
+runs only (see ledger entry 8); the function they time is unchanged.
 
 Human reviewer:
 James Ross (maintainer); review pending.

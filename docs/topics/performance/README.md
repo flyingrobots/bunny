@@ -768,7 +768,7 @@ that needs its own measurement.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
 
-### 7. A straight-line `TraceRay::box_entry` in `i64` (exact replacement)
+### 8. A straight-line `TraceRay::box_entry` in `i64` (exact replacement)
 
 **Where:** `TraceRay::box_entry` and its helpers in `crates/bunny-query/src/trace.rs`
 (flyingrobots/bunny#258). The [profile](#profile-of-closest_hit-on-the-benchmark-scene)

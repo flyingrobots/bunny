@@ -80,7 +80,7 @@ impl TraceRay {
     /// box the ray reaches; it may return a bound for a box the ray narrowly misses.
     #[must_use]
     #[inline]
-    // `&` on the flags keeps the test free of data-dependent branches (ledger entry 7).
+    // `&` on the flags keeps the test free of data-dependent branches (ledger entry 8).
     #[allow(clippy::needless_bitwise_bool)]
     pub fn box_entry(&self, aabb: &FixedAabb3, t_max: FixedQ32_32) -> Option<FixedQ32_32> {
         let lines = map2(self.origin, self.direction, pair);
