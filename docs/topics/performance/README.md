@@ -210,6 +210,13 @@ the shipped functions on every ray. The same module provides the `trace/kernel_*
 replay the box and triangle tests the search makes and time them in isolation. See the
 [profile](#profile-of-closest_hit-on-the-benchmark-scene).
 
+`trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
+on the scene: each camera ray that hits something against the triangle it hits first,
+repeated to fill a batch, once with no upper limit and once with `t_max` one raw unit below
+the hit (the case the traversal meets behind its best hit). The scene's unit tests also
+compare every triangle test of `trace/closest_hit` with the frozen reference copy of the
+kernel and count how many reach the division (entry 6).
+
 ## Optimization Ledger
 
 Each landed optimization is recorded here with its technique, fidelity, trade-offs and
@@ -1042,3 +1049,130 @@ divide (wasm32 in particular) were not measured and may behave differently.
 
 **Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
 not proposed for merging.
+
+### 6. Reject triangle hits beyond the limit before dividing
+
+**Where tried:** `TraceRay::hit_triangle` in `bunny-query` (flyingrobots/bunny#214). The
+kernel on `main` is unchanged; the branch added the check, measured it and withdrew it.
+
+**Idea.** After the exact crossing test, `hit_triangle` divides once to get
+`distance = floor(t * 2^32 / det)` (with `det > 0`) and only then compares it with the limits.
+`closest_hit` passes the best distance so far as `t_max`, so a triangle crossed behind the
+best hit pays for a division whose result is thrown away. The check tried was, before the
+division:
+
+```text
+reject when  t >= (t_max + 1) * ceil(det / 2^32)        (checked i128 multiply)
+```
+
+**Why it is exact.** With `c = ceil(det / 2^32)`, `det <= c * 2^32`. For `t_max >= 0`,
+`t >= (t_max + 1) * c` gives `t * 2^32 >= (t_max + 1) * c * 2^32 >= (t_max + 1) * det`, so
+the floored distance is at least `t_max + 1`: the old code returns `None` too (or the quotient
+does not fit `i64`, which is also `None`). For `t_max < 0`, every crossing is a miss either way:
+a negative `t` is behind the origin, and a non-negative `t` gives a distance of at least zero.
+A product that overflows `i128` (`t_max + 1` up to `2^63` times `c` up to about `2^85`)
+exceeds every `t`, so it proves nothing and the old division runs. The check can only say
+"certainly beyond"; otherwise the code is the old code. It is conservative only where
+`det` is not a multiple of `2^32` and the distance is within `(t_max + 1) / c` of the limit,
+which for the scene's triangles (`det` around `2^86`) means essentially never. A symmetric
+check for `t_min` was not tried: the traversal always passes `t_min = 0`, and a negative `t`
+is already rejected by a sign test before any division (`u128::try_from` in
+`shifted_quotient`), so neither an early sign test nor a lower-limit check removes work here.
+
+**Fidelity: it was an exact replacement.** `crates/bunny-query/tests/trace_equivalence_tests.rs`
+compares `hit_triangle` with a frozen copy of its arithmetic
+(`crates/bunny-query/tests/support/trace_reference.rs`): distance, facing and both
+barycentric weights, at upper and lower limits equal to the true distance, one and two raw
+units below it, one above, zero, -1, 1, `i64::MIN`, `i64::MAX` and `i64::MAX - 1`, over
+30 000 seeded rays and triangles (each at those limits as an upper limit, a lower limit and an
+upper limit with `t_min = i64::MIN`: up to 900 000 comparisons), constructed
+hits whose `det` is a multiple of `2^32`, `2^32 + 1` (`641 * 6 700 417`) or 1, and the
+corners of the trace domain. `crates/bunny-perf/src/scene.rs` compares every triangle test
+the scene's `closest_hit` makes, at the limit it passed and around the true distance. The
+existing traversal tests passed unmodified. Four deliberate mutations of the check were each
+caught:
+
+| Mutation | Caught by |
+| --- | --- |
+| `t_max` instead of `t_max + 1` (one raw unit too eager) | TRACE-TP-003, TRACE-TP-201 to TRACE-TP-205, TRACE-TP-102, TRACE-TP-103, TRACE-TP-106, TRACE-TP-108 |
+| `floor(det / 2^32)` instead of the ceiling | TRACE-TP-201, TRACE-TP-204 |
+| `t + 1 >= bound` instead of `t >= bound` | TRACE-TP-204 |
+| `ceil` computed with `2^32 - 2` instead of `2^32 - 1` | TRACE-TP-204 |
+
+The last two survived the first corpus; `TRACE-TP-204` (raw-unit triangles whose `det` is
+exactly `2^32`, `2^32 + 1` or 1) was added to catch them.
+
+**How often it could fire.** `count_the_divisions_the_scene_traversal_makes` in
+`crates/bunny-perf/src/scene.rs` replays `trace/closest_hit` on its 1 024 camera rays and
+classifies every triangle test with the reference arithmetic:
+
+| Triangle tests | Reach the division (`t >= 0` crossing) | Divided but beyond the limit | Rejected by the check |
+| ---: | ---: | ---: | ---: |
+| 1 673 (1.63 per ray) | 714 (42.7 %) | 24 (3.4 % of divisions, 1.4 % of tests) | 24 (all of them) |
+
+The traversal already prunes almost everything behind the best hit at the box level, so
+only 24 divisions in 1 024 rays are wasted. This agrees with the
+[profile](#profile-of-closest_hit-on-the-benchmark-scene) (0.02 of 0.70 divisions per ray
+beyond the limit), which predicted that #214 could not pay on this scene. Even a check that cost nothing would save about
+24 × 12.5 ns over 1 024 rays, roughly 0.3 ns per ray, or 0.13 % of `trace/closest_hit`.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), 2026-11-13, two complete runs through the guarded container runner with
+`--exclusive` (no other container run active) and the branch's commits as history:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Base revision `42279ed2825f` (`origin/main`); the working tree was the branch merged with
+that base, with the check in place. The two `trace/triangle_*` cases are new in the
+harness and run the same source on both sides: `trace/triangle_hit` tests each camera ray
+against the triangle it hits first with no upper limit (the hit divides), and
+`trace/triangle_beyond_limit` tests the same pairs with `t_max` one raw unit below the hit.
+Nanoseconds per call:
+
+| Case | Run 1 p50 before | Run 1 p50 after | Run 1 best change | Run 2 p50 before | Run 2 p50 after | Run 2 best change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `trace/closest_hit` | 225.02 | 222.94 | -1.5% | 223.75 | 223.02 | -2.0% |
+| `trace/any_hit` | 208.42 | 209.72 | +0.5% | 209.47 | 209.96 | +2.1% |
+| `trace/triangle_beyond_limit` | 30.64 | 18.07 | -39.8% | 30.56 | 17.99 | -39.9% |
+| `trace/triangle_hit` | 30.15 | 32.71 | +7.1% | 29.95 | 32.59 | +7.2% |
+| `trace/ray_prepare` | 2.03 | 1.99 | +0.0% | 1.99 | 1.99 | +0.0% |
+| `scene/closest_visitor` | 3179.13 | 3217.74 | +0.3% | 3226.89 | 3203.49 | -0.4% |
+| `query/ray_triangle` | 52.61 | 52.73 | +0.2% | 52.86 | 52.69 | -0.5% |
+| `query/ray_aabb` | 54.12 | 54.57 | +2.6% | 54.97 | 54.32 | -0.8% |
+| `query/ray_build` | 51.55 | 51.84 | -0.2% | 51.35 | 51.72 | -0.5% |
+| `query/ray_sphere_hit` | 67.26 | 70.56 | -1.6% | 67.59 | 70.68 | +0.6% |
+| `query/ray_sphere_miss` | 21.20 | 21.20 | -0.2% | 21.12 | 21.16 | -0.2% |
+| `linalg/length` | 16.32 | 16.03 | -0.8% | 16.24 | 16.36 | +0.3% |
+| `linalg/normalize` | 41.83 | 42.48 | -1.3% | 41.95 | 42.11 | +0.3% |
+| `num/div` | 6.71 | 6.71 | +0.0% | 6.67 | 6.67 | -1.2% |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.42 | +0.0% |
+| `num/sqrt` | 13.59 | 13.88 | +3.2% | 13.92 | 14.04 | -0.3% |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.4% | 11.11 | 11.11 | +0.0% |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.19 | 4.15 | +0.0% |
+
+**Reading.** In isolation the check does what it should: a rejected hit costs about 12.6 ns
+less (-40 %, both runs), and every hit that still divides costs about 2.1 ns more (+7 %, both
+runs), the price of the 128-bit checked multiply and compare. On the scene, 690 crossings
+pay that price for every 24 that skip the division, so the per-ray cost model predicts a
+loss of about 1.2 ns (+0.5 %), and the check breaks even only when about one crossing in
+seven is behind the limit. The measured `trace/closest_hit` moved by -1.5 % and -2.0 % in best
+p50 and -0.9 % and -0.3 % in median p50: inside the noise band, smaller than the controls'
+spread (`num/sqrt` +3.2 %, `query/ray_aabb` +2.6 %, `trace/any_hit` +2.1 % on unchanged or
+non-firing paths), and the opposite of what the counts predict, so it is not claimed as a
+gain. `trace/any_hit` passes an unbounded limit, so the check never fires there and only
+adds cost.
+
+**Decision: not shipped.** It adds a kernel branch whose benefit cannot be seen on the scene
+this project measures. The equivalence tests, the scene comparison, the counting test and
+the two micro cases stay: they are the oracle and the measurement any later attempt needs.
+
+**What would change it:** a scene where many crossings are behind the nearest hit at the
+leaf level (dense overlapping geometry, large leaves, or a tree whose leaf boxes overlap a
+lot; flyingrobots/bunny#213 may change the tree), or a cheaper certainty test. The counting
+test gives the fraction directly; above about 15 % of crossings it is worth re-measuring.
+x86-64 (with a hardware 128-by-64 divide the saving per skipped division is smaller) and
+wasm32 (where both the division and the 128-bit multiply are software routines) were not
+measured; the CI job measured x86-64 only on the withdrawn state.
