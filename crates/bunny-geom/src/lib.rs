@@ -14,7 +14,9 @@ use bunny_num::{is_finite, FixedQ32_32, Scalar};
 mod conversions;
 mod plane;
 
-pub use plane::{FixedPlane3, FixedSegment3, PlaneSide, SegmentClip};
+pub use plane::{
+    FixedPlane3, FixedSegment3, PlaneSide, PolygonClip, PolygonClipError, SegmentClip,
+};
 
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

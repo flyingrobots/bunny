@@ -17,8 +17,15 @@ use crate::git_helpers::git_command;
 
 type DynError = Box<dyn Error>;
 
-const CORE_CRATES: &[&str] =
-    &["bunny-num", "bunny-linalg", "bunny-geom", "bunny-query", "bunny-broadphase", "bunny-mesh"];
+const CORE_CRATES: &[&str] = &[
+    "bunny-num",
+    "bunny-linalg",
+    "bunny-geom",
+    "bunny-query",
+    "bunny-broadphase",
+    "bunny-mesh",
+    "bunny-optics",
+];
 const GENERATOR_CRATES: &[&str] = &["bunny-wesley"];
 const TOOLING_CRATES: &[&str] = &["xtask", "bunny-perf"];
 const STRICT_CLIPPY_PACKAGES: &[&str] = &[
@@ -28,6 +35,7 @@ const STRICT_CLIPPY_PACKAGES: &[&str] = &[
     "bunny-query",
     "bunny-broadphase",
     "bunny-mesh",
+    "bunny-optics",
     "bunny-codec",
     "bunny-contract",
 ];
@@ -39,6 +47,7 @@ const WASM_PACKAGES: &[&str] = &[
     "bunny-query",
     "bunny-broadphase",
     "bunny-mesh",
+    "bunny-optics",
     "bunny-codec",
 ];
 const GOLDEN_TEST_NAMES: &[&str] =
