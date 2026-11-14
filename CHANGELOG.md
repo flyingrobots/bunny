@@ -127,6 +127,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returned `None` in release builds; it now returns `None` in both. Hits the
   trace kernel reports are not affected (flyingrobots/bunny#280).
 
+* `bunny_broadphase::intersect_aabb`, `intersect_ray`, `closest_hit` and
+  `any_hit` no longer loop forever on a node buffer with a reference cycle
+  (a child index naming an ancestor). Each allows at most
+  `nodes.len() / 2` interior visits, which no tree can exceed, and returns
+  `TraversalError::InvalidNodeIndex` at the next one, after a bounded number
+  of callbacks. On a tree, including one whose only faults are out-of-range
+  indices or a depth past 64, every result, error and callback is unchanged,
+  which a differential test against the previous functions checks. Buffers
+  that are not trees can now get a different answer: a cycle that used to
+  overflow the stack returns `InvalidNodeIndex` instead of `StackOverflow`,
+  and a shared subtree whose unfolding needs more than `nodes.len() / 2`
+  interior visits returns `InvalidNodeIndex` instead of a result that
+  reported its primitives more than once. No variant was added:
+  `TraversalError` is not `#[non_exhaustive]`, so a new variant would break
+  exhaustive matches, and `InvalidNodeIndex` is what the compact searches
+  already return for a cycle; it does not tell a cycle from an out-of-range
+  index (flyingrobots/bunny#269).
+
 ### Changed
 
 * Code Dojo's `ambient-state` rule is split into the Echo rule IDs above,
