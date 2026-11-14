@@ -39,7 +39,9 @@ pub struct CompactView<'a> {
 /// # Errors
 /// Returns `TraversalError::StackOverflow` if the tree is deeper than 64 levels, and
 /// `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange` if a node
-/// the search visits is malformed.
+/// the search visits is malformed. A reference cycle (a node reached again, which no tree
+/// has) is reported as `TraversalError::InvalidNodeIndex` once the search has made more
+/// interior visits than there are nodes, so a malformed tree cannot make it loop forever.
 pub fn compact_closest_hit<F>(
     bvh: CompactView<'_>,
     ray: &TraceRay,
@@ -79,6 +81,9 @@ struct Search<'a> {
     stop_at_first: bool,
     stack: [(CompactChild, FixedQ32_32); STACK_CAPACITY],
     len: usize,
+    /// Interior visits so far. A tree visits each node at most once, so more visits than
+    /// nodes means a reference cycle in a malformed tree.
+    visits: usize,
 }
 
 impl<'a> Search<'a> {
@@ -96,6 +101,7 @@ impl<'a> Search<'a> {
             stop_at_first,
             stack: [(CompactChild { first: 0, prim_count: 0 }, FixedQ32_32::ZERO); STACK_CAPACITY],
             len: 0,
+            visits: 0,
         }
     }
 
@@ -145,6 +151,10 @@ impl<'a> Search<'a> {
     {
         if child.is_leaf() {
             return self.visit_leaf(child, hit);
+        }
+        self.visits += 1;
+        if self.visits > self.bvh.nodes.len() {
+            return Err(TraversalError::InvalidNodeIndex);
         }
         let node =
             self.bvh.nodes.get(child.first as usize).ok_or(TraversalError::InvalidNodeIndex)?;

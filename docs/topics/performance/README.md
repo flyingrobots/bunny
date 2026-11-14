@@ -217,6 +217,19 @@ the shipped functions on every ray. The same module provides the `trace/kernel_*
 replay the box and triangle tests the search makes and time them in isolation. See the
 [profile](#profile-of-closest_hit-on-the-benchmark-scene).
 
+`crates/bunny-perf/src/memory.rs` adds replays that separate the loads of a box test from its
+arithmetic (`trace/kernel_box_load`, `trace/kernel_box_load_chain`,
+`trace/kernel_box_entry_addr_chain`), a two-box replica of the box test
+(`trace/kernel_box_single`, `trace/kernel_box_pair`) and `closest_hit` on the tree with its
+sibling pairs shuffled (`trace/closest_hit_shuffled`); see
+[Memory share of a box test](#memory-share-of-a-box-test). The `trace_compact` group
+(`crates/bunny-perf/src/compact.rs`) times the compact layout on the same rays:
+`trace/closest_hit_compact`, `trace/any_hit_compact`, one conversion of the tree per call
+(`trace/compact_convert`), and the compact nodes in three other orders
+(`_builder_order`, `_near_first`, `_shuffled`). Before timing, the harness checks that every
+compact tree makes the same primitive calls and gives the same answers as the builder's tree on
+every ray, and exits with the differing ray indices if not.
+
 `trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
 on the scene: each camera ray that hits something against the triangle it hits first,
 repeated to fill a batch, once with no upper limit and once with `t_max` one raw unit below
@@ -983,10 +996,70 @@ No single item reaches the stage 2 target of under 100 ns per ray: free box test
 87 ns, and nothing else comes close. The target needs both fewer box tests (builder,
 packets) and a lower cost per box test or per visit (layout, 4-wide).
 
+### Memory share of a box test
+
+Added for flyingrobots/bunny#215, before building a compact node layout, to see how much any
+layout could gain. `crates/bunny-perf/src/memory.rs` replays the same 20 238 box tests of
+the 1 024 `closest_hit` searches as `trace/kernel_box_entry`, on the real nodes in the
+search's order, in four ways, and runs `closest_hit` on a copy of the tree whose sibling
+pairs sit in seeded random slots (the search makes the same calls in the same order there,
+so only placement differs). A test checks each replica and the shuffled tree against the
+shipped functions on every call or ray (PERF-TP-042 to PERF-TP-044).
+
+Apple M5 Pro, `flyingrobots/rust-dev:1.96.0` container, two runs of
+`perf --base origin/main --rounds 11 --align-code --filter trace/` with `--exclusive`
+(base `8cdbb1cb38f5` and `57bc035f69f2`); head side, best p50, nanoseconds per ray:
+
+| Case | Run 1 | Run 2 | What it replays |
+| --- | ---: | ---: | --- |
+| `trace/kernel_box_entry` | 131.06 | 132.00 | `box_entry`, node indices known in advance |
+| `trace/kernel_box_entry_chain` | 133.91 | 133.95 | the same, each limit depending on the last result |
+| `trace/kernel_box_entry_addr_chain` | 233.93 | 239.38 | the same, each node index depending on the last result |
+| `trace/kernel_box_load` | 12.21 | 12.17 | only the loads of the six bounds, indices known |
+| `trace/kernel_box_load_chain` | 136.47 | 144.33 | only the loads, each index depending on the last load |
+| `trace/closest_hit` | 221.72 | 222.29 | the search on the builder's tree |
+| `trace/closest_hit_shuffled` | 227.58 | 225.95 | the search with sibling pairs placed at random |
+
+Reading:
+
+- **Loads that can start early are nearly free.** Reading the bounds of the 19.76 nodes a
+  ray tests costs 12.2 ns when the core knows the addresses ahead: 0.6 ns per box test, 9 %
+  of the box row.
+- **Loads that wait for the previous one are not.** Chained through their addresses, the
+  same loads cost 136 to 144 ns per ray, about 7 ns each (this includes the `black_box`
+  store and reload that carries the chain, roughly a nanosecond). Chaining `box_entry` by
+  address instead of by limit adds 100 to 105 ns per ray, about 5 ns per test. So the
+  memory component of a box test is not its bytes but the latency of a load whose address
+  comes from the previous step.
+- **The search sits between the two.** It costs 222 ns per ray, less than the
+  address-chained box replay alone, because its next node depends on a comparison, not on
+  loaded data, and the core predicts that branch and starts the next loads early. The
+  profile's 44 to 50 ns residual is the upper bound on the latency it does pay.
+- **Placement hardly matters.** Shuffling sibling pairs across the 3 MB array costs 0.7 to
+  2.6 % (best p50), so which cache lines nodes share is not the problem on this scene; the
+  number of dependent loads per step is.
+
+That made a layout worth building, but for a different reason than bytes: the builder's
+layout needs two dependent loads per step (the popped node, for its child index, and then
+its children's boxes), the compact layout one. The result is
+[ledger entry 7](#7-compact-node-layout-with-both-child-boxes-in-the-parent-new-api).
+
+**A two-box replica of `box_entry`.** The same module holds a harness replica of
+`box_entry`'s arithmetic from per-ray values prepared once (`floor(2^63 / |d|)` from the
+public direction), for one box and for both children at once, axis by axis. It returns
+`box_entry`'s exact result on every recorded call and on constructed axis-parallel,
+inside-the-box and behind-the-origin rays. Hoisting the preparation changes nothing
+(`trace/kernel_box_single` 130.00 and 129.03 ns against 131.06 and 132.00), and testing two
+boxes together is slower (`trace/kernel_box_pair` 144.98 and 143.15 ns, +11 %): the
+compiler neither shares work nor vectorizes the `u128` products. No two-box helper was added
+to `bunny-query`, so nothing here touches `box_entry` (which flyingrobots/bunny#258 is
+changing).
+
 ### Unmeasured
 
 x86-64 and wasm32; other scenes and ray batches (secondary rays share less between
-neighbours); the split of a box test into arithmetic and loads; whether a packet or a
+neighbours); the split of a box test into arithmetic and loads (since estimated: see
+[Memory share of a box test](#memory-share-of-a-box-test)); whether a packet or a
 4-wide node would reach its ceiling; the effect of another builder on the sphere rays'
 excess visits (the 30 to 35 ns is an arithmetic ceiling, not a trial).
 

@@ -143,11 +143,11 @@ impl<'a> Converter<'a> {
     /// Writes the next compact node, points its parent's slot at it and queues its interior
     /// children, the right one underneath so the left subtree is written first.
     fn write(&mut self, pending: Pending) -> Result<(), CompactError> {
-        let index = self.claim()?;
         let source = self.nodes.get(pending.source).ok_or(CompactError::InvalidNodeIndex)?;
         let left = source.first_child_or_prim_idx as usize;
         let right = left.checked_add(1).ok_or(CompactError::InvalidNodeIndex)?;
         let pair = [self.source(left)?, self.source(right)?];
+        let index = self.claim()?;
         let node = CompactNode {
             bounds: pair.map(|child| child.bounds),
             children: pair.map(|child| reference(&child, 0)),
