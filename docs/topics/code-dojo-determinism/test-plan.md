@@ -37,7 +37,7 @@ topic-docs`.
 | ID | Requirement | Current Source |
 | --- | --- | --- |
 | ND-REQ-001 | Every rule of Echo's `ban-nondeterminism` scan maps to a Code Dojo rule that rejects its seeded forms in deterministic library crates: qualified paths, `use` items, `use` groups, renamed imports, module aliases, glob imports, type positions and macro bodies. | `README.md#rules` |
-| ND-REQ-002 | Waivers are local and rule-scoped and must carry a reason of at least eight characters; a waiver without a reason, with a too-short reason or naming another rule does not suppress a finding. | `README.md#waivers` |
+| ND-REQ-002 | A waiver is a comment (never literal, doc or macro text) holding exactly one `dojo: allow <rule> -- <reason>` clause with a reason of at least eight characters; it covers its own line when it follows code, and otherwise the comment lines below it and the whole outermost item, statement, field, variant, arm or struct-literal field starting on the next code line; a refused waiver does not hide a valid one, and a manifest waiver is a whole-line TOML comment. | `README.md#waivers` |
 | ND-REQ-003 | Deterministic look-alikes of banned forms are accepted. | `README.md#rules` |
 | ND-REQ-004 | The source rules cover the core crates, `bunny-codec` and `bunny-contract`, including their tests; `xtask`, `bunny-perf` and `bunny-wesley` are outside them; `float-boundary` stays core-only. | `README.md#scope` |
 | ND-REQ-005 | The normal dependency graph of each deterministic library crate contains no banned crate; a finding names the deterministic crate that declares the path to it and can be waived only in that crate's manifest with a reason. | `README.md#dependency-rules` |
@@ -50,7 +50,7 @@ status = "active"
 
 [[requirement]]
 id = "ND-REQ-002"
-summary = "Waivers are local and rule-scoped and must carry a reason of at least eight characters; a waiver without a reason, with a too-short reason or naming another rule does not suppress a finding."
+summary = "A waiver is a comment (never literal, doc or macro text) holding exactly one `dojo: allow <rule> -- <reason>` clause with a reason of at least eight characters; it covers its own line when it follows code, and otherwise the comment lines below it and the whole outermost item, statement, field, variant, arm or struct-literal field starting on the next code line; a refused waiver does not hide a valid one, and a manifest waiver is a whole-line TOML comment."
 status = "active"
 
 [[requirement]]
@@ -121,6 +121,21 @@ real `cargo tree` output and the real manifests.
 | ND-TP-032 | raw float types | ND-REQ-001 | `r#f64` as a type and as a path segment is reported as `float-boundary`. | `xtask/src/nondeterminism/evasion_tests.rs::raw_float_types_are_float_boundary` |
 | ND-TP-033 | self in a use group | ND-REQ-001 | `use std::{self as s};` then `s::fs::read` is `std-fs` at the call line, and `use std::{self as host, fmt};` then `host::env::var` is `std-env`; treating `self` as a path segment fails this case. | `xtask/src/nondeterminism/evasion_tests.rs::self_in_a_use_group_names_the_module_itself` |
 | ND-TP-034 | evasion look-alikes | ND-REQ-003 | An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family. | `xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_are_accepted` |
+| ND-TP-035 | waiver outside a comment | ND-REQ-002 | Waiver text in a string, raw string, byte string, a line of a multi-line raw string, an outer, inner or block doc comment, a doc attribute or macro tokens leaves the `std-fs` finding reported. | `xtask/src/waivers/tests.rs::waiver_text_outside_a_comment_waives_nothing` |
+| ND-TP-036 | comment waivers | ND-REQ-002 | A line comment or block comment above the finding, or a line comment on its line, suppresses it. | `xtask/src/waivers/tests.rs::line_and_block_comments_waive` |
+| ND-TP-037 | one rule per waiver | ND-REQ-002 | A comment with a `std-fs` and a `std-env` clause leaves both findings reported. | `xtask/src/waivers/tests.rs::a_comment_with_two_clauses_waives_nothing` |
+| ND-TP-038 | refused then valid waiver | ND-REQ-002 | A short-reason waiver followed by a valid one for the same rule suppresses the finding. | `xtask/src/waivers/tests.rs::a_valid_waiver_after_a_refused_one_applies` |
+| ND-TP-039 | next statement only | ND-REQ-002 | A waiver above the first of two one-line statements leaves exactly the second one's finding (line 4) reported. | `xtask/src/waivers/tests.rs::a_waiver_covers_only_the_next_statement` |
+| ND-TP-040 | multi-line statement | ND-REQ-002 | A finding on the fourth line of a waived statement is suppressed; the next statement's finding (line 8) is reported. | `xtask/src/waivers/tests.rs::a_waiver_covers_every_line_of_a_multi_line_statement` |
+| ND-TP-041 | float waiver scope | ND-REQ-002 | A `float-boundary` waiver above a function covers a float use five lines into it; the same use in the next function (line 8) is reported. | `xtask/src/waivers/tests.rs::a_float_waiver_covers_its_item_and_nothing_after_it` |
+| ND-TP-042 | comment lines below a waiver | ND-REQ-002 | A `hand-hashed-table` finding on a comment line between the waiver and the item is suppressed. | `xtask/src/waivers/tests.rs::a_waiver_covers_the_comment_lines_below_it` |
+| ND-TP-043 | stacked waivers | ND-REQ-002 | Two waiver comments for two rules above one item suppress both findings. | `xtask/src/waivers/tests.rs::stacked_waivers_each_cover_the_item` |
+| ND-TP-044 | exact rule name | ND-REQ-002 | A waiver for `std-fs-extra` leaves a `std-fs` finding reported. | `xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly` |
+| ND-TP-066 | block comment over lines | ND-REQ-002 | A `/* */` comment whose two lines hold a `std-fs` and a `std-env` clause waives neither: both findings (lines 4 and 5) are reported. | `xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_two_clauses_waives_nothing` |
+| ND-TP-067 | block comment with one clause | ND-REQ-002 | A `/* */` comment over two lines with one clause, its reason running onto the second line, waives the item below it. | `xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_one_clause_waives_the_item_below` |
+| ND-TP-068 | manifest multi-line strings | ND-REQ-002, ND-REQ-005 | A waiver line inside a multi-line basic or literal TOML string waives nothing, also after an escaped quote that looks like a closing delimiter; a whole-line comment after a multi-line string closed on the same line or on a line of its own waives. | `xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment` |
+| ND-TP-045 | manifest waiver form | ND-REQ-002, ND-REQ-005 | A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not. | `xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments` |
+| ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
 
 ```toml
 [[case]]
@@ -428,6 +443,141 @@ test = "xtask/src/nondeterminism/evasion_tests.rs::look_alikes_of_the_evasions_a
 oracle = "An identifier `r#type`, `HashMap` in a comment and a string, and `core` and `alloc` renamed by `extern crate` produce no finding in the rule family."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "ND-TP-035"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::waiver_text_outside_a_comment_waives_nothing"
+oracle = "Waiver text in a string, raw string, byte string, a line of a multi-line raw string, an outer, inner or block doc comment, a doc attribute or macro tokens leaves the `std-fs` finding reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-036"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::line_and_block_comments_waive"
+oracle = "A line comment or block comment above the finding, or a line comment on its line, suppresses it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-037"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_comment_with_two_clauses_waives_nothing"
+oracle = "A comment with a `std-fs` and a `std-env` clause leaves both findings reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-038"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_valid_waiver_after_a_refused_one_applies"
+oracle = "A short-reason waiver followed by a valid one for the same rule suppresses the finding."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-039"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_covers_only_the_next_statement"
+oracle = "A waiver above the first of two one-line statements leaves exactly the second one's finding (line 4) reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-040"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_covers_every_line_of_a_multi_line_statement"
+oracle = "A finding on the fourth line of a waived statement is suppressed; the next statement's finding (line 8) is reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-041"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_float_waiver_covers_its_item_and_nothing_after_it"
+oracle = "A `float-boundary` waiver above a function covers a float use five lines into it; the same use in the next function (line 8) is reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-042"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_covers_the_comment_lines_below_it"
+oracle = "A `hand-hashed-table` finding on a comment line between the waiver and the item is suppressed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-043"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::stacked_waivers_each_cover_the_item"
+oracle = "Two waiver comments for two rules above one item suppress both findings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-044"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly"
+oracle = "A waiver for `std-fs-extra` leaves a `std-fs` finding reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-066"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_two_clauses_waives_nothing"
+oracle = "A `/* */` comment whose two lines hold a `std-fs` and a `std-env` clause waives neither: both findings (lines 4 and 5) are reported."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-067"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_one_clause_waives_the_item_below"
+oracle = "A `/* */` comment over two lines with one clause, its reason running onto the second line, waives the item below it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-068"
+requirements = ["ND-REQ-002", "ND-REQ-005"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment"
+oracle = "A waiver line inside a multi-line basic or literal TOML string waives nothing, also after an escaped quote that looks like a closing delimiter; a whole-line comment after a multi-line string closed on the same line or on a line of its own waives."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-045"
+requirements = ["ND-REQ-002", "ND-REQ-005"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments"
+oracle = "A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "ND-TP-046"
+requirements = ["ND-REQ-002"]
+evidence = "test"
+test = "xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line"
+oracle = "A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -447,7 +597,8 @@ Covered: `use` groups, nested groups, `self` in a group, renamed imports,
 `extern crate` renames, raw identifiers (`r#std`, `r#HashMap`, `r#f64`),
 module aliases, glob imports, leading `::`, turbofish generics, type
 positions, macro invocation paths and macro bodies, comments, waivers with
-short reasons and waivers for other rules, a banned crate reached through
+short reasons and waivers for other rules, waiver text in literals, doc
+comments and macro tokens, two clauses in one comment, a banned crate reached through
 another deterministic crate.
 
 ## Stress And Fuzz
@@ -462,5 +613,5 @@ around a banned leaf) would be the next instrument if a form slips through.
 | --- | --- |
 | Alias resolution is file-wide, not per module scope: an import in one module resolves a same-named path in a sibling module. This can only over-report. | Scope-aware name resolution; not needed while no false positive is reported on `main`. |
 | A banned type returned by another crate's function and never named in the file is invisible to the source rules. | Covered by the dependency rule for third-party crates; a type-aware check would need `rustc` (for example a lint driver). |
-| `float-op` is enforced through float types and literals, not method names, because Bunny's fixed-point types have `sqrt` and `sin` methods. A float binding admitted by a `float-boundary` waiver can call float methods further than two lines below that waiver. | Review of each `float-boundary` waiver; a type-aware check would close it. |
+| `float-op` is enforced through float types and literals, not method names, because Bunny's fixed-point types have `sqrt` and `sin` methods. A float admitted by a waived item can leave it (as a return value) and be operated on elsewhere where its type is only inferred. | Review of each `float-boundary` waiver; a type-aware check would close it. |
 

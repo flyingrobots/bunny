@@ -219,11 +219,36 @@ let point = points[i];
 pub x: f32,
 ```
 
-A waiver covers its own line and the two lines below it, names exactly one
-rule, and needs a reason of at least eight characters after `--`. A waiver
-with no reason, a shorter reason, or another rule's name leaves the finding
-reported. A dependency-rule waiver is the same comment, with `#`, anywhere in
-the manifest of the crate the finding names:
+A waiver is a `//` or `/* */` comment whose text is exactly one clause,
+`dojo: allow <rule> -- <reason>`, naming one rule by its exact ID, with a
+reason of at least eight characters after ` -- `. Text that only looks like
+a waiver waives nothing: inside a string, raw-string, byte-string or
+character literal, in a doc comment or `#[doc]` attribute, or in a macro's
+tokens. A comment with two clauses waives neither rule. A waiver with no
+reason, a shorter reason or another rule's name leaves the finding reported,
+and does not hide a valid waiver for the same finding above or below it.
+
+What a waiver covers:
+
+- On a line that also holds code, that line only.
+- On a line of its own, that line, the comment lines below it, and every line
+  of the outermost item, statement, field, enum variant, match arm or
+  struct-literal field that starts on the next line holding code. A waiver
+  above a function covers the whole function and nothing after it; a waiver
+  above one statement does not cover the next statement. When no such node
+  starts on that line (inside a macro's tokens, or on a continuation line of
+  an expression), it covers that one line.
+
+The gate finds comments from the token stream (`xtask/src/waivers.rs`):
+whatever text no token covers is whitespace or a comment, and each comment is
+read whole, so a block comment over several lines with two clauses waives
+neither rule.
+
+A dependency-rule waiver is the same clause in a whole-line TOML comment
+(`#` first on the line) anywhere in the manifest of the crate the finding
+names; the same text inside a TOML string (a line inside a multi-line
+`"""` or `'''` string included), or after a value on the line, is not a
+waiver:
 
 ```toml
 # dojo: allow random -- seeded generator behind the reviewed `fuzz` feature
