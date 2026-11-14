@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `bunny-broadphase`: `compact_closest_hit_counted` and
+  `compact_any_hit_counted` return the result of `compact_closest_hit` and
+  `compact_any_hit` together with a `TraversalCounts` record of the search's
+  work: box tests, boxes entered, popped entries skipped, interior and leaf
+  visits, primitive tests and the deepest stack. They make the same primitive
+  calls and return the same results and errors as the uncounted functions,
+  which keep their output and measured cost; `TraversalCounts` adds with
+  saturation and keeps the larger peak. Part of flyingrobots/bunny#335.
+
 ### Changed
 
 * The core crates follow Rule 10 of `CODE_STANDARDS.md`: `bunny-num`,

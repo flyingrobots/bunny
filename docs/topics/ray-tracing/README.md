@@ -52,9 +52,11 @@ A second node layout for the same searches is implemented in
 - `CompactNode` (`bounds`, `children`), `CompactChild` (`first`, `prim_count`,
   `is_leaf`) and `CompactRoot` (`bounds`, `child`);
 - `compact_closest_hit`, `compact_any_hit` and `CompactView` (`root`, `nodes`,
-  `prim_indices`).
+  `prim_indices`);
+- `compact_closest_hit_counted`, `compact_any_hit_counted` and `TraversalCounts`
+  (in `crates/bunny-broadphase/src/counts.rs`).
 
-See [Compact Layout](#compact-layout).
+See [Compact Layout](#compact-layout) and [Counting Traversals](#counting-traversals).
 
 Evidence is listed in the [test plan](test-plan.md). Benchmarks of the kernels
 and the traversals are not part of this chapter yet.
@@ -541,6 +543,86 @@ The layout is a second representation to keep in step with the first: a
 change to the search order or pruning rule must be made in both
 `closest_hit.rs` and `compact_hit.rs`. Its speed is recorded in the
 performance chapter's ledger.
+
+### Counting Traversals
+
+`compact_closest_hit_counted` and `compact_any_hit_counted` run the compact
+searches and also say how much work the search did:
+
+```rust,ignore
+pub fn compact_closest_hit_counted<F>(
+    bvh: CompactView<'_>, ray: &TraceRay, t_max: FixedQ32_32, hit: F,
+) -> Result<(Option<ClosestHit>, TraversalCounts), TraversalError>
+where F: FnMut(u32, FixedQ32_32) -> Option<FixedQ32_32>;
+
+pub fn compact_any_hit_counted<F>(
+    bvh: CompactView<'_>, ray: &TraceRay, t_max: FixedQ32_32, hit: F,
+) -> Result<(bool, TraversalCounts), TraversalError>
+where F: FnMut(u32) -> bool;
+```
+
+They return exactly what `compact_closest_hit` and `compact_any_hit` return and
+call `hit` with the same primitives and limits in the same order, on every
+view, malformed ones included. On an error they return the same
+`TraversalError` and no counts: the counts of a search that met a malformed
+node describe no answer, and a caller tracing a tree `compact_bvh` built never
+sees an error.
+
+**One loop.** Both forms run one search loop, generic over a private tally:
+the uncounted functions instantiate it with a zero-sized tally whose methods
+are empty, the counted ones with `TraversalCounts`. There is no second copy of
+the search to keep in step; the pruning rule, order and visit bound are the
+same code. The uncounted functions' cost was measured unchanged (the
+performance chapter's [contract change cost
+check](../performance/README.md#counting-compact-traversals-flyingrobotsbunny335)).
+
+**What is counted.** `TraversalCounts` is a `Copy` record of `u64` counters,
+each incremented at one place of the loop:
+
+| Field | Counted when |
+| --- | --- |
+| `box_tests` | `TraceRay::box_entry` is called: once for the root's box, and twice per interior visit (both children's boxes sit in the parent node). |
+| `box_entries` | such a call returns a bound, so the child is pushed. |
+| `popped_skipped` | a popped entry is dropped because its bound now exceeds the limit (the limit shrank after the push). |
+| `interior_visits` | an interior child is popped and searched. |
+| `leaf_visits` | a leaf is popped and its primitive range read. |
+| `primitive_tests` | `hit` is called. |
+| `peak_stack` | after each push: the most entries the stack held at once (at most 64). |
+
+In both searches `box_tests = 1 + 2 * interior_visits` for a non-empty tree.
+A closest-hit search pops every entry it pushes, so also `box_entries =
+popped_skipped + interior_visits + leaf_visits`; an any-hit search stops at
+its first accepted primitive and leaves the rest of the stack unpopped. An empty
+tree counts nothing; a ray that misses the root box counts one box test.
+These are the definitions of the benchmark profile's replica (`box_calls`,
+`box_some`, `skipped_at_pop`, `interior_visited`, `leaf_visited`, `tri_tests`,
+`stack_peak` in `crates/bunny-perf/src/profile.rs`), which counts on the
+`BvhNode` tree: a compact tree makes the same box tests in the same order. The
+profile's "nodes popped" is `popped_skipped + interior_visits + leaf_visits`.
+The check that every count agrees with the replica on all 1 024 benchmark rays
+is planned as `TRACE-TP-418`.
+
+**Adding counts.** `+` and `+=` sum each counter, saturating at `u64::MAX`,
+and keep the larger `peak_stack`, so a sum over rays is a total per counter
+and the deepest stack of any ray. The record is `#[non_exhaustive]`: read its
+fields, start a sum from `TraversalCounts::default()`.
+
+**Overflow.** Within one search, interior visits are at most `nodes.len()`
+(the visit bound), box tests at most `1 + 2 * nodes.len()`, and entries,
+skipped pops and leaf visits at most the box tests. A slice of 112-byte
+compact nodes has fewer than `2^57` elements, so none of these can reach
+`2^64`. Primitive tests are at most `leaf_visits * prim_indices.len()` on a
+malformed tree whose leaves share ranges (on a tree each primitive is tested
+at most once), which is bounded below `2^64` only by the time `2^64` calls of
+`hit` take; every increment saturates, so even that case is defined.
+
+**Which to call.** Use the uncounted functions for rendering. Use the counted
+ones where the work per ray is the output: statistics, a per-pixel cost view,
+or comparing trees. Only the compact layout has counted forms. A caller with a
+`BvhNode` tree can convert it with `compact_bvh` and count there, because the
+compact search makes the same box tests, visits and primitive calls as
+`closest_hit` and `any_hit`; counted forms of the plain traversals would add a
+second generic loop to keep for no count the compact forms cannot give.
 
 ### Example
 
