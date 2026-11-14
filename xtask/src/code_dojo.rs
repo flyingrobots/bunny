@@ -9,8 +9,8 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro,
-    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, Lit, Macro,
-    Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
+    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, ItemUse, Lit,
+    Macro, Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath, UseTree,
 };
 
 use crate::git_helpers::git_command;
@@ -1059,6 +1059,58 @@ impl PolicyVisitor<'_> {
         }
     }
 
+    /// A method such as `d.mul_f64(..)` or `d.as_secs_f64()` is float arithmetic even when
+    /// no float type is written.
+    fn check_float_method(&mut self, line: usize, method: &str) {
+        if self.category == Category::Core
+            && is_float_name(method)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                format!(
+                    "`{method}` takes or returns a float; core requires a boundary/proof waiver"
+                ),
+            );
+        }
+    }
+
+    /// A `use` leaf naming a float (`use core::f64::consts::PI as P`, a renamed `to_f32`)
+    /// is reported where it is imported, since the name it binds hides the float.
+    fn check_use_floats(&mut self, tree: &UseTree, prefix: &mut Vec<String>) {
+        let leaf = match tree {
+            UseTree::Path(path) => {
+                prefix.push(crate::nondeterminism::ident_name(&path.ident));
+                self.check_use_floats(&path.tree, prefix);
+                prefix.pop();
+                return;
+            }
+            UseTree::Group(group) => {
+                for item in &group.items {
+                    self.check_use_floats(item, prefix);
+                }
+                return;
+            }
+            UseTree::Name(name) => Some(&name.ident),
+            UseTree::Rename(rename) => Some(&rename.ident),
+            UseTree::Glob(_) => None,
+        };
+        let mut path = prefix.clone();
+        path.extend(leaf.map(crate::nondeterminism::ident_name));
+        let line = line_of(tree.span());
+        if self.category == Category::Core
+            && names_float(&path)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                "importing a float name in core requires a boundary/proof waiver",
+            );
+        }
+    }
+
     fn check_type_path(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
@@ -1146,6 +1198,7 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let line = line_of(node.span());
         let method = crate::nondeterminism::ident_name(&node.method);
+        self.check_float_method(line_of(node.method.span()), &method);
         if !self.limits.panics_allowed
             && (method == "unwrap" || method == "expect")
             && !self.waived(line, "panic-path")
@@ -1177,6 +1230,11 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     fn visit_macro(&mut self, node: &'ast Macro) {
         self.check_macro_floats(node);
         visit::visit_macro(self, node);
+    }
+
+    fn visit_item_use(&mut self, node: &'ast ItemUse) {
+        self.check_use_floats(&node.tree, &mut Vec::new());
+        visit::visit_item_use(self, node);
     }
 
     fn visit_type_path(&mut self, node: &'ast TypePath) {
@@ -1300,7 +1358,14 @@ fn in_nondeterminism_scope(path: &Path) -> bool {
 }
 
 fn names_float(segments: &[String]) -> bool {
-    segments.iter().any(|segment| segment == "f32" || segment == "f64")
+    segments.iter().any(|segment| is_float_name(segment))
+}
+
+/// `f32`, `f64`, and every name ending in `_f32` or `_f64`: `Duration::mul_f64`,
+/// `as_secs_f32`, `from_secs_f64` and Bunny's own `to_f32` take or return a float without
+/// a float token appearing at the call.
+fn is_float_name(name: &str) -> bool {
+    name == "f32" || name == "f64" || name.ends_with("_f32") || name.ends_with("_f64")
 }
 
 fn path_segments(path: &SynPath) -> Vec<String> {

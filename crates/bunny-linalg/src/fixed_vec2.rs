@@ -124,12 +124,14 @@ impl DivAssign<FixedQ32_32> for FixedVec2 {
     }
 }
 
+// dojo: allow float-boundary -- saturating f32 DTO ingress into canonical Q32.32
 impl From<Vec2> for FixedVec2 {
     fn from(v: Vec2) -> Self {
         Self::new(FixedQ32_32::from_f32(v.x), FixedQ32_32::from_f32(v.y))
     }
 }
 
+// dojo: allow float-boundary -- lossy egress into the f32 DTO
 impl From<FixedVec2> for Vec2 {
     fn from(v: FixedVec2) -> Self {
         Self::new(v.x.to_f32(), v.y.to_f32())

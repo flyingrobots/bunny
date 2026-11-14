@@ -8,6 +8,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssi
 /// Floating point conversion algorithms.
 pub mod conversions;
 
+// dojo: allow float-boundary -- re-exports the reviewed f32 ingress and egress conversions
 pub use conversions::{from_f32, to_f32, try_from_f32, FloatConversionError};
 
 /// Number of fractional bits in the Q32.32 fixed-point encoding.

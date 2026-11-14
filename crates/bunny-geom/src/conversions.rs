@@ -6,6 +6,7 @@ fn fixed_vec3_from_float(value: Vec3) -> Result<FixedVec3, GeomError> {
     FixedVec3::try_from_float(value).map_err(|_| GeomError::FixedValueOutOfRange)
 }
 
+// dojo: allow float-boundary -- validated f32 DTO ingress into canonical Q32.32
 fn fixed_scalar_from_float(value: Scalar) -> Result<FixedQ32_32, GeomError> {
     FixedQ32_32::try_from_f32(value).map_err(|_| GeomError::FixedValueOutOfRange)
 }
@@ -245,6 +246,7 @@ impl TryFrom<Sphere3> for FixedSphere3 {
     }
 }
 
+// dojo: allow float-boundary -- lossy egress of a fixed sphere into the f32 DTO
 impl From<FixedSphere3> for Sphere3 {
     fn from(sphere: FixedSphere3) -> Self {
         Self { center: Vec3::from(sphere.center), radius: sphere.radius.to_f32() }

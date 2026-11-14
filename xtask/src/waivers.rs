@@ -17,7 +17,9 @@ use std::str::FromStr;
 use proc_macro2::{LineColumn, Span, TokenStream, TokenTree};
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{Arm, Field, FieldValue, File, ForeignItem, ImplItem, Item, Stmt, TraitItem, Variant};
+use syn::{
+    Arm, Attribute, Field, FieldValue, File, ForeignItem, ImplItem, Item, Stmt, TraitItem, Variant,
+};
 
 const CLAUSE: &str = "dojo: allow ";
 const MIN_REASON_BYTES: usize = 8;
@@ -43,8 +45,8 @@ impl Waivers {
         let lines = source.lines().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
         let mut code = lines.iter().map(|line| vec![false; line.len()]).collect::<Vec<_>>();
         mark_tokens(&tokens, &mut code);
-        let nodes = file.map(node_ends).unwrap_or_default();
         let has_code = code.iter().map(|line| line.contains(&true)).collect::<Vec<_>>();
+        let nodes = file.map(|file| node_ends(file, &code)).unwrap_or_default();
         let entries = comments(&lines, &code)
             .into_iter()
             .filter_map(|(index, text)| {
@@ -284,27 +286,55 @@ fn mark_span(span: Span, code: &mut [Vec<bool>]) {
 }
 
 /// For each line on which a node a waiver can cover starts, the last line of the longest
-/// such node.
-fn node_ends(file: &File) -> BTreeMap<usize, usize> {
+/// such node. A node starts both on its first line and on its first line that holds code
+/// other than attributes, so a waiver between a function's doc comment and its `fn`
+/// covers the function.
+fn node_ends(file: &File, code: &[Vec<bool>]) -> BTreeMap<usize, usize> {
     let mut collector = NodeCollector::default();
     collector.visit_file(file);
-    collector.ends
+    let mut attribute = code.iter().map(|line| vec![false; line.len()]).collect::<Vec<_>>();
+    for span in &collector.attributes {
+        mark_span(*span, &mut attribute);
+    }
+    let attribute_only = code
+        .iter()
+        .zip(&attribute)
+        .map(|(code, attr)| code.iter().zip(attr).all(|(code, attr)| !code || *attr))
+        .collect::<Vec<_>>();
+    let mut ends = BTreeMap::new();
+    for (start, end) in collector.nodes {
+        let body = (start..=end).find(|line| {
+            let index = line - 1;
+            code.get(index).is_some_and(|row| row.contains(&true))
+                && !attribute_only.get(index).copied().unwrap_or(true)
+        });
+        for line in [Some(start), body].into_iter().flatten() {
+            let last = ends.entry(line).or_insert(end);
+            *last = (*last).max(end);
+        }
+    }
+    ends
 }
 
 #[derive(Default)]
 struct NodeCollector {
-    ends: BTreeMap<usize, usize>,
+    nodes: Vec<(usize, usize)>,
+    attributes: Vec<Span>,
 }
 
 impl NodeCollector {
     fn record(&mut self, span: Span) {
         let (start, end): (LineColumn, LineColumn) = (span.start(), span.end());
-        let last = self.ends.entry(start.line).or_insert(end.line);
-        *last = (*last).max(end.line);
+        self.nodes.push((start.line, end.line));
     }
 }
 
 impl<'ast> Visit<'ast> for NodeCollector {
+    fn visit_attribute(&mut self, node: &'ast Attribute) {
+        self.attributes.push(node.span());
+        visit::visit_attribute(self, node);
+    }
+
     fn visit_item(&mut self, node: &'ast Item) {
         self.record(node.span());
         visit::visit_item(self, node);

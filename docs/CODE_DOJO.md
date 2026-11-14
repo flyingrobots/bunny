@@ -100,9 +100,9 @@ type position, a macro body and a glob import, as applicable. The tests are in
 
 | Echo rule ID | Code Dojo rule | What it bans in Bunny | Before #279 | Test |
 | --- | --- | --- | --- | --- |
-| `time-system` | `time-system` | `std::time::SystemTime`, `UNIX_EPOCH` | 2 of 9 (as `ambient-state`) | `time_system_rejects_every_seeded_form` |
+| `time-system` | `time-system` | `std::time::SystemTime`, `UNIX_EPOCH`; `SystemTimeError` since #321 | 2 of 9 (as `ambient-state`) | `time_system_rejects_every_seeded_form` |
 | `time-instant` | `time-instant` | `std::time::Instant` | 2 of 9 (as `ambient-state`) | `time_instant_rejects_every_seeded_form` |
-| `thread-sleep` | `thread-sleep` | `std::thread::sleep`, `tokio`/`async_std` sleeps; crates `tokio`, `async-std` | 0 of 7 | `thread_sleep_rejects_every_seeded_form` |
+| `thread-sleep` | `thread-sleep` | `std::thread::sleep`, `tokio`/`async_std` sleeps; crates `tokio`, `async-std`; since #321 also `sleep_ms`, `sleep_until`, `park`, `park_timeout`, `park_timeout_ms`, `yield_now` | 0 of 7 | `thread_sleep_rejects_every_seeded_form` |
 | `host-parallelism` | `host-parallelism` | `available_parallelism`, qualified or bare | 0 of 5 | `host_parallelism_rejects_every_seeded_form` |
 | `random` | `random` | `rand`, `getrandom`, `fastrand`, `thread_rng`; the same crates as dependencies | 2 of 7 (as `ambient-state`) | `random_rejects_every_seeded_form` |
 | `host-callback` | `host-callback` | `js_sys`, `wasm_bindgen`, `web_sys` paths; crates `js-sys`, `wasm-bindgen`, `web-sys` | 0 of 4 | `host_callback_rejects_every_seeded_form` |
@@ -112,7 +112,7 @@ type position, a macro body and a glob import, as applicable. The tests are in
 | `json-serialization` | `json-serialization` | `serde_json` paths and macros; crate `serde_json` | 0 of 5 | `json_serialization_rejects_every_seeded_form` |
 | `wasm-serde` | `wasm-serde` | `serde_wasm_bindgen`; crate `serde-wasm-bindgen` | 0 of 2 | `wasm_serde_rejects_every_seeded_form` |
 | `float-sentinel` | `float-boundary` | any `f32`/`f64` path in core, so `NAN`, `INFINITY`, `NEG_INFINITY`, `consts` | 0 of 5 | `float_sentinels_are_rejected_as_float_boundary` |
-| `float-op` | `float-boundary` | float types, float literals and float paths in core, also inside macros | 1 of 3 | `float_operations_are_rejected_as_float_boundary` |
+| `float-op` | `float-boundary` | float types, float literals and float paths in core, also inside macros; since #321 names ending in `_f32`/`_f64` (`Duration::mul_f64`, `as_secs_f64`, `to_f32`) | 1 of 3 | `float_operations_are_rejected_as_float_boundary` |
 | `std-env` | `std-env` | `std::env`; `env!` and `option_env!` since #321 | 1 of 6 (as `ambient-state`) | `std_env_rejects_every_seeded_form` |
 | `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
 | `std-process` | `std-process` | `std::process` | 0 of 5 | `std_process_rejects_every_seeded_form` |
@@ -134,7 +134,16 @@ and counted with the forms above:
 | `include_str!`/`include_bytes!` outside the crate, absolute, computed, renamed, in a macro | `include-data` (Bunny's own) | 0 of 5 | `included_data_must_come_from_inside_the_crate` |
 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")`, in a macro | `std-env` | 1 of 6 (`std::env!`, through the `std::env` prefix) | `compile_time_environment_macros_are_std_env` |
 
-With these the rule tests seed 136 forms; the gate before #321 caught 93.
+| `std::thread::sleep_ms` under `#[allow(deprecated)]`, `park`, `park_timeout_ms`, `yield_now`, `park_timeout` by alias; `SystemTimeError` | `thread-sleep`, `time-system` | 0 of 5 | `sibling_names_in_banned_families_are_rejected` |
+| `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64(text.parse().ok()?)`, `div_duration_f32`, `as_secs_f32` in `format!`, `x.to_f32()` | `float-boundary` | 0 of 5 | `float_methods_with_no_float_token_are_float_boundary` |
+| `use core::f64::consts::PI as P`, a renamed `to_f32`, the same in a group, a `core::f32::consts` glob (found in review) | `float-boundary` | 0 of 4 | `float_names_in_use_declarations_are_float_boundary` |
+
+With these the rule tests seed 150 forms; the gate before #321 caught 93.
+Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
+documented items of `std::thread` and `std::time` as a path and as a `use`
+(58 probes, 14 of which the gate before #321 got wrong) and each of the 14
+float methods of `Duration` as a method call and as a path (28 probes, all
+missed before).
 `env!` was an accepted look-alike before #321; it is banned now, as in
 Lumen's gate (flyingrobots/lumen, ADR 0006), and the one use on main, in a
 `bunny-contract` test, carries a waiver.
@@ -157,6 +166,41 @@ Where the names differ:
   deterministic crate has `js-sys` or `wasm-bindgen` as a normal dependency
   (`wasm-bindgen-test` is a dev-dependency of their tests and is accepted).
   The dependency check is what keeps it that way.
+
+### Keeping The Name Lists Current
+
+`std::time` and `std::thread` are banned item by item, not as modules, so a
+sibling such as the deprecated `sleep_ms` cannot slip past a prefix. The item
+lists of the pinned toolchain's documentation are committed as
+`xtask/src/nondeterminism/std_api_<version>.txt`; `std_api_tests.rs` fails
+when the documentation lists an item its classification table does not name,
+when the gate reports anything but the classified rule for an item, and when
+`rust-toolchain.toml` pins a toolchain other than the one the file was read
+from. When the toolchain moves, regenerate the lists in the container (the
+documentation pages are the source; the image has no `rust-src` or
+`rust-docs`):
+
+```sh
+python3 ~/git/devcontainers/bin/devrun bunny <worktree> --worktree --network -- bash -c '
+  V=<version>; echo "toolchain $V"; echo
+  for m in thread time; do echo "[std::$m]"
+    curl -fsSL https://doc.rust-lang.org/$V/std/$m/index.html |
+      grep -oE "class=\"(fn|struct|macro|type|enum|trait|constant)\" href=\"[^\"]+\"" |
+      sed -E "s/class=\"([a-z]+)\" href=\"[a-z]+\.([A-Za-z0-9_]+)\.html\"/\1 \2/"
+    echo
+  done
+  for page in time/Duration path/Path; do echo "[std::${page%/*}::${page#*/} methods]"
+    curl -fsSL https://doc.rust-lang.org/$V/std/${page%/*}/struct.${page#*/}.html |
+      grep -oE "id=\"method\.[a-z0-9_]+\"" | sed -E "s/id=\"method\.(.*)\"/\1/" | LC_ALL=C sort -u
+    echo
+  done'
+```
+
+prefix its three comment lines and save the output as the new
+`std_api_<version>.txt` (the first run reproduced the 1.96.0 file
+exactly), classify each new item in
+the test's table and in the rules, and read the release notes for renamed
+items.
 
 ### How the source rules read code
 
@@ -242,7 +286,10 @@ What a waiver covers:
 - On a line that also holds code, that line only.
 - On a line of its own, that line, the comment lines below it, and every line
   of the outermost item, statement, field, enum variant, match arm or
-  struct-literal field that starts on the next line holding code. A waiver
+  struct-literal field that starts on the next line holding code. A node
+  starts on its first line and again on its first line after its attributes
+  and doc comments, so a waiver between a doc comment and `fn` covers the
+  function. A waiver
   above a function covers the whole function and nothing after it; a waiver
   above one statement does not cover the next statement. When no such node
   starts on that line (inside a macro's tokens, or on a continuation line of
