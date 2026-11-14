@@ -46,6 +46,11 @@ and `point_at`:
   and `ShadingFrame::try_cosine_direction`: one constructed case per
   reachable `SecondaryRayError` variant, and a seeded differential case that
   the `Option` forms keep the 0.7.1 outputs and agree with the `try_` forms.
+- the area-weighted vertex normals `bunny-vertex-normals/1`
+  (`VertexNormals`, `VertexNormalError`, `MAX_NORMAL_TRIANGLES`,
+  `VERTEX_NORMALS_ID`): hand-derived meshes, vertices with no normal, the
+  refusals and their order, an exact big-integer oracle over seeded meshes,
+  independence from face order and vertex labels, and golden vectors.
 
 Projection matrices (flyingrobots/bunny#201, #202), and reflection, refraction
 and other material helpers (#160) are out of scope.
@@ -118,6 +123,9 @@ formatting.
 | OPTICS-REQ-041 | `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction` name each refusal with a `SecondaryRayError` variant carrying the observed values, checked in this order: `HitPointUnrepresentable { distance }` when `point_at(ray, hit.distance)` is not representable, `HitPointOutsideTraceDomain { point }` when a coordinate of that point is more than two raw units outside the trace domain, `NotOnArrivalSide { point }` when no step of at most two raw units reaches the arrival side, `StartOutsideTraceDomain { start }` when the stepped start point is outside the trace domain, `SampleOutsideUnitInterval { sample }` when a sample coordinate is outside `[0, 1)`, and the defensive `BounceRayRefused { origin, direction }` when `TraceRay::new` refuses the bounce ray. | `README.md#inputs-and-refusals` |
 | OPTICS-REQ-042 | `SurfaceHit::new`, `SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction` keep every output of 0.7.1: each returns `Some(x)` exactly when its `try_` form returns `Ok(x)`, with the same value, and agrees with the 0.7.1 code on every input, except that a hit point far enough outside the trace domain to overflow the 0.7.1 plane test in `i128` (a panic in debug builds) returns `None`, as 0.7.1 release builds did. | `README.md#inputs-and-refusals` |
 | OPTICS-REQ-043 | The fast path and the diagnostic path agree: `SurfaceHit::new`, `SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction` (the fast path, the 0.7.1 bodies plus the plane-test overflow guard) return `Some(x)` exactly when `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction` (the diagnostic path) return `Ok(x)`, with equal values, on generated inputs from a fixed and a fresh seed and on the constructed refusals; a change to either side alone breaks it. | `README.md#inputs-and-refusals` |
+| OPTICS-REQ-044 | `VertexNormals::new` (`bunny-vertex-normals/1`, `VERTEX_NORMALS_ID`) gives each vertex the exact `i128` sum of the cross products `(p[b] - p[a]) x (p[c] - p[a])` of the triangles `[a, b, c]` that list it (area weighting), normalized as `TriangleSurface::new` normalizes a face normal; each component is within one raw unit of the exact unit vector along the sum. | `README.md#vertex-normals` |
+| OPTICS-REQ-045 | A vertex normal depends only on the mesh: the same faces in any order, with any corner of each face listed first, give the same bits, and relabelling the vertices relabels the normals. | `README.md#vertex-normals` |
+| OPTICS-REQ-046 | A vertex with no face, or whose faces sum to exactly zero, has no normal (`None`); vertices are never welded. `VertexNormals::new` refuses, in this order, more than `MAX_NORMAL_TRIANGLES` (`2^32`) triangles (`TooManyTriangles`), a position with a coordinate magnitude of at least `TRACE_COORD_LIMIT_RAW` (`PositionOutsideTraceDomain`, the first such vertex), and an index not below the number of positions (`IndexOutOfRange`, the first such triangle and corner). | `README.md#vertex-normals` |
 
 ```toml
 [[requirement]]
@@ -314,6 +322,21 @@ status = "active"
 id = "OPTICS-REQ-043"
 summary = "The fast path and the diagnostic path agree: SurfaceHit::new, SurfaceHit::bounce_ray and ShadingFrame::cosine_direction (the fast path, the 0.7.1 bodies plus the plane-test overflow guard) return Some(x) exactly when SurfaceHit::try_new, SurfaceHit::try_bounce_ray and ShadingFrame::try_cosine_direction (the diagnostic path) return Ok(x), with equal values, on generated inputs from a fixed and a fresh seed and on the constructed refusals; a change to either side alone breaks it."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-044"
+summary = "VertexNormals::new (bunny-vertex-normals/1, VERTEX_NORMALS_ID) gives each vertex the exact i128 sum of the cross products (p[b] - p[a]) x (p[c] - p[a]) of the triangles [a, b, c] that list it (area weighting), normalized as TriangleSurface::new normalizes a face normal; each component is within one raw unit of the exact unit vector along the sum."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-045"
+summary = "A vertex normal depends only on the mesh: the same faces in any order, with any corner of each face listed first, give the same bits, and relabelling the vertices relabels the normals."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-046"
+summary = "A vertex with no face, or whose faces sum to exactly zero, has no normal (None); vertices are never welded. VertexNormals::new refuses, in this order, more than MAX_NORMAL_TRIANGLES (2^32) triangles (TooManyTriangles), a position with a coordinate magnitude of at least TRACE_COORD_LIMIT_RAW (PositionOutsideTraceDomain, the first such vertex), and an index not below the number of positions (IndexOutOfRange, the first such triangle and corner)."
+status = "active"
 ```
 
 ## Fixtures
@@ -401,6 +424,19 @@ Seeded shading cases use the plan's generator with the seed
 `SHADING_TEST_SEED` (`0xB002_0160_D1FF_0001`), and sampler points from
 `PixelSampler` with the seed `0x0123_4567_89AB_CDEF`.
 
+### The Vertex-Normal Oracle
+
+`crates/bunny-optics/tests/vertex_normal_tests.rs` checks every vertex normal
+against the exact unit vector along the exact sum, with no square root and no
+floating point. It shares no code with the crate: it computes each face's
+normal in the shoelace form `a x b + b x c + c x a` (equal to
+`(b - a) x (c - a)`), finds the faces of a vertex by search, and decides
+`r - 1 <= s 2^32 / |S| <= r + 1` for each raw component `r` of a normal with
+exact sum `S` by comparing squares (`(r -+ 1)^2 |S|^2` against `(s 2^32)^2`,
+with the signs handled first) in an unsigned big integer written in the test
+(`Big`, base-`2^32` limbs). Seeded meshes use the plan's generator with the
+seed `0xB002_0289_0000_0001`; failures print the seed and case.
+
 ### The Image-Plane Oracle
 
 The oracle shares no code or rounding with the camera. For a sample with
@@ -484,6 +520,14 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-063 | Refusal mutations | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | Each side of the fast/diagnostic pair broken alone (the stepped-point domain check of either, the overflow guard of the fast path, the beyond-reach check of the diagnostic path), the stepped start point reported as the unstepped one, and a sample coordinate of exactly 1.0 accepted, each make at least one case above fail. | [Shading mutation checks](#shading-mutation-checks) |
 | OPTICS-TP-064 | Agreement from a fresh seed | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The check of OPTICS-TP-062 from a seed drawn per run (`RandomState`), printed in every failure message, so coverage accumulates across runs; 30 consecutive runs passed. On `wasm32-unknown-unknown` the standard library's hash keys are fixed, so there the seed repeats. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed` |
 | OPTICS-TP-065 | Defensive bounce refusal | OPTICS-REQ-041 | `BounceRayRefused` built directly (no input reaches it through the public API; OPTICS-TP-062 and OPTICS-TP-064 count zero occurrences): its values and `Display` text. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_defensive_bounce_refusal_names_its_ray` |
+| OPTICS-TP-066 | Hand-derived vertex normals | OPTICS-REQ-044 | The identity string; a flat 3 by 3 grid in `z = 0` gives `+Z` at every vertex; the same grid on the plane `3y + 4z = 0` gives raw `(0, 2 576 980 378, 3 435 973 837)` (`(0, 0.6, 0.8)` rounded) at every vertex, whether it has 1, 2, 3 or 6 faces; a four-face fan around `+Z` gives the axis at its apex and `(+-0.6, 0, 0.8)`, `(0, +-0.6, 0.8)` at its base; a fold of a face with cross product `(0, 0, 8)` and one with `(6, 0, 0)`, both right-angled at the shared vertex, gives `(0.6, 0, 0.8)` there (equal or angle weights would give `(1, 0, 1) / sqrt(2)`). | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_066_hand_derived_meshes_give_exact_vertex_normals` |
+| OPTICS-TP-067 | Vertices without a normal | OPTICS-REQ-046 | An empty mesh has no normals; an unreferenced vertex, the vertices of only zero-area faces (collinear corners, a repeated index) and of one triangle wound both ways have `None`; the fold with its shared vertex duplicated gives each copy only its own face's normal. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_067_vertices_without_faces_or_with_a_zero_sum_have_no_normal` |
+| OPTICS-TP-068 | Refusals in order | OPTICS-REQ-046 | Positions at `+-2^40` raw and the extreme raw values are refused as `PositionOutsideTraceDomain` naming the first such vertex, and `2^40 - 1` is accepted; the first triangle with an out-of-range index and its first such corner are named in `IndexOutOfRange`; a mesh with both is refused for its position first; the `Display` texts. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_068_meshes_outside_the_domain_are_refused_in_order` |
+| OPTICS-TP-069 | Triangle-count limit | OPTICS-REQ-046 | `MAX_NORMAL_TRIANGLES` is `2^32`; the private count check accepts 0 and `2^32` and refuses `2^32 + 1` and `u64::MAX` with `TooManyTriangles`, and its `Display` text. A mesh over the limit cannot be built in a test, so this is a unit test of the check. | `crates/bunny-optics/src/shading/vertex_normals/tests/mod.rs::optics_tp_069_the_triangle_count_limit_is_inclusive` |
+| OPTICS-TP-070 | Exact oracle | OPTICS-REQ-044, OPTICS-REQ-046 | 400 seeded meshes (3 to 12 vertices within `2^6`, `2^20`, `2^33`, `2^38` raw or the whole domain; 1 to 24 triangles of random indices, so zero-area faces too), and 1 000 faces at the corners of the domain around one vertex: every normal is within one raw unit of the exact unit vector by [the vertex-normal oracle](#the-vertex-normal-oracle), and is `None` exactly when the exact sum is zero. Witness counts require both outcomes. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_070_vertex_normals_are_within_one_raw_unit_of_the_exact_oracle` |
+| OPTICS-TP-071 | Order and labels | OPTICS-REQ-045 | 300 seeded meshes, each rebuilt with its faces shuffled, each face's corners rotated and its vertices relabelled by a seeded permutation: every relabelled normal has the same bits. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_071_vertex_normals_do_not_depend_on_face_order_or_vertex_labels` |
+| OPTICS-TP-072 | Golden vertex normals | OPTICS-REQ-044 | A tetrahedron with irregular corners and a fifth vertex on one extra face: locked raw normals (produced by the crate, checked here against the oracle and separately against an exact Python computation, where each is the correctly rounded unit vector). | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_072_golden_vertex_normals_lock_the_rule` |
+| OPTICS-TP-073 | Vertex-normal mutations | OPTICS-REQ-044, OPTICS-REQ-045, OPTICS-REQ-046 | Equal weights per face, a fallback vector for a zero sum, a sum replaced by the last face, a face added to its first corner only, the domain check made inclusive of `2^40`, the wrong corner named and the count limit made exclusive each make at least one case above fail. | [Vertex-normal mutation checks](#vertex-normal-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1025,6 +1069,78 @@ test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_de
 oracle = "Specified: the variant carries the origin and direction it is given, and its Display text names both as raw components."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-066"
+requirements = ["OPTICS-REQ-044"]
+evidence = "test"
+test = "crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_066_hand_derived_meshes_give_exact_vertex_normals"
+oracle = "Hand computed: exact cross products, sums and perfect-square lengths, each component rounded to nearest by hand."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-067"
+requirements = ["OPTICS-REQ-046"]
+evidence = "test"
+test = "crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_067_vertices_without_faces_or_with_a_zero_sum_have_no_normal"
+oracle = "Specified: no face or an exact zero sum gives None; unwelded copies keep their own faces."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-068"
+requirements = ["OPTICS-REQ-046"]
+evidence = "test"
+test = "crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_068_meshes_outside_the_domain_are_refused_in_order"
+oracle = "Specified: the refusal order, the first offending vertex, triangle and corner, and the Display texts."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-069"
+requirements = ["OPTICS-REQ-046"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/vertex_normals/tests/mod.rs::optics_tp_069_the_triangle_count_limit_is_inclusive"
+oracle = "Specified: the limit 2^32 is inclusive."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-070"
+requirements = ["OPTICS-REQ-044", "OPTICS-REQ-046"]
+evidence = "test"
+test = "crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_070_vertex_normals_are_within_one_raw_unit_of_the_exact_oracle"
+oracle = "Independent exact oracle: shoelace face normals and big-integer comparisons of squares; None exactly for a zero sum."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-071"
+requirements = ["OPTICS-REQ-045"]
+evidence = "test"
+test = "crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_071_vertex_normals_do_not_depend_on_face_order_or_vertex_labels"
+oracle = "Metamorphic: shuffled faces, rotated corners and relabelled vertices give bit-identical relabelled normals."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-072"
+requirements = ["OPTICS-REQ-044"]
+evidence = "test"
+test = "crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_072_golden_vertex_normals_lock_the_rule"
+oracle = "Golden vectors, checked against the oracle of OPTICS-TP-070."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-073"
+requirements = ["OPTICS-REQ-044", "OPTICS-REQ-045", "OPTICS-REQ-046"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#vertex-normal-mutation-checks"
+oracle = "Mutation checks: each listed mutation fails at least one case; recorded in Vertex-Normal Mutation Checks."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1133,6 +1249,24 @@ The second row is the 0.7.1 failure itself: its plane test overflows `i128` on
 a point `2^30` units above the ground (a panic in a debug build; release
 builds return `None`).
 
+## Vertex-Normal Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/vertex_normals.rs`, and the vertex-normal
+tests were run with `timeout 120 cargo test --locked -p bunny-optics
+--no-fail-fast --lib --test vertex_normal_tests` per mutation. Every mutation
+made at least one case fail; the restored source passed all seven cases.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Each face's cross product normalized before the sum (equal weights) | Area weighting | OPTICS-TP-066, OPTICS-TP-070, OPTICS-TP-072 |
+| A zero sum given `+Z` instead of `None` | No normal without faces | OPTICS-TP-067, OPTICS-TP-070 |
+| Each face replaces the vertex's sum instead of adding to it | The exact sum | OPTICS-TP-066, OPTICS-TP-067, OPTICS-TP-070, OPTICS-TP-071, OPTICS-TP-072 |
+| A face added to its first corner only | Every corner of a face | OPTICS-TP-066, OPTICS-TP-067, OPTICS-TP-070, OPTICS-TP-071, OPTICS-TP-072 |
+| A coordinate of exactly `2^40` raw accepted (`>` for `>=`) | Positions inside the trace domain | OPTICS-TP-068 |
+| The third corner named for a bad second corner | The first bad corner is named | OPTICS-TP-068 |
+| The count limit made exclusive (`>=` for `>`) | `2^32` triangles accepted | OPTICS-TP-069 |
+
 ## Timing
 
 `pixel/resolve_srgb_rgba8` in `crates/bunny-perf` (feature group `pixel`)
@@ -1165,6 +1299,13 @@ sample with its shadow ray, the bounce ray and the reflection of direct plus
 sky). Traversal is not included. Every result passes through `black_box`. Run
 it with `--filter shade/` as above; the readings are in the
 [chapter](README.md#accuracy-and-cost), not a speed claim.
+
+The `normals` group (`crates/bunny-perf/src/normals.rs`) times
+`shade/vertex_normals`: one whole `VertexNormals::new` of a seeded 32 by 32
+height-field grid (1 024 vertices, 1 922 triangles) per batch, reported per
+vertex, allocations included. Its reading is in the
+[chapter](README.md#accuracy-and-cost) and the
+[performance ledger](../performance/README.md#12-area-weighted-vertex-normals-new-api).
 
 ## Determinism Obligations And Evidence
 
@@ -1199,6 +1340,12 @@ an oracle only, in the test files. `OPTICS-TP-045` is a regression guard on
 the hemisphere distribution with stated thresholds, not a statistical test;
 `OPTICS-TP-050` checks energy on two constructed scenes, not convergence in
 general. Every shading case runs natively and under WebAssembly.
+
+The vertex normals use only exact `i128` additions and multiplications and
+the normalization of `TriangleSurface::new`; their oracle is exact big-integer
+arithmetic in the test file, with no floating point. `OPTICS-TP-071` is the
+order evidence for them: the sums are exact, so face order, corner order and
+vertex labels cannot change a bit.
 
 ## Known Failures
 
@@ -1249,6 +1396,10 @@ Current tests cover:
   the surface, along it and below it; a cover `2^-20` units and 4 raw units
   above the surface;
 - light directions whose largest component is one raw unit either side of 1.0.
+- meshes with no vertices, an unreferenced vertex, only zero-area faces, a
+  triangle wound both ways, a duplicated vertex, an index one past the end,
+  positions at `+-2^40` raw and `2^40 - 1`, and 1 000 faces at the corners of
+  the domain around one vertex;
 - hit distances of the most negative raw value, zero with the face flipped,
   large positive and negative values and a few raw units from the reported
   distance; sample coordinates of exactly 1.0, `-2^-32` and the extreme raw
