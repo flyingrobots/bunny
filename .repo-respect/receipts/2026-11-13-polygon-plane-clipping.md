@@ -23,7 +23,7 @@ Files edited:
 - `crates/bunny-geom/README.md`
 - `crates/bunny-geom/src/lib.rs`
 - `crates/bunny-geom/src/plane.rs`
-- `crates/bunny-geom/src/polygon.rs`
+- `crates/bunny-geom/src/plane/polygon.rs`
 - `docs/MATH_GEOMETRY_CAPABILITY_MAP.md`
 - `docs/README.md`
 - `crates/bunny-geom/tests/polygon_clip_tests.rs`

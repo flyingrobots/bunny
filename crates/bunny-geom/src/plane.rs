@@ -3,6 +3,10 @@
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
+mod polygon;
+
+pub use polygon::{PolygonClip, PolygonClipError};
+
 /// Which side of a plane a point lies on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaneSide {
@@ -112,7 +116,7 @@ const fn side_of(distance: FixedQ32_32) -> PlaneSide {
 }
 
 /// The on-plane rule: zero distance is kept, so `On` and `Front` both keep.
-pub const fn keeps(distance: FixedQ32_32) -> bool {
+const fn keeps(distance: FixedQ32_32) -> bool {
     distance.raw() >= 0
 }
 
@@ -121,7 +125,7 @@ pub const fn keeps(distance: FixedQ32_32) -> bool {
 /// The edge is first put in canonical direction, ascending by raw `(x, y, z)`, so
 /// the result does not depend on which way the caller traverses it. It is
 /// bit-identical to the cut of `clip_segment` applied to the canonical segment.
-pub fn edge_cut(plane: FixedPlane3, a: FixedVec3, b: FixedVec3) -> Option<FixedVec3> {
+fn edge_cut(plane: FixedPlane3, a: FixedVec3, b: FixedVec3) -> Option<FixedVec3> {
     let key = |p: FixedVec3| (p.x.raw(), p.y.raw(), p.z.raw());
     let (lo, hi) = if key(a) <= key(b) { (a, b) } else { (b, a) };
     crossing(FixedSegment3::new(lo, hi), plane.signed_distance(lo)?, plane.signed_distance(hi)?)
