@@ -7,7 +7,9 @@ edition.workspace = true
 keywords = ["bunny", "mesh", "codec", "ply", "obj"]
 license.workspace = true
 readme = "README.md"
-exclude = ["tests/fixtures/stanford-bunny-ascii/"]
+# The 143 KB Stanford asset and the only test that reads it stay out of the package
+# together; `scripts/publish-crates.sh packaged-tests` builds the packaged tests.
+exclude = ["tests/fixtures/stanford-bunny-ascii/", "tests/ply_ascii_stanford_tests.rs"]
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
