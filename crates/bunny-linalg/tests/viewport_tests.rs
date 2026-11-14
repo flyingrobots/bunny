@@ -55,7 +55,10 @@ fn cl_tp_007_one_by_one_and_hd_viewports_have_exact_golden_vectors() {
     let hd = viewport(1920, 1080);
     assert_eq!(to_pixels(hd, 0, 0, 0), [960 * ONE_RAW, 540 * ONE_RAW, 0]);
     assert_eq!(to_pixels(hd, -ONE_RAW, ONE_RAW, 0), [0, 0, 0]);
-    assert_eq!(to_pixels(hd, ONE_RAW, -ONE_RAW, ONE_RAW), [1920 * ONE_RAW, 1080 * ONE_RAW, ONE_RAW]);
+    assert_eq!(
+        to_pixels(hd, ONE_RAW, -ONE_RAW, ONE_RAW),
+        [1920 * ONE_RAW, 1080 * ONE_RAW, ONE_RAW]
+    );
     // Odd sizes: a 3 x 5 viewport puts the NDC origin at (3/2, 5/2).
     let odd = viewport(3, 5);
     assert_eq!(to_pixels(odd, 0, 0, 0), [3 * HALF_RAW, 5 * HALF_RAW, 0]);
@@ -90,7 +93,7 @@ fn cl_tp_009_depth_passes_through_and_points_outside_the_cube_map_linearly() {
     // NDC x = 2 is one full viewport width past the right edge; y = -3 is two
     // heights below the bottom edge; no clipping happens.
     assert_eq!(to_pixels(vp, 2 * ONE_RAW, -3 * ONE_RAW, 0), [6 * ONE_RAW, 4 * ONE_RAW, 0]);
-    assert_eq!(to_pixels(vp, -3 * ONE_RAW, 3 * ONE_RAW, 0), [-2 * ONE_RAW, -2 * ONE_RAW, 0]);
+    assert_eq!(to_pixels(vp, -3 * ONE_RAW, 3 * ONE_RAW, 0), [-4 * ONE_RAW, -2 * ONE_RAW, 0]);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -102,11 +105,16 @@ fn cl_tp_010_empty_extent_and_overflow_are_typed_errors() {
     assert_eq!(vp.try_ndc_to_viewport(v(i64::MAX, 0, 0)), Err(ViewportError::Overflow));
     assert_eq!(vp.try_ndc_to_viewport(v(i64::MIN, 0, 0)), Err(ViewportError::Overflow));
     assert_eq!(vp.try_ndc_to_viewport(v(0, i64::MIN, 0)), Err(ViewportError::Overflow));
-    assert_eq!(vp.try_ndc_to_viewport(v(0, i64::MAX, 0)), Err(ViewportError::Overflow));
+    // (1 - y) * height / 2 is negative here, so it needs height 4 to leave the range.
+    let tall = viewport(4, 4);
+    assert_eq!(tall.try_ndc_to_viewport(v(0, i64::MAX, 0)), Err(ViewportError::Overflow));
     let one = viewport(1, 1);
     assert_eq!(one.try_viewport_to_ndc(v(i64::MAX, 0, 0)), Err(ViewportError::Overflow));
     assert_eq!(one.try_viewport_to_ndc(v(0, i64::MIN, 0)), Err(ViewportError::Overflow));
-    assert_eq!(ViewportError::EmptyExtent.to_string(), "viewport width and height must be positive");
+    assert_eq!(
+        ViewportError::EmptyExtent.to_string(),
+        "viewport width and height must be positive"
+    );
     assert_eq!(
         ViewportError::Overflow.to_string(),
         "viewport arithmetic is outside the Q32.32 range"

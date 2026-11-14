@@ -251,7 +251,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_006_four_by_two_viewport_has_exact_golden_vectors"
 oracle = "Hand-computed exact raw pixels for a 4 x 2 viewport."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CL-TP-007"
@@ -260,7 +260,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_007_one_by_one_and_hd_viewports_have_exact_golden_vectors"
 oracle = "Exact raw pixels for 1 x 1, 1920 x 1080 and 3 x 5 viewports."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CL-TP-008"
@@ -269,7 +269,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_008_rounding_is_floor_of_exact_raw_value_at_the_edges"
 oracle = "Exact raw results at half-unit rounding edges in a 1 x 1 viewport."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CL-TP-009"
@@ -278,7 +278,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_009_depth_passes_through_and_points_outside_the_cube_map_linearly"
 oracle = "Depth passthrough and hand-computed raw results outside the cube."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CL-TP-010"
@@ -287,7 +287,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_010_empty_extent_and_overflow_are_typed_errors"
 oracle = "Exact error variants and stable messages."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CL-TP-011"
@@ -296,7 +296,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_011_inverse_mapping_has_exact_golden_vectors"
 oracle = "Hand-computed exact raw NDC for the inverse mapping."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CL-TP-012"
@@ -305,7 +305,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/viewport_tests.rs::cl_tp_012_seeded_round_trip_matches_exact_integer_arithmetic"
 oracle = "Exact i128 arithmetic for the forward floor bound and the round-trip rule."
 tier = "fast"
-status = "planned"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -335,7 +335,6 @@ Future implementation work must add explicit negative tests for:
 - point/vector misuse where type APIs can reject it
 - inverted bounds where a bounds API owns the rejection
 - external-format adapters that omit required convention metadata
-- viewport conversions with mismatched origin or `y` direction
 
 ## Edge Cases And Unusual Inputs
 
@@ -376,5 +375,4 @@ case with a stable test name.
 | `target_from_source` composition examples. | Matrix and transform primitives. |
 | Point versus vector translation behavior. | Typed point/vector/transform APIs. |
 | Positive rotation direction beyond cross-product orientation. | Angle, quaternion, or rotation APIs. |
-| Viewport conversion examples. | Viewport APIs. |
 | External source convention conversion tests. | Format-specific adapter APIs that expose convention conversion. |

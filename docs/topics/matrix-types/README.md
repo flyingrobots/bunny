@@ -176,8 +176,10 @@ far to `1`) are defined in the
 lists the `ProjectionError` variants. Entries are rounded to nearest Q32.32,
 so the matrices are exact when the parameters give representable entries;
 golden tests use power-of-two parameters. There is no vector-transform,
-unprojection, ray, or viewport API for these matrices yet; multiply with
-`checked_mul_mat4` or apply the rows directly.
+unprojection or ray API for these matrices yet; multiply with
+`checked_mul_mat4` or apply the rows directly. The NDC result converts to
+pixels with `Viewport`, defined in the
+[coordinate law](../coordinate-law/README.md#viewport-conversion).
 
 ## Required Tests
 

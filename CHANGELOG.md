@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
+  conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
+  `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
+  down, coordinates are continuous with pixel corners on integers, each
+  coordinate is the floor of the exact raw value, and depth passes through. The
+  round trip is within one raw unit per axis. The coordinate law's new
+  Viewport Conversion section records the choices; golden vectors run natively
+  and under WebAssembly. Existing functions are unchanged.
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
   a tangent (no trigonometry) and return the new `ProjectionError`. The
