@@ -1,11 +1,12 @@
 # Optics
 
 This chapter defines Bunny's current contract for camera, ray-generation,
-sampling and pixel-value math in `bunny-optics`: a deterministic pinhole
-camera that turns pixel samples into [trace rays](../ray-tracing/README.md),
-the deterministic sample hash and pixel sampler that choose those samples and
-every later random decision, and the functions that turn the radiance those
-rays gather into 8-bit and 16-bit output codes.
+sampling, shading and pixel-value math in `bunny-optics`: a deterministic
+pinhole camera that turns pixel samples into
+[trace rays](../ray-tracing/README.md), the deterministic sample hash and pixel
+sampler that choose those samples and every later random decision, the
+diffuse shading steps that turn trace hits into radiance, and the functions
+that turn that radiance into 8-bit and 16-bit output codes.
 
 ## Status
 
@@ -32,11 +33,20 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `LinearClampV1`; `identity`, `apply`, `encode_8`, `encode_16`),
   `quantize_8`, `quantize_16`, `write_rgba8`, `PixelError`,
   `MAX_SAMPLE_RADIANCE_RAW`, `MAX_SAMPLES_PER_PIXEL`, `UNORM8_IDENTITY`,
-  `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`.
+  `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`;
+- for [diffuse shading](#diffuse-shading) (`bunny-diffuse-shading/1`):
+  `TriangleSurface` (`new`, `frame`, `facing_frame`), `ShadingFrame` (`new`,
+  `flipped`, `tangent`, `bitangent`, `normal`, `cosine_direction`),
+  `SurfaceHit` (`new`, `point`, `frame`, `bounce_ray`, `light_sample`),
+  `DirectionalLight` (`new`, `toward_light`, `irradiance`, `cosine`,
+  `reflected_radiance`), `LightSample` (`shadow_ray`, `radiance`), `SkyLight`
+  (`new`, `radiance`), `Albedo` (`new`, `channels`, `reflect`),
+  `ShadingError`, `SHADING_ID`, `PI`, `FRAC_1_PI`, `MAX_LIGHT_RAW`,
+  `SHADOW_T_MAX` and `MIN_BOUNCE_COSINE_RAW`.
 
-Evidence is listed in the [test plan](test-plan.md). Mapping unit-square
-points to directions on a hemisphere, and shading (#160), are not part of this
-chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
+Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
+attenuation and materials other than diffuse (the rest of #160) are not part
+of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
 (right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
 field of view given by its tangent, aspect `width / height`) and `Viewport`
 (top-left origin, `y` down), but no test yet checks a ray against those
@@ -501,6 +511,372 @@ its timelines:
 `state` returns the state for checkpointing. Each value depends on every draw
 before it, so this generator is for code that draws in one fixed order, not
 for rendering. Echo's golden vectors replay exactly (see the test plan).
+
+## Diffuse Shading
+
+Between a trace hit and a radiance sample, a path tracer with diffuse
+(Lambertian) surfaces, one directional light, a uniform sky and at most one
+bounce takes a fixed set of steps. Each step is a pure integer function in
+`crates/bunny-optics/src/shading/`, with golden vectors and a stated bound, so
+that a renderer only wires them together and two renderers that wire them the
+same way produce the same bits.
+
+**What Bunny owns.** The triangle's normal and frame, the facing rule, where
+secondary rays start, the bounce direction for a sampler point, the light's
+term and its shadow ray, the sky's radiance, the diffuse reflection, and the
+reference order in which they combine. **What the renderer owns.** Scene
+loading and vertex transforms, the acceleration structure and the
+closest-hit and any-hit queries (`bunny-broadphase`), which sampler pair each
+decision uses, the loop over pixels and samples, and the pixel value
+([Pixel Values](#pixel-values)). Materials other than diffuse, other lights,
+textures, smooth shading, reflection and refraction are not defined here.
+
+### Shading Identity
+
+| Identity | Constant | Names |
+| --- | --- | --- |
+| `bunny-diffuse-shading/1` | `SHADING_ID` | `TriangleSurface::new`, `ShadingFrame::new`, `ShadingFrame::flipped`, `ShadingFrame::cosine_direction`, `SurfaceHit::new`, `SurfaceHit::bounce_ray`, `SurfaceHit::light_sample`, `DirectionalLight::cosine`, `DirectionalLight::reflected_radiance`, `LightSample::radiance`, `Albedo::reflect`, `SkyLight::radiance`, the constants below, and the [order of operations](#order-of-operations). |
+
+Any change to an output bit of any of these is a new version (`/2`) with new
+functions or types; under the Fidelity Rule the existing ones keep their
+output. The golden vectors in the [test plan](test-plan.md) define version 1.
+
+| Constant | Raw value | Meaning |
+| --- | --- | --- |
+| `PI` | 13 493 037 705 | The nearest raw value to `pi * 2^32` (13 493 037 704.522), 0.478 raw units above pi. |
+| `FRAC_1_PI` | 1 367 130 551 | The nearest raw value to `2^32 / pi` (1 367 130 551.153), 0.153 raw units below. The light's term uses it. |
+| `MAX_LIGHT_RAW` | `2^48` (65 536.0) | The largest light irradiance or sky radiance per channel. |
+| `SHADOW_T_MAX` | `2^41` (512.0) | The distance limit of a shadow ray's any-hit query. |
+| `MIN_BOUNCE_COSINE_RAW` | `2^15` | Every bounce direction's dot product with the normal is at least this. |
+
+### Geometric Normal
+
+`TriangleSurface::new(&TraceTriangle)` prepares a triangle once, before any
+hit: its exact plane, unit normal and frame.
+
+- **Plane.** `N = (v1 - v0) x (v2 - v0)` in exact `i128` (edges are below
+  `2^41` raw, so `N` is below `2^83`), and `N . v0`. `N` is the right-handed
+  normal of the [coordinate law](../coordinate-law/README.md): it points to
+  the triangle's front face, where `TriangleHit::front_face` is `true`.
+- **Unit normal.** `N` scaled by the power of two that puts its largest
+  component magnitude in `[2^61, 2^62)` (the camera basis's prescale), then
+  `FixedUnitVec3::new`. Each component is within one raw unit of the exact
+  `N / |N|`.
+- **Degenerate triangles.** A zero-area triangle (duplicate or collinear
+  vertices) has `N = 0` exactly and returns `None`. The exact triangle test
+  never reports a hit on one, so a renderer never needs its surface.
+
+**Unit, and per triangle.** The cosine terms need a consistent normalization,
+and a unit normal gives one with no length to carry. It costs two square
+roots and three divisions, and the frame three more divisions, so the
+renderer builds a `TriangleSurface` per triangle, not per hit (84 ns each, see
+[Accuracy And Cost](#accuracy-and-cost)); a hit then needs no square root or
+division for its normal. The geometric normal of a two-sided triangle is used
+for shading; vertex normals are not part of version 1.
+
+### Orthonormal Frame
+
+`ShadingFrame::new(normal)` builds the tangent and bitangent of Duff,
+Burgess, Christensen, Hery, Kensler, Liani and Villemin ("Building an
+Orthonormal Basis, Revisited", JCGT 6(1), 2017), the branch-free frame whose
+only case split is the sign of `z`. With `(x, y, z)` the unit normal's raw
+components, `s = 1` when `z >= 0` and `-1` otherwise, and `q(a) = a / (s + z)`
+rounded to nearest, ties to even, in raw units:
+
+```text
+tangent   = (1 - s q(x x), -s q(x y), -s x)
+bitangent = (-q(x y), s - q(y y), -y)
+```
+
+`|s + z|` is at least 1.0, so the quotients always exist. Each component is
+within half a raw unit of the formula evaluated exactly on the given normal.
+The frame is right-handed (`tangent x bitangent = normal`). Because the given
+normal is unit length only to within a raw unit, the exact formula is
+orthonormal only to within a few raw units: the test plan checks every
+pairwise dot product, every squared length minus one and every component of
+`tangent x bitangent - normal` within 8 raw units (`2^-29`) over 4 000 frames
+of each orientation, with largest values of 4.3, 3.9 and 4.4 raw units in a
+400 000-frame measurement.
+
+`flipped()` is `(bitangent, tangent, -normal)`: the same frame seen from the
+other side, still right-handed, with no arithmetic but negation.
+
+### Facing And Secondary Rays
+
+`SurfaceHit::new(&surface, &ray, &hit)` prepares one hit, where `hit` is the
+`TriangleHit` that `ray.hit_triangle` returned for the surface's triangle.
+
+**Facing.** The hit's frame is `surface.facing_frame(hit.front_face)`: the
+surface frame for a front-face hit and its flipped form for a back-face hit.
+So the normal always points to the side the ray arrived from, and
+`ray.direction() . normal < 0` for every hit (the exact test reports no hit
+on a ray parallel to the plane).
+
+**Start point (the self-intersection rule).** Every secondary ray (the
+shadow ray and the bounce ray) starts at the same point:
+
+1. `p = point_at(ray, hit.distance)`;
+2. let `k` be the axis of the plane normal's largest component magnitude (the
+   lowest axis on a tie), and `e` one raw unit along `k`, toward the arrival
+   side (the sign of the facing normal's component `k`);
+3. the start point is the first of `p`, `p + e`, `p + 2e` that is strictly on
+   the arrival side of the triangle's exact plane: `N' . point > N' . v0` in
+   exact `i128`, with `N'` the plane normal negated for a back-face hit.
+
+Two steps always suffice: the floored distance leaves the exact point at
+`hit.distance` on the arrival side or on the plane, `point_at` moves each
+coordinate by at most half a raw unit, so `N' . p - N' . v0 >= -|N'|_1 / 2`,
+and each step adds `|N'_k| >= |N'|_1 / 3`. In the reference model 38 % of
+400 000 seeded hits needed one step and none needed two. `SurfaceHit::new`
+returns `None` when the point is not representable or the step leaves the
+trace domain (possible only for a point on its boundary).
+
+Secondary rays are queried with a minimum distance of zero and no primitive
+excluded. Because the start point is strictly on the arrival side and every
+secondary ray leaves into that side (bounce directions by construction, the
+shadow ray only when the light is strictly on that side), a secondary ray
+never meets the plane of the triangle it leaves. Therefore it never hits:
+
+- its own triangle;
+- a coplanar neighbour, including across a shared edge or vertex;
+- an exactly coincident duplicate, with either winding;
+- a neighbour across a convex edge, which lies behind the plane.
+
+**What it can miss or leak.** The start point is within 1.5 raw units of the
+exact hit point on each axis, plus at most two along axis `k`: at most 3.5 raw
+units (about `8e-10` units) on any axis. A surface closer than that on the
+arrival side may be skipped, and at a concave corner the start point may move
+up to that far through the other wall; the test plan shows a surface 4 raw
+units away is found. There is no distance epsilon: a cover `2^-20` units above
+a surface still casts its shadow, which a minimum distance of `2^-10` would
+not.
+
+**Alternatives not chosen.** *Excluding the primitive just hit*, with no
+other rule, starts rays at `p`, which is on the plane or behind it for about
+four hits in ten. Accepting such a start point (the test plan's mutation)
+makes bounce and shadow rays hit their own triangle or a coplanar neighbour at
+distance zero in the shared-edge scenes; excluding the primitive just hit
+removes the first failure but not the second, nor a coincident duplicate.
+*A minimum distance* `t_min` depends on the direction's length (trace
+directions are not unit length) and misses nearby geometry. *An offset along
+the normal* by a fixed length depends on the scene's scale. The chosen rule is
+exact, scale-free and has no constant.
+
+### Cosine-Weighted Hemisphere
+
+`ShadingFrame::cosine_direction([u, v])` maps a unit-square point (a sampler
+pair: `PixelSampler::point(sample, pair)`) to a direction on the normal's
+side, distributed with density `cos(theta) / pi`: the polar disk point
+`(sqrt(u) cos(2 pi v), sqrt(u) sin(2 pi v))` lifted to the hemisphere
+(Malley's method).
+
+```text
+radius = floor_sqrt(u)              // sin(theta), in [0, 1)
+height = floor_sqrt(1 - u)          // cos(theta), in [2^-16, 1]
+(sin, cos) = FixedAngle::from_turns(v).sin_cos()
+d_i = round((radius cos t_i + radius sin b_i + height n_i) / 2^64)   // exact i128
+d_i = clamp(d_i, -1.0, 1.0)
+```
+
+`floor_sqrt` is `FixedQ32_32::sqrt`, the exact integer square root, floored.
+`v` turns is an exact `FixedAngle`; its sine and cosine are within one raw
+unit. The three products and their sum are exact in `i128` (below `2^98`),
+rounded once per component to nearest with ties to even. The polar map
+preserves area, so with exact arithmetic the direction would be exactly
+cosine-weighted: `P(cos(theta) <= c) = c^2`.
+
+Guarantees, each checked by the test plan:
+
+- **Range.** Each component is in `-1.0..=1.0` (the clamp), so the direction
+  is a valid trace direction as returned. `None` when `u` or `v` is outside
+  `[0, 1)`.
+- **Above the surface.** `u <= 1 - 2^-32`, so `height >= sqrt(2^-32) = 2^-16`:
+  raw 65 536. The frame's dot products and the rounding change `d . n` by
+  fewer than 50 raw units, so `d . n >= 2^15` raw units
+  (`MIN_BOUNCE_COSINE_RAW`, an elevation above about `7.6e-6` radians). No
+  direction is below or along the surface. In the ideal map only the last
+  `u` value, a fraction `2^-32` of samples, is that low.
+- **Accuracy.** Each component is within 4 raw units of the ideal map on the
+  same frame (`sqrt(u) cos(2 pi v) t + sqrt(u) sin(2 pi v) b +
+  sqrt(1 - u) n` in exact arithmetic): the square roots are within one raw
+  unit, the sine and cosine within one, and the frame rows are unit to a few
+  raw units. Largest value measured: 2.1 raw units.
+- **Length.** Within 8 raw units of 1.0 (measured: 3).
+
+The distribution is checked as a regression guard with stated thresholds, not
+a statistical test: over 4 096 stratified sampler points the mean of
+`cos(theta)` is within `2^-12` of 2/3; over 1 024 points (a (0, 10, 2)-net,
+whose `u` and `v` are each stratified in 1 024 intervals) the cosine bands
+`[0, 1/4)`, `[1/4, 1/2)`, `[1/2, 3/4)`, `[3/4, 1]` hold within one point of
+64, 192, 320 and 448, and each quarter turn of azimuth within two of 256.
+
+**Cost.** Two integer square roots, one table sine and cosine, nine `i128`
+multiplications: 27 ns per direction on the benchmark machine. Two square
+roots are inherent to this map; a concentric disk map would trade one of them
+for a division (the angle is a ratio of the disk coordinates). That has not
+been measured, and nothing here is optimized.
+
+### Radiometric Convention
+
+**A directional light's value is irradiance.** `DirectionalLight::new(
+toward_light, irradiance)` takes, per channel, the irradiance the light
+delivers to a surface perpendicular to it. A diffuse surface of albedo `a` lit
+at cosine `c` then reflects radiance `a * E * c / pi` toward every direction.
+This is the convention of pbrt's distant light and of Mitsuba's directional
+emitter, whose parameter is named `irradiance`: a light with no angular size
+has no finite radiance, so its value scales irradiance. Under it a white surface lit straight from
+above by `E = pi` reflects radiance 1.0; a light given as 3.0 lights a 0.7
+surface to about 0.67.
+
+**The cosine.** `DirectionalLight::cosine(normal)` is
+`normal . unit(toward_light)`, exact in `i128`, rounded once to nearest (ties
+to even) and clamped to `0..=1.0`. `unit(toward_light)` is normalized once,
+when the light is built, by the same prescale and `FixedUnitVec3::new`, to
+within one raw unit per component. The cosine is within 3 raw units of the
+exact cosine with the given normal (measured: 1.2), and so within about 5 of
+the cosine with the triangle's exact normal.
+
+**The term.** `DirectionalLight::reflected_radiance(cosine)` is the radiance a
+white surface reflects:
+
+```text
+weight = cosine * FRAC_1_PI           // one Q32.32 product, rounded to nearest, ties to even
+term_c = irradiance_c * weight        // one product per channel, same rounding
+```
+
+Proven infallible: the weight is at most `1 / pi` and each irradiance at most
+`2^48` raw. The albedo multiplies later, in the
+[diffuse reflection](#diffuse-reflection). Choosing the convention without
+`1 / pi` instead would multiply every directly lit pixel by pi; it is a
+contract choice of version 1.
+
+### Directional Light
+
+`toward_light` is the direction from a surface to the light. Its largest
+component magnitude must be exactly 1.0 (raw `2^32`), so it is a valid trace
+direction as given, with no division at run time.
+
+`SurfaceHit::light_sample(&light)` returns a `LightSample`:
+
+- when `toward_light . N' <= 0` exactly (the light is along or behind the
+  surface; `N'` the facing plane normal), there is no shadow ray and the
+  radiance is zero;
+- otherwise the shadow ray runs from the start point along `toward_light`,
+  and the radiance is `light.reflected_radiance(light.cosine(normal))` with
+  the hit frame's normal. The cosine may round to zero for a light within
+  `2^-32` of the horizon: a shadow ray, but no light.
+
+The renderer queries the shadow ray with any-hit, minimum distance zero and
+`SHADOW_T_MAX`, and passes the answer to `LightSample::radiance(visible)`,
+which returns the term when visible and zero otherwise.
+
+**Why `SHADOW_T_MAX` suffices.** Along the axis of `toward_light`'s 1.0
+component, a distance `t` moves exactly `t` units. The start point and every
+triangle lie inside the trace domain (below 256 units on every axis), so they
+differ by less than 512 units on that axis, and every occluder is at a
+distance below 512: raw `2^41`. Every limit of at least `2^41` gives the same
+answer, so the limit is not pixel-affecting; the test plan checks an occluder
+on the far face of the domain.
+
+### Sky
+
+`SkyLight::new(radiance)` is the constant radiance of every ray that leaves
+the scene: a camera ray that hits nothing, or a bounce ray that hits nothing.
+`SkyLight::radiance()` is that value; it names the step.
+
+### Diffuse Reflection
+
+`Albedo::reflect(direct, indirect)` is the radiance a diffuse surface sends
+back along the incoming ray:
+
+```text
+out_c = albedo_c * (direct_c + indirect_c)    // exact sum, one product rounded to nearest, ties to even
+```
+
+`direct` is the light's term (`LightSample::radiance`), `indirect` the
+radiance arriving along the bounce ray. **The bounce has no pi.** The
+Lambertian BRDF is `albedo / pi`, the bounce direction's density is
+`cos(theta) / pi`, so the one-sample estimate
+`(albedo / pi) * L * cos(theta) / (cos(theta) / pi)` is `albedo * L`: the
+cosine and `1 / pi` cancel exactly, and the function does not compute them.
+Because each albedo channel is at most 1.0, the product is never larger than
+the sum; the sum is checked, and `None` when it is not representable.
+
+### Order Of Operations
+
+Fixed-point multiplication is not associative, so the order is part of the
+contract. For one sample of one pixel, with `t_max = i64::MAX` raw for camera
+and bounce rays:
+
+```text
+1. camera ray:  ray0 = camera.ray(sampler.camera_sample(i))                 // pair 0
+2. primary:     closest_hit(ray0); none -> L = sky.radiance(); done
+3. hit1:        h1 = SurfaceHit::new(&surface[p1], &ray0, &hit1)
+4. direct 1:    s1 = h1.light_sample(&light)
+                D1 = s1.radiance(s1.shadow_ray() is Some and any_hit(it, SHADOW_T_MAX) is false)
+5. bounce:      ray1 = h1.bounce_ray(sampler.point(i, 1))                   // pair 1
+                closest_hit(ray1); none -> B = sky.radiance()
+                else h2 = SurfaceHit::new(&surface[p2], &ray1, &hit2)
+                     D2 = direct at h2, as in step 4
+                     B  = albedo[p2].reflect(D2, 0)
+                (no bounce: B = 0)
+6. sample:      L = albedo[p1].reflect(D1, B)
+```
+
+Every multiplication rounds to nearest with ties to even; every addition is
+exact. Per channel the products are, in order: `cosine * FRAC_1_PI`, then
+`irradiance * weight` (inside `reflected_radiance`), then
+`albedo * (direct + indirect)` at the second hit and at the first. The
+directional light uses no sampler dimension. The sample then goes to
+`PixelAccumulator::add_sample`: with albedo at most 1, the light at most
+65 536 and one bounce, `L <= 65 536 / pi + 65 536 < 2^17` units, far inside
+the accumulator's `2^52` raw limit.
+
+The test plan locks the radiance bits of composed paths: one hand computed
+(the sun straight above, the bounce seeing the sky, two ties to even) and
+three from the reference model (a bounce onto a lit wall, the same path in
+shadow, and a camera ray that sees the sky).
+
+### Inputs And Refusals
+
+| Input | Accepted | Refusal |
+| --- | --- | --- |
+| `toward_light` | Largest component magnitude exactly 1.0 | `ShadingError::LightNotNormalized` |
+| Light irradiance, sky radiance | Each channel in `0..=MAX_LIGHT_RAW` | `NegativeRadiance` when one is negative, else `RadianceTooLarge` |
+| Albedo | Each channel in `0..=1.0` | `ShadingError::AlbedoOutOfRange` |
+| Triangle | Nonzero area | `TriangleSurface::new` returns `None` |
+| Sampler point | Each coordinate in `[0, 1)` | `cosine_direction` and `bounce_ray` return `None` |
+| Start point | Representable and inside the trace domain | `SurfaceHit::new` returns `None` |
+
+### Accuracy And Cost
+
+| Step | Bound | Measured largest |
+| --- | --- | --- |
+| Unit normal | Each component within 1 raw unit of the exact unit normal | — |
+| Frame | Within half a raw unit of the formula; orthonormal to 8 raw units | 4.4 raw units |
+| Start point | At most 2 raw-unit steps along one axis from `point_at` | 1 step |
+| Bounce direction | Within 4 raw units of the ideal map; length within 8; `d . n >= 2^15` | 2.1; 3 |
+| Light cosine | Within 3 raw units, clamped to `0..=1.0` | 1.2 |
+
+Timings on an Apple M5 Pro in the `rust-dev:1.96.0` container, run alone: the
+`shade/` cases are the p50 across 11 interleaved rounds of `cargo run --locked
+-p xtask -- perf --base origin/main --rounds 11 --align-code --filter shade/`
+(base `7fdd2e4`, where they are new); the sampler and traced-ray rows are the
+p50 of one direct harness run (`bunny-perf --filter`) in the same session, for
+scale. A reading, not a speed claim:
+
+| Case | ns per call |
+| --- | ---: |
+| `shade/surface_new` (per triangle, once) | 84.1 |
+| `shade/bounce_direction` | 26.9 |
+| `shade/hit_shading` (start point, light sample and shadow ray, bounce ray, reflection) | 73.7 |
+| `sample/sampler_point` | 19.7 |
+| `trace/closest_hit` (one camera ray through the benchmark scene) | 226.8 |
+
+A one-bounce path traces up to four rays (two closest-hit, two shadow) and
+shades up to two hits, so shading is a small part of a sample's cost. The
+per-hit step includes the bounce direction (27 ns of its 74 when timed alone)
+and building two `TraceRay`s, which compute three reciprocals each.
 
 ## Pixel Values
 

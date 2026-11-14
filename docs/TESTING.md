@@ -110,7 +110,10 @@ configuration. The initial property suites cover:
   every power-of-two block of sampler points, and evaluation-order
   independence of the sample hash and the sampler; pixel accumulation order
   independence and the mean's rounding over seeded samples, and the sRGB tone
-  curve against an `f64` reference oracle over dense deterministic inputs.
+  curve against an `f64` reference oracle over dense deterministic inputs;
+  triangle normals, bounce directions and light cosines against `f64` oracles,
+  exact frame orthonormality, a cosine-distribution guard over stratified
+  sampler points, and the self-intersection rule on constructed scenes.
 
 Each generated assertion should include enough seed and case metadata to replay
 the failure. A property test discovers classes of defects; a minimized

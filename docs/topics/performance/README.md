@@ -229,6 +229,14 @@ and pixel sampler over 1 024 keys of a 32 by 32 tile, 16 samples and 4 dimension
 base revision lacks (such as `bunny-optics` before it existed) is left out of the base
 manifest, and the groups that need it are reported as `new`.
 
+The `shade` group (`crates/bunny-perf/src/shade.rs`) times the `bunny-optics` diffuse
+shading steps over 1 024 seeded triangles, each hit by a ray toward its centroid, with one
+sampler point per hit: `shade/surface_new` (the per-triangle `TriangleSurface`),
+`shade/bounce_direction` (a cosine-weighted direction from a held frame) and
+`shade/hit_shading` (the whole per-hit step: start point, light sample and shadow ray, bounce
+ray, reflection). Traversal is not included; the readings are in the optics chapter's
+[Accuracy And Cost](../optics/README.md#accuracy-and-cost).
+
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
 the search loop in `crates/bunny-perf/src/profile.rs`, built on public APIs only, so the core

@@ -1,6 +1,6 @@
 [package]
 name = "bunny-optics"
-description = "Deterministic camera, ray-generation, sampling and pixel-value math for Bunny."
+description = "Deterministic camera, ray-generation, sampling, pixel-value and diffuse shading math for Bunny."
 authors.workspace = true
 categories = ["game-development", "graphics", "mathematics"]
 edition.workspace = true

@@ -4,7 +4,7 @@
 #![deny(clippy::nursery)]
 #![deny(missing_docs)]
 
-//! Deterministic camera, ray-generation and pixel-value math for Bunny.
+//! Deterministic camera, sampling, diffuse shading and pixel-value math for Bunny.
 //!
 //! A [`PinholeCamera`] turns a position, a look direction, an up hint, the tangent of half the
 //! vertical field of view and an image size into one [`bunny_query::TraceRay`] per pixel
@@ -19,7 +19,14 @@
 //! (seed, pixel, sample, dimension pair). [`Xoroshiro128Plus`] is a sequential generator for
 //! code that draws in one fixed order.
 //!
-//! The pixel-value functions turn those rays' radiance samples into output codes: a
+//! The diffuse shading steps of a path tracer with at most one bounce (`bunny-diffuse-shading/1`)
+//! turn trace hits into radiance samples: a [`TriangleSurface`] holds a triangle's unit normal
+//! and [`ShadingFrame`], a [`SurfaceHit`] applies the facing rule and starts secondary rays
+//! strictly on the arrival side of the surface, [`ShadingFrame::cosine_direction`] maps a sampler
+//! point to a cosine-weighted bounce direction, a [`DirectionalLight`] gives the direct term and
+//! its shadow ray, and [`Albedo::reflect`] combines the direct and indirect radiance.
+//!
+//! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
 //! maps linear radiance to a display value, and [`quantize_8`], [`quantize_16`] and
 //! [`write_rgba8`] produce 8-bit and 16-bit codes, writing into caller-provided slices.
@@ -40,6 +47,8 @@ mod pixel;
 mod plane;
 mod point;
 mod sampler;
+#[allow(unreachable_pub)]
+mod shading;
 mod xoroshiro;
 
 pub use camera::{
@@ -54,4 +63,8 @@ pub use pixel::{
 };
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
+pub use shading::{
+    Albedo, DirectionalLight, LightSample, ShadingError, ShadingFrame, SkyLight, SurfaceHit,
+    TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX,
+};
 pub use xoroshiro::Xoroshiro128Plus;

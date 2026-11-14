@@ -1,13 +1,16 @@
 # bunny-optics
 
-Deterministic camera, ray-generation, sampling and pixel-value math for Bunny.
+Deterministic camera, ray-generation, sampling, diffuse shading and pixel-value
+math for Bunny.
 
 This crate turns camera parameters and pixel samples into
 `bunny_query::TraceRay`s using the deterministic Q32.32 numeric profile, with
 integer arithmetic only, so every supported target generates the same rays.
 It also chooses the samples: every sample position and random value is a pure
 function of (seed, pixel, sample, dimension), so an image does not depend on
-evaluation order or thread count. And it turns accumulated radiance samples
+evaluation order or thread count. It shades trace hits on diffuse surfaces
+under a directional light and a uniform sky, with at most one bounce. And it
+turns accumulated radiance samples
 into 8-bit and 16-bit output codes, with the same integer-only rule, so every
 target produces the same pixels. It never allocates an image: callers own
 every buffer.
@@ -37,6 +40,17 @@ every buffer.
   `camera_sample` returns pair 0 as a `PixelSample` for `PinholeCamera::ray`.
 * `Xoroshiro128Plus`: a sequential generator, bit for bit compatible with
   Echo's `warp-math` `Prng`, for code that draws in one fixed order.
+* Diffuse shading (`bunny-diffuse-shading/1`): `TriangleSurface` (a
+  triangle's exact plane, unit normal within one raw unit, and Duff et al.
+  frame, built once per triangle; `None` for zero area), `SurfaceHit` (the
+  facing rule, and secondary rays that start strictly on the arrival side of
+  the exact plane, at most two raw-unit steps from the hit point, so they never
+  hit their own or a coplanar surface), `ShadingFrame::cosine_direction` (a
+  cosine-weighted bounce direction from a sampler point, within 4 raw units of
+  the ideal map and never below the surface), `DirectionalLight` (irradiance
+  convention: a white surface reflects `E * cos / pi`; the shadow ray and its
+  limit `SHADOW_T_MAX`), `SkyLight` and `Albedo::reflect`
+  (`albedo * (direct + indirect)`; the bounce term has no `pi`).
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
@@ -48,7 +62,8 @@ every buffer.
   rounded to nearest with ties to even; `write_rgba8` writes one opaque RGBA8
   pixel (`bunny-rgba8-opaque/1`) into a caller-provided four-byte slice.
 * Golden vectors, an exact image-plane oracle, an exact stratification
-  property and an `f64` sRGB reference oracle in the tests; see
+  property, an `f64` sRGB reference oracle, and shading oracles and
+  constructed scenes in the tests; see
   `docs/topics/optics/`.
 
 ## License

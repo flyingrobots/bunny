@@ -29,6 +29,8 @@ mod sample;
     feature = "sah"
 ))]
 mod scene;
+#[cfg(feature = "shade")]
+mod shade;
 mod timing;
 
 use std::error::Error;
