@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-13
+
+This is an early cut of the 0.7 line. It exists so downstream repositories can
+use the view, projection, ray-tracing and clipping APIs now; the rest of the
+`v0.7.0 Geometry Law and Primitive Coverage` milestone (quaternions,
+interpolation and curves, degeneracy policy, robust predicates, shapes,
+topology, mass properties) is not in this release and continues as additive
+`0.7.x` releases. `bunny-optics` is a new published crate. `bunny-perf` is a
+workspace tool and is not published.
+
+### Changed (behaviour)
+
+* `bunny_query::ray_intersects_aabb`, and so
+  `bunny_broadphase::intersect_ray`, no longer report a miss when a slab
+  distance or a coordinate difference overflows. The inputs that change are
+  exactly those for which the old function stopped on an overflowing
+  `bound - origin` subtraction or `(bound - origin) / direction` division:
+  a direction component of a few raw units (for a slab of half-width `k`
+  centred on the origin, any component of at most `2k` raw units), or a bound
+  2^31 units or more from the origin. For them the function now returns
+  `Some((t_enter, t_exit))` when the ray reaches the box ahead of its origin
+  and `None` when it truly misses, decided exactly with `i128` rationals; a
+  slab distance that does not fit Q32.32 saturates to the minimum or maximum
+  by sign, and coordinate differences are widened to `i128` instead of
+  saturated. Every hit the function reported before is reported with the same
+  bits, and every miss not caused by overflow is still a miss; a differential
+  test against the retained old implementation and an exact rational oracle
+  check both. Per the Fidelity Rule this contract change needs a version that signals it,
+  which is why this release is `0.7.0` and not a patch release (flyingrobots/bunny#211,
+  PR #236).
+
 ### Added
 
 * Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
@@ -161,6 +192,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   M5 Pro in the rust-dev container). Equivalence tests keep the old bit-by-bit loop as the reference;
   the performance chapter's ledger records the method, trade-offs and full
   measurements.
+* The lockfile takes `ninelives` 0.2.1 and `tokio` 1.54.1 (transitive
+  dependencies of the host-side `wesley-core` tooling) to clear RUSTSEC-2026-0386.
+  No published crate's dependency requirements changed.
+* Bumped every publishable Bunny crate to `0.7.0`, including the inter-crate
+  dependency requirements; regenerated contract witnesses now identify the
+  generator as `bunny-wesley/0.7.0`. `bunny-optics` is added to the publish
+  order after `bunny-query`.
 
 ### Fixed
 
@@ -168,24 +206,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compiled only with the `scene` or `trace` group, which made `cargo xtask perf`
   report the `num`, `linalg`, `query` and `angle` cases as new instead of
   comparing them against a base revision.
-* **Behaviour change (contract change, flyingrobots/bunny#211):**
-  `bunny_query::ray_intersects_aabb`, and so
-  `bunny_broadphase::intersect_ray`, no longer report a miss when a slab
-  distance or a coordinate difference overflows. The inputs that change are
-  exactly those for which the old function stopped on an overflowing
-  `bound - origin` subtraction or `(bound - origin) / direction` division:
-  a direction component of a few raw units (for a slab of half-width `k`
-  centred on the origin, any component of at most `2k` raw units), or a bound
-  2^31 units or more from the origin. For them the function now returns
-  `Some((t_enter, t_exit))` when the ray reaches the box ahead of its origin
-  and `None` when it truly misses, decided exactly with `i128` rationals; a
-  slab distance that does not fit Q32.32 saturates to the minimum or maximum
-  by sign, and coordinate differences are widened to `i128` instead of
-  saturated. Every hit the function reported before is reported with the same
-  bits, and every miss not caused by overflow is still a miss; a differential
-  test against the retained old implementation and an exact rational oracle
-  check both. The workspace version is not bumped here: per the Fidelity Rule
-  the next release must carry a version that signals this contract change.
 * Two `bunny-codec` test helpers use `as_chunks`, so clippy from newer
   toolchains no longer fails the gate.
 
