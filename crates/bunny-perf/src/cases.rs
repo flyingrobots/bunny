@@ -48,6 +48,10 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::scene::trace_cases());
     #[cfg(feature = "trace")]
     cases.extend(crate::profile::kernel_cases());
+    #[cfg(feature = "trace")]
+    cases.extend(crate::memory::memory_cases());
+    #[cfg(feature = "trace_compact")]
+    cases.extend(crate::compact::compact_cases());
     #[cfg(feature = "sample")]
     cases.extend(crate::sample::sample_cases());
     #[cfg(feature = "pixel")]
@@ -64,7 +68,8 @@ pub(crate) fn all() -> Vec<Case> {
     feature = "scene",
     feature = "trace",
     feature = "sample",
-    feature = "pixel"
+    feature = "pixel",
+    feature = "trace_compact"
 ))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }
