@@ -1089,15 +1089,14 @@ coplanar neighbour at distance zero.
 | No step and a start point on the plane accepted | Both | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054 |
 
 The typed refusals (`OPTICS-TP-063`) were checked the same way, with `timeout
-120 cargo test --locked -p bunny-optics --test shading_property_tests --test
-shading_refusal_tests --test shading_tests` per mutation (Cargo stops at the
-first failing test file, so the cases listed are those that ran and failed);
-the restored source passed every case.
+120 cargo test --locked -p bunny-optics --no-fail-fast --test
+shading_property_tests --test shading_refusal_tests --test shading_tests` per
+mutation; the restored source passed every case.
 
 | Mutation | Rule broken | Failing cases |
 | --- | --- | --- |
 | `StartOutsideTraceDomain` carries the unstepped hit point | The variant names the stepped start point | OPTICS-TP-060 |
-| A sample coordinate of exactly 1.0 accepted (`<=` for `<`) | Samples are in `[0, 1)` | OPTICS-TP-061, OPTICS-TP-062 |
+| A sample coordinate of exactly 1.0 accepted (`<=` for `<`) | Samples are in `[0, 1)` | OPTICS-TP-043, OPTICS-TP-061, OPTICS-TP-062 |
 | The check of a hit point beyond reach of the domain removed (the 0.7.1 order) | Far points are refused before the plane test | OPTICS-TP-058, OPTICS-TP-062 |
 
 With the last mutation the constructed case first sees `NotOnArrivalSide`
