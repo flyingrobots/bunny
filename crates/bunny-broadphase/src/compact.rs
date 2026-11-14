@@ -33,8 +33,10 @@ impl CompactChild {
 
 /// An interior node: the boxes and references of its left and right children, in that order.
 ///
-/// Leaves have no node of their own; their primitive ranges live in their parent.
+/// Leaves have no node of their own; their primitive ranges live in their parent. A node is
+/// 112 bytes of data padded to 128 and aligned to 128 bytes, so it fills two cache lines.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(align(128))]
 pub struct CompactNode {
     /// Bounds of the left and the right child.
     pub bounds: [FixedAabb3; 2],
