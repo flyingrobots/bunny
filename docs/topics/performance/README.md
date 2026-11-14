@@ -571,7 +571,7 @@ path as `ray_intersects_aabb` (`aabb_wide::exact_slab_hit`), so the two agree th
 **Fidelity: exact, as new APIs.** `divisor.checked_div(a)` returns exactly
 `a.checked_div(divisor)`, `None` included, and `ray_intersects_aabb_prepared` returns exactly
 what `ray_intersects_aabb` returns for the same ray and box, the overflow inputs of
-flyingrobots/bunny#211 included. Evidence (PERF-TP-028 to PERF-TP-035): boundary values,
+flyingrobots/bunny#211 included. Evidence (PERF-TP-034 to PERF-TP-041): boundary values,
 every power-of-two divisor with both signs, 100 000 seeded pairs across all magnitudes,
 10 000 constructed exact ties, 160 000 seeded ray and box pairs including axis-parallel
 rays, up to 240 000 pairs from an overflow-heavy corpus (coordinates near the `i64` extremes,

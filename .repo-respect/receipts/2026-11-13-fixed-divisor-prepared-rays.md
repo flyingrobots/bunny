@@ -38,7 +38,7 @@ docs/topics/performance/test-plan.md
 
 Topic docs:
 docs/topics/performance/README.md (ledger entry 5)
-docs/topics/performance/test-plan.md (PERF-TP-028 to PERF-TP-035)
+docs/topics/performance/test-plan.md (PERF-TP-034 to PERF-TP-041)
 
 Generated artifacts:
 None.
