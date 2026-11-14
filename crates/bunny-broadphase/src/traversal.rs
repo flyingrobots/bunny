@@ -12,7 +12,10 @@ const STACK_CAPACITY: usize = 64;
 pub enum TraversalError {
     /// The traversal stack capacity (64) was exceeded.
     StackOverflow,
-    /// A node references a child index that is outside the node slice.
+    /// A node references a child index that is outside the node slice, or the search made
+    /// more interior visits than a tree of the slice's length has interior nodes
+    /// (`nodes.len() / 2`), which only a node reached twice (a cycle or a shared subtree) can
+    /// cause.
     InvalidNodeIndex,
     /// A leaf node references primitives outside the primitive-index slice.
     InvalidPrimitiveRange,
@@ -30,7 +33,9 @@ fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32]
 /// # Errors
 /// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
 /// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
-/// if the provided BVH buffers are structurally malformed.
+/// if the provided BVH buffers are structurally malformed. A buffer that is not a tree (a
+/// child index naming an ancestor, or a subtree reached twice) is `InvalidNodeIndex` once
+/// the search has made more than `nodes.len() / 2` interior visits, so it cannot loop.
 pub fn intersect_aabb<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
@@ -48,7 +53,9 @@ where
 /// # Errors
 /// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
 /// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
-/// if the provided BVH buffers are structurally malformed.
+/// if the provided BVH buffers are structurally malformed. A buffer that is not a tree (a
+/// child index naming an ancestor, or a subtree reached twice) is `InvalidNodeIndex` once
+/// the search has made more than `nodes.len() / 2` interior visits, so it cannot loop.
 pub fn intersect_ray<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
@@ -107,11 +114,15 @@ where
 struct TraversalStack {
     values: [u32; STACK_CAPACITY],
     len: usize,
+    /// Interior visits still allowed. A tree of `n` nodes has at most `n / 2` interior nodes
+    /// and visits each once, so running out proves a node was reached twice.
+    interior_visits_left: usize,
 }
 
 impl TraversalStack {
     fn new(nodes: &[BvhNode]) -> Result<Self, TraversalError> {
-        let mut stack = Self { values: [0_u32; STACK_CAPACITY], len: 0 };
+        let interior_visits_left = nodes.len() / 2;
+        let mut stack = Self { values: [0_u32; STACK_CAPACITY], len: 0, interior_visits_left };
         if !nodes.is_empty() {
             stack.push(0)?;
         }
@@ -133,6 +144,8 @@ impl TraversalStack {
     }
 
     fn push_children(&mut self, node: &BvhNode) -> Result<(), TraversalError> {
+        self.interior_visits_left =
+            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
         let left_child = node.first_child_or_prim_idx;
         let right_child = left_child.checked_add(1).ok_or(TraversalError::InvalidNodeIndex)?;
         self.push(left_child)?;

@@ -81,7 +81,9 @@ pub struct ClosestHit {
 /// # Errors
 /// Returns `TraversalError::StackOverflow` if the tree is deeper than 64 levels, and
 /// `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange` if a node
-/// the search visits is malformed.
+/// the search visits is malformed. A buffer that is not a tree (a child index naming an
+/// ancestor, or a subtree reached twice) is `InvalidNodeIndex` once the search has made more
+/// than `nodes.len() / 2` interior visits, so it cannot loop.
 pub fn closest_hit<F>(
     bvh: BvhView<'_>,
     ray: &TraceRay,
@@ -125,6 +127,9 @@ struct Search<'a> {
     stop_at_first: bool,
     stack: [(u32, FixedQ32_32); STACK_CAPACITY],
     len: usize,
+    /// Interior visits still allowed. A tree of `n` nodes has at most `n / 2` interior nodes
+    /// and visits each once, so running out proves a node was reached twice.
+    interior_visits_left: usize,
 }
 
 impl<'a> Search<'a> {
@@ -142,6 +147,7 @@ impl<'a> Search<'a> {
             stop_at_first,
             stack: [(0, FixedQ32_32::ZERO); STACK_CAPACITY],
             len: 0,
+            interior_visits_left: bvh.nodes.len() / 2,
         }
     }
 
@@ -199,6 +205,8 @@ impl<'a> Search<'a> {
         if node.prim_count > 0 {
             return self.visit_leaf(node, hit);
         }
+        self.interior_visits_left =
+            self.interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
         let left = node.first_child_or_prim_idx;
         let right = left.checked_add(1).ok_or(TraversalError::InvalidNodeIndex)?;
         let (near, far) = nearer_first((left, self.entry(left)?), (right, self.entry(right)?));

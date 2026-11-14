@@ -54,8 +54,7 @@ type Child = (u32, Option<FixedQ32_32>);
 /// `any_hit` (`stop_at_first` true).
 pub(crate) fn search(
     bvh: BvhView<'_>,
-    ray: &TraceRay,
-    t_max: FixedQ32_32,
+    (ray, t_max): (&TraceRay, FixedQ32_32),
     stop_at_first: bool,
     mut hit: impl FnMut(u32, FixedQ32_32) -> Option<FixedQ32_32>,
 ) -> Result<Option<ClosestHit>, TraversalError> {

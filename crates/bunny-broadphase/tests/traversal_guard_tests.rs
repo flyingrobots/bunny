@@ -201,6 +201,8 @@ struct Outcome {
 
 struct Query {
     ray: TraceRay,
+    /// `FAR` for half the queries, otherwise up to 15 units.
+    t_max: FixedQ32_32,
     line: FixedRay3,
     aabb: FixedAabb3,
 }
@@ -221,19 +223,19 @@ impl Case<'_> {
             self.distance(ray, p, limit)
         };
         let found = if guarded {
-            closest_hit(bvh, ray, FAR, &mut closest)
+            closest_hit(bvh, ray, query.t_max, &mut closest)
         } else {
-            reference::search(bvh, ray, FAR, false, &mut closest)
+            reference::search(bvh, (ray, query.t_max), false, &mut closest)
         };
         let closest = (found, std::mem::take(&mut calls));
         let mut any = |p, _| {
             calls.push((p, 0));
-            self.distance(ray, p, FAR).map(|_| FixedQ32_32::ZERO)
+            self.distance(ray, p, query.t_max).map(|_| FixedQ32_32::ZERO)
         };
         let found = if guarded {
-            any_hit(bvh, ray, FAR, |p| any(p, FAR).is_some())
+            any_hit(bvh, ray, query.t_max, |p| any(p, FAR).is_some())
         } else {
-            reference::search(bvh, ray, FAR, true, &mut any).map(|hit| hit.is_some())
+            reference::search(bvh, (ray, query.t_max), true, &mut any).map(|hit| hit.is_some())
         };
         let any = (found, std::mem::take(&mut calls));
         let line = &query.line;
@@ -268,7 +270,9 @@ fn seeded_query(seeds: &mut Seeds) -> Option<Query> {
     let corner = seeds.point(7 * ONE_RAW);
     let extent = seeds.point(3 * ONE_RAW);
     let size = vec3([extent.x.raw().abs(), extent.y.raw().abs(), extent.z.raw().abs()]);
-    Some(Query { ray, line, aabb: FixedAabb3::new(corner, corner + size) })
+    let short = FixedQ32_32::from_raw(size.x.raw() * 5);
+    let t_max = if seeds.next().is_multiple_of(2) { FAR } else { short };
+    Some(Query { ray, t_max, line, aabb: FixedAabb3::new(corner, corner + size) })
 }
 
 /// Seeded triangles in a 12-unit cube, built by `builder` and truncated to the used nodes.
