@@ -473,13 +473,53 @@ at `k = 0`, but a sample at the very corner of the image has a component of
 `-(1 + 2^-20)`, which `TraceRay::new` refuses. That case was added for this
 reason.
 
+## Pixel Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/pixel/`, and the pixel tests were run
+(`cargo test --locked -p bunny-optics --test pixel_tests`, with lints capped
+to warnings so an unused helper does not stop the build). Every mutation made
+at least one case fail; the restored source passed all eleven.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Mean floored (`sum / count`) | The mean rounds to nearest | OPTICS-TP-010, OPTICS-TP-013 |
+| Mean ties rounded up (`(sum + count / 2) / count`) | Ties go to the even neighbour | OPTICS-TP-010, OPTICS-TP-013 |
+| Quantization floored | Codes round to nearest | OPTICS-TP-015, OPTICS-TP-017, OPTICS-TP-019, OPTICS-TP-020 |
+| Quantization ties rounded down | The tie at 0.5 goes to the even code | OPTICS-TP-015, OPTICS-TP-019, OPTICS-TP-020 |
+| Toe used for one more input (`<=` at `TOE_END`) | The toe/power boundary | OPTICS-TP-015, OPTICS-TP-018 |
+| Hold at the toe end removed | The curve is monotone where the pieces meet | OPTICS-TP-015, OPTICS-TP-018 |
+| Toe slope 12.93 instead of 12.92 | The toe is `12.92 x` | OPTICS-TP-015, OPTICS-TP-016, OPTICS-TP-017, OPTICS-TP-018 |
+| Interpolation rounded to nearest instead of floored | The interpolation floors | OPTICS-TP-015 |
+
+The last mutation stays within the stated bounds, so only the golden vectors
+see it: a version is defined by its bits, not by its accuracy.
+
+## Timing
+
+`pixel/resolve_srgb_rgba8` in `crates/bunny-perf` (feature group `pixel`)
+resolves 1 024 seeded pixels of 16 samples each (linear radiance up to 2.0 per
+channel), applies `SrgbV1` and writes each pixel's RGBA8 bytes; every result
+passes through `black_box`. Run it with
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter pixel/
+```
+
+The base revision has no pixel functions, so the case reports as `new`. It is
+a reading for future comparisons, not a speed claim, so it has no ledger entry
+in the [performance chapter](../performance/README.md).
+
 ## Determinism Obligations And Evidence
 
-The camera and its tests use only integer arithmetic: `i64` and `i128`
-additions, multiplications, shifts and floor divisions with defined results.
-There is no floating point, trigonometry, square root per ray, randomness from
-the host, time, filesystem access, parallel scheduling, map iteration, stdout,
-stderr or logging in any oracle. The square roots in construction are those of
+The camera, the pixel functions and the camera tests use only integer
+arithmetic: `i64` and `i128` additions, multiplications, shifts and floor or
+rounded divisions with defined results. There is no floating point,
+trigonometry, square root per ray, randomness from the host, time, filesystem
+access, parallel scheduling, map iteration, stdout, stderr or logging in the
+library or in any camera oracle. The pixel tests use `f64` only as the sRGB
+reference oracle described under [Fixtures](#the-srgb-reference-oracle); every
+value they lock is an integer. The square roots in construction are those of
 `FixedUnitVec3::new`, an exact integer square root.
 
 Test builds check integer overflow, so `OPTICS-TP-004` turns any overflow at
@@ -504,12 +544,23 @@ Current tests cover:
 - look and up vectors one raw unit long and as long as Q32.32 allows;
 - up hints just inside and just outside the near-parallel threshold;
 - positions one raw unit inside and outside the trace domain;
-- sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero.
+- sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero;
+- sample channels of zero, `2^52`, `2^52 + 1`, `-1`, `i64::MIN` and
+  `i64::MAX`, and a full pixel of 1 024 samples at `2^52`;
+- an empty pixel and an over-full merge;
+- tone inputs at zero, one raw unit, both sides of the toe end, inside the
+  hold, at every knot and its neighbours, at 1.0 and one raw unit on either
+  side, the radiance cap and the most negative value;
+- display values on both sides of the first 8-bit and 16-bit boundaries, the
+  exact tie at 0.5, and values outside `[0, 1]`;
+- output slices of lengths 0, 1, 3, 5 and 8.
 
 ## Stress And Fuzz
 
 No fuzz target exists today. `OPTICS-TP-003` is a seeded property case over
-2 000 cameras.
+2 000 cameras; `OPTICS-TP-011` and `OPTICS-TP-013` are seeded property cases
+over accumulators, and `OPTICS-TP-016` to `OPTICS-TP-018` use dense
+deterministic inputs rather than random ones.
 
 Every minimized fuzz failure must become a committed deterministic regression
 case with a stable test name.
@@ -521,3 +572,4 @@ case with a stable test name.
 | A differential check that points along a camera ray project, through `FixedMat4::try_look_at`, `FixedMat4::try_perspective` and `Viewport`, back to the ray's sample. | None; a follow-up case (the matrices landed while this chapter was written). |
 | Sample positions from a sampling sequence. | flyingrobots/bunny#221. |
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
+| An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |

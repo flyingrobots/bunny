@@ -4,7 +4,7 @@
 #![deny(clippy::nursery)]
 #![deny(missing_docs)]
 
-//! Deterministic camera and ray-generation math for Bunny.
+//! Deterministic camera, ray-generation and pixel-value math for Bunny.
 //!
 //! A [`PinholeCamera`] turns a position, a look direction, an up hint, the tangent of half the
 //! vertical field of view and an image size into one [`bunny_query::TraceRay`] per pixel

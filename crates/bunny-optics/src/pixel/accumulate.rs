@@ -42,9 +42,14 @@ impl PixelAccumulator {
     /// [`PixelError::RadianceTooLarge`] for the first channel outside
     /// `0..=MAX_SAMPLE_RADIANCE_RAW`. On error the accumulator is unchanged.
     pub fn add_sample(&mut self, radiance: [FixedQ32_32; 3]) -> Result<(), PixelError> {
-        // Stub: failing evidence for OPTICS-TP-010 to 013.
-        let _ = (radiance, check_sample(0), MAX_SAMPLE_RADIANCE_RAW);
-        self.include(self.sums, self.count);
+        if self.count >= MAX_SAMPLES_PER_PIXEL {
+            return Err(PixelError::TooManySamples);
+        }
+        let [r, g, b] = radiance.map(FixedQ32_32::raw);
+        check_sample(r)?;
+        check_sample(g)?;
+        check_sample(b)?;
+        self.include([r, g, b], 1);
         Ok(())
     }
 
@@ -55,8 +60,11 @@ impl PixelAccumulator {
     /// [`PixelError::TooManySamples`] when the two together hold more than
     /// [`MAX_SAMPLES_PER_PIXEL`] samples. On error the accumulator is unchanged.
     pub const fn merge(&mut self, other: &Self) -> Result<(), PixelError> {
-        // Stub.
-        let _ = other;
+        // Both counts are at most 2^10, so the sum cannot overflow.
+        if self.count + other.count > MAX_SAMPLES_PER_PIXEL {
+            return Err(PixelError::TooManySamples);
+        }
+        self.include(other.sums, other.count);
         Ok(())
     }
 
@@ -82,9 +90,11 @@ impl PixelAccumulator {
     ///
     /// [`PixelError::NoSamples`] when no sample has been added.
     pub fn resolve(&self) -> Result<[FixedQ32_32; 3], PixelError> {
-        // Stub.
-        let _ = (div_round_half_even(0, 1), PixelError::NoSamples);
-        Ok([FixedQ32_32::ZERO; 3])
+        if self.count == 0 {
+            return Err(PixelError::NoSamples);
+        }
+        let count = i64::from(self.count);
+        Ok(self.sums.map(|sum| FixedQ32_32::from_raw(div_round_half_even(sum, count))))
     }
 
     /// Adds already checked sums for `count` samples.
@@ -92,8 +102,10 @@ impl PixelAccumulator {
     /// Callers have checked that the new count is at most `2^10` and that each added sum is at
     /// most `count * 2^52`, so each new sum is at most `2^62`: no overflow.
     const fn include(&mut self, sums: [i64; 3], count: u32) {
-        self.sums = sums;
-        self.count = count;
+        let [r, g, b] = self.sums;
+        let [dr, dg, db] = sums;
+        self.sums = [r + dr, g + dg, b + db];
+        self.count += count;
     }
 }
 

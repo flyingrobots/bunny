@@ -80,9 +80,15 @@ pub fn quantize_16(display: FixedQ32_32) -> u16 {
 ///
 /// `v <= 2^32` and `max_code < 2^16`, so the product is below `2^48`.
 const fn quantize(display: FixedQ32_32, max_code: i64) -> i64 {
-    // Stub: failing evidence for OPTICS-TP-019.
-    let _ = (display, max_code, div_round_half_even(0, 1));
-    0
+    let raw = display.raw();
+    let clamped = if raw < 0 {
+        0
+    } else if raw > ONE_RAW {
+        ONE_RAW
+    } else {
+        raw
+    };
+    div_round_half_even(clamped * max_code, ONE_RAW)
 }
 
 /// Writes one opaque RGBA8 pixel: each linear channel (red, green, blue) through `curve` and
@@ -97,7 +103,10 @@ pub fn write_rgba8(
     curve: ToneCurve,
     linear: [FixedQ32_32; 3],
 ) -> Result<(), PixelError> {
-    // Stub: failing evidence for OPTICS-TP-020.
-    let _ = (out, curve, linear, PixelError::NoSamples);
+    let actual = out.len();
+    let pixel: &mut [u8; 4] =
+        out.try_into().map_err(|_| PixelError::WrongSliceLength { expected: 4, actual })?;
+    let [r, g, b] = linear.map(|channel| curve.encode_8(channel));
+    *pixel = [r, g, b, u8::MAX];
     Ok(())
 }

@@ -9,7 +9,8 @@
 /// Sub-segments per octave, as a power of two.
 pub const SUB_SEGMENT_BITS: u32 = 7;
 
-/// The knot values, ascending.
+/// The knot values, ascending. Kept in packed rows (one per line would be 1 153 lines).
+#[rustfmt::skip]
 pub static KNOTS: [i64; 1153] = [
     100_559_547, 101_653_358, 102_742_233, 103_826_233, 104_905_416, 105_979_842, 107_049_564,
     108_114_641, 109_175_125, 110_231_070, 111_282_528, 112_329_551, 113_372_189, 114_410_492,

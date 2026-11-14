@@ -106,10 +106,12 @@ fn optics_tp_010_golden_accumulation_and_mean() {
     // 1.33, 1.67 and 2 raw.
     assert_eq!(raws(three.resolve().expect("three samples")), [1, 2, 2]);
 
-    let four = accumulate(&[[fixed(6), fixed(10), fixed(14)], [fixed(0); 3], [fixed(0); 3], [
-        fixed(0);
-        3
-    ]]);
+    let four = accumulate(&[
+        [fixed(6), fixed(10), fixed(14)],
+        [fixed(0); 3],
+        [fixed(0); 3],
+        [fixed(0); 3],
+    ]);
     // 1.5, 2.5 and 3.5 raw.
     assert_eq!(raws(four.resolve().expect("four samples")), [2, 2, 4]);
 
@@ -139,7 +141,8 @@ fn optics_tp_011_accumulation_is_order_independent() {
         assert_eq!(accumulate(&reversed), forward, "reverse; case={case}");
         assert_eq!(accumulate(&shuffled), forward, "shuffled; case={case}");
 
-        let split = usize::try_from(seeds.upto(i64::try_from(count).expect("small"))).expect("small");
+        let split =
+            usize::try_from(seeds.upto(i64::try_from(count).expect("small"))).expect("small");
         let (mut left, right) = (accumulate(&samples[..split]), accumulate(&samples[split..]));
         let mut right_first = right;
         right_first.merge(&left).expect("within the count");
@@ -158,7 +161,7 @@ fn optics_tp_011_accumulation_is_order_independent() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_012_accumulation_limits_are_exact_at_their_edges() {
-    let mut full = accumulate(&[[fixed(MAX); 3]; 1024]);
+    let mut full = accumulate(&vec![[fixed(MAX); 3]; 1024]);
     assert_eq!(MAX_SAMPLES_PER_PIXEL, 1024);
     assert_eq!(MAX, 1 << 52);
     assert_eq!(raws(full.sums()), [1 << 62; 3]);
@@ -168,7 +171,7 @@ fn optics_tp_012_accumulation_limits_are_exact_at_their_edges() {
     assert_eq!(full.add_sample([fixed(0); 3]), Err(PixelError::TooManySamples));
     assert_eq!(full, before, "a refused sample leaves the pixel unchanged");
 
-    let mut half = accumulate(&[[fixed(MAX); 3]; 512]);
+    let mut half = accumulate(&vec![[fixed(MAX); 3]; 512]);
     let other_half = half;
     half.merge(&other_half).expect("1024 samples are accepted");
     assert_eq!(half, before);
@@ -220,7 +223,8 @@ fn optics_tp_013_mean_rounds_to_nearest_with_ties_to_even() {
                 // The power-of-two case is a shift with the same rounding.
                 let shift = count.trailing_zeros();
                 for (sum, value) in raws(pixel.sums()).into_iter().zip(mean) {
-                    let (floor, rest, half) = (sum >> shift, sum & (i64::from(count) - 1), i64::from(count) / 2);
+                    let (floor, rest, half) =
+                        (sum >> shift, sum & (i64::from(count) - 1), i64::from(count) / 2);
                     let up = rest > half || (rest == half && rest != 0 && floor & 1 == 1);
                     assert_eq!(value, floor + i64::from(up), "shift; sum={sum} count={count}");
                 }
@@ -264,14 +268,14 @@ fn optics_tp_014_srgb_knots_are_the_correctly_rounded_curve() {
 const SRGB_GOLDEN: &[(i64, i64, u8, u16)] = &[
     (0, 0, 0, 0),
     (1, 13, 0, 0),
-    (8_388_608, 108_380_815, 6, 1654),        // 2^-9, in the toe
-    (13_446_683, 173_731_144, 10, 2651),      // last toe input, round(12.92 x)
-    (13_446_684, 173_731_144, 10, 2651),      // first power input, held at the toe's last value
-    (13_446_706, 173_731_144, 10, 2651),      // last held input (table value 173 731 139)
-    (13_446_707, 173_731_152, 10, 2651),      // first input above the hold
-    (42_949_673, 428_864_202, 25, 6544),      // 0.01
-    (773_094_113, 1_981_507_763, 118, 30235), // 0.18, mid grey
-    (919_299_696, 2_147_482_764, 127, 32767), // 0.2140, just below display one half
+    (8_388_608, 108_380_815, 6, 1654),          // 2^-9, in the toe
+    (13_446_683, 173_731_144, 10, 2651),        // last toe input, round(12.92 x)
+    (13_446_684, 173_731_144, 10, 2651),        // first power input, held at the toe's last value
+    (13_446_706, 173_731_144, 10, 2651),        // last held input (table value 173 731 139)
+    (13_446_707, 173_731_152, 10, 2651),        // first input above the hold
+    (42_949_673, 428_864_202, 25, 6544),        // 0.01
+    (773_094_113, 1_981_507_763, 118, 30235),   // 0.18, mid grey
+    (919_299_696, 2_147_482_764, 127, 32767),   // 0.2140, just below display one half
     (2_147_483_648, 3_158_334_193, 188, 48192), // 0.5, a knot
     (2_155_884_601, 3_163_854_763, 188, 48276), // inside a segment
     (3_221_225_472, 3_783_114_659, 225, 57725), // 0.75
@@ -297,7 +301,9 @@ const LINEAR_GOLDEN: &[(i64, i64, u8, u16)] = &[
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_015_golden_tone_vectors_lock_exact_outputs() {
-    for (curve, golden) in [(ToneCurve::SrgbV1, SRGB_GOLDEN), (ToneCurve::LinearClampV1, LINEAR_GOLDEN)] {
+    for (curve, golden) in
+        [(ToneCurve::SrgbV1, SRGB_GOLDEN), (ToneCurve::LinearClampV1, LINEAR_GOLDEN)]
+    {
         for &(input, display, code_8, code_16) in golden {
             let linear = fixed(input);
             assert_eq!(curve.apply(linear).raw(), display, "{curve:?} input={input}");
@@ -354,10 +360,22 @@ fn check_code_thresholds(max_code: i64, encode: impl Fn(i64) -> i64) -> (i64, i6
         lead = lead.max(reference - actual);
         // Within one code everywhere: code c starts no later than the reference's c + 1 and
         // no earlier than the reference's c - 1.
-        assert!(actual >= previous_reference || code == 1, "code {code} starts before the reference's code {}", code - 1);
+        assert!(
+            actual >= previous_reference || code == 1,
+            "code {code} starts before the reference's code {}",
+            code - 1
+        );
         previous_reference = reference;
-        assert!(actual - reference <= CODE_LAG_LIMIT, "code {code}: starts {} inputs late", actual - reference);
-        assert!(reference - actual <= CODE_LEAD_LIMIT, "code {code}: starts {} inputs early", reference - actual);
+        assert!(
+            actual - reference <= CODE_LAG_LIMIT,
+            "code {code}: starts {} inputs late",
+            actual - reference
+        );
+        assert!(
+            reference - actual <= CODE_LEAD_LIMIT,
+            "code {code}: starts {} inputs early",
+            reference - actual
+        );
         if code < max_code {
             #[allow(clippy::cast_precision_loss)]
             let next = first_raw(|x| srgb_reference(to_f64(x)) * scale >= code as f64 + 0.5);
@@ -387,7 +405,10 @@ fn optics_tp_018_tone_curves_and_quantization_are_monotone() {
         for x in dense_inputs() {
             let linear = fixed(x);
             let now = (curve.apply(linear).raw(), curve.encode_8(linear), curve.encode_16(linear));
-            assert!(now.0 >= previous.0 && now.1 >= previous.1 && now.2 >= previous.2, "{curve:?} input={x}");
+            assert!(
+                now.0 >= previous.0 && now.1 >= previous.1 && now.2 >= previous.2,
+                "{curve:?} input={x}"
+            );
             previous = now;
         }
     }
@@ -396,7 +417,8 @@ fn optics_tp_018_tone_curves_and_quantization_are_monotone() {
     let mut displays: Vec<i64> = (-(1_i64 << 8)..=(1 << 20) + (1 << 8)).map(|k| k << 12).collect();
     for (max_code, scale) in [(255_i64, 255_i128), (65_535, 65_535)] {
         for code in 0..max_code {
-            let boundary = i64::try_from((2 * i128::from(code) + 1) * (1_i128 << 31) / scale).expect("fits");
+            let boundary =
+                i64::try_from((2 * i128::from(code) + 1) * (1_i128 << 31) / scale).expect("fits");
             displays.extend(boundary - 2..=boundary + 2);
         }
     }
@@ -414,10 +436,10 @@ fn optics_tp_019_quantization_rounds_to_nearest_with_ties_to_even() {
     // (display raw, 8-bit code, 16-bit code)
     let golden: &[(i64, u8, u16)] = &[
         (0, 0, 0),
-        (32_768, 0, 0),             // 65535 v = 0.49998..: below one half of a 16-bit code
-        (32_769, 0, 1),             // 65535 v = 0.50001..
-        (8_421_504, 0, 128),        // 255 v = 0.49999..
-        (8_421_505, 1, 128),        // 255 v = 0.50000..
+        (32_768, 0, 0),      // 65535 v = 0.49998..: below one half of a 16-bit code
+        (32_769, 0, 1),      // 65535 v = 0.50001..
+        (8_421_504, 0, 128), // 255 v = 0.49999..; 65535 v = 128.49998..
+        (8_421_505, 1, 129), // 255 v = 0.50000..; 65535 v = 128.50001..
         (2_147_483_648, 128, 32768), // 0.5: 127.5 and 32767.5 exactly, ties to even
         (2_147_483_647, 127, 32767),
         (2_147_483_649, 128, 32768),

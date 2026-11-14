@@ -1,10 +1,12 @@
 # bunny-optics
 
-Deterministic camera and ray-generation math for Bunny.
+Deterministic camera, ray-generation and pixel-value math for Bunny.
 
 This crate turns camera parameters and pixel samples into
-`bunny_query::TraceRay`s using the deterministic Q32.32 numeric profile, with
-integer arithmetic only, so every supported target generates the same rays.
+`bunny_query::TraceRay`s, and accumulated radiance samples into 8-bit and
+16-bit output codes, using the deterministic Q32.32 numeric profile with
+integer arithmetic only, so every supported target produces the same rays and
+the same pixels. It never allocates an image: callers own every buffer.
 
 ## Features
 
@@ -20,8 +22,18 @@ integer arithmetic only, so every supported target generates the same rays.
   the trace kernels require, and each component is within one raw unit plus
   `(width + height) / 2^33` of the exact image-plane point.
 * `point_at`: the point at a trace distance along an unnormalized ray.
-* Golden vectors and an exact image-plane oracle; see
-  `docs/topics/optics/`.
+* `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
+  samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
+  exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
+  Out-of-range input returns a typed `PixelError`; nothing saturates or wraps.
+* `ToneCurve`: `SrgbV1` (`bunny-tone-srgb/1`, the sRGB transfer function from a
+  1 153-knot table, within `1.49 * 10^-6` of the exact curve and monotone) and
+  `LinearClampV1` (`bunny-tone-linear-clamp/1`).
+* `quantize_8`, `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`): codes
+  rounded to nearest with ties to even; `write_rgba8` writes one opaque RGBA8
+  pixel (`bunny-rgba8-opaque/1`) into a caller-provided four-byte slice.
+* Golden vectors, an exact image-plane oracle and an `f64` sRGB reference
+  oracle in the tests; see `docs/topics/optics/`.
 
 ## License
 
