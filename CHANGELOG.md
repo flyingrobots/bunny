@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* The core crates follow Rule 10 of `CODE_STANDARDS.md`: `bunny-num`,
+  `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase` and
+  `bunny-mesh` no longer deny `clippy::nursery` as a group, and instead deny
+  `missing_const_for_fn`, `redundant_pub_crate` and `use_self` by name, with
+  reasons, as `bunny-optics` does. No library had a finding under the whole
+  group, so no code changes. Code Dojo's new `blanket-nursery` check
+  (`docs/topics/lint-policy/`) fails the full and pre-commit gates on a blanket
+  `deny`, `warn` or `forbid` of the group in a core crate's `lib.rs`, its
+  manifest or the workspace's. `docs/RUST_CODE_STANDARDS.editors-edition.md`,
+  an older copy of the standards, is now a pointer to `CODE_STANDARDS.md`
+  (flyingrobots/bunny#284).
+
 ### Fixed
 
 * Code Dojo's dependency check lists the deterministic crates' graph over

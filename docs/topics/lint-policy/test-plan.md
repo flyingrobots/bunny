@@ -51,25 +51,28 @@ status = "active"
 id = "LINT-TP-001"
 requirements = ["LINT-REQ-001"]
 evidence = "test"
+test = "xtask/src/lint_policy/tests.rs::lint_tp_001_a_blanket_nursery_attribute_is_found_at_its_line"
 oracle = "Constructed sources with known findings and their lines."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LINT-TP-002"
 requirements = ["LINT-REQ-001"]
 evidence = "test"
+test = "xtask/src/lint_policy/tests.rs::lint_tp_002_a_blanket_nursery_manifest_level_is_found_at_its_line"
 oracle = "Constructed manifests with known findings and their lines."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LINT-TP-003"
 requirements = ["LINT-REQ-001", "LINT-REQ-002"]
 evidence = "test"
+test = "xtask/src/lint_policy/tests.rs::lint_tp_003_the_core_crates_name_their_nursery_lints"
 oracle = "The repository's own files: no finding; six before the change."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LINT-TP-004"
@@ -78,9 +81,21 @@ evidence = "manual-audit"
 artifact = "docs/topics/lint-policy/test-plan.md#seeded-lint-checks"
 oracle = "Clippy names the seeded lint in each crate copy."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Seeded Lint Checks
 
-Planned: LINT-TP-004.
+In a container copy of each core crate, one seed at a time was appended to its
+`src/lib.rs`, the file touched, and `cargo clippy --locked -q -p <crate> --lib`
+run; the seed counts as caught when Clippy's output names the lint.
+
+| Seed | Lint | Caught in |
+| --- | --- | --- |
+| `pub fn seeded_const_candidate() -> u8 { 1 }` | `missing_const_for_fn` | all six crates |
+| `mod seeded_private { pub(crate) const SEEDED: u8 = 1; }` and a public use of it | `redundant_pub_crate` | all six crates |
+| `impl SeededType { pub const fn new() -> SeededType { SeededType(1) } .. }` | `use_self` | all six crates |
+
+The gate check itself was red before the crates changed: LINT-TP-003 named
+line 4 of the `src/lib.rs` of `bunny-num`, `bunny-linalg`, `bunny-geom`,
+`bunny-query`, `bunny-broadphase` and `bunny-mesh`.
