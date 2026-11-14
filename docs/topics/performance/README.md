@@ -1376,8 +1376,6 @@ grows slightly where they are called, and the speed they give is still the compi
 choice (`#[inline]` is a hint). A later crate change can still move other paths; this
 only removes the pixel path's dependence on the split.
 
-||||||| 6b808d4
-
 ## Profile of `closest_hit` on the benchmark scene
 
 This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
