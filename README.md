@@ -64,7 +64,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and
 | `bunny-query` | Deterministic ray intersections, closest-point solvers, and ray-tracing kernels. |
 | `bunny-broadphase` | BVH construction, ray traversal (including closest-hit and any-hit), and sweep-and-prune broadphase pairs. |
 | `bunny-mesh` | Quantized vertex layouts, triangle buffers, and stable mesh hashes. |
-| `bunny-optics` | Deterministic pinhole camera that generates trace rays per pixel sample, and a counter-based sample hash and stratified pixel sampler. |
+| `bunny-optics` | Deterministic pinhole camera that generates trace rays per pixel sample, a counter-based sample hash and stratified pixel sampler, and pixel-value math: exact sample accumulation, sRGB and linear tone curves, 8-bit and 16-bit codes. |
 | `bunny-codec` | Zero-copy OBJ/PLY parsers and Bunny compressed mesh decoding. |
 | `bunny-contract` | Generated Rust DTOs and schema/version witnesses. |
 | `bunny-wesley` | Wesley-backed GraphQL schema lowering and Rust/TypeScript DTO generation. |
