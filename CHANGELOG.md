@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
+  `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
+  a tangent (no trigonometry) and return the new `ProjectionError`. The
+  coordinate law now defines the canonical NDC depth range `[0, 1]` (near to
+  `0`, far to `1`) and a `-Z` camera, with golden vectors that run natively and
+  under WebAssembly.
 * Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
   `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
   test that never rejects a box the ray reaches and returns an entry bound
@@ -20,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates below 256.0 and direction components at most 1.0. Existing
   `bunny-query` functions are unchanged. See the new
   `docs/topics/ray-tracing/` chapter and test plan.
+* Added `FixedPlane3`, `PlaneSide`, `FixedSegment3` and `SegmentClip` to
+  `bunny-geom`: checked signed distance, three-way point classification, and
+  segment clipping to the closed front half-space (a point exactly on the plane
+  is kept). The clipped endpoint uses one checked division and rounds
+  ties-to-even. See `docs/topics/plane-clipping/`.
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same

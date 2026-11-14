@@ -170,15 +170,69 @@ Queries may define stricter behavior for degeneracy. Degeneracy policy belongs
 with the shape or query API and must cite this coordinate law when the behavior
 depends on orientation, winding, units, or boundary contact.
 
-## Projection and NDC Reservations
+## Projection and NDC
 
-Bunny does not yet expose canonical projection or viewport APIs. Future APIs
-must use these reserved defaults unless their names explicitly say otherwise:
+`FixedMat4::try_orthographic` and `FixedMat4::try_perspective` in
+`bunny-linalg` are the canonical projection builders. Each returns a
+`clip_from_view` matrix that follows the transform convention above
+(`p_clip = clip_from_view * p_view`, column vectors).
 
-- Normalized device coordinate `x` range: `[-1, 1]`.
-- Normalized device coordinate `y` range: `[-1, 1]`.
-- Normalized device coordinate `z` range: `[0, 1]`.
+Canonical normalized device coordinates (NDC):
+
+- `x` range: `[-1, 1]`.
+- `y` range: `[-1, 1]`.
+- `z` (depth) range: `[0, 1]`.
 - Positive NDC `y` points up.
+
+View space is the right-handed canonical frame with the camera at the origin
+looking down `-Z`. A point at distance `d` in front of the camera has
+`z_view = -d`, `+X` is to the camera's right, and `+Y` is up. `near` and `far`
+are positive distances in front of the camera, with `near < far`.
+
+Depth range choice: the near plane maps to NDC `z = 0` and the far plane to
+`z = 1`. Reason: the coordinate law already reserved `[0, 1]` for NDC depth
+(it is the WebGPU and Direct3D range and keeps fixed-point depth precision
+non-negative), and the right-handed frame with a `-Z` camera requires no
+handedness flip. The `[-1, 1]` OpenGL range is not canonical; a boundary
+adapter that needs it must convert explicitly (`z_gl = 2 * z - 1`).
+
+Orthographic matrix (`half_width`, `half_height`, `near`, `far`, with
+`depth = far - near`):
+
+```text
+| 1/half_width  0              0            0           |
+| 0             1/half_height  0            0           |
+| 0             0              -1/depth     -near/depth |
+| 0             0              0            1           |
+```
+
+Perspective matrix (`tan_half_fov_y`, `aspect = width / height`):
+
+```text
+| 1/(aspect*tan)  0        0              0                  |
+| 0               1/tan    0              0                  |
+| 0               0        -far/depth     -far*near/depth    |
+| 0               0        -1             0                  |
+```
+
+The perspective builder takes the tangent of half the vertical field of view,
+so Bunny needs no trigonometry to build it. After the matrix, `w_clip =
+-z_view`, and NDC is the component-wise division by `w_clip`. A point behind
+the camera has `w_clip < 0`; callers clip before dividing. Bunny does not yet
+expose a clip or divide helper, unprojection, rays, or viewport conversion.
+
+Both builders use checked Q32.32 arithmetic and return `ProjectionError`
+instead of panicking or saturating:
+
+- `NonPositiveExtent`: a half extent, tangent, or aspect is zero or negative.
+- `InvalidNear`: `near < 0` (orthographic) or `near <= 0` (perspective).
+- `InvalidDepthRange`: `near >= far`.
+- `Overflow`: a checked operation overflowed, including `far * near`, or a
+  divisor rounded to zero.
+
+Each matrix entry is rounded to the nearest Q32.32 value, so a matrix is exact
+only when its entries are representable. Golden vectors therefore use
+power-of-two parameters.
 
 Viewport conversion must explicitly name the viewport origin and `y` direction.
 OpenGL, WebGPU, DirectX, image buffers, and UI systems disagree here; Bunny must
@@ -194,7 +248,7 @@ Boundary adapters must document:
 - source up axis
 - source unit scale, if known
 - source winding order
-- source depth range, if projection data is imported
+- source depth range, if projection data is imported (Bunny's is `[0, 1]`)
 - the exact conversion into Bunny's canonical convention
 
 Lossy display or diagnostic conversion may use floats, but canonical geometry
@@ -210,13 +264,16 @@ enforce:
 - reversed cross product signs
 - `XY` counter-clockwise winding produces a `+Z` normal
 
-Future transform, projection, angle, and camera APIs must add tests for:
+Projection builders keep tests that map near and far plane points to NDC
+`z = 0` and `z = 1`, and that check the `-Z` camera and `+Y` up convention.
+
+Future transform, angle, and camera APIs must add tests for:
 
 - `target_from_source` naming examples
 - matrix composition order
 - point versus vector translation behavior
 - positive rotation direction
-- NDC and viewport conversion examples
+- viewport conversion examples
 
 ## Documentation Rule
 

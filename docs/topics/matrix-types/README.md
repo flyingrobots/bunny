@@ -150,18 +150,34 @@ No matrix inverse API panics for singular input.
 claim camera transform, projection matrix, normal matrix, or bounds propagation
 semantics.
 
-`FixedMat4` is still only a matrix type. It does not yet claim to be an affine
-transform, camera transform, projection matrix, normal matrix, or bounds
+`FixedMat4` is a matrix type. Apart from the projection builders below, it does
+not claim to be an affine transform, camera transform, normal matrix, or bounds
 propagation API.
 
 Future transform-specific APIs must name the semantic kind they transform:
 
 - normals may need inverse-transpose handling;
 - bounds require explicit propagation rules;
-- projection and viewport conversion require their own depth and origin
-  conventions.
+- viewport conversion requires its own origin convention.
 
 Those semantics are reserved for later roadmap slices.
+
+## Projection Matrices
+
+`FixedMat4::try_orthographic(half_width, half_height, near, far)` and
+`FixedMat4::try_perspective(tan_half_fov_y, aspect, near, far)` build
+`clip_from_view` matrices with checked Q32.32 arithmetic. The perspective
+builder takes the tangent of half the vertical field of view, so no
+trigonometry is involved. Both return `Result<FixedMat4, ProjectionError>`.
+
+The matrices, the `-Z` camera, and the NDC depth range `[0, 1]` (near to `0`,
+far to `1`) are defined in the
+[coordinate law](../coordinate-law/README.md#projection-and-ndc), which also
+lists the `ProjectionError` variants. Entries are rounded to nearest Q32.32,
+so the matrices are exact when the parameters give representable entries;
+golden tests use power-of-two parameters. There is no vector-transform,
+unprojection, ray, or viewport API for these matrices yet; multiply with
+`checked_mul_mat4` or apply the rows directly.
 
 ## Required Tests
 
@@ -178,4 +194,6 @@ The current repository must keep tests for:
 - affine point transforms including translation;
 - affine vector transforms excluding translation;
 - right-to-left affine composition;
-- affine inverse round trips and singular inverse rejection.
+- affine inverse round trips and singular inverse rejection;
+- exact golden rows and frustum-corner NDC values for both projection
+  builders, typed errors for invalid parameters, and seeded properties.
