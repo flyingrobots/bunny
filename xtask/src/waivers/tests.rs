@@ -189,10 +189,21 @@ fn dependency_rules(manifest: &str) -> Vec<&'static str> {
 fn manifest_waivers_are_whole_line_comments() {
     let comment = format!("# dojo: allow random -- {REASON}\n");
     let in_string = format!("description = \"# dojo: allow random -- {REASON}\"\n");
-    let two_clauses = format!("# dojo: allow random -- {REASON}; dojo: allow network -- {REASON}\n");
+    let two_clauses =
+        format!("# dojo: allow random -- {REASON}; dojo: allow network -- {REASON}\n");
 
     assert_eq!(
         (dependency_rules(&comment), dependency_rules(&in_string), dependency_rules(&two_clauses)),
         (vec![], vec!["random"], vec!["random"]),
     );
+}
+
+#[test]
+fn a_waiver_after_code_covers_only_its_line() {
+    let source = format!(
+        "pub fn f() {{\n    let _a = std::fs::read(\"a\"); // dojo: allow std-fs -- {REASON}\n    \
+         let _b = std::fs::read(\"b\");\n}}"
+    );
+
+    assert_eq!(lines_of("std-fs", &source), vec![3]);
 }

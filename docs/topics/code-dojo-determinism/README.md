@@ -104,20 +104,31 @@ code, run Git and Cargo, and read and write files by design.
 
 ## Waivers
 
-A source waiver is a comment on the finding's line or one of the two lines
-above it:
+A source waiver is a `//` or `/* */` comment holding exactly one clause:
 
 ```rust
 // dojo: allow std-fs -- fixture loader for the golden vectors, reviewed in #NNN
 ```
 
-It names one rule and needs a reason of at least eight characters after `--`.
-A waiver without a reason, with a shorter reason, or naming another rule
-leaves the finding reported.
+It names one rule by its exact ID and needs a reason of at least eight
+characters after ` -- `. A waiver without a reason, with a shorter reason,
+naming another rule, or sharing its comment with a second clause leaves the
+finding reported; it does not hide a valid waiver for the same finding.
 
-A dependency waiver is the same comment with `#`, anywhere in the manifest of
-the crate the finding names. There are no dependency waivers in the
-repository.
+Comments are what the token stream does not cover, so the same text inside a
+string, raw-string, byte-string or character literal, a doc comment, a
+`#[doc]` attribute or a macro's tokens is not a waiver.
+
+A waiver after code covers its own line. A waiver on a line of its own covers
+that line, the comment lines below it, and the whole of the outermost item,
+statement, field, variant, match arm or struct-literal field that starts on
+the next line holding code; if none starts there, that line only. A
+`float-boundary` waiver above a function therefore covers every float in it,
+and a float in the next function is reported.
+
+A dependency waiver is the same clause in a whole-line TOML comment, anywhere
+in the manifest of the crate the finding names. There are no dependency
+waivers in the repository.
 
 ## Where The Rules Run
 

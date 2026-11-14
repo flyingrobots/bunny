@@ -47,9 +47,29 @@ three doc-comment forms, a doc attribute, macro tokens) waived the finding; the 
 comment waived both rules; the refused-then-valid pair reported; the window waived the
 second statement and missed line 6 of a statement and of a function; `std-fs-extra`
 waived `std-fs`; manifest waivers in a TOML string and with two clauses were honoured.
+ND-TP-046 (a waiver after code covers only its line) was added with the implementation;
+it passes on the old window too, and exists to kill a mutation of the new coverage.
+Mutations of `xtask/src/waivers.rs`, each under `timeout 120`, all caught: the covered node
+not extended past the next code line (2 tests fail), one line past the node (3), comment
+lines below the waiver not covered (1), a trailing waiver also covering the next line (1),
+a second clause allowed (2), the rule matched as a prefix (1), no token masked (9), a
+group's whole span masked instead of its delimiters (3). The review's surviving mutation,
+shrinking the old two-line window, has no counterpart: the window is gone, and shrinking
+the new coverage to the next code line is the first mutant above.
+cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
+cargo test --locked -p xtask: 95 passed.
+cargo run --locked -q -p xtask -- code-dojo-rust --all over the repository with the new
+waivers: clean. All 26 waivers on main sit directly above their finding, so each still
+covers it.
+cargo run --locked -p xtask -- code-dojo --all with --history origin/main..HEAD --network
+at the final commit.
 
 Known risks:
-The fix is not in this commit; its tests fail here by design.
+A waiver above a large item (an `impl` block, a module) covers all of it; review must
+read the waiver against the item it sits on. A float admitted by a waived item can leave
+it as a return value and be operated on where its type is only inferred. Comments are
+found with proc-macro2's lexer, the same one `syn` uses; a file it cannot lex has no
+waivers, and the parse error is reported as `rust-parse`.
 
 Human reviewer:
 James Ross (maintainer); review pending.

@@ -161,6 +161,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo waivers are comments only. `dojo: allow` text inside a string,
+  raw-string or byte-string literal, a doc comment, a `#[doc]` attribute or a
+  macro's tokens no longer waives anything, and a comment with two clauses
+  waives neither rule. A waiver on a line of its own now covers the item,
+  statement, field, variant or match arm that starts below it, every line of
+  it, instead of a fixed window of three lines: one waiver no longer silences
+  the next statement, and a `float-boundary` waiver above a function covers
+  the whole function (the waiver-scope part of flyingrobots/bunny#286). A
+  refused waiver no longer hides a valid one, a rule ID must match exactly
+  (`std-fs-extra` does not waive `std-fs`), and a manifest waiver must be a
+  whole-line TOML comment. Part of flyingrobots/bunny#321.
+
 * Code Dojo's nondeterminism rules resolve `extern crate` renames like imports
   (`extern crate std as host; host::env::var(..)` is a `std-env` finding, and
   `extern crate rand;` a `random` one) and compare identifiers without their
