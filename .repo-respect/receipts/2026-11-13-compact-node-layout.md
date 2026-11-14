@@ -23,17 +23,29 @@ crates/bunny-perf/src/cases.rs
 crates/bunny-perf/src/main.rs
 
 Files edited:
+crates/bunny-broadphase/src/compact.rs
+crates/bunny-broadphase/src/compact_hit.rs
+crates/bunny-broadphase/src/lib.rs
+crates/bunny-broadphase/tests/compact_tests.rs
+crates/bunny-broadphase/README.md
+crates/bunny-perf/Cargo.toml
 crates/bunny-perf/src/memory.rs
+crates/bunny-perf/src/compact.rs
 crates/bunny-perf/src/cases.rs
 crates/bunny-perf/src/main.rs
+crates/bunny-perf/src/scene.rs
+docs/topics/ray-tracing/README.md
+docs/topics/ray-tracing/test-plan.md
 docs/topics/performance/README.md
 docs/topics/performance/test-plan.md
 CHANGELOG.md
 .repo-respect/receipts/2026-11-13-compact-node-layout.md
 
 Topic docs:
-docs/topics/performance/README.md
-docs/topics/performance/test-plan.md
+docs/topics/performance/README.md (memory share of a box test, ledger entry 7)
+docs/topics/performance/test-plan.md (PERF-REQ-008, PERF-TP-042..046)
+docs/topics/ray-tracing/README.md (Compact Layout)
+docs/topics/ray-tracing/test-plan.md (TRACE-REQ-028, TRACE-TP-301..307, mutation checks)
 
 Generated artifacts:
 None.
@@ -43,8 +55,9 @@ See the pull request description; every build, test and timing ran in the rust-d
 container through devrun.
 
 Known risks:
-One synthetic scene on one machine; the memory share is estimated from replays, not
-measured inside the shipped traversal.
+One synthetic scene; the memory share is estimated from replays, not measured inside the
+shipped traversal. The compact search repeats closest_hit's loop, so the two must be kept
+in step; call-for-call tests guard that.
 
 Human reviewer:
 James Ross (maintainer); review pending.

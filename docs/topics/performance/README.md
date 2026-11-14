@@ -781,6 +781,99 @@ that needs its own measurement.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
 
+### 7. Compact node layout with both child boxes in the parent (new API)
+
+**Where:** `compact_bvh`, `compact_closest_hit`, `compact_any_hit` and their types in
+`bunny-broadphase` (`src/compact.rs`, `src/compact_hit.rs`), flyingrobots/bunny#215.
+`BvhNode`, `build_bvh`, `closest_hit`, `any_hit`, `intersect_ray` and `intersect_aabb` are
+unchanged. The layout and its contract are in the
+[ray-tracing chapter](../ray-tracing/README.md#compact-layout).
+
+**Technique.** A second, read-only representation of a built tree. Each interior node holds
+both children's boxes and references (112 bytes); a leaf's primitive range lives in its
+parent, so leaves have no node; nodes are in depth-first, left-first order. In the
+builder's layout a search step pops an index, loads that node to learn where its children
+are, then loads the children's boxes: two dependent loads. In the compact layout the stack
+entry already holds the child's reference, so a step loads one node and tests both boxes,
+and a leaf visit loads nothing. The [memory estimate](#memory-share-of-a-box-test) shows why
+that matters more than the bytes: loads whose addresses are known early cost 0.6 ns per box
+test, loads that wait on the previous one about 7 ns.
+
+**Fidelity: new API with an exact contract.** The compact searches make the same box tests,
+in the same order, with the same pruning and tie rules, as `closest_hit` and `any_hit` on
+the source tree, so they call the primitive test with the same primitives and limits in the
+same order and return the same `ClosestHit` bits. Evidence: TRACE-TP-301 to TRACE-TP-307
+(seeded scenes against the source searches and a test of every primitive, ties, limits,
+other tree shapes, empty and one-leaf trees, typed errors, golden conversion vectors) with
+eight deliberate mutations caught, and PERF-TP-045 (all 1 024 benchmark rays, every primitive
+call, on the compact tree and three reordered copies). The harness repeats that check before
+every timing run.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), each run with `--exclusive`:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter trace/
+```
+
+The base revision lacks the API, so the compact cases are `new` and the comparison is
+**old layout against new layout within one run, on the same binary and rays**; the base and
+head columns of the unchanged cases are the noise reference (best p50 within 1.3 % in every
+run below, apart from the few-nanosecond `box_entry` and `ray_prepare` cases). Head side,
+best p50, nanoseconds per ray:
+
+| Run (base revision) | `closest_hit` | `closest_hit_compact` | Change | `any_hit` | `any_hit_compact` | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 112-byte nodes (`57bc035f69f2`) | 222.29 | 197.18 | -11.3 % | 203.86 | 180.87 | -11.3 % |
+| 128-byte aligned nodes (`57bc035f69f2`, `--filter _hit`) | 221.64 | 195.64 | -11.7 % | 207.28 | 177.86 | -14.2 % |
+| Final code, run A (`cda15ecc020a`) | 218.63 | 196.37 | -10.2 % | 203.86 | 184.20 | -9.6 % |
+
+Node order, same runs (best p50, ns per ray; the library writes the depth-first order):
+
+| Order | 112-byte run | aligned run | Final run A |
+| --- | ---: | ---: | ---: |
+| depth first, left subtree first (`closest_hit_compact`) | 197.18 | 195.64 | 196.37 |
+| builder's order of the source nodes (`_builder_order`) | 198.28 | 192.99 | 196.57 |
+| depth first, child nearer the camera first (`_near_first`) | 194.95 | 190.63 | 193.48 |
+| seeded random order (`_shuffled`) | 203.53 | 197.75 | 201.78 |
+
+Conversion of the scene's tree (`trace/compact_convert`, one call): 431.6 µs and 421.4 µs
+best p50, about 15 ns per compact node.
+
+**Reading.** The compact layout is 10 to 12 % faster for both searches in every run, about
+22 to 26 ns per ray, far outside the noise reference. Aligning nodes to 128 bytes moved
+`closest_hit_compact` by 0.8 % (inside the noise) for 14 % more memory, so the node stays at
+112 bytes. Placement changes the result by a few percent at most: the camera-aware order is
+1 to 2.5 % faster than the default and a random order 2.5 to 3 % slower, consistent with
+the shuffled builder tree. The near-first order depends on the camera, so the library does
+not use it; a renderer that wants it can reorder the public nodes.
+
+**Trade-offs.**
+
+- *Memory.* The same size as the source tree: 27 638 nodes of 112 bytes against 55 277 of
+  56 bytes (3.10 MB each). The compact copy is in addition to the source tree, which
+  `build_bvh` still needs, so a caller that keeps both holds twice the node memory.
+- *Conversion.* About 0.43 ms for this tree, a pass that pays for itself after roughly
+  20 000 rays (0.43 ms / 22 ns).
+- *A second layout to maintain.* `compact_hit.rs` repeats the search of `closest_hit.rs`;
+  any change to the order or pruning rules must be made in both, and the call-for-call
+  tests (TRACE-TP-301, PERF-TP-045) are what keeps them in step.
+- *Malformed input.* Hand-built compact trees can contain reference cycles; the search
+  bounds its interior visits by the node count and reports `InvalidNodeIndex` instead of
+  looping (found by a mutant that hung; see the ray-tracing test plan).
+
+**Not tried.** Quantized child boxes relative to the parent (the usual compact-BVH trick).
+On paper it is not promising here: the estimate above shows that bytes are not what a step
+waits for, the shuffled tree shows that the 3 MB array's placement barely matters, and the
+box test is limited by its own `u128` arithmetic, to which dequantization (six
+multiply-adds per box, with conservative rounding) would add; looser boxes would also make
+the search visit more nodes. It becomes worth a trial for trees that leave the cache, which
+this scene's does not.
+
+**Unmeasured.** wasm32; other scenes and ray batches; scenes whose trees do not fit the
+cache; whether the gain survives a different builder (flyingrobots/bunny#213) or packets
+(flyingrobots/bunny#217).
+
 ## Profile of `closest_hit` on the benchmark scene
 
 This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
@@ -970,6 +1063,8 @@ today). A real change gets a fraction of it. Nothing below was tried.
    helps only the load share of that time; the replays do not separate load time from
    arithmetic time, so that share is unmeasured. With integer-only arithmetic and no SIMD
    in the core crates, expect a layout change alone to pay a small part of the box row.
+   (Tried in flyingrobots/bunny#215: the layout paid 10 to 12 % of the ray, by removing one
+   dependent load per step rather than by cutting bytes; see ledger entry 7.)
 3. **A 4-wide BVH: #216.** Bound: the 44 to 50 ns residual (20 to 23 %), not the box row.
    A 4-wide node tests four boxes per visit and halves the depth, so the box tests along a
    path stay about the same (4 per wide level against 2 per binary level, over half the
