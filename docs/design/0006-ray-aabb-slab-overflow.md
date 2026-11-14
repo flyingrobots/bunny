@@ -1,4 +1,4 @@
-# 0005 — `ray_intersects_aabb` reports a miss when a slab division overflows
+# 0006 — `ray_intersects_aabb` reports a miss when a slab division overflows
 
 Status: proposal, awaiting a maintainer decision. Issue: flyingrobots/bunny#211.
 

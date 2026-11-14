@@ -20,7 +20,7 @@ crates/bunny-broadphase/tests/bvh_tests.rs
 Files edited:
 crates/bunny-query/tests/ray_aabb_overflow_tests.rs
 crates/bunny-broadphase/tests/bvh_tests.rs
-docs/design/0005-ray-aabb-slab-overflow.md
+docs/design/0006-ray-aabb-slab-overflow.md
 .repo-respect/receipts/2026-11-13-ray-aabb-overflow-repro.md
 
 Topic docs:
