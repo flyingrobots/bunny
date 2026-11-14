@@ -9,7 +9,10 @@ The kernels are the per-node and per-primitive tests a closest-hit traversal
 runs millions of times, so they avoid division wherever the answer allows it.
 The general-purpose solvers in `crates/bunny-query/src/ray.rs`
 (`ray_intersects_aabb`, `ray_intersects_triangle`) and the all-hits traversal
-`bunny_broadphase::intersect_ray` are unchanged and keep their own contracts.
+`bunny_broadphase::intersect_ray` keep their own contracts; the overflow
+behaviour of `ray_intersects_aabb`, which `intersect_ray` uses for every node,
+is described in
+[General-Purpose Ray-AABB Solver](#general-purpose-ray-aabb-solver).
 
 ## Status
 
@@ -166,6 +169,46 @@ which `v0, v1, v2` appear counter-clockwise, that is when
 the direction is not normalized. `TraceTriangle::vertices` returns the three
 vertices given to `new`, and `TraceTriangle::bounds` returns the smallest
 `FixedAabb3` that contains them.
+
+## General-Purpose Ray-AABB Solver
+
+`ray_intersects_aabb(ray, aabb)` in `crates/bunny-query/src/ray.rs` returns
+`Some((t_enter, t_exit))` or `None`. It is not a trace kernel: it divides, its
+ray is a `FixedRay3` with a unit direction, and its coordinates are not
+restricted. `bunny_broadphase::intersect_ray` visits a node exactly when this
+function returns `Some` for the node's bounds.
+
+**Bounds.** For each axis with a non-zero direction component the two slab
+distances are `(bound - origin) / direction`, rounded to the nearest raw unit
+with ties to even, exactly as `FixedQ32_32::checked_div` rounds. `t_enter` is
+the largest near-slab distance, `t_exit` the smallest far-slab distance. An
+axis with a zero component does not bound the interval and rejects the box when
+the origin lies outside `min..=max` on that axis. A side that no axis bounds is
+`i64::MIN` or `i64::MAX` raw.
+
+**Overflow.** A slab distance that does not fit Q32.32 saturates to `i64::MIN`
+or `i64::MAX` raw by its sign. The coordinate difference `bound - origin` is
+taken in `i128`, so a difference past `i64` is never saturated before the
+division. Such distances arise from a direction component of a few raw units
+(for a slab of half-width `k` centred on the origin, any component of at most `2k`
+raw units), or from a bound about `2^31` units or more from the origin.
+
+**Hit decision.** When every slab distance fits, the hit is decided from the
+rounded distances (`t_enter <= t_exit` and `t_exit >= 0`), so a ray that misses
+by less than half a raw unit can report a hit whose bounds are equal or whose
+exit is zero. When some slab distance does not fit, the function decides the hit
+exactly: every slab distance is an `i128` ratio, compared by
+cross-multiplication (all products stay below `2^127`), and only then are the
+two bounds rounded and saturated. A saturated bound therefore never turns a miss
+into a hit; two entries that both saturate to the maximum are still compared
+exactly.
+
+**History.** Before flyingrobots/bunny#211 the function returned `None` whenever
+a coordinate difference or slab distance overflowed, so rays through a box were
+reported as misses. The change touches only those inputs: every hit reported
+before is reported with the same bits, which a differential test against the
+retained old implementation checks. The analysis is in
+[`docs/design/0006-ray-aabb-slab-overflow.md`](../../design/0006-ray-aabb-slab-overflow.md).
 
 ## Closest-Hit Traversal
 
