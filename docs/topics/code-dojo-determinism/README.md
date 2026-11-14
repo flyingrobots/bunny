@@ -31,7 +31,7 @@ The verification design is [`test-plan.md`](test-plan.md).
 | `std-env` | `std::env`, and the macros `env!` and `option_env!` (also under `std::` and `core::`) |
 | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` |
 | `std-process` | `std::process` |
-| `include-source` | `include!` in every spelling, and a `#[path]` module naming anything but a `.rs` file inside the crate directory |
+| `include-source` | `include!` in every spelling, and a `#[path]` module (also under nested `cfg_attr` or emitted by a macro) naming anything but a `.rs` file the gate scans inside the crate directory |
 | `include-data` | `include_str!` and `include_bytes!` whose argument is not one string literal naming a file inside the crate directory |
 | `float-boundary` | in core crates only: `f32` and `f64` types, float literals, and any path through `f32` or `f64` (for example `f32::NAN`, `f64::from_bits`, `core::f64::consts::PI`), also inside macro bodies |
 
@@ -81,9 +81,11 @@ another kind of file or a file outside the crate.
   file, a `concat!` or `env!` path, a build-script output) is code the gate
   never reads. Because the first `include!` is itself the finding, a second
   level of indirection behind it changes nothing.
-- A `#[path]` module, also one set through `cfg_attr`, must name a `.rs`
-  file inside the crate directory; that file is then scanned as a file of the
-  crate. Anything else is an `include-source` finding at the attribute.
+- A `#[path]` module, also one set through `cfg_attr` at any depth or
+  emitted by a macro, must name a `.rs` file inside the crate directory and
+  outside the `target`, `vendor` and `third_party` directories, which the gate
+  does not list; that file is then scanned as a file of the crate. Anything
+  else is an `include-source` finding at the attribute.
 - `include_str!` and `include_bytes!` must name one string literal that
   resolves inside the crate directory (`include-data`): fixed data in the
   package, not a file on the host.

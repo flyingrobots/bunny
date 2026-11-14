@@ -615,7 +615,7 @@ evidence = "test"
 test = "xtask/src/nondeterminism/evasion_tests.rs::path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected"
 oracle = "`#[path]` emitted by a macro, a `path` inside a nested `cfg_attr`, and a `.rs` target under a `vendor`, `third_party` or `target` directory of the crate (which the gate does not scan) are each reported as `include-source`."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ND-TP-049"

@@ -190,7 +190,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Code Dojo no longer lets code or host files into a deterministic crate
   unscanned: `include!` is banned in every spelling (`include-source`), a
-  `#[path]` module must name a `.rs` file inside the crate directory, and
+  `#[path]` module (also under a nested `cfg_attr` or emitted by a macro)
+  must name a `.rs` file inside the crate directory that the gate scans, and
   `include_str!`/`include_bytes!` must name a literal path inside it
   (`include-data`). `env!` and `option_env!` are now `std-env` findings, as
   in Lumen's gate; the `bunny-contract` test that reads `CARGO_PKG_VERSION`
