@@ -102,6 +102,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vectors, an `f64` reference oracle in the tests and eight recorded mutations;
   `bunny-perf` gains a `pixel` group with `pixel/resolve_srgb_rgba8`.
 
+### Changed
+
+* `TraceRay::box_entry` is cheaper, with the same result for every input
+  (flyingrobots/bunny#258): slab differences in `i64` (bitwise not turns a
+  negative direction into a forward one) instead of `i128`, parallel axes in
+  the same path, and no data-dependent branch of its own. `TraceRay` is
+  unchanged (72 bytes, same fields). On the benchmark scene (Apple M5 Pro,
+  container) `trace/closest_hit` is about 17 % faster and the replayed box tests
+  of a ray about 20 %, and the compact-layout search `trace/closest_hit_compact`
+  about 17 %; see ledger entry 10 in the performance chapter. The pre-#258 box test
+  is kept as a reference oracle (`crates/bunny-query/tests/support/box_entry_reference.rs`)
+  with equivalence tests over seeded, extreme-coordinate and benchmark-scene
+  corpora (`TRACE-TP-308` to `TRACE-TP-312`).
+
 ## [0.7.0] - 2026-11-13
 
 This is an early cut of the 0.7 line. It exists so downstream repositories can
