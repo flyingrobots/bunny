@@ -14,7 +14,7 @@ path = "src/main.rs"
 workspace = true
 
 [features]
-default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "trace_compact"]
+default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "pixel", "trace_compact"]
 # Each group compiles only against the APIs it times, so `cargo xtask perf --base <rev>` can
 # build the same harness against an older Bunny that lacks a newer group.
 num = []
@@ -28,6 +28,8 @@ scene = []
 trace = []
 # The sample hash and pixel sampler of `bunny-optics`.
 sample = []
+# Pixel values from `bunny-optics`: resolve, tone curve and RGBA8 output.
+pixel = []
 # The compact node layout (`compact_bvh` and its traversals), timed against `trace`.
 trace_compact = []
 

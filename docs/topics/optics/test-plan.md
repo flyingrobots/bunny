@@ -1,9 +1,10 @@
 # Optics Test Plan
 
 This document defines how Bunny verifies the [optics contract](README.md): the
-pinhole camera in `bunny-optics` and the rays it generates, and the
+pinhole camera in `bunny-optics` and the rays it generates, the
 deterministic sample hash, pixel sampler and sequential generator that choose
-sample positions and random decisions.
+sample positions and random decisions, and the pixel-value functions that turn
+radiance samples into output codes.
 
 ## Scope
 
@@ -25,9 +26,16 @@ and `point_at`:
   exact stratification of every power-of-two block of samples, range,
   decorrelation between dimension pairs and pixels, and use as a camera sample;
 - `Xoroshiro128Plus`, replaying Echo's `warp-math` golden vectors bit for bit.
+- `PixelAccumulator`: exact, order-independent sums, their limits and the
+  mean's rounding;
+- `ToneCurve` (`SrgbV1`, `LinearClampV1`): golden vectors, the sRGB error
+  bound against a reference oracle, and monotonicity;
+- `quantize_8`, `quantize_16` and the codes they give against the correctly
+  rounded sRGB codes;
+- `write_rgba8` and the versioned identities.
 
 Projection matrices (flyingrobots/bunny#201, #202), hemisphere and light
-sampling (#160), shading and pixel values (#222, #160) are out of scope.
+sampling, and shading (#160) are out of scope.
 
 ## Test Goals
 
@@ -42,6 +50,10 @@ sampling (#160), shading and pixel values (#222, #160) are out of scope.
   exact counting property, not as a look at the points.
 - Show that each key field and the stratification rule are load bearing by
   breaking them on purpose.
+- Lock every pixel-value function with golden vectors, check the sRGB curve
+  against an `f64` reference oracle over dense deterministic inputs, and find
+  exactly where each 8-bit and 16-bit code begins compared with the correctly
+  rounded code.
 - Keep the evidence native and WASM-compatible: every case is a
   `wasm_bindgen_test` that also runs as a native test.
 
@@ -70,6 +82,15 @@ formatting.
 | OPTICS-REQ-014 | Every value depends only on its key: computing the same keys in any order, with fresh or reused handles, gives the same bits. | `README.md#determinism` |
 | OPTICS-REQ-015 | `PixelSampler::camera_sample` is pair 0 as a `PixelSample` of the sampler's own pixel, accepted by `PinholeCamera::ray` for every in-range pixel. | `README.md#pixel-sampler` |
 | OPTICS-REQ-016 | `Xoroshiro128Plus` reproduces Echo's `warp-math` `Prng` bit for bit: `from_seed`, `from_seed_u64` (SplitMix64 expansion), the all-zero seed replacement, `next_u64`, `next_int` (refusing an empty range with `None`) and `next_unit` (Echo's `next_f32` value as exact Q32.32). | `README.md#sequential-generator` |
+| OPTICS-REQ-017 | `PixelAccumulator` sums each channel exactly in `i64`: the sums and the count do not depend on the order samples are added in or on how they are split between accumulators that are then merged. | `README.md#accumulation` |
+| OPTICS-REQ-018 | A sample channel is accepted in `0..=2^52` raw and a pixel holds at most 1024 samples, so no sum exceeds `2^62`; a negative channel, a channel above `2^52` raw, a sample or merge past 1024 samples each return their own `PixelError` and leave the accumulator unchanged. | `README.md#accumulation` |
+| OPTICS-REQ-019 | `resolve` returns each sum divided by the count, rounded to nearest with ties to even (for a power-of-two count, the same rounding of a right shift), and `NoSamples` for an empty pixel. | `README.md#resolve` |
+| OPTICS-REQ-020 | `ToneCurve::SrgbV1` is 0 at or below zero, 1.0 at or above 1.0, `round(12.92 x)` below the first raw input at or above 0.0031308, and above it the floored linear interpolation of 1153 correctly rounded knots of `1.055 x^(1/2.4) - 0.055`, held at the toe's last value until it rises past it; it is within 6400 raw units (1.49e-6) of the exact sRGB curve and monotone over every input. | `README.md#tone-curves` |
+| OPTICS-REQ-021 | `ToneCurve::LinearClampV1` clamps its input to `[0, 1]` and is otherwise the identity. | `README.md#tone-curves` |
+| OPTICS-REQ-022 | `quantize_8` and `quantize_16` clamp a display value to `[0, 1]` and return `round(255 v)` and `round(65535 v)`, to nearest with ties to even; both are monotone. | `README.md#output-codes` |
+| OPTICS-REQ-023 | Under `SrgbV1`, every 8-bit and 16-bit code is within one of the correctly rounded sRGB code of the same input; each code begins at most 9600 raw inputs after and at most 2 raw inputs before the input where the correctly rounded code begins. | `README.md#accuracy-of-the-codes` |
+| OPTICS-REQ-024 | `write_rgba8` writes red, green and blue 8-bit codes and alpha 255 into a slice of exactly four bytes, and returns `WrongSliceLength` without writing for any other length. | `README.md#output-codes` |
+| OPTICS-REQ-025 | Tone curves and output encodings have stable versioned identities (`bunny-tone-srgb/1`, `bunny-tone-linear-clamp/1`, `bunny-unorm8/1`, `bunny-unorm16/1`, `bunny-rgba8-opaque/1`); golden vectors lock their outputs, and any change to an output is a new version. | `README.md#versioned-identities` |
 
 ```toml
 [[requirement]]
@@ -151,6 +172,51 @@ status = "active"
 id = "OPTICS-REQ-016"
 summary = "Xoroshiro128Plus reproduces Echo's warp-math Prng bit for bit: from_seed, from_seed_u64 (SplitMix64 expansion), the all-zero seed replacement, next_u64, next_int (refusing an empty range with None) and next_unit (Echo's next_f32 value as exact Q32.32)."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-017"
+summary = "PixelAccumulator sums each channel exactly in i64: the sums and the count do not depend on the order samples are added in or on how they are split between accumulators that are then merged."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-018"
+summary = "A sample channel is accepted in 0..=2^52 raw and a pixel holds at most 1024 samples, so no sum exceeds 2^62; a negative channel, a channel above 2^52 raw, a sample or merge past 1024 samples each return their own PixelError and leave the accumulator unchanged."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-019"
+summary = "resolve returns each sum divided by the count, rounded to nearest with ties to even (for a power-of-two count, the same rounding of a right shift), and NoSamples for an empty pixel."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-020"
+summary = "ToneCurve::SrgbV1 is 0 at or below zero, 1.0 at or above 1.0, round(12.92 x) below the first raw input at or above 0.0031308, and above it the floored linear interpolation of 1153 correctly rounded knots of 1.055 x^(1/2.4) - 0.055, held at the toe's last value until it rises past it; it is within 6400 raw units (1.49e-6) of the exact sRGB curve and monotone over every input."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-021"
+summary = "ToneCurve::LinearClampV1 clamps its input to [0, 1] and is otherwise the identity."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-022"
+summary = "quantize_8 and quantize_16 clamp a display value to [0, 1] and return round(255 v) and round(65535 v), to nearest with ties to even; both are monotone."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-023"
+summary = "Under SrgbV1, every 8-bit and 16-bit code is within one of the correctly rounded sRGB code of the same input; each code begins at most 9600 raw inputs after and at most 2 raw inputs before the input where the correctly rounded code begins."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-024"
+summary = "write_rgba8 writes red, green and blue 8-bit codes and alpha 255 into a slice of exactly four bytes, and returns WrongSliceLength without writing for any other length."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-025"
+summary = "Tone curves and output encodings have stable versioned identities (bunny-tone-srgb/1, bunny-tone-linear-clamp/1, bunny-unorm8/1, bunny-unorm16/1, bunny-rgba8-opaque/1); golden vectors lock their outputs, and any change to an output is a new version."
+status = "active"
 ```
 
 ## Fixtures
@@ -184,6 +250,37 @@ The Echo vectors in `OPTICS-TP-019` are copied from Echo's
 `crates/warp-math/tests/prng_golden_regression.rs` and
 `crates/warp-math/tests/fixtures/math-fixtures.json` (the `next_f32` values
 converted exactly: each is `k * 2^-23` for the integer `k` in the test).
+
+The pixel cases (`crates/bunny-optics/tests/pixel_tests.rs`) use the camera
+cases' linear congruential generator with the seed `PIXEL_SEED` (`0xB002_0971_C500_0222`). Their golden
+tone vectors come from an independent integer model of the curve whose knots
+were computed with 60-digit decimal arithmetic (in a scratch directory, not
+committed); every knot is also rechecked in `OPTICS-TP-026`.
+
+### The sRGB Reference Oracle
+
+`CODE_STANDARDS.md` Rule 2 bans floating point in canonical math, and the
+Code Dojo float rule applies to core crates only, so the pixel test file uses
+`f64` as a reference oracle, never the library. The oracle is the IEC
+61966-2-1 formula, `12.92 x` below 0.0031308 and `1.055 x^(1/2.4) - 0.055`
+above, on `x = raw / 2^32`, which is exact in `f64` for every input tested.
+
+`f64` is close enough to decide each comparison the cases make:
+
+- `powf` is accurate to about `10^-6` raw Q32.32 units of display value; the
+  nearest knot to a rounding tie is `2.7 * 10^-4` raw units away, and
+  `OPTICS-TP-026` asserts a margin of `10^-4`;
+- where a code boundary is compared, one raw input changes the reference by
+  at least `10^-6` codes, and on both sides of every 8-bit and 16-bit
+  boundary the 60-digit model found the reference at least `5 * 10^-11` codes
+  away from it, against an `f64` error near `10^-11` codes;
+- the reference curve itself drops by `2.9 * 10^-8` at the toe end (the
+  standard's constants do not meet), but no 8-bit or 16-bit code boundary lies
+  in that drop, so each code still begins at one well-defined input.
+
+The asserted bounds (`9600` and `2` inputs in `OPTICS-TP-029`) leave a margin
+over the values the 60-digit model measured (9 447 and 9 522 late, 1 early) so
+that a one-input `f64` misjudgement cannot fail the case.
 
 ### The Image-Plane Oracle
 
@@ -229,6 +326,19 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-019 | Echo golden vectors | OPTICS-REQ-016 | Echo's `next_int` regression values and its `math-fixtures.json` `next_f32` and `next_int(5, 10)` values, exactly. | `crates/bunny-optics/tests/xoroshiro_tests.rs::optics_tp_019_echo_golden_vectors_replay` |
 | OPTICS-TP-020 | Sequential seeding | OPTICS-REQ-016 | The published SplitMix64 outputs for seed 1234567 as the state of `from_seed_u64`; draws after both constructors and the zero-seed replacement from the reference model; one-value and empty ranges draw nothing. | `crates/bunny-optics/tests/xoroshiro_tests.rs::optics_tp_020_seeding_and_range_rules` |
 | OPTICS-TP-021 | Sampler mutations | OPTICS-REQ-011, OPTICS-REQ-013 | Each key field and the stratification rule, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
+| OPTICS-TP-022 | Golden accumulation | OPTICS-REQ-017, OPTICS-REQ-019 | Hand-computed sums and means for two, three, four and sixteen samples, including halves that round to the even neighbour. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_022_golden_accumulation_and_mean` |
+| OPTICS-TP-023 | Order independence | OPTICS-REQ-017 | 64 seeded pixels of 1 to 256 samples, large and tiny: forward, reverse, shuffled and both merge orders of a seeded split give identical accumulators, whose sums equal an independent `i128` sum. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_023_accumulation_is_order_independent` |
+| OPTICS-TP-024 | Accumulation limits | OPTICS-REQ-018, OPTICS-REQ-019 | 1024 samples at `2^52` sum to exactly `2^62` with mean `2^52`, also by merging two halves; the 1025th sample, an over-full merge, each out-of-range channel (with the first bad channel deciding the error) and an empty resolve are refused, leaving the accumulator unchanged. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_024_accumulation_limits_are_exact_at_their_edges` |
+| OPTICS-TP-025 | Mean rounding | OPTICS-REQ-019 | For every count 1 to 1024 over four seeded sample ranges, the mean equals an oracle that picks the nearer of the two neighbours (the even one on a tie) and, for power-of-two counts, a shift with the same rounding. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_025_mean_rounds_to_nearest_with_ties_to_even` |
+| OPTICS-TP-026 | sRGB knots | OPTICS-REQ-020 | Every knot at or above the toe end equals the `f64` reference value rounded to nearest; no knot is within `10^-4` raw units of a tie, so the `f64` oracle decides each one. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_026_srgb_knots_are_the_correctly_rounded_curve` |
+| OPTICS-TP-027 | Golden tone vectors | OPTICS-REQ-020, OPTICS-REQ-021, OPTICS-REQ-025 | Exact display values and 8-bit and 16-bit codes for both curves at 0, one raw unit, the toe end and the hold, 0.01, mid grey, 0.5, a mid-segment input, just below, at and above 1.0, the radiance cap and negative inputs; the identities. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_027_golden_tone_vectors_lock_exact_outputs` |
+| OPTICS-TP-028 | sRGB error bound | OPTICS-REQ-020 | Over every 4096th raw input from `-2^20` to `2^32 + 2^20`, every knot and its neighbours, every segment midpoint and every input within `2^16` of the toe end, the curve is within 6400 raw units of the `f64` reference, and the worst error exceeds 6200 (the bound is tight). | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_028_srgb_is_within_its_bound_of_the_exact_curve` |
+| OPTICS-TP-029 | Codes against correct rounding | OPTICS-REQ-023 | For every 8-bit and 16-bit code, the first input reaching it (binary search over the monotone function) is compared with the first input whose `f64` reference reaches the code boundary: at most 9600 inputs later, at most 2 earlier, and never past the neighbouring codes' boundaries; the worst lag exceeds 9000. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_029_codes_are_within_one_of_the_correctly_rounded_codes` |
+| OPTICS-TP-030 | Monotonicity | OPTICS-REQ-020, OPTICS-REQ-021, OPTICS-REQ-022 | Display values, 8-bit and 16-bit codes of both curves never decrease over the dense inputs of OPTICS-TP-028, which include both sides of every place where curve pieces meet; quantization never decreases over every 4096th display value and every value within two raw units of each 8-bit and 16-bit boundary. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_030_tone_curves_and_quantization_are_monotone` |
+| OPTICS-TP-031 | Quantization rounding | OPTICS-REQ-022, OPTICS-REQ-025 | Golden codes on both sides of the first code boundaries, at 0.5 (the only exact tie, 127.5 and 32767.5, to even), at 1.0 and clamped outside `[0, 1]`; every code is the image of its own display value `c / 255` or `c / 65535`. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_031_quantization_rounds_to_nearest_with_ties_to_even` |
+| OPTICS-TP-032 | RGBA8 writer | OPTICS-REQ-024, OPTICS-REQ-025 | Golden bytes for both curves with alpha 255, one pixel written inside a row buffer, and lengths 0, 1, 3, 5 and 8 refused with the buffer unchanged. | `crates/bunny-optics/tests/pixel_tests.rs::optics_tp_032_rgba8_writes_four_opaque_bytes_or_refuses` |
+| OPTICS-TP-033 | Pixel mutations | OPTICS-REQ-019, OPTICS-REQ-020, OPTICS-REQ-022 | Each rounding rule and the toe boundary, broken on purpose, makes at least one case above fail. | [Pixel mutation checks](#pixel-mutation-checks) |
+| OPTICS-TP-034 | Pixel timing | OPTICS-REQ-019, OPTICS-REQ-020, OPTICS-REQ-024 | `pixel/resolve_srgb_rgba8` in `bunny-perf` times resolve, tone and RGBA8 output per pixel. | [Timing](#timing) |
 
 ```toml
 [[case]]
@@ -419,6 +529,123 @@ artifact = "docs/topics/optics/test-plan.md#mutation-checks"
 oracle = "Each key field and the stratification rule, broken on purpose, makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-022"
+requirements = ["OPTICS-REQ-017", "OPTICS-REQ-019"]
+evidence = "test"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_022_golden_accumulation_and_mean"
+oracle = "Hand-computed sums and means for two, three, four and sixteen samples, including halves that round to the even neighbour."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-023"
+requirements = ["OPTICS-REQ-017"]
+evidence = "property"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_023_accumulation_is_order_independent"
+oracle = "64 seeded pixels of 1 to 256 samples, large and tiny: forward, reverse, shuffled and both merge orders of a seeded split give identical accumulators, whose sums equal an independent i128 sum."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-024"
+requirements = ["OPTICS-REQ-018", "OPTICS-REQ-019"]
+evidence = "test"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_024_accumulation_limits_are_exact_at_their_edges"
+oracle = "1024 samples at 2^52 sum to exactly 2^62 with mean 2^52, also by merging two halves; the 1025th sample, an over-full merge, each out-of-range channel (with the first bad channel deciding the error) and an empty resolve are refused, leaving the accumulator unchanged."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-025"
+requirements = ["OPTICS-REQ-019"]
+evidence = "property"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_025_mean_rounds_to_nearest_with_ties_to_even"
+oracle = "For every count 1 to 1024 over four seeded sample ranges, the mean equals an oracle that picks the nearer of the two neighbours (the even one on a tie) and, for power-of-two counts, a shift with the same rounding."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-026"
+requirements = ["OPTICS-REQ-020"]
+evidence = "test"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_026_srgb_knots_are_the_correctly_rounded_curve"
+oracle = "Every knot at or above the toe end equals the f64 reference value rounded to nearest; no knot is within 10^-4 raw units of a tie, so the f64 oracle decides each one."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-027"
+requirements = ["OPTICS-REQ-020", "OPTICS-REQ-021", "OPTICS-REQ-025"]
+evidence = "test"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_027_golden_tone_vectors_lock_exact_outputs"
+oracle = "Exact display values and 8-bit and 16-bit codes for both curves at 0, one raw unit, the toe end and the hold, 0.01, mid grey, 0.5, a mid-segment input, just below, at and above 1.0, the radiance cap and negative inputs; the identities."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-028"
+requirements = ["OPTICS-REQ-020"]
+evidence = "property"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_028_srgb_is_within_its_bound_of_the_exact_curve"
+oracle = "Over every 4096th raw input from -2^20 to 2^32 + 2^20, every knot and its neighbours, every segment midpoint and every input within 2^16 of the toe end, the curve is within 6400 raw units of the f64 reference, and the worst error exceeds 6200 (the bound is tight)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-029"
+requirements = ["OPTICS-REQ-023"]
+evidence = "property"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_029_codes_are_within_one_of_the_correctly_rounded_codes"
+oracle = "For every 8-bit and 16-bit code, the first input reaching it (binary search over the monotone function) is compared with the first input whose f64 reference reaches the code boundary: at most 9600 inputs later, at most 2 earlier, and never past the neighbouring codes' boundaries; the worst lag exceeds 9000."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-030"
+requirements = ["OPTICS-REQ-020", "OPTICS-REQ-021", "OPTICS-REQ-022"]
+evidence = "property"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_030_tone_curves_and_quantization_are_monotone"
+oracle = "Display values, 8-bit and 16-bit codes of both curves never decrease over the dense inputs of OPTICS-TP-028, which include both sides of every place where curve pieces meet; quantization never decreases over every 4096th display value and every value within two raw units of each 8-bit and 16-bit boundary."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-031"
+requirements = ["OPTICS-REQ-022", "OPTICS-REQ-025"]
+evidence = "test"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_031_quantization_rounds_to_nearest_with_ties_to_even"
+oracle = "Golden codes on both sides of the first code boundaries, at 0.5 (the only exact tie, 127.5 and 32767.5, to even), at 1.0 and clamped outside [0, 1]; every code is the image of its own display value c / 255 or c / 65535."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-032"
+requirements = ["OPTICS-REQ-024", "OPTICS-REQ-025"]
+evidence = "test"
+test = "crates/bunny-optics/tests/pixel_tests.rs::optics_tp_032_rgba8_writes_four_opaque_bytes_or_refuses"
+oracle = "Golden bytes for both curves with alpha 255, one pixel written inside a row buffer, and lengths 0, 1, 3, 5 and 8 refused with the buffer unchanged."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-033"
+requirements = ["OPTICS-REQ-019", "OPTICS-REQ-020", "OPTICS-REQ-022"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#pixel-mutation-checks"
+oracle = "Each rounding rule and the toe boundary, broken on purpose, makes at least one implemented pixel case fail."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-034"
+requirements = ["OPTICS-REQ-019", "OPTICS-REQ-020", "OPTICS-REQ-024"]
+evidence = "benchmark"
+artifact = "docs/topics/optics/test-plan.md#timing"
+oracle = "pixel/resolve_srgb_rgba8 in bunny-perf times resolve, tone and RGBA8 output for 1024 seeded pixels of 16 samples."
+tier = "bench"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -459,15 +686,62 @@ fail; the restored source passed all eleven.
 | Index shuffle replaced by an odd multiply and add | The shuffle maps aligned blocks onto aligned blocks | OPTICS-TP-012, OPTICS-TP-013, OPTICS-TP-017 |
 | `mix64` replaced by the identity | The hash mixes | OPTICS-TP-010, OPTICS-TP-013, OPTICS-TP-016 |
 
+## Pixel Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/pixel/`, and the pixel tests were run
+(`cargo test --locked -p bunny-optics --test pixel_tests`, with lints capped
+to warnings so an unused helper does not stop the build). Every mutation made
+at least one case fail; the restored source passed all eleven.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Mean floored (`sum / count`) | The mean rounds to nearest | OPTICS-TP-022, OPTICS-TP-025 |
+| Mean ties rounded up (`(sum + count / 2) / count`) | Ties go to the even neighbour | OPTICS-TP-022, OPTICS-TP-025 |
+| Quantization floored | Codes round to nearest | OPTICS-TP-027, OPTICS-TP-029, OPTICS-TP-031, OPTICS-TP-032 |
+| Quantization ties rounded down | The tie at 0.5 goes to the even code | OPTICS-TP-027, OPTICS-TP-031, OPTICS-TP-032 |
+| Toe used for one more input (`<=` at `TOE_END`) | The toe/power boundary | OPTICS-TP-027, OPTICS-TP-030 |
+| Hold at the toe end removed | The curve is monotone where the pieces meet | OPTICS-TP-027, OPTICS-TP-030 |
+| Toe slope 12.93 instead of 12.92 | The toe is `12.92 x` | OPTICS-TP-027, OPTICS-TP-028, OPTICS-TP-029, OPTICS-TP-030 |
+| Interpolation rounded to nearest instead of floored | The interpolation floors | OPTICS-TP-027 |
+
+The last mutation stays within the stated bounds, so only the golden vectors
+see it: a version is defined by its bits, not by its accuracy.
+
+## Timing
+
+`pixel/resolve_srgb_rgba8` in `crates/bunny-perf` (feature group `pixel`)
+resolves 1 024 seeded pixels of 16 samples each (linear radiance up to 2.0 per
+channel), applies `SrgbV1` and writes each pixel's RGBA8 bytes; every result
+passes through `black_box`. Until a base revision has the pixel functions,
+`cargo xtask perf` cannot compare it (with `--filter pixel/` it reports that no
+case was measured on both sides), so run the harness directly:
+
+```sh
+cargo run --locked --release -p bunny-perf -- --filter pixel/
+```
+
+Once a revision with this case is the base, the usual comparison applies:
+
+```sh
+cargo run --locked -p xtask -- perf --base <rev> --rounds 11 --align-code --filter pixel/
+```
+
+The readings are for future comparisons, not a speed claim, so the case has no
+ledger entry in the [performance chapter](../performance/README.md).
+
 ## Determinism Obligations And Evidence
 
-The camera, the sample hash, the sampler, the sequential generator and their
-tests use only integer arithmetic: `i64` and `i128` additions,
-multiplications, shifts and floor divisions, and wrapping `u64` and `u32`
-arithmetic and bit reversal, all with defined results.
-There is no floating point, trigonometry, square root per ray, randomness from
-the host, time, filesystem access, parallel scheduling, map iteration, stdout,
-stderr or logging in any oracle. The square roots in construction are those of
+The camera, the sample hash, the sampler, the sequential generator, the pixel
+functions and their tests use only integer arithmetic: `i64` and `i128`
+additions, multiplications, shifts and floor or rounded divisions, and
+wrapping `u64` and `u32` arithmetic and bit reversal, all with defined
+results. There is no floating point, trigonometry, square root per ray,
+randomness from the host, time, filesystem access, parallel scheduling, map
+iteration, stdout, stderr or logging in the library or in any camera, hash or
+sampler oracle. The pixel tests use `f64` only as the sRGB reference oracle
+described under [Fixtures](#the-srgb-reference-oracle); every value they lock
+is an integer. The square roots in construction are those of
 `FixedUnitVec3::new`, an exact integer square root.
 
 Test builds check integer overflow, so `OPTICS-TP-004` turns any overflow at
@@ -508,11 +782,22 @@ Current tests cover:
 - `fraction_from_bits` of 0, all ones, and values on either side of a step of
   the top 32 bits;
 - the all-zero seed of `Xoroshiro128Plus`, one-value and empty ranges.
+- sample channels of zero, `2^52`, `2^52 + 1`, `-1`, `i64::MIN` and
+  `i64::MAX`, and a full pixel of 1 024 samples at `2^52`;
+- an empty pixel and an over-full merge;
+- tone inputs at zero, one raw unit, both sides of the toe end, inside the
+  hold, at every knot and its neighbours, at 1.0 and one raw unit on either
+  side, the radiance cap and the most negative value;
+- display values on both sides of the first 8-bit and 16-bit boundaries, the
+  exact tie at 0.5, and values outside `[0, 1]`;
+- output slices of lengths 0, 1, 3, 5 and 8.
 
 ## Stress And Fuzz
 
 No fuzz target exists today. `OPTICS-TP-003` is a seeded property case over
-2 000 cameras.
+2 000 cameras; `OPTICS-TP-023` and `OPTICS-TP-025` are seeded property cases
+over accumulators, and `OPTICS-TP-028` to `OPTICS-TP-030` use dense
+deterministic inputs rather than random ones.
 
 Every minimized fuzz failure must become a committed deterministic regression
 case with a stable test name.
@@ -525,3 +810,4 @@ case with a stable test name.
 | A statistical test suite (PractRand or TestU01) over the sample hash and the sampler. | None; it needs a harness outside the core crates. |
 | Stratification evidence above 1 024 samples per pixel (the property is proven for every `k` up to 32 and tested to 10). | None; a slow-tier case. |
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
+| An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |

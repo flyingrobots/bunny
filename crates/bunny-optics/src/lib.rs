@@ -4,7 +4,7 @@
 #![deny(clippy::nursery)]
 #![deny(missing_docs)]
 
-//! Deterministic camera and ray-generation math for Bunny.
+//! Deterministic camera, ray-generation and pixel-value math for Bunny.
 //!
 //! A [`PinholeCamera`] turns a position, a look direction, an up hint, the tangent of half the
 //! vertical field of view and an image size into one [`bunny_query::TraceRay`] per pixel
@@ -18,6 +18,11 @@
 //! [`PixelSampler`] (`bunny-sobol-owen/1`) gives stratified points in the unit square per
 //! (seed, pixel, sample, dimension pair). [`Xoroshiro128Plus`] is a sequential generator for
 //! code that draws in one fixed order.
+//!
+//! The pixel-value functions turn those rays' radiance samples into output codes: a
+//! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
+//! maps linear radiance to a display value, and [`quantize_8`], [`quantize_16`] and
+//! [`write_rgba8`] produce 8-bit and 16-bit codes, writing into caller-provided slices.
 
 // The internal modules mark crate-private items `pub`, as `clippy::redundant_pub_crate`
 // asks; the workspace's `unreachable_pub` lint disagrees, and is allowed on those modules.
@@ -30,6 +35,8 @@ mod error;
 #[allow(unreachable_pub)]
 mod hash;
 #[allow(unreachable_pub)]
+mod pixel;
+#[allow(unreachable_pub)]
 mod plane;
 mod point;
 mod sampler;
@@ -40,6 +47,11 @@ pub use camera::{
 };
 pub use error::CameraError;
 pub use hash::{fraction_from_bits, PixelStream, SAMPLE_HASH_ID};
+pub use pixel::{
+    quantize_16, quantize_8, write_rgba8, PixelAccumulator, PixelError, ToneCurve,
+    MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW, RGBA8_OPAQUE_IDENTITY, UNORM16_IDENTITY,
+    UNORM8_IDENTITY,
+};
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use xoroshiro::Xoroshiro128Plus;

@@ -54,6 +54,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::compact::compact_cases());
     #[cfg(feature = "sample")]
     cases.extend(crate::sample::sample_cases());
+    #[cfg(feature = "pixel")]
+    cases.extend(pixel_cases());
     cases
 }
 
@@ -66,6 +68,7 @@ pub(crate) fn all() -> Vec<Case> {
     feature = "scene",
     feature = "trace",
     feature = "sample",
+    feature = "pixel",
     feature = "trace_compact"
 ))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
@@ -349,4 +352,33 @@ fn trace_cases() -> Vec<Case> {
                 .fold(0, i64::wrapping_add)
         }),
     ]
+}
+
+/// One call resolves a pixel of 16 seeded samples (linear radiance up to 2.0 per channel),
+/// applies the sRGB tone curve and writes its RGBA8 bytes: the per-pixel output path.
+#[cfg(feature = "pixel")]
+fn pixel_cases() -> Vec<Case> {
+    use bunny_optics::{write_rgba8, PixelAccumulator, ToneCurve};
+
+    let mut seeds = Seeds(PERF_SEED ^ 0x9222);
+    let pixels = seeds.batch(|s| {
+        let mut pixel = PixelAccumulator::new();
+        for _ in 0..16 {
+            let mut channel = || FixedQ32_32::from_raw((s.next() >> 31).cast_signed());
+            let sample = [channel(), channel(), channel()];
+            pixel.add_sample(sample).unwrap_or_default();
+        }
+        pixel
+    });
+    vec![case("pixel/resolve_srgb_rgba8", move || {
+        let mut out = [0_u8; 4];
+        pixels
+            .iter()
+            .map(|pixel| {
+                let mean = black_box(pixel).resolve().unwrap_or([FixedQ32_32::ZERO; 3]);
+                write_rgba8(&mut out, ToneCurve::SrgbV1, mean).unwrap_or_default();
+                i64::from(u32::from_le_bytes(black_box(out)))
+            })
+            .fold(0, i64::wrapping_add)
+    })]
 }
