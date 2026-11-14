@@ -28,7 +28,8 @@ It also covers `closest_hit`, `any_hit`, `BvhView` and `ClosestHit` in
 - the inclusive distance limit;
 - the search order and each pruning rule;
 - the early stop of `any_hit`;
-- malformed and empty trees.
+- malformed and empty trees, and the interior-visit bound that `closest_hit`,
+  `any_hit`, `intersect_ray` and `intersect_aabb` share (flyingrobots/bunny#269).
 
 The other solvers in `crates/bunny-query/src/ray.rs` keep their own evidence
 and are out of scope. Timing is out of scope until the benchmark cases exist.
@@ -308,7 +309,7 @@ Regenerating them is a contract change.
 | TRACE-TP-403 | Cycles: intersect_ray | TRACE-REQ-030 | intersect_ray on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_403_intersect_ray_refuses_cyclic_buffers` |
 | TRACE-TP-404 | Cycles: intersect_aabb | TRACE-REQ-030 | intersect_aabb on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_404_intersect_aabb_refuses_cyclic_buffers` |
 | TRACE-TP-405 | Shared subtrees | TRACE-REQ-030 | With a query reaching every node, a shared leaf within the budget is searched as the tree it unfolds into (callbacks 0, 1, 0, as the retained functions give); a shared interior node and a 40-node ladder whose unfolding is exponential are InvalidNodeIndex; each is refused exactly when compact_bvh calls it NotATree. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_405_shared_subtrees_are_searched_within_the_budget_and_refused_beyond_it` |
-| TRACE-TP-406 | Differential against the retained functions | TRACE-REQ-030 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, and a 70-level comb, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over thousands of seeded rays and boxes; failures name the seed and case. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback` |
+| TRACE-TP-406 | Differential against the retained functions | TRACE-REQ-030 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, a 70-level comb (deeper than the stack) and a 64-level comb ending in out-of-range children reached with a full stack, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over up to 5 040 seeded queries (a ray with t_max unbounded or up to 15 units, and a box; over 2 500 required); failures name the seed and case. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback` |
 | TRACE-TP-407 | Deliberate guard mutations | TRACE-REQ-030 | Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case. | [Mutation checks](#mutation-checks) |
 
 ```toml
@@ -805,7 +806,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_401_closest_hit_refuses_cyclic_buffers"
 oracle = "closest_hit on four cyclic buffers (node 0 its own left child beside a leaf the ray misses, the same beside a leaf covering everything, a three-node cycle through left children, and a node that is its own right child) returns InvalidNodeIndex with the stated number of primitive calls (none)."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-402"
@@ -814,7 +815,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_402_any_hit_refuses_cyclic_buffers"
 oracle = "any_hit on the four cyclic buffers of TRACE-TP-401 returns InvalidNodeIndex with no primitive call."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-403"
@@ -823,7 +824,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_403_intersect_ray_refuses_cyclic_buffers"
 oracle = "intersect_ray on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise)."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-404"
@@ -832,7 +833,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_404_intersect_aabb_refuses_cyclic_buffers"
 oracle = "intersect_aabb on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise)."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-405"
@@ -841,16 +842,16 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_405_shared_subtrees_are_searched_within_the_budget_and_refused_beyond_it"
 oracle = "With a query reaching every node, a shared leaf within the budget is searched as the tree it unfolds into (callbacks 0, 1, 0, as the retained functions give); a shared interior node and a 40-node ladder whose unfolding is exponential are InvalidNodeIndex; each is refused exactly when compact_bvh calls it NotATree."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-406"
 requirements = ["TRACE-REQ-030"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_406_valid_trees_keep_every_result_and_callback"
-oracle = "On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, and a 70-level comb, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over thousands of seeded rays and boxes; failures name the seed and case."
+oracle = "On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah, the same trees with a seeded leaf range or child index made out of range, a 70-level comb (deeper than the stack) and a 64-level comb ending in out-of-range children reached with a full stack, all four functions return the same result and make the same callback calls (closest_hit: primitive and limit) in the same order as frozen copies of the pre-#269 functions, over up to 5 040 seeded queries (a ray with t_max unbounded or up to 15 units, and a box; over 2 500 required); failures name the seed and case."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-407"
@@ -859,7 +860,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
 oracle = "Removing the guard from each of the four functions makes its cycle case fail or not terminate under a wall-clock limit; a budget one smaller fires on a valid tree and fails an existing case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -945,6 +946,22 @@ killed. That exposed the missing guard, now the interior-visit bound, and the
 dropped-child mutant first failed to compile rather than run; TRACE-TP-306
 gained a case where the nearer leaf's box is entered but its triangle missed.
 
+The interior-visit bound (flyingrobots/bunny#269) was mutated in a container
+checkout of the branch. Each mutant was built once, then each test was run as
+`timeout 120 cargo test --locked -q -p bunny-broadphase ...`, so a search that
+never ends is recorded as caught by exit status 124. `traverse` holds the bound
+for `intersect_aabb` and `intersect_ray`, `Search` for `closest_hit` and
+`any_hit`, so removing one bound removes it from two functions.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Bound removed from `traverse` (`intersect_aabb`, `intersect_ray`; run at `74de0dd`, before the bound moved after the pushes) | A cycle is an error, not an endless loop | TRACE-TP-403, TRACE-TP-404 (did not terminate: 124), TRACE-TP-405 |
+| Bound removed from `Search` (`closest_hit`, `any_hit`) | The same | TRACE-TP-401, TRACE-TP-402 (did not terminate: 124), TRACE-TP-405 |
+| `traverse` budget one smaller (`(n / 2).saturating_sub(1)`) | A tree never reaches the bound | existing: `bvh_tests::test_bvh_build_and_traverse`, `bvh_allocation_tests`, `bvh_sah_tests` TP-009 and TP-010; new: TRACE-TP-403 to 406 |
+| `Search` budget one smaller | The same | existing: TRACE-TP-107, 108, 109, 301 and the `closest_hit` doctest; new: TRACE-TP-405, 406 |
+| Both budgets one larger (`n / 2 + 1`) | The bound is tight | TRACE-TP-403, 404, 405 |
+| `traverse` spends the visit before pushing the children | A tree's own errors come first | TRACE-TP-406 (the truncated comb) |
+
 The rewritten box test (flyingrobots/bunny#258) was checked the same way in a container
 copy of the final source, running `box_entry_equivalence_tests`, `trace_tests`,
 `closest_hit_tests` and the `bunny-perf` scene test `TRACE-TP-311`. Every mutation made at
@@ -1010,6 +1027,8 @@ Current tests cover:
 - trees of different shapes over the same primitives, including a single leaf;
 - empty trees, dangling child indices and leaf ranges past the primitive
   buffer;
+- cyclic buffers (a node that is its own left or right child, a three-node
+  cycle) and shared subtrees within and beyond the interior-visit bound;
 - primitive tests that report distances beyond the limit or below zero.
 - for `box_entry` against its retained reference: box coordinates at and near
   `i64::MIN` and `i64::MAX`, inverted boxes, faces through the origin,
@@ -1049,4 +1068,3 @@ case with a stable test name.
 | A tree builder tuned for ray tracing; the traversals run on `build_bvh` trees today. | flyingrobots/bunny#213. |
 | Closest-point-to-mesh queries and committed mesh fixture data. | Remaining scope of flyingrobots/bunny#123. |
 | Canonical hit record, plane, segment, capsule and OBB intersections. | Remaining scope of flyingrobots/bunny#159. |
-| `closest_hit`, `any_hit` and `intersect_ray` on a malformed `BvhNode` buffer whose child index names an ancestor can loop without filling the stack (the compact searches bound their visits; these do not). | A guard in the existing traversals; not in scope of flyingrobots/bunny#215. |
