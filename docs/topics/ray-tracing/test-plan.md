@@ -355,7 +355,7 @@ Regenerating them is a contract change.
 | TRACE-TP-412 | Hand-counted trees | TRACE-REQ-033 | Hand-derived counts, written out in the test, on an empty tree (all zero), a one-leaf root of three primitives, a ray missing the root box, a root over two leaves where the nearer hit prunes the farther (one popped_skipped), where the nearer leaf is entered but missed (both leaves visited), where the ray enters the root but neither child, a three-level tree whose nearer subtree's hit skips the farther interior subtree at its pop, and compact_any_hit stopping at its first primitive test. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values` |
 | TRACE-TP-413 | Counts against a recursive reference | TRACE-REQ-033 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah and seeded rays (t_max unbounded and at the nearest hit), the counts and the primitive calls of both counted searches equal those of a recursive search written in the test that shares no code with the loop (it tracks the stack depth as pending siblings); failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_413_counts_equal_a_recursive_reference_search` |
 | TRACE-TP-414 | Counted and uncounted searches agree | TRACE-REQ-033 | On the trees of TRACE-TP-413 and on seeded corruptions of them (a child reference out of range or naming an ancestor, a leaf range past the buffer), and on a 70-level chain past the stack, both counted searches return the uncounted search's result or error and make the same primitive calls (closest: primitive and limit) in the same order; failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_414_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees` |
-| TRACE-TP-415 | The benchmark scene's profile | TRACE-REQ-033 | On all 1 024 benchmark rays, the counts of both counted searches on the compact copy of the scene's tree equal the profile replica's box_calls, box_some, skipped_at_pop, interior_visited, leaf_visited, tri_tests and stack_peak for the same ray. | `crates/bunny-perf/src/profile.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray` |
+| TRACE-TP-415 | The benchmark scene's profile | TRACE-REQ-033 | On all 1 024 benchmark rays, the counts of both counted searches on the compact copy of the scene's tree equal the profile replica's box_calls, box_some, skipped_at_pop, interior_visited, leaf_visited, tri_tests and stack_peak for the same ray. | `crates/bunny-perf/src/counted.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray` |
 | TRACE-TP-416 | Adding counts | TRACE-REQ-033 | Adding two TraversalCounts sums each counter, saturating at u64::MAX, and keeps the larger peak_stack; += agrees with +. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_416_adding_counts_sums_saturates_and_keeps_the_peak` |
 | TRACE-TP-417 | Deliberate counting mutations | TRACE-REQ-033 | A box test not counted, a rejected box counted as entered, a skipped pop counted as a visit, a leaf counted twice, the last primitive test of a leaf not counted, the peak not tracked and the counted search pruning differently from the uncounted one (`<=` made `<` for the counting tally only) each make a case fail. | [Mutation checks](#counting-mutation-checks) |
 
@@ -988,7 +988,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values"
 oracle = "Constructed: counts derived by hand from the search order for each tree."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-413"
@@ -997,7 +997,7 @@ evidence = "property"
 test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_413_counts_equal_a_recursive_reference_search"
 oracle = "Retained reference: an independent recursive search with its own counters."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-414"
@@ -1006,13 +1006,13 @@ evidence = "property"
 test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_414_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees"
 oracle = "Differential: the uncounted function, whose results the compact tests tie to closest_hit and a test of every primitive."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-415"
 requirements = ["TRACE-REQ-033"]
 evidence = "test"
-test = "crates/bunny-perf/src/profile.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray"
+test = "crates/bunny-perf/src/counted.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray"
 oracle = "Retained reference: the profile replica, itself checked against closest_hit and any_hit on every ray."
 tier = "fast"
 status = "planned"
@@ -1024,7 +1024,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_416_adding_counts_sums_saturates_and_keeps_the_peak"
 oracle = "Constructed: exact sums and maxima."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRACE-TP-417"

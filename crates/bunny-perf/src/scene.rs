@@ -190,13 +190,13 @@ pub(crate) fn visitor_cases() -> Vec<Case> {
     })]
 }
 
-#[cfg(any(feature = "trace", feature = "trace_compact", feature = "trace_counted"))]
+#[cfg(any(feature = "trace", feature = "trace_compact"))]
 pub(crate) fn trace_rays() -> Vec<bunny_query::TraceRay> {
     let (origin, directions) = camera();
     directions.iter().filter_map(|&d| bunny_query::TraceRay::new(origin, d)).collect()
 }
 
-#[cfg(any(feature = "trace", feature = "trace_compact", feature = "trace_counted"))]
+#[cfg(any(feature = "trace", feature = "trace_compact"))]
 pub(crate) fn trace_triangles(scene: &Scene) -> Vec<bunny_query::TraceTriangle> {
     scene
         .triangles

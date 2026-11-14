@@ -22,6 +22,9 @@ buffer is large enough for the requested operation.
 * A compact copy of a built tree for ray traversal (`compact_bvh`), whose
   nodes hold both children's boxes, searched by `compact_closest_hit` and
   `compact_any_hit` with the same calls and answers as the searches above.
+* Counted forms of the compact searches (`compact_closest_hit_counted`,
+  `compact_any_hit_counted`) that also return a `TraversalCounts` record of
+  the box tests, visits and primitive tests one search made.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 

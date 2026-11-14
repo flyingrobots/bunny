@@ -15,8 +15,6 @@ mod box_entry_reference;
 mod cases;
 #[cfg(feature = "trace_compact")]
 mod compact;
-#[cfg(feature = "trace_counted")]
-mod counted;
 #[cfg(feature = "trace")]
 mod memory;
 #[cfg(feature = "normals")]
@@ -29,7 +27,6 @@ mod sample;
     feature = "scene",
     feature = "trace",
     feature = "trace_compact",
-    feature = "trace_counted",
     feature = "build",
     feature = "sah"
 ))]
