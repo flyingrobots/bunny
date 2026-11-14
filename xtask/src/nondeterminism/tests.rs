@@ -373,6 +373,10 @@ const WAIVABLE: &[(&str, &str)] = &[
     ("std-env", "pub fn f() { let _ = std::env::var(\"X\"); }"),
     ("std-fs", "pub fn f() { let _ = std::fs::read(\"x\"); }"),
     ("std-process", "pub fn f() -> u32 { std::process::id() }"),
+    ("macro-metavariable", "macro_rules! m { ($t:ident) => { std::time::$t::now() }; }"),
+    ("host-cpu", "pub fn f() -> bool { is_x86_feature_detected!(\"avx2\") }"),
+    ("host-platform", "pub fn f(_t: &dyn std::os::unix::thread::JoinHandleExt) {}"),
+    ("unclassified-std", "pub fn f() { let _ = std::hostinfo::name(); }"),
 ];
 
 fn waived_source(waiver: &str, offending: &str) -> String {
@@ -467,6 +471,10 @@ pub(super) const FAMILY: &[&str] = &[
     "include-source",
     "include-data",
     "host-input",
+    "macro-metavariable",
+    "host-cpu",
+    "host-platform",
+    "unclassified-std",
 ];
 
 #[test]
