@@ -211,5 +211,6 @@ fn trace_tp_203_extreme_domain_values_agree() {
             crossed += usize::from(assert_same_around(&ray, &triangle));
         }
     }
-    assert!(crossed > 0, "some extreme cases must cross");
+    // TRACE-TP-005 counts the same three crossings with an independent oracle.
+    assert_eq!(crossed, 3, "extreme cases that cross");
 }

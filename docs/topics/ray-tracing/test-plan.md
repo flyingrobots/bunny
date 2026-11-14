@@ -241,6 +241,21 @@ own entry bound and its two neighbours, where the limit decides the answer. Seed
 `0xB002_0258_0000_0001` (seeded cases) and `0xB002_0258_0000_0002` (extremes);
 `TRACE-TP-308` replays the corpus of `TRACE-TP-007` with its own seed.
 
+`TRACE-TP-315` checks `hit_triangle` against `crates/bunny-query/tests/support/volume_oracle.rs`,
+which decides a crossing from the signs of the three volumes `det[a - o, b - o, d]`, one per
+edge, and the distance from the plane equation, in a 256-bit integer with a bit-by-bit floor
+division. It computes none of the kernel's Moller-Trumbore quantities and shares no code with
+the kernel or the frozen copy; the kernel's `u`, `v` and `det` follow from the volumes by
+expanding the triple products. `TRACE-TP-005` uses it too. The corpus (`EDGE_ORACLE_SEED`,
+`0xB002_7ACE_0294_0001`, 40 000 cases, about 1.8 s in a debug build) solves one origin
+coordinate so that a chosen edge numerator is exactly `-3` to `3`, or aims through a vertex, an
+edge midpoint or a raw unit or two from one. With the fixed seed it reaches 15 565 hits, 1 564,
+1 548 and 1 596 on the three edges, 7 001 on a vertex, 200, 204 and 210 misses one or two
+units past each edge, 10 924 in the extreme families (8 947 of them on an edge or vertex), 642
+grazing hits, 7 783 front and 7 782 back hits, 2 048 degenerate triangles and 914 parallel
+rays. A separate exact Python model of the same generator and oracle gives the same counts.
+The test asserts a floor of about 75 % of each.
+
 The golden vectors in `TRACE-TP-009` and `TRACE-TP-010` are hand computed; the
 comments beside each case give the exact value the floor is taken of.
 Regenerating them is a contract change.
@@ -253,7 +268,7 @@ Regenerating them is a contract change.
 | TRACE-TP-002 | Constructed misses | TRACE-REQ-004 | Rays through points just outside each edge, and rays starting past the triangle, must miss. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_002_points_outside_the_triangle_or_behind_the_ray_miss` |
 | TRACE-TP-003 | Inclusive distance limits | TRACE-REQ-006, TRACE-REQ-008 | A hit at exactly 5.0 is reported for limits 5.0..=5.0 and refused for limits one raw unit away. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_003_distance_limits_are_inclusive` |
 | TRACE-TP-004 | Shared-edge watertightness | TRACE-REQ-005 | A ray through the diagonal of a split quad hits both halves; a ray elsewhere hits exactly one. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_004_a_shared_edge_never_leaks` |
-| TRACE-TP-005 | Extreme domain values | TRACE-REQ-009 | Triangles and rays at the corners of the domain run under overflow-checked test arithmetic without panicking, and a triangle hit implies its bounds are accepted. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_005_extreme_domain_values_do_not_overflow` |
+| TRACE-TP-005 | Extreme domain values | TRACE-REQ-009 | Triangles and rays at the corners of the domain run under overflow-checked test arithmetic without panicking and equal the signed-volume oracle of TRACE-TP-315; exactly 3 of the 32 cases hit, and each hit's bounds are accepted. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_005_extreme_domain_values_do_not_overflow` |
 | TRACE-TP-006 | Domain refusal | TRACE-REQ-001 | Values one raw unit past each bound return None; values at each bound are accepted; vertices round-trip. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_006_values_outside_the_trace_domain_are_refused` |
 | TRACE-TP-007 | Box bound against an exact oracle | TRACE-REQ-002, TRACE-REQ-003 | An exact rational slab test over 40 000 seeded rays and boxes: every reached box is accepted, the bound is at or below the floored exact entry and within the stated slack, and many missed boxes are rejected. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_007_box_entry_never_rejects_a_box_the_ray_reaches` |
 | TRACE-TP-008 | Box distance limit | TRACE-REQ-002, TRACE-REQ-006 | An entry at exactly 4.0 is accepted for t_max 4.0 and rejected one raw unit below; negative t_max, boxes behind the ray and an origin inside the box behave as stated. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_008_box_entry_respects_the_distance_limit` |
@@ -288,7 +303,7 @@ Regenerating them is a contract change.
 | TRACE-TP-110 | Deliberate traversal mutations | TRACE-REQ-021, TRACE-REQ-024, TRACE-REQ-025 | Each pruning, ordering or stop rule, broken on purpose, makes at least one traversal case fail. | [Mutation checks](#mutation-checks) |
 | TRACE-TP-201 | Seeded limits around the true distance | TRACE-REQ-027 | Over 30 000 seeded rays aimed at seeded triangles in five size classes (unit scale, det below 2^32, full domain budgets), hit_triangle equals the frozen reference at upper and lower limits equal to the true distance, one and two raw units below, one above, 0, -1, 1, i64::MIN, i64::MAX and i64::MAX - 1; each class has over 2 000 crossings. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_201_seeded_limits_around_the_true_distance_agree` |
 | TRACE-TP-202 | Whole distances with det a multiple of 2^32 | TRACE-REQ-027 | Rays falling straight onto a fixed triangle at whole raw distances, where det is a multiple of 2^32, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_202_exact_distances_at_the_limit_agree` |
-| TRACE-TP-203 | Extreme domain values against the reference | TRACE-REQ-027 | The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree` |
+| TRACE-TP-203 | Extreme domain values against the reference | TRACE-REQ-027 | The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits; exactly 3 of the 32 cross, as TRACE-TP-005 counts. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree` |
 | TRACE-TP-204 | det at and just past multiples of 2^32 | TRACE-REQ-027 | Raw-unit triangles hit at a corner with det exactly 2^32, 3 * 2^32, 2^32 + 1 (641 * 6 700 417) and 1 equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_204_determinants_at_multiples_of_2_pow_32_agree` |
 | TRACE-TP-205 | The benchmark scene's triangle tests | TRACE-REQ-027 | Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance. | `crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal` |
 | TRACE-TP-301 | Brute-force and source agreement | TRACE-REQ-028, TRACE-REQ-021, TRACE-REQ-025 | On seeded scenes of 2, 3, 5, 17, 64 and 600 triangles (3 500 rays in all), compact_closest_hit and compact_any_hit make the same primitive calls with the same limits in the same order, and return the same results, as closest_hit and any_hit on the source tree, which equal a test of every triangle; each scene has hits and misses. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_301_compact_searches_equal_the_source_tree_and_every_primitive` |
@@ -305,6 +320,8 @@ Regenerating them is a contract change.
 | TRACE-TP-312 | Deliberate mutations of the faster box test | TRACE-REQ-029 | Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-308 to TRACE-TP-311 fail. | [Mutation checks](#mutation-checks) |
 | TRACE-TP-313 | Exact numerators of constructed hits | TRACE-REQ-030 | 4 000 seeded constructed hits (as in TRACE-TP-001, small triangles near the origin and large ones near the domain limit) through the point with weights `(b, c) / 64`: `64 u = b det` and `64 v = c det` exactly, `det < 2^117`, and `BarycentricNumerators::new` accepts the returned values unchanged. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_313_numerators_are_the_exact_weights_of_constructed_hits` |
 | TRACE-TP-314 | Numerators off the triangle | TRACE-REQ-030 | `new` accepts the corners, an interior point and `det = i128::MAX`, and refuses `det <= 0`, a negative `u` or `v`, `u + v > det` and a `u + v` that overflows. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the_triangle_are_refused` |
+| TRACE-TP-315 | Independent near-edge oracle | TRACE-REQ-004, TRACE-REQ-005, TRACE-REQ-008, TRACE-REQ-009, TRACE-REQ-030 | 40 000 generated cases concentrated on and within three numerator units of each edge and vertex, in raw-unit, scaled (numerators near 2^107), domain-corner and long-direction (components near 2^32, grazing) families, with degenerate triangles: hit or miss, floor distance, facing and exact numerators equal a signed-volume oracle in 256-bit integers that shares no formula with the kernel. Minimum counts of hits, hits on each edge, vertex hits, misses one or two units past each edge, extreme-family hits, grazing hits, both facings, degenerate and parallel cases are asserted. | `crates/bunny-query/tests/trace_edge_oracle_tests.rs::trace_tp_315_hits_near_edges_and_vertices_match_a_signed_volume_oracle` |
+| TRACE-TP-316 | Edge-oracle mutations | TRACE-REQ-004, TRACE-REQ-005, TRACE-REQ-008 | Each edge comparison relaxed or made strict, the distance rounded to nearest, and the facing inverted, each make TRACE-TP-315 fail. | [Edge-oracle mutation checks](#edge-oracle-mutation-checks) |
 
 ```toml
 [[case]]
@@ -348,7 +365,7 @@ id = "TRACE-TP-005"
 requirements = ["TRACE-REQ-009"]
 evidence = "test"
 test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_005_extreme_domain_values_do_not_overflow"
-oracle = "Triangles and rays at the corners of the domain run under overflow-checked test arithmetic without panicking, and a triangle hit implies its bounds are accepted."
+oracle = "Overflow-checked test arithmetic, the signed-volume oracle on all 32 corner cases, exactly 3 hits, and each hit's bounds accepted."
 tier = "fast"
 status = "implemented"
 
@@ -663,7 +680,7 @@ id = "TRACE-TP-203"
 requirements = ["TRACE-REQ-027"]
 evidence = "test"
 test = "crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree"
-oracle = "The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits."
+oracle = "The domain-corner cases of TRACE-TP-005 equal the frozen reference at the same limits; exactly 3 of the 32 cross."
 tier = "fast"
 status = "implemented"
 
@@ -810,6 +827,24 @@ test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the
 oracle = "Specified: the conditions of the exact triangle test."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-315"
+requirements = ["TRACE-REQ-004", "TRACE-REQ-005", "TRACE-REQ-008", "TRACE-REQ-009", "TRACE-REQ-030"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_edge_oracle_tests.rs::trace_tp_315_hits_near_edges_and_vertices_match_a_signed_volume_oracle"
+oracle = "Derived: an independent signed-volume formulation in 256-bit integers with its own floor division, over cases at and next to every edge and vertex."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-316"
+requirements = ["TRACE-REQ-004", "TRACE-REQ-005", "TRACE-REQ-008"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#edge-oracle-mutation-checks"
+oracle = "Each edge, distance-rounding and facing rule, broken on purpose, makes TRACE-TP-315 fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -924,6 +959,27 @@ case that existed before #258; only the equivalence corpora `TRACE-TP-309` and
 outright, which left an unused-parentheses lint that `deny(warnings)` turned into a build
 error, so no test ran; it was redone as the comparison change above.
 
+### Edge-Oracle Mutation Checks
+
+Each rule below was broken in a container copy of `trace.rs`, the sources were touched, and
+`timeout 120 cargo test --locked --no-fail-fast` was run. "Before" is `main` without
+`TRACE-TP-315`, running the `bunny-query`, `bunny-broadphase` and `bunny-optics` tests; "after"
+is this plan, running the `bunny-query` tests. The restored source passes both.
+
+| Mutation in `hit_triangle` | Before: failing cases | After: failing cases |
+| --- | --- | --- |
+| All three edges relaxed by one unit (`-1..=det`, `v < -1`, `u + v > det + 1`) | TRACE-TP-201 only (the frozen copy) | TRACE-TP-315, TRACE-TP-201 |
+| `0..=det` made `1..=det` for `u` | TRACE-TP-001, 004, 201, 204 | adds TRACE-TP-315 |
+| `0..=det` made `0..det` for `u` | TRACE-TP-001, 004, 009, 201 | adds TRACE-TP-315 |
+| `v < 0` made `v <= 0` | TRACE-TP-001, 004, 009, 201, 204; OPTICS-TP-046, 060, 079 | adds TRACE-TP-315 |
+| `u + v > det` made `u + v >= det` | TRACE-TP-001, 004, 009, 201, 203 | adds TRACE-TP-315, TRACE-TP-005 |
+| Distance rounded to nearest instead of floored | TRACE-TP-201, 204; OPTICS-TP-046 | adds TRACE-TP-315 |
+| `front_face` inverted | TRACE-TP-001, 003, 009, 201 to 204; 12 optics cases | adds TRACE-TP-315, TRACE-TP-005 |
+
+Before `TRACE-TP-315`, the relaxed edges and the rounded distance were caught only by tests
+that compare the kernel with its own frozen copy (and, for the distance, one optics golden
+case).
+
 ## Determinism Obligations And Evidence
 
 The kernels, the traversals and their tests use only integer arithmetic: `i64`, `u64`, `i128`
@@ -987,6 +1043,10 @@ traversal cases over 1 500 to 3 000 rays each.
 `TRACE-TP-309` (300 000 cases) and `TRACE-TP-310` (a 42 525-case sweep and 200 000 seeded
 cases) compare `box_entry` with its retained reference at ten limits each; their failure
 messages name the case index, the ray, the box and the limit.
+
+`TRACE-TP-315` compares `hit_triangle` with the signed-volume oracle over 40 000 seeded
+cases; its failure message names the seed, the case index, the ray and the triangle. It has
+no shrinking.
 
 Every minimized fuzz failure must become a committed deterministic regression
 case with a stable test name.
