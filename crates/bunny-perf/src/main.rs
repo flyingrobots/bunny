@@ -8,6 +8,10 @@
 //! sets the number of timed batches per case (default 101); `--stats` prints the traversal
 //! counters and tree shape of the benchmark scene as Markdown instead of timing anything.
 
+// The retained pre-#258 box test, shared with bunny-query's equivalence tests.
+#[cfg(all(test, feature = "trace"))]
+#[path = "../../bunny-query/tests/support/box_entry_reference.rs"]
+mod box_entry_reference;
 mod cases;
 #[cfg(feature = "trace_compact")]
 mod compact;

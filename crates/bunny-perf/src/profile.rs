@@ -739,6 +739,33 @@ mod tests {
         assert_eq!(bad, Vec::<usize>::new());
     }
 
+    /// TRACE-TP-311: every box test the benchmark's 1 024 `closest_hit` and `any_hit`
+    /// searches make returns the same `Option` as the retained pre-#258 box test, at the
+    /// recorded limit and at the limits that decide each answer.
+    #[test]
+    fn every_recorded_box_test_matches_the_reference_box_test() {
+        use crate::box_entry_reference;
+        let rig = Rig::new();
+        let (mut compared, mut reached) = (0_usize, 0_usize);
+        for ray in &rig.rays {
+            let mut boxes = walk(&rig, ray, Mode::Closest).boxes;
+            boxes.extend(walk(&rig, ray, Mode::Any).boxes);
+            for (node, limit) in boxes {
+                let node = rig.scene.nodes.get(node as usize).expect("recorded nodes exist");
+                let entry = box_entry_reference::box_entry(ray, &node.bounds, FAR);
+                let decisive = entry.map_or(0, FixedQ32_32::raw);
+                let limits = [limit.raw(), FAR.raw(), 0, -1, decisive, decisive.saturating_sub(1)];
+                for limit in limits.map(FixedQ32_32::from_raw) {
+                    let expected = box_entry_reference::box_entry(ray, &node.bounds, limit);
+                    assert_eq!(ray.box_entry(&node.bounds, limit), expected, "{ray:?} {node:?}");
+                }
+                compared += 1;
+                reached += usize::from(entry.is_some());
+            }
+        }
+        assert!(compared > 30_000 && reached > 10_000, "{compared} tests, {reached} reached");
+    }
+
     #[test]
     fn counters_obey_their_identities() {
         let rig = Rig::new();

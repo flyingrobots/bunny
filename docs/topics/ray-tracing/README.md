@@ -126,6 +126,27 @@ value and each upper bound is above its exact value. Therefore:
 The box test needs no division at query time: one multiplication and one shift
 per slab plane.
 
+How the implementation computes this (flyingrobots/bunny#258; the results are
+bit for bit those of the earlier `i128` version, which the tests keep as a
+reference oracle):
+
+- **Differences in `i64`.** For a negative direction component, bitwise not
+  (`!x = -x - 1`) reverses the order of `i64` and keeps `!a - !b = b - a`, so
+  the slab becomes one crossed forwards: the box test applies `!` to the
+  origin and the slab's planes on such axes. A signed comparison then decides
+  whether a plane is ahead of the origin, and the difference of two `i64`
+  values `a >= b` lies in `0..2^64`, so the wrapping `i64` subtraction read as
+  `u64` is exact for any box coordinates, including the ends of the `i64`
+  range.
+- **Parallel axes in the same path.** A zero component is treated as a forward
+  crossing whose reciprocal is zero: its far-plane check is `origin <= max`, a
+  near plane ahead of the origin (`min > origin`) rejects, its lower bound is
+  0 and its upper bound saturates to `u64::MAX`.
+- **Straight-line code.** All three axes, both bounds and the comparison with
+  `t_max` are computed without early returns and combined into one validity
+  flag, so the test has no data-dependent branch of its own; arithmetic on a
+  rejected axis cannot overflow and its result is discarded.
+
 ## Exact Triangle Test
 
 `TraceRay::hit_triangle(triangle, t_min, t_max)` decides exactly whether the

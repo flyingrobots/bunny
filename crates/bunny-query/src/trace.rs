@@ -80,18 +80,23 @@ impl TraceRay {
     /// box the ray reaches; it may return a bound for a box the ray narrowly misses.
     #[must_use]
     #[inline]
+    // `&` on the flags keeps the test free of data-dependent branches (ledger entry 10).
+    #[allow(clippy::needless_bitwise_bool)]
     pub fn box_entry(&self, aabb: &FixedAabb3, t_max: FixedQ32_32) -> Option<FixedQ32_32> {
-        let limit = u64::try_from(t_max.raw()).ok()?;
         let lines = map2(self.origin, self.direction, pair);
         let bounds = map2(raw3(aabb.min), raw3(aabb.max), pair);
-        let [x, y, z] = map2(map2(lines, self.reciprocal, pair), bounds, slab);
-        let (x, y, z) = (x?, y?, z?);
-        let enter = x.0.max(y.0).max(z.0);
-        let exit = x.1.min(y.1).min(z.1);
-        if enter > exit || enter > limit {
-            return None;
-        }
-        i64::try_from(enter).ok().map(FixedQ32_32::from_raw)
+        // Straight-line integer work with one validity flag: no axis returns early, so the
+        // only branch is the caller's on the result.
+        let [x, y, z] = map2(lines, bounds, offsets);
+        let planes = map2([x, y, z], self.reciprocal, pair);
+        let [lx, ly, lz] = planes.map(|((near, _, _), reciprocal)| scaled(near, reciprocal));
+        let [ux, uy, uz] = map2(planes, self.direction, upper);
+        let enter = lx.max(ly).max(lz);
+        let exit = ux.min(uy).min(uz);
+        let limit = t_max.raw();
+        let valid = x.2 & y.2 & z.2 & (limit >= 0) & (enter <= limit.cast_unsigned());
+        // `enter <= limit <= i64::MAX` when valid, so it converts exactly.
+        (valid & (enter <= exit)).then(|| FixedQ32_32::from_raw(enter.cast_signed()))
     }
 
     /// Exact ray–triangle test over distances `t_min..=t_max`.
@@ -240,24 +245,38 @@ const fn pair<A, B>(lhs: A, rhs: B) -> (A, B) {
     (lhs, rhs)
 }
 
-/// Bounds `(lower, upper)` on the distances at which a ray is inside one axis slab, from the
-/// ray's `(origin, direction)` on that axis, its reciprocal and the slab's `(min, max)`.
+/// The raw coordinate distances `(near, far)` from the origin to one axis slab's planes, in
+/// the direction of travel, from the ray's `(origin, direction)` on that axis and the slab's
+/// `(min, max)`; a near plane behind the origin counts as zero. The flag is false when the
+/// slab rules the box out, and the distances are then meaningless.
 #[inline]
-fn slab(
-    ((origin, direction), reciprocal): ((i64, i64), u64),
-    bounds: (i64, i64),
-) -> Option<(u64, u64)> {
-    let origin = i128::from(origin);
-    let (min, max) = (i128::from(bounds.0), i128::from(bounds.1));
-    if direction == 0 {
-        return (min <= origin && origin <= max).then_some((0, u64::MAX));
-    }
-    let (near, far) =
-        if direction > 0 { (min - origin, max - origin) } else { (origin - max, origin - min) };
-    // A negative far plane is behind the origin. Both differences fit `u64`.
-    let far = u64::try_from(far).ok()?;
-    let near = u64::try_from(near).unwrap_or(0);
-    Some((scaled(near, reciprocal), scaled(far, reciprocal + 1).saturating_add(1)))
+// `&` keeps the flag free of a data-dependent branch, as in `box_entry`.
+#[allow(clippy::needless_bitwise_bool)]
+const fn offsets((origin, direction): (i64, i64), (min, max): (i64, i64)) -> (u64, u64, bool) {
+    // Against a negative direction, `!` (which reverses the order of `i64` and keeps
+    // `!a - !b == b - a`) turns the slab into one crossed forwards. A zero component is
+    // treated as forwards too.
+    let flip = direction >> 63;
+    let (near, far) = if direction < 0 { (max, min) } else { (min, max) };
+    let (origin, near, far) = (origin ^ flip, near ^ flip, far ^ flip);
+    // A far plane behind the origin rejects the box; so does a near plane ahead of it when
+    // the ray runs parallel to the slab.
+    let ahead = near > origin;
+    let valid = (far >= origin) & !((direction == 0) & ahead);
+    // A difference `a - b` with `a >= b` lies in `0..2^64`, so the wrapping `i64` difference
+    // read as `u64` is exact.
+    let far = far.wrapping_sub(origin).cast_unsigned();
+    let near = if ahead { near.wrapping_sub(origin).cast_unsigned() } else { 0 };
+    (near, far, valid)
+}
+
+/// The slab upper bound `floor(far * (r + 1) / 2^31) + 1`, saturating, from the slab's
+/// offsets, its reciprocal `r` and the direction component. A parallel axis (whose
+/// reciprocal is zero) gets `u64::MAX`.
+#[inline]
+fn upper(((_, far, _), reciprocal): ((u64, u64, bool), u64), direction: i64) -> u64 {
+    let step = if direction == 0 { u64::MAX } else { 1 };
+    scaled(far, reciprocal + 1).saturating_add(step)
 }
 
 /// `floor(2^63 / |d|)`, or zero for a zero component.
