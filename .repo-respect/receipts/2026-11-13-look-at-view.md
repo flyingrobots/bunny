@@ -53,8 +53,17 @@ diagonal rows were cross-checked beforehand against an independent decimal refer
 Mutation: making `checked_negate` return its input (camera looks down +Z instead of -Z) failed 4
 of 7 tests (MT-TP-023, 024, 025, 026); reverted.
 
+At the last code commit, via devrun: `cargo test --locked --workspace` (--commit HEAD) passed
+(55 test binaries ok); `code-dojo --all` (--history origin/main..HEAD --network) reported
+"full gate clean". Earlier gate runs failed on rustfmt layout, clippy (const fn, single-character
+bindings, is_multiple_of); fixed in follow-up commits. The gate compiles the core crates for
+wasm32-unknown-unknown but the wasm_bindgen_test suite was not executed in a browser or runtime.
+
 Known risks:
-Pending until the final commit.
+`ParallelUp` is exact: a nearly parallel up vector is accepted and its roll is rounding noise.
+`Overflow` covers only translation entries (eye coordinates near the Q32.32 limits).
+The 2 raw unit bounds are derived analytically and checked by a seeded property, not proven by
+exhaustive search.
 
 Human reviewer:
 Pending.
