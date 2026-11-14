@@ -7,7 +7,9 @@
 use std::hint::black_box;
 
 #[cfg(feature = "query")]
-use bunny_geom::{FixedAabb3, FixedRay3, FixedSphere3};
+use bunny_geom::FixedSphere3;
+#[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
+use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
@@ -34,6 +36,10 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(linalg_cases());
     #[cfg(feature = "query")]
     cases.extend(query_cases());
+    #[cfg(feature = "prepared")]
+    cases.extend(prepared_cases());
+    #[cfg(feature = "trace")]
+    cases.extend(trace_cases());
     #[cfg(feature = "angle")]
     cases.extend(angle_cases());
     #[cfg(feature = "scene")]
@@ -47,7 +53,15 @@ pub(crate) fn all() -> Vec<Case> {
     cases
 }
 
-#[cfg(any(feature = "scene", feature = "trace"))]
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "angle",
+    feature = "prepared",
+    feature = "scene",
+    feature = "trace"
+))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }
 }
@@ -172,7 +186,7 @@ fn query_cases() -> Vec<Case> {
 }
 
 /// A ray from `origin` aimed at `target`, or `None` when they coincide.
-#[cfg(feature = "query")]
+#[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
 fn ray_toward(origin: FixedVec3, target: FixedVec3) -> Option<FixedRay3> {
     FixedRay3::try_new(origin, target - origin).ok()
 }
@@ -197,7 +211,7 @@ fn unit_sphere() -> FixedSphere3 {
     )
 }
 
-#[cfg(feature = "query")]
+#[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
 fn unit_box() -> FixedAabb3 {
     let one = FixedQ32_32::ONE;
     FixedAabb3::new(FixedVec3::new(-one, -one, -one), FixedVec3::new(one, one, one))
@@ -210,6 +224,48 @@ fn triangle() -> [FixedVec3; 3] {
         FixedVec3::new(-one, -one, zero),
         FixedVec3::new(one, -one, zero),
         FixedVec3::new(zero, one, zero),
+    ]
+}
+
+/// Exact division by a prepared divisor, and a prepared ray against the same boxes and rays
+/// as `query/ray_aabb`, so the two cases compare directly.
+#[cfg(feature = "prepared")]
+fn prepared_cases() -> Vec<Case> {
+    use bunny_num::FixedDivisor;
+    use bunny_query::{ray_intersects_aabb_prepared, PreparedRay3};
+
+    let mut seeds = Seeds(PERF_SEED);
+    let pairs = seeds.batch(|s| (s.fixed(1000), FixedDivisor::new(s.fixed(1000))));
+    let mut seeds = Seeds(PERF_SEED ^ 0x0E77);
+    let _ = seeds.batch(|s| (s.vec3(10), s.vec3(10)));
+    let rays = seeds.batch(|s| ray_toward(s.vec3(10), s.vec3(1)));
+    let prepared: Vec<Option<PreparedRay3>> =
+        rays.iter().map(|r| r.map(PreparedRay3::new)).collect();
+    vec![
+        case("prepared/div", move || {
+            pairs
+                .iter()
+                .map(|&(a, d)| {
+                    d.and_then(|d| d.checked_div(black_box(a))).map_or(0, FixedQ32_32::raw)
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+        case("prepared/ray_prepare", move || {
+            rays.iter()
+                .flatten()
+                .map(|&r| PreparedRay3::new(black_box(r)).ray().origin.x.raw())
+                .fold(0, i64::wrapping_add)
+        }),
+        case("prepared/ray_aabb", move || {
+            prepared
+                .iter()
+                .flatten()
+                .map(|r| {
+                    ray_intersects_aabb_prepared(black_box(r), &unit_box())
+                        .map_or(0, |(t, _)| t.raw())
+                })
+                .fold(0, i64::wrapping_add)
+        }),
     ]
 }
 
@@ -249,6 +305,40 @@ fn angle_cases() -> Vec<Case> {
                 .map(|&a| {
                     let (sin, cos) = black_box(black_box(a).sin_cos());
                     (sin * 4_294_967_296.0) as i64 ^ (cos * 4_294_967_296.0) as i64
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+    ]
+}
+
+/// The conservative trace-kernel box test on the same rays and box as `query/ray_aabb` and
+/// `prepared/ray_aabb`, so the three compare directly.
+#[cfg(feature = "trace")]
+fn trace_cases() -> Vec<Case> {
+    use bunny_query::TraceRay;
+
+    let mut seeds = Seeds(PERF_SEED ^ 0x0E77);
+    let _ = seeds.batch(|s| (s.vec3(10), s.vec3(10)));
+    let rays = seeds.batch(|s| ray_toward(s.vec3(10), s.vec3(1)));
+    let prepared: Vec<Option<TraceRay>> =
+        rays.iter().map(|r| r.as_ref().and_then(TraceRay::from_ray)).collect();
+    let t_max = FixedQ32_32::from_raw(100 << 32);
+    vec![
+        case("trace/box_ray_prepare", move || {
+            rays.iter()
+                .flatten()
+                .map(|r| {
+                    black_box(TraceRay::from_ray(black_box(r))).map_or(0, |t| t.origin().x.raw())
+                })
+                .fold(0, i64::wrapping_add)
+        }),
+        case("trace/box_entry", move || {
+            prepared
+                .iter()
+                .flatten()
+                .map(|r| {
+                    black_box(black_box(r).box_entry(&unit_box(), t_max))
+                        .map_or(0, FixedQ32_32::raw)
                 })
                 .fold(0, i64::wrapping_add)
         }),
