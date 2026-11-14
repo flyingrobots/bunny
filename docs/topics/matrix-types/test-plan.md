@@ -22,8 +22,9 @@ This plan covers `FixedMat2`, `FixedMat3`, `FixedMat4`, `FixedAffine2`, and
 - determinant and inverse behavior;
 - singular and overflowing input handling.
 
-Normal, bounds, projection, and viewport semantics are out of scope until later
-roadmap slices expose those APIs.
+Normal, bounds, unprojection, and viewport semantics are out of scope until later
+roadmap slices expose those APIs. The projection builders (`try_orthographic`,
+`try_perspective`, `ProjectionError`) are in scope.
 
 ## Test Goals
 
@@ -56,10 +57,12 @@ formatting.
 | MT-REQ-004 | Multiplication APIs return None when checked Q32.32 arithmetic overflows. | `README.md#multiplication` |
 | MT-REQ-005 | Identity and transpose are stable for 2x2, 3x3, and 4x4 matrices. | `README.md#identity-and-transpose` |
 | MT-REQ-006 | Determinant and inverse APIs return exact values when representable and None for singular or overflowing cases. | `README.md#determinant-and-inverse` |
-| MT-REQ-007 | FixedMat4 does not yet claim affine transform, projection, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
+| MT-REQ-007 | FixedMat4 does not claim affine transform, normal, or bounds propagation semantics. | `README.md#transform-boundaries` |
 | MT-REQ-008 | Affine point transforms apply translation while affine vector transforms do not. | `README.md#affine-transforms` |
 | MT-REQ-009 | Affine composition is right-to-left for column-vector semantics. | `README.md#affine-transforms` |
 | MT-REQ-010 | Affine inverse APIs return exact values when representable and None for singular or overflowing cases. | `README.md#affine-transforms` |
+| MT-REQ-011 | Projection builders produce `clip_from_view` matrices with the documented entries and NDC depth range, using checked Q32.32 arithmetic. | `README.md#projection-matrices` |
+| MT-REQ-012 | Projection builders return typed errors for non-positive extents, invalid near, `near >= far`, and overflow. | `README.md#projection-matrices` |
 
 ```toml
 [[requirement]]
@@ -94,7 +97,7 @@ status = "active"
 
 [[requirement]]
 id = "MT-REQ-007"
-summary = "FixedMat4 does not yet claim affine transform, projection, normal, or bounds propagation semantics."
+summary = "FixedMat4 does not claim affine transform, normal, or bounds propagation semantics."
 status = "active"
 
 [[requirement]]
@@ -110,6 +113,16 @@ status = "active"
 [[requirement]]
 id = "MT-REQ-010"
 summary = "Affine inverse APIs return exact values when representable and None for singular or overflowing cases."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-011"
+summary = "Projection builders produce clip_from_view matrices with the documented entries and NDC depth range, using checked Q32.32 arithmetic."
+status = "active"
+
+[[requirement]]
+id = "MT-REQ-012"
+summary = "Projection builders return typed errors for non-positive extents, invalid near, near >= far, and overflow."
 status = "active"
 ```
 
@@ -151,6 +164,14 @@ and regeneration policy.
 | MT-TP-012 | 2x2 inverse boundary regression | MT-REQ-006 | Minimum raw off-diagonal is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_012_fixed_mat2_inverse_divides_min_off_diagonal_before_negating` |
 | MT-TP-013 | 3x3 inverse boundary regression | MT-REQ-006 | Minimum raw negative cofactor is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_013_fixed_mat3_inverse_divides_min_cofactor_before_negating` |
 | MT-TP-014 | 4x4 inverse boundary regression | MT-REQ-006 | Minimum raw negative cofactor is divided before negation when the inverse entry is representable. | `crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_014_fixed_mat4_inverse_divides_min_cofactor_before_negating` |
+| MT-TP-015 | Orthographic golden rows | MT-REQ-011 | Exact raw rows for half extents 2 x 1, near 1, far 3, and for near 0. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_015_orthographic_matrix_has_exact_golden_rows` |
+| MT-TP-016 | Orthographic frustum corners | MT-REQ-011 | Exact raw NDC for near corners, far corners, and mid depth. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_016_orthographic_frustum_corners_map_to_exact_ndc` |
+| MT-TP-017 | Perspective golden rows | MT-REQ-011 | Exact raw rows for tan 1, aspect 2 and for aspect below 1. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_017_perspective_matrix_has_exact_golden_rows` |
+| MT-TP-018 | Perspective frustum corners | MT-REQ-011 | Exact raw NDC for near corners, far corners, nonlinear mid depth, and aspect below 1. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_018_perspective_frustum_corners_map_to_exact_ndc` |
+| MT-TP-019 | Orthographic errors | MT-REQ-012 | Each invalid parameter class returns its named ProjectionError; near 0 stays valid. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_019_orthographic_rejects_invalid_parameters` |
+| MT-TP-020 | Perspective errors | MT-REQ-012 | Each invalid class including far * near overflow returns its named ProjectionError; the boundary just inside succeeds. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_020_perspective_rejects_invalid_parameters` |
+| MT-TP-021 | Error messages | MT-REQ-012 | Exact Display strings. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_021_projection_errors_have_stable_messages` |
+| MT-TP-022 | Seeded property | MT-REQ-011 | Seeded random valid parameters: center maps to NDC (0, 0) exactly; near and far depth within the documented rounding bound of 0 and 1. | `crates/bunny-linalg/tests/projection_tests.rs::mt_tp_022_random_valid_parameters_keep_center_and_depth_endpoints` |
 
 ```toml
 [[case]]
@@ -278,6 +299,78 @@ test = "crates/bunny-linalg/tests/matrix_tests.rs::mt_tp_014_fixed_mat4_inverse_
 oracle = "Minimum raw negative cofactor is divided before negation when the inverse entry is representable."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "MT-TP-015"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_015_orthographic_matrix_has_exact_golden_rows"
+oracle = "Exact raw rows for half extents 2 x 1, near 1, far 3, and for near 0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-016"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_016_orthographic_frustum_corners_map_to_exact_ndc"
+oracle = "Exact raw NDC for near corners, far corners, and mid depth."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-017"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_017_perspective_matrix_has_exact_golden_rows"
+oracle = "Exact raw rows for tan 1, aspect 2 and for aspect below 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-018"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_018_perspective_frustum_corners_map_to_exact_ndc"
+oracle = "Exact raw NDC for near corners, far corners, nonlinear mid depth, and aspect below 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-019"
+requirements = ["MT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_019_orthographic_rejects_invalid_parameters"
+oracle = "Each invalid parameter class returns its named ProjectionError; near 0 stays valid."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-020"
+requirements = ["MT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_020_perspective_rejects_invalid_parameters"
+oracle = "Each invalid class including far * near overflow returns its named ProjectionError; the boundary just inside succeeds."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-021"
+requirements = ["MT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_021_projection_errors_have_stable_messages"
+oracle = "Exact Display strings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-022"
+requirements = ["MT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::mt_tp_022_random_valid_parameters_keep_center_and_depth_endpoints"
+oracle = "Seeded random valid parameters: center maps to NDC (0, 0) exactly; near and far depth within the documented rounding bound of 0 and 1."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
@@ -301,7 +394,6 @@ The current executable surface has no known failing matrix or affine cases.
 Future implementation work must add explicit negative tests for:
 
 - normal transform misuse;
-- projection parameters that would produce invalid clip-space mappings;
 - bounds propagation cases where transformed corners overflow.
 
 ## Edge Cases And Unusual Inputs
@@ -324,7 +416,6 @@ Future slices should add boundary cases for:
 - near-singular matrices with nonzero determinants;
 - large translation components;
 - non-uniform scale and inverse-transpose normal handling;
-- projection near and far plane limits;
 - viewport edge coordinates.
 
 ## Stress And Fuzz
@@ -347,5 +438,5 @@ case with a stable test name.
 | Gap | Blocking API |
 | --- | --- |
 | Transform-aware bounds propagation. | Slice 2.3 bounds propagation APIs. |
-| Projection, unprojection, and viewport mapping. | Slice 2.4 projection APIs. |
+| Unprojection and viewport mapping. | Slice 2.4 unprojection and viewport APIs. |
 | Quaternion-to-matrix conversion. | Follow-on orientation APIs. |
