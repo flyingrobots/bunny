@@ -387,6 +387,7 @@ fn optics_tp_062_option_and_result_forms_agree_with_the_released_code() {
 /// is the same every run.)
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed() {
+    // dojo: allow unordered-container -- RandomState only draws this per-run seed, printed on failure
     let seed = std::collections::hash_map::RandomState::new().build_hasher().finish();
     check_agreement(seed);
 }
