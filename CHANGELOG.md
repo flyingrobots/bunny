@@ -36,7 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (flyingrobots/bunny#211), with no division per box. Best p50: 21.5 to 21.7 ns
   against 51.5 to 52.3 ns in the same runs, after a 26 ns preparation. For ray
   traversal that does not need exact distances, `TraceRay::box_entry` (6.0 ns
-  after a 1.8 ns preparation) is faster; see the ledger entry.
+  after a 1.8 ns preparation) is faster, and on an x86-64 CI runner the
+  prepared box test is only 1.11 times faster; see the ledger entry.
 * Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
   conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
   `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs

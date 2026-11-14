@@ -683,9 +683,32 @@ closest-hit traversal, gave the same picture: best p50 `prepared/div` 3.46 and 3
 40.97 ns in the same runs.
 
 The numbers of the earlier version of this entry (host measurement, older harness, stacked
-on the two-divide square root) are superseded and not carried over. The x86-64 platform
-job has not been consulted for these numbers; it is the check that caught the entry 3
-regression this machine could not see.
+on the two-divide square root) are superseded and not carried over.
+
+**x86-64 (the pull request's `Perf / before and after` job, GitHub `ubuntu-24.04` runner,
+shared and coarse, 7 rounds, base `origin/main`).** The gate passed: no existing case moved
+by more than 2.5 % at best p50 (`num/sqrt` -2.5 %, `linalg/length` +1.4 %, the controls
+within 1.1 %). The new cases are much less favourable to the exact prepared APIs than on the
+M5. Best p50 in nanoseconds:
+
+| Operation | x86-64 CI | M5 Pro (two runs) |
+| --- | ---: | ---: |
+| `num/div` | 9.92 | 6.43, 6.47 |
+| `prepared/div` | 7.97 | 3.99, 3.50 |
+| `query/ray_aabb` | 68.76 | 52.25, 51.47 |
+| `prepared/ray_aabb` | 62.06 | 21.73, 21.53 |
+| `prepared/ray_prepare` | 18.75 | 26.00, 26.04 |
+| `trace/box_entry` | 15.52 | 5.98, 5.98 |
+| `trace/box_ray_prepare` | 8.05 | 1.83, 1.83 |
+
+On x86-64 a prepared division is 1.25 times faster than `checked_div` and a prepared box
+test only 1.11 times faster than `ray_intersects_aabb`, so with its preparation it pays off
+only from a ray's third box (18.75 + 2 x 62.06 = 142.9 against 137.5 ns at two boxes, 205.0
+against 206.3 ns at three). `trace/box_entry` is 4.4 times faster than the exact box test
+there. The speed of the prepared exact API is therefore target-dependent and modest where
+the hardware divides quickly; the
+[target-specific rules](#target-specific-implementations) do not apply because the prepared
+path is a separate API, not a replacement.
 
 **Which API suits which use.**
 
