@@ -12,7 +12,7 @@ twice, then withdrawn in a revert commit: on the scene only 24 of 714 crossings 
 the limit, so it can save about 0.3 ns per ray while adding about 2 ns per crossing, and
 `trace/closest_hit` moved within noise (-1.5 %, -2.0 % best p50). `hit_triangle` on this
 branch is byte-identical to `origin/main`. The tests, counting evidence, micro cases and
-the ledger entry (performance chapter, entry 5, under Tried And Rejected) remain.
+the ledger entry (performance chapter, entry 6, under Tried And Rejected) remain.
 
 Files read:
 CODE_STANDARDS.md
@@ -39,7 +39,7 @@ CHANGELOG.md
 .repo-respect/receipts/2026-11-13-reject-before-divide.md
 
 Topic docs:
-docs/topics/performance/README.md (Tried And Rejected, entry 5; the new trace/triangle_* cases)
+docs/topics/performance/README.md (Tried And Rejected, entry 6; the new trace/triangle_* cases)
 docs/topics/ray-tracing/test-plan.md (TRACE-REQ-027, TRACE-TP-201..205, mutation note)
 docs/topics/ray-tracing/README.md unchanged: the kernel's contract and code did not change.
 

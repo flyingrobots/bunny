@@ -703,7 +703,7 @@ The pre-check tried in flyingrobots/bunny#214 (reject when
 `bunny-query`, `bunny-broadphase` and `bunny-perf` tests: `t_max` for `t_max + 1`,
 the floor of `det / 2^32` for its ceiling, `t + 1 >= bound`, and the ceiling computed with
 `2^32 - 2`. Each made at least one of `TRACE-TP-201` to `TRACE-TP-205` fail; the last two
-survived until `TRACE-TP-204` was added. The table is in the performance chapter's entry 5.
+survived until `TRACE-TP-204` was added. The table is in the performance chapter's entry 6.
 
 ## Determinism Obligations And Evidence
 

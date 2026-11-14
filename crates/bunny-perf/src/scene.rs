@@ -442,15 +442,15 @@ mod tests {
 
     /// How much work a shortcut on the distance limit can remove on this scene. Run with
     /// `--nocapture` to see the counts; the performance chapter records them
-    /// (`docs/topics/performance/README.md`, entry 5).
+    /// (`docs/topics/performance/README.md`, entry 6).
     #[test]
     fn count_the_divisions_the_scene_traversal_makes() {
         let mut counts = TriangleTestCounts::default();
         for_each_triangle_test(|ray, triangle, limit| counts.record(ray, triangle, limit));
         println!("trace/closest_hit triangle tests: {counts:?}");
-        // The performance chapter's entry 5 quotes these numbers; a change to the scene, the
+        // The performance chapter's entry 6 quotes these numbers; a change to the scene, the
         // camera or the traversal must update it.
         let found = (counts.calls, counts.divided, counts.beyond_limit, counts.pre_checked);
-        assert_eq!(found, (1_673, 714, 24, 24), "update entry 5 of the performance chapter");
+        assert_eq!(found, (1_673, 714, 24, 24), "update entry 6 of the performance chapter");
     }
 }
