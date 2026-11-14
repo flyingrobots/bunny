@@ -38,6 +38,27 @@ A caller that wants one entry point can look at the `format` line and call one
 of the two; the readers share the borrowed-view shape, the validate-everything-up-front
 rule (a returned mesh never fails later) and the face rules.
 
+## Dependencies And Features
+
+With default features off, `bunny-codec` depends only on the Bunny crates
+`bunny-geom`, `bunny-linalg`, `bunny-mesh` and `bunny-num`, which have no crates.io
+dependencies in that configuration, and every reader in this crate is still there:
+`parse_ascii_ply`, `parse_decimal_q32_32`, `parse_binary_ply`, `parse_obj_text` and
+`decode_compressed_mesh`. A consumer that admits no third-party crates writes:
+
+```toml
+bunny-codec = { git = "https://github.com/flyingrobots/bunny", default-features = false }
+```
+
+The one feature, `mesh-hash`, is on by default. It turns on `bunny-mesh/mesh-hash`,
+which provides `bunny_mesh::compute_mesh_hash` and is the only user of `sha2`; no
+`bunny-codec` item depends on it. With default features on, both crates' public
+items and dependency graphs are what they were before the feature existed. The
+feature is additive: it adds `compute_mesh_hash` and changes nothing else.
+
+The full gate checks the no-default configuration of both crates on every run;
+see [`test-plan.md`](test-plan.md#feature-configurations).
+
 ## The Profile
 
 `parse_ascii_ply` accepts, and nothing else:

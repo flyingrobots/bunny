@@ -445,7 +445,7 @@ evidence = "test"
 test = "xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported"
 oracle = "Exactly `sha2`, the deduplicated `typenum` and the git crate are reported, once each, in listing order."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "APLY-TP-053"
@@ -454,7 +454,7 @@ evidence = "test"
 test = "xtask/src/feature_configs.rs::tests::path_crates_are_accepted"
 oracle = "No crate is reported for path crates, deduplicated path crates and a Windows path."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "APLY-TP-054"
@@ -463,7 +463,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/ascii-ply/test-plan.md#feature-configurations"
 oracle = "Identical rustdoc item lists with default features; only `compute_mesh_hash` absent without them."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Fixtures
@@ -499,6 +499,10 @@ APLY-TP-054 is an audit, repeated for a change to either crate's features: build
 and compare the `href` entries of each crate's `all.html`. The lists must be
 identical with default features, and without them differ only by
 `fn.compute_mesh_hash.html`.
+
+Audit at flyingrobots/bunny#291 against `origin/main` 3c395f9: the default-feature
+lists were identical (10 entries for `bunny-mesh`, 28 for `bunny-codec`), and the
+no-default lists lacked only `fn.compute_mesh_hash.html`.
 
 ## Mutation Check
 

@@ -14,7 +14,15 @@ layout, and quantization bounds cannot collide.
 * Wide-intermediate quantization and dequantization at raw Q32.32 extremes, so
   full-span bounds clamp or reconstruct without host-width overflow.
 * 16-bit and 32-bit triangle index layout validation.
-* SHA-256 mesh hashes with domain, bounds, vertex, and face framing.
+* SHA-256 mesh hashes with domain, bounds, vertex, and face framing
+  (`compute_mesh_hash`, `mesh-hash` feature).
+
+## Cargo Features
+
+`mesh-hash` (on by default) provides `compute_mesh_hash` and is the crate's only
+crates.io dependency, `sha2`. With `default-features = false` every other item is
+available and the crate depends only on `bunny-geom`, `bunny-linalg` and
+`bunny-num`.
 
 ## License
 
