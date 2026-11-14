@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics` tests pin the start point's two-step case and its tie rule:
+  kernel-reported hits that take zero, one and two steps (a regular-octahedron
+  face, whose equal normal components are the proof's worst case, and a general
+  triangle), five hits on planes whose largest normal components tie, and a
+  generated check of 100 000 rays against the rule with an exact plane test.
+  Before them only the comparison with the retained 0.7.1 code caught a
+  one-step limit, and nothing caught the highest axis on a tie. The optics
+  chapter no longer says that two steps were never needed: 1 808 of 99 616
+  generated hits needed two. No library function changes
+  (flyingrobots/bunny#288).
+
 * `bunny-optics`'s `SmoothHit::bounce` samples the bounce around the shading
   normal and returns a `SmoothBounce`: `Ray` when the direction is strictly
   above the exact geometric plane (`SmoothHit::is_above_surface`, an exact

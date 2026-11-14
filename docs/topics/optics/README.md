@@ -859,9 +859,26 @@ shadow ray and the bounce ray) starts at the same point:
 Two steps always suffice: the floored distance leaves the exact point at
 `hit.distance` on the arrival side or on the plane, `point_at` moves each
 coordinate by at most half a raw unit, so `N' . p - N' . v0 >= -|N'|_1 / 2`,
-and each step adds `|N'_k| >= |N'|_1 / 3`. In the reference model 38 % of
-400 000 seeded hits needed one step and none needed two. `SurfaceHit::new`
-returns `None` when the point is not representable or the step leaves the
+and each step adds `|N'_k| >= |N'|_1 / 3`.
+
+Two steps do occur. They are needed when the rounding of `point_at` leaves
+the point at least `|N'_k|` behind the plane, which takes the rounding of
+several coordinates against the plane. That is most likely when the normal's
+components are equal, as on a regular octahedron's faces, the worst case of
+the proof. With a direction component of exactly 1.0 that coordinate's
+product is exact, and two steps then need equal components, a distance with
+nothing floored and two products that are exact half-unit ties. On the
+octahedron face `(-1, 0, 0),
+(0, -1, 0), (0, 0, -1)` a hit can land at plane value `-2^64`: the first step
+lands exactly on the plane and the second is strictly in front; a general
+triangle can need two steps too (both are golden cases in the test plan).
+Over the 99 616 hits the trace kernel reported for the test plan's generated
+case (its fixed seed; ray directions with a largest component from 0.5 to
+1.0), on octahedron faces 18 653 needed no step, 29 508 one and 1 800 two, and
+on general triangles 36 687, 12 960 and 8; none needed three and none was
+refused.
+
+`SurfaceHit::new` returns `None` when the point is not representable or the step leaves the
 trace domain (possible only for a point on its boundary), and for a hit that
 the trace kernel did not report for this ray and face, as when a caller
 changes `hit.distance` or `hit.front_face`. `SurfaceHit::try_new`, the
@@ -1136,7 +1153,7 @@ with components in `-1.0..=1.0`. `SecondaryRayError` is `#[non_exhaustive]`.
 | --- | --- | --- |
 | Unit normal | Each component within 1 raw unit of the exact unit normal | — |
 | Frame | Within half a raw unit of the formula; orthonormal to 8 raw units | 4.4 raw units |
-| Start point | At most 2 raw-unit steps along one axis from `point_at` | 1 step |
+| Start point | At most 2 raw-unit steps along one axis from `point_at` | 2 steps (1 808 of 99 616 generated hits) |
 | Bounce direction | Within 4 raw units of the ideal map; length within 8; `d . n >= 2^15` | 2.1; 3 |
 | Light cosine | Within 3 raw units, clamped to `0..=1.0` | 1.2 |
 | Vertex normal | Each component within 1 raw unit of the exact unit vector along the face sum | — |
