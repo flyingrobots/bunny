@@ -1426,17 +1426,19 @@ status = "implemented"
 id = "OPTICS-TP-096"
 requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
 evidence = "test"
+test = "crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_096_a_hit_point_one_raw_unit_outside_the_domain_steps_inside"
 oracle = "Hand computed with exact integers: on the plane 2a + b = 2L - 1 (L = TRACE_COORD_LIMIT_RAW), the point at a = L + 1, b = 0 gives 2L + 2 and one step 2L, neither below 2L - 1, and two steps give 2L - 2, below it; the start point L - 1 is inside the domain."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-097"
 requirements = ["OPTICS-REQ-041", "OPTICS-REQ-042", "OPTICS-REQ-043"]
 evidence = "test"
+test = "crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_097_a_hit_point_two_raw_units_outside_the_domain_is_refused_by_both_paths"
 oracle = "Specified: a coordinate of L + 2 raw units is more than two raw units outside the domain, so both paths refuse it before the plane test and the variant carries the unstepped point."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-098"
@@ -1445,7 +1447,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/optics/test-plan.md#overflow-guard-mutation-checks"
 oracle = "Each path's beyond-reach guard tightened and loosened by one raw unit, with each mutant's tests under timeout 120 and every source touched before the build."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1593,6 +1595,24 @@ Before OPTICS-TP-096 and OPTICS-TP-097:
 | Fast path loosened (`domain + MAX_STEPS + 1`: admits two raw units outside) | None |
 | Diagnostic path tightened | OPTICS-TP-062, OPTICS-TP-064 only (the comparison with the retained 0.7.1 code) |
 | Diagnostic path loosened | None |
+
+After (the restored source passed all fifteen test binaries of the crate):
+
+| Mutation in `hit.rs` | Failing cases |
+| --- | --- |
+| Fast path tightened | OPTICS-TP-096 (the fast path refuses the hit) |
+| Fast path loosened | None: an equivalent mutant (below) |
+| Diagnostic path tightened | OPTICS-TP-096 (`try_new` refuses what `new` accepts); also OPTICS-TP-062, OPTICS-TP-064 |
+| Diagnostic path loosened | OPTICS-TP-097 (`NotOnArrivalSide` for `HitPointOutsideTraceDomain`) |
+
+The fast path's loosened guard changes no output of `SurfaceHit::new`, so no
+test can catch it. A point it newly admits has a coordinate of exactly
+`TRACE_COORD_LIMIT_RAW + 2` raw units; at most two steps move only the
+dominant axis, by one raw unit each, so that coordinate ends at magnitude
+`TRACE_COORD_LIMIT_RAW` or more and the final domain check returns `None`, as
+the guard did. The plane test still fits `i128` (coordinates below `2^41`).
+The diagnostic path's loosened guard is not equivalent: it names the refusal
+`NotOnArrivalSide` or `StartOutsideTraceDomain` instead.
 
 ### Shading Rounding Mutation Checks
 

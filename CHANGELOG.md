@@ -75,6 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within both bounds. Ledger entry 13 records the cost; closes
   flyingrobots/bunny#289.
 
+* `bunny-optics` tests pin the boundary of `SurfaceHit`'s beyond-reach guard
+  on each axis and sign: a hit point one raw unit outside the trace domain steps
+  inside (`Some` from `new`, `Ok` from `try_new`, start point hand computed), and
+  one two raw units outside is refused by both (`HitPointOutsideTraceDomain`).
+  Before them, moving the fast path's guard one raw unit inward passed every
+  test, and the diagnostic path's guard moved outward did too. The fast path's
+  guard moved outward changes no output and is recorded as an equivalent mutant.
+  No library function changes (flyingrobots/bunny#324).
+
 * `bunny-optics` tests pin the start point's two-step case and its tie rule:
   kernel-reported hits that take zero, one and two steps (a regular-octahedron
   face, whose equal normal components are the proof's worst case, and a general

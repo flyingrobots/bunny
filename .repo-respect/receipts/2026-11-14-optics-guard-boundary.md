@@ -37,7 +37,14 @@ fast path's guard tightened (refusing one raw unit outside) and loosened (admitt
 units outside) each failed nothing; the diagnostic path's guard tightened failed only
 OPTICS-TP-062 and -064 (the comparison with the retained 0.7.1 code); loosened, it failed
 nothing.
-After: see the mutation table in the test plan and the pull request.
+After: the fast guard tightened fails OPTICS-TP-096; the diagnostic guard tightened fails
+OPTICS-TP-096 (and -062, -064); the diagnostic guard loosened fails OPTICS-TP-097; the fast guard
+loosened fails nothing and is shown equivalent in the test plan. The restored source passes
+every bunny-optics test. A stale build cache once served the last mutant to a later run (the
+copy's file times were older than the cached build); every result above was taken after
+touching every source.
+cargo fmt --all --check, cargo clippy -p bunny-optics --all-targets -D warnings, cargo test -p
+bunny-optics; code-dojo --all at the final commit (see the PR).
 
 Known risks:
 The expected values are hand derived by the same author who wrote the tests; a misreading of
