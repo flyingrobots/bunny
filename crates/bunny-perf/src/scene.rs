@@ -263,7 +263,8 @@ pub(crate) fn disagreeing_rays() -> Vec<usize> {
     bad
 }
 
-#[cfg(all(test, feature = "scene", feature = "trace"))]
+// These tests need the default feature groups (`scene` and `trace`), as `cargo test` uses.
+#[cfg(test)]
 mod tests {
     use super::*;
 
