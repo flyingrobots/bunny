@@ -87,6 +87,9 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-009 | Exact replacement | PERF-REQ-001 | The new square root equals the reference on 20 000 seeded inputs across all magnitudes. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_u128_matches_reference_on_seeded_inputs` |
 | PERF-TP-010 | Exact replacement | PERF-REQ-001 | `FixedQ32_32::sqrt` equals the reference for every raw value 0..=65 536. | `crates/bunny-num/tests/sqrt_equivalence_tests.rs::sqrt_matches_reference_for_every_small_raw_value` |
 | PERF-TP-011 | Error bound | PERF-REQ-001 | `sin` and `cos` stay within one raw unit of `f64` trigonometry. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit` |
+| PERF-TP-012 | Exact replacement | PERF-REQ-001 | Bunny's two-divide square root (retained, not selected on any target) equals core's `u128::isqrt` on 200 000 seeded inputs. | `crates/bunny-num/src/lib.rs::tests::two_divides_matches_core_isqrt_on_many_seeded_inputs` |
+| PERF-TP-013 | Exact replacement | PERF-REQ-001 | Bunny's two-divide square root equals core's `u128::isqrt` at the 64-bit split and around quotient corrections. | `crates/bunny-num/src/lib.rs::tests::two_divides_matches_core_isqrt_around_the_split_and_correction_points` |
+| PERF-TP-014 | Dispatch | PERF-REQ-001 | The implementation chosen for the target equals the retained two-divide implementation on 20 000 seeded inputs. | `crates/bunny-num/src/lib.rs::tests::the_chosen_implementation_matches_the_other_one` |
 | PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
 | PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
 | PERF-TP-022 | Gate | PERF-REQ-003 | A run that measured no case on both sides fails instead of passing. | `xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing` |
@@ -189,6 +192,33 @@ requirements = ["PERF-REQ-001"]
 evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_004_error_is_within_one_raw_unit"
 oracle = "sin and cos stay within one raw unit of f64 trigonometry."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-012"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/src/lib.rs::tests::two_divides_matches_core_isqrt_on_many_seeded_inputs"
+oracle = "Bunny's two-divide square root (retained, not selected on any target) equals core's u128::isqrt on 200 000 seeded inputs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-013"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/src/lib.rs::tests::two_divides_matches_core_isqrt_around_the_split_and_correction_points"
+oracle = "Bunny's two-divide square root equals core's u128::isqrt at the 64-bit split and around quotient corrections."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-014"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/src/lib.rs::tests::the_chosen_implementation_matches_the_other_one"
+oracle = "The implementation chosen for the target equals the retained two-divide implementation on 20 000 seeded inputs."
 tier = "fast"
 status = "implemented"
 
