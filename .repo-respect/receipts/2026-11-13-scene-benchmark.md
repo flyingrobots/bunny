@@ -34,7 +34,7 @@ CHANGELOG.md
 .repo-respect/receipts/2026-11-13-scene-benchmark.md
 
 Topic docs:
-docs/topics/performance/README.md (ledger entry 3, adding-a-case, feature groups)
+docs/topics/performance/README.md (ledger entry 4, adding-a-case, feature groups)
 docs/topics/performance/test-plan.md (PERF-REQ-006, PERF-TP-024..027)
 
 Generated artifacts:

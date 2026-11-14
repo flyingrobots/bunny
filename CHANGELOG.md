@@ -11,11 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `Viewport` and `ViewportError` to `bunny-linalg`: checked Q32.32
+  conversion between NDC and viewport coordinates (`try_ndc_to_viewport`,
+  `try_viewport_to_ndc`). The origin is the top-left corner, pixel `y` runs
+  down, coordinates are continuous with pixel corners on integers, each
+  coordinate is the floor of the exact raw value, and depth passes through. The
+  round trip is within one raw unit per axis. The coordinate law's new
+  Viewport Conversion section records the choices; golden vectors run natively
+  and under WebAssembly. Existing functions are unchanged.
 * Added the `scene` and `trace` feature groups to `bunny-perf`: a whole-scene
   ray benchmark (27 650 triangles, 1 024 camera rays) timing closest hit through
   the visitor API and through `closest_hit`, with a check that both choose the
   same primitive on every ray, and added `bunny-broadphase` to the `xtask perf`
-  base crates. Ledger entry 3 in `docs/topics/performance/` records the
+  base crates. Ledger entry 4 in `docs/topics/performance/` records the
   measurement.
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
@@ -76,6 +84,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Added `isqrt_u128_two_divides` (crate-private), an exact integer square root that
+  finishes with two hardware `u64` divisions, with unit tests against core's
+  `u128::isqrt`. Re-measured on the corrected harness it makes `sqrt` 1.33 times and
+  `length` 1.28 times faster but `normalize` about 4 % slower on aarch64, so every
+  target keeps core's implementation; `sqrt_u128` output and speed are unchanged. An early
+  version that marked `sqrt_u128` `#[inline]` read 71 % slower on `num/sqrt` on x86-64 CI
+  and was fixed (see the performance ledger, entry 3).
 * `FixedQ32_32::sqrt_u128` (and so `sqrt`, `FixedVec3::length`, `normalize`
   and the ray queries) now uses the table-seeded integer square root from the
   core library: the same exact bits as before, 4.9 times faster for `sqrt`,

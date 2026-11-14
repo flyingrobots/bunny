@@ -25,6 +25,9 @@ math for graphics pipelines.
   `try_perspective` build `clip_from_view` matrices (NDC depth `[0, 1]`, camera
   looks down `-Z`) from a tangent, with no trigonometry and typed
   `ProjectionError`s.
+* **Viewport Mapping**: `Viewport::try_ndc_to_viewport` and
+  `try_viewport_to_ndc` convert between NDC and continuous top-left, y-down
+  viewport coordinates with floored raw rounding and typed `ViewportError`s.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
