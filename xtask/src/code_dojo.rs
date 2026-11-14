@@ -328,7 +328,21 @@ pub(super) fn dependency_violations(
 }
 
 fn check_dependency_rules() -> Result<(), DynError> {
-    let root = git_root()?;
+    let violations = dependency_rule_violations(&git_root()?, &|| Command::new("cargo"))?;
+    if violations.is_empty() {
+        println!("Code Dojo: deterministic dependency graph clean");
+        return Ok(());
+    }
+    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
+    Err(DojoError::new("deterministic dependency policy violations found").into())
+}
+
+/// Lists the dependency graph of the deterministic crates of the workspace at `root` with
+/// `cargo tree` and applies the dependency rules to it. `cargo` makes the `cargo` command.
+pub(super) fn dependency_rule_violations(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+) -> Result<Vec<Violation>, DynError> {
     let mut args = [
         "tree",
         "--locked",
@@ -346,7 +360,7 @@ fn check_dependency_rules() -> Result<(), DynError> {
     .map(str::to_owned)
     .collect::<Vec<_>>();
     args.extend(package_args(NONDETERMINISM_CRATES));
-    let output = Command::new("cargo").args(&args).current_dir(&root).output()?;
+    let output = cargo().args(&args).current_dir(root).output()?;
     if !output.status.success() {
         return Err(command_error("cargo tree", &output.stderr).into());
     }
@@ -355,13 +369,7 @@ fn check_dependency_rules() -> Result<(), DynError> {
         std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
             .unwrap_or_default()
     };
-    let violations = dependency_violations(&tree, &manifest);
-    if violations.is_empty() {
-        println!("Code Dojo: deterministic dependency graph clean");
-        return Ok(());
-    }
-    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
-    Err(DojoError::new("deterministic dependency policy violations found").into())
+    Ok(dependency_violations(&tree, &manifest))
 }
 
 fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {

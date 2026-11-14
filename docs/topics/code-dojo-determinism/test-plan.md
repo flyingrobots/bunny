@@ -116,6 +116,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-027 | permitted dependencies | ND-REQ-005 | `sha2`, `digest` and `cpufeatures` produce no finding. | `xtask/src/nondeterminism/tests.rs::permitted_dependencies_are_accepted` |
 | ND-TP-028 | manifest waiver | ND-REQ-005 | A reasoned `random` waiver in the `bunny-num` manifest leaves only the `json-serialization` finding. | `xtask/src/nondeterminism/tests.rs::manifest_waiver_with_reason_suppresses_a_dependency_rule` |
 | ND-TP-029 | reasonless manifest waiver | ND-REQ-005 | Manifest waivers without a reason or with the reason `ok` leave all three findings reported. | `xtask/src/nondeterminism/tests.rs::manifest_waiver_without_reason_is_refused` |
+| ND-TP-065 | optional and build dependencies | ND-REQ-005 | On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is. | `xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate` |
 
 ```toml
 [[case]]
@@ -378,6 +379,15 @@ test = "xtask/src/nondeterminism/tests.rs::manifest_waiver_without_reason_is_ref
 oracle = "Manifest waivers without a reason or with the reason `ok` leave all three findings reported."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "ND-TP-065"
+requirements = ["ND-REQ-005"]
+evidence = "test"
+test = "xtask/src/nondeterminism/dependency_graph_tests.rs::optional_and_build_dependencies_on_banned_crates_fail_the_gate"
+oracle = "On a fixture workspace run through `cargo tree`, `rand` behind a feature nothing enables in `bunny-num` and `serde_json` as a build-dependency of `bunny-mesh` are each reported once, against the crate that declares them, and nothing else is."
+tier = "fast"
+status = "planned"
 ```
 
 ## Determinism Obligations And Evidence

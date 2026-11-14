@@ -467,4 +467,6 @@ fn line_of(span: Span) -> usize {
 }
 
 #[cfg(test)]
+mod dependency_graph_tests;
+#[cfg(test)]
 mod tests;
