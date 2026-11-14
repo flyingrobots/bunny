@@ -812,7 +812,9 @@ fn command_error(command: &str, stderr: &[u8]) -> DojoError {
     DojoError::new(format!("{command} failed: {}", detail.trim()))
 }
 
-fn is_rust_source(path: &Path) -> bool {
+/// Whether the gate lists `path` as a Rust source: a `.rs` file outside `target`, `.git`,
+/// `vendor` and `third_party`.
+pub(super) fn is_rust_source(path: &Path) -> bool {
     if path.extension() != Some(OsStr::new("rs")) {
         return false;
     }
@@ -910,7 +912,7 @@ fn check_ast(
 
 fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, file: &File) {
     if in_nondeterminism_scope(&context.path) {
-        let findings = crate::nondeterminism::source_findings(file)
+        let findings = crate::nondeterminism::source_findings(&context.path, file)
             .into_iter()
             .chain(crate::nondeterminism::text_findings(context.lines));
         for finding in findings {

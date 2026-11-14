@@ -113,7 +113,7 @@ type position, a macro body and a glob import, as applicable. The tests are in
 | `wasm-serde` | `wasm-serde` | `serde_wasm_bindgen`; crate `serde-wasm-bindgen` | 0 of 2 | `wasm_serde_rejects_every_seeded_form` |
 | `float-sentinel` | `float-boundary` | any `f32`/`f64` path in core, so `NAN`, `INFINITY`, `NEG_INFINITY`, `consts` | 0 of 5 | `float_sentinels_are_rejected_as_float_boundary` |
 | `float-op` | `float-boundary` | float types, float literals and float paths in core, also inside macros | 1 of 3 | `float_operations_are_rejected_as_float_boundary` |
-| `std-env` | `std-env` | `std::env` | 1 of 6 (as `ambient-state`) | `std_env_rejects_every_seeded_form` |
+| `std-env` | `std-env` | `std::env`; `env!` and `option_env!` since #321 | 1 of 6 (as `ambient-state`) | `std_env_rejects_every_seeded_form` |
 | `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
 | `std-process` | `std-process` | `std::process` | 0 of 5 | `std_process_rejects_every_seeded_form` |
 
@@ -128,7 +128,16 @@ and counted with the forms above:
 | `r#f64` as a type and a path | `float-boundary` | 0 of 2 | `raw_float_types_are_float_boundary` |
 | `use std::{self as s};` then `s::fs` | `std-fs`, `std-env` | 2 of 2 (no test failed when `self` was treated as a segment) | `self_in_a_use_group_names_the_module_itself` |
 
-With these the rule tests seed 106 forms; the gate before #321 caught 92.
+| `include!` in every spelling: a non-Rust file, a `.rs` file, a `concat!` path, `std::`/`core::`, renamed, in a macro | `include-source` (Bunny's own) | 0 of 8 | `include_of_source_is_rejected_however_it_is_named` |
+| `#[path]` to a non-`.rs` file, outside the crate, absolute, with backslashes, through `cfg_attr` | `include-source` | 0 of 5 | `path_attributes_must_name_a_scanned_file` |
+| `#[path]` emitted by a macro, under nested `cfg_attr`, second in a `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 6 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
+| `include_str!`/`include_bytes!` outside the crate, absolute, computed, renamed, in a macro | `include-data` (Bunny's own) | 0 of 5 | `included_data_must_come_from_inside_the_crate` |
+| `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")`, in a macro | `std-env` | 1 of 6 (`std::env!`, through the `std::env` prefix) | `compile_time_environment_macros_are_std_env` |
+
+With these the rule tests seed 136 forms; the gate before #321 caught 93.
+`env!` was an accepted look-alike before #321; it is banned now, as in
+Lumen's gate (flyingrobots/lumen, ADR 0006), and the one use on main, in a
+`bunny-contract` test, carries a waiver.
 
 Where the names differ:
 

@@ -216,6 +216,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Code Dojo no longer lets code or host files into a deterministic crate
+  unscanned: `include!` is banned in every spelling (`include-source`), a
+  `#[path]` module (also under a nested `cfg_attr` or emitted by a macro)
+  must name a `.rs` file inside the crate directory that the gate scans, and
+  `include_str!`/`include_bytes!` must name a literal path inside it
+  (`include-data`). `env!` and `option_env!` are now `std-env` findings, as
+  in Lumen's gate; the `bunny-contract` test that reads `CARGO_PKG_VERSION`
+  and the committed generator outputs carries waivers. Part of
+  flyingrobots/bunny#321.
+
 * Code Dojo waivers are comments only. `dojo: allow` text inside a string,
   raw-string or byte-string literal, a doc comment, a `#[doc]` attribute or a
   macro's tokens no longer waives anything, and a comment with two clauses

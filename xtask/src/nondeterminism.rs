@@ -9,11 +9,16 @@
 //! unparsed. This module only finds; `code_dojo` applies waivers and reports.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use proc_macro2::{Ident, Spacing, Span, TokenStream, TokenTree};
 use syn::ext::IdentExt;
 use syn::visit::{self, Visit};
-use syn::{File, ItemExternCrate, ItemUse, Lit, Macro, Path as SynPath, UseTree};
+use syn::{File, ItemExternCrate, ItemMod, ItemUse, Lit, Macro, Path as SynPath, UseTree};
+
+use self::includes::Origin;
+
+mod includes;
 
 /// A source finding: the 1-based line and the rule it breaks.
 pub(super) struct Finding {
@@ -52,6 +57,7 @@ const WASM_SERDE: &str = "serde-wasm-bindgen is banned in deterministic crates";
 const ENV: &str = "environment access is banned; pass configuration explicitly";
 const FS: &str = "filesystem access is banned; take bytes from an adapter at the edge";
 const PROCESS: &str = "process access is banned in deterministic crates";
+const INCLUDE: &str = "importing `include!` is banned; it brings in code the gate does not scan";
 
 const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["std", "time", "SystemTime"], rule: "time-system", message: CLOCK },
@@ -107,6 +113,11 @@ const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["std", "env"], rule: "std-env", message: ENV },
     PrefixRule { prefix: &["std", "fs"], rule: "std-fs", message: FS },
     PrefixRule { prefix: &["std", "process"], rule: "std-process", message: PROCESS },
+    PrefixRule { prefix: &["std", "option_env"], rule: "std-env", message: ENV },
+    PrefixRule { prefix: &["core", "env"], rule: "std-env", message: ENV },
+    PrefixRule { prefix: &["core", "option_env"], rule: "std-env", message: ENV },
+    PrefixRule { prefix: &["std", "include"], rule: "include-source", message: INCLUDE },
+    PrefixRule { prefix: &["core", "include"], rule: "include-source", message: INCLUDE },
 ];
 
 /// Names banned wherever they appear in a path, even unresolved. These keep the
@@ -275,6 +286,7 @@ fn alias_map(leaves: &[UseLeaf]) -> BTreeMap<String, Vec<String>> {
 }
 
 struct Scanner {
+    origin: Origin,
     aliases: BTreeMap<String, Vec<String>>,
     seen: BTreeSet<(usize, &'static str)>,
     findings: Vec<Finding>,
@@ -315,10 +327,7 @@ impl Scanner {
 
 impl<'ast> Visit<'ast> for Scanner {
     fn visit_path(&mut self, node: &'ast SynPath) {
-        let written =
-            node.segments.iter().map(|segment| ident_name(&segment.ident)).collect::<Vec<_>>();
-        let line = node.segments.first().map_or(0, |segment| line_of(segment.ident.span()));
-        self.check_path(line, &written);
+        self.check_path(path_line(node), &path_names(node));
         visit::visit_path(self, node);
     }
 
@@ -326,15 +335,34 @@ impl<'ast> Visit<'ast> for Scanner {
         for path in token_paths(&node.tokens) {
             self.check_path(path.line, &path.segments);
         }
+        let invoked = self.expand(&path_names(&node.path));
+        let rules = includes::macro_rules(&invoked, &node.tokens, &self.origin);
+        self.report(path_line(&node.path), rules);
+        for call in includes::macro_calls(&node.tokens) {
+            let rules = includes::macro_rules(&self.expand(&call.path), &call.args, &self.origin);
+            self.report(call.line, rules);
+        }
+        for (line, rule) in includes::token_module_path_findings(&node.tokens, &self.origin) {
+            self.report(line, vec![rule]);
+        }
         visit::visit_macro(self, node);
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast ItemMod) {
+        if let Some((line, rule)) = includes::module_path_finding(&node.attrs, &self.origin) {
+            self.report(line, vec![rule]);
+        }
+        visit::visit_item_mod(self, node);
     }
 }
 
-/// Finds every source-rule violation in a parsed file, at most once per line and rule.
-pub(super) fn source_findings(file: &File) -> Vec<Finding> {
+/// Finds every source-rule violation in a parsed file at the repository-relative `path`,
+/// at most once per line and rule.
+pub(super) fn source_findings(path: &Path, file: &File) -> Vec<Finding> {
     let mut collector = UseCollector::default();
     collector.visit_file(file);
     let mut scanner = Scanner {
+        origin: Origin::of(path),
         aliases: alias_map(&collector.leaves),
         seen: BTreeSet::new(),
         findings: Vec::new(),
@@ -485,6 +513,14 @@ fn tree_entry(line: &str) -> Option<(usize, &str)> {
     let depth = line.get(..digits)?.parse().ok()?;
     let name = line.get(digits..)?.split_whitespace().next()?;
     Some((depth, name))
+}
+
+fn path_names(path: &SynPath) -> Vec<String> {
+    path.segments.iter().map(|segment| ident_name(&segment.ident)).collect()
+}
+
+fn path_line(path: &SynPath) -> usize {
+    path.segments.first().map_or(0, |segment| line_of(segment.ident.span()))
 }
 
 fn line_of(span: Span) -> usize {
