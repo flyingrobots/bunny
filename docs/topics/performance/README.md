@@ -819,7 +819,9 @@ cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code 
 The base revision lacks the API, so the compact cases are `new` and the comparison is
 **old layout against new layout within one run, on the same binary and rays**; the base and
 head columns of the unchanged cases are the noise reference (best p50 within 1.3 % in every
-run below, apart from the few-nanosecond `box_entry` and `ray_prepare` cases). Head side,
+run below, apart from the few-nanosecond `box_entry` and `ray_prepare` cases and, in run B,
+the base side of `trace/closest_hit_shuffled`, which landed in a slow mode in every round:
+247.92 against 226.15 ns on identical code, a [bimodal case](#bimodal-cases)). Head side,
 best p50, nanoseconds per ray:
 
 | Run (base revision) | `closest_hit` | `closest_hit_compact` | Change | `any_hit` | `any_hit_compact` | Change |
@@ -827,17 +829,18 @@ best p50, nanoseconds per ray:
 | 112-byte nodes (`57bc035f69f2`) | 222.29 | 197.18 | -11.3 % | 203.86 | 180.87 | -11.3 % |
 | 128-byte aligned nodes (`57bc035f69f2`, `--filter _hit`) | 221.64 | 195.64 | -11.7 % | 207.28 | 177.86 | -14.2 % |
 | Final code, run A (`cda15ecc020a`) | 218.63 | 196.37 | -10.2 % | 203.86 | 184.20 | -9.6 % |
+| Final code, run B (`0e84fff31a3c`) | 220.58 | 198.69 | -9.9 % | 204.63 | 184.32 | -9.9 % |
 
 Node order, same runs (best p50, ns per ray; the library writes the depth-first order):
 
-| Order | 112-byte run | aligned run | Final run A |
-| --- | ---: | ---: | ---: |
-| depth first, left subtree first (`closest_hit_compact`) | 197.18 | 195.64 | 196.37 |
-| builder's order of the source nodes (`_builder_order`) | 198.28 | 192.99 | 196.57 |
-| depth first, child nearer the camera first (`_near_first`) | 194.95 | 190.63 | 193.48 |
-| seeded random order (`_shuffled`) | 203.53 | 197.75 | 201.78 |
+| Order | 112-byte run | aligned run | Final run A | Final run B |
+| --- | ---: | ---: | ---: | ---: |
+| depth first, left subtree first (`closest_hit_compact`) | 197.18 | 195.64 | 196.37 | 198.69 |
+| builder's order of the source nodes (`_builder_order`) | 198.28 | 192.99 | 196.57 | 197.99 |
+| depth first, child nearer the camera first (`_near_first`) | 194.95 | 190.63 | 193.48 | 194.25 |
+| seeded random order (`_shuffled`) | 203.53 | 197.75 | 201.78 | 201.45 |
 
-Conversion of the scene's tree (`trace/compact_convert`, one call): 431.6 µs and 421.4 µs
+Conversion of the scene's tree (`trace/compact_convert`, one call): 421.4 to 431.6 µs
 best p50, about 15 ns per compact node.
 
 **Reading.** The compact layout is 10 to 12 % faster for both searches in every run, about
@@ -847,6 +850,31 @@ best p50, about 15 ns per compact node.
 1 to 2.5 % faster than the default and a random order 2.5 to 3 % slower, consistent with
 the shuffled builder tree. The near-first order depends on the camera, so the library does
 not use it; a renderer that wants it can reorder the public nodes.
+
+**x86-64 (this pull request's `Perf / before and after` job,** a shared GitHub x86-64 Linux
+runner, `--rounds 7 --align-code`, base `0e84fff31a3c`; coarse, and absolute times are not
+comparable with the Mac's). Best p50, nanoseconds per ray:
+
+| Case | Base side | Head side |
+| --- | ---: | ---: |
+| `trace/closest_hit` | 360.02 | 375.59 |
+| `trace/closest_hit_compact` | — | 317.16 |
+| `trace/closest_hit_compact_near_first` | — | 315.55 |
+| `trace/closest_hit_compact_shuffled` | — | 321.89 |
+| `trace/any_hit` | 331.20 | 346.15 |
+| `trace/any_hit_compact` | — | 283.26 |
+| `trace/compact_convert` (one call) | — | 308 838 |
+
+The compact searches are 12 to 16 % (closest) and 14 to 18 % (any) faster than the old
+layout on that runner, against the base and the head side respectively, so the layout is
+not worse on x86-64; it gains at least as much as on the Mac. The unchanged
+`closest_hit` and `any_hit` read 4.3 and 4.5 % slower on the head side than on the base
+side, although neither function changed, while the other unchanged cases stayed within
+about 2 %: placement noise in a different binary, but it means the head-side ratio
+overstates the gain a little. On this runner the address-chained box replay costs only
+24 ns per ray more than the limit-chained one (100 ns on the Mac): dependent loads are
+relatively cheaper there, and its gain must come at least as much from the leaf visits and
+node reads the layout removes.
 
 **Trade-offs.**
 
@@ -870,8 +898,8 @@ multiply-adds per box, with conservative rounding) would add; looser boxes would
 the search visit more nodes. It becomes worth a trial for trees that leave the cache, which
 this scene's does not.
 
-**Unmeasured.** wasm32; other scenes and ray batches; scenes whose trees do not fit the
-cache; whether the gain survives a different builder (flyingrobots/bunny#213) or packets
+**Unmeasured.** wasm32, ARM Linux and Windows runners; local x86-64; other scenes and ray
+batches; scenes whose trees do not fit the cache; whether the gain survives a different builder (flyingrobots/bunny#213) or packets
 (flyingrobots/bunny#217).
 
 ## Profile of `closest_hit` on the benchmark scene
