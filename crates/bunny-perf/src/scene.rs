@@ -250,7 +250,9 @@ pub(crate) fn disagreeing_rays() -> Vec<usize> {
     let triangles = trace_triangles(&scene);
     let (old_rays, new_rays) = (visitor_rays(), trace_rays());
     let mut bad: Vec<usize> = Vec::new();
-    if old_rays.len() != new_rays.len() || i64::try_from(old_rays.len()) != Ok(RAYS_PER_SIDE * RAYS_PER_SIDE) {
+    if old_rays.len() != new_rays.len()
+        || i64::try_from(old_rays.len()) != Ok(RAYS_PER_SIDE * RAYS_PER_SIDE)
+    {
         bad.push(usize::MAX);
     }
     for (index, (old, new)) in old_rays.iter().zip(&new_rays).enumerate() {
