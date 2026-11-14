@@ -62,7 +62,7 @@ impl Raw3 {
         Self { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }
     }
 
-    fn cross(self, rhs: Self) -> Self {
+    const fn cross(self, rhs: Self) -> Self {
         Self {
             x: self.y * rhs.z - self.z * rhs.y,
             y: self.z * rhs.x - self.x * rhs.z,
@@ -101,7 +101,7 @@ fn rescale(v: Raw3, largest: u128) -> Raw3 {
 }
 
 /// Divides `numerator` by `divisor > 0`, rounding half away from zero.
-fn round_div(numerator: i128, divisor: i128) -> i128 {
+const fn round_div(numerator: i128, divisor: i128) -> i128 {
     let magnitude = (numerator.abs() + divisor / 2) / divisor;
     if numerator < 0 {
         -magnitude
@@ -128,11 +128,11 @@ fn unit(v: Raw3) -> Option<FixedVec3> {
     Some(FixedVec3::new(component(scaled.x)?, component(scaled.y)?, component(scaled.z)?))
 }
 
-fn checked_dot(a: FixedVec3, b: FixedVec3) -> Option<FixedQ32_32> {
-    let x = a.x.checked_mul(b.x)?;
-    let y = a.y.checked_mul(b.y)?;
-    let z = a.z.checked_mul(b.z)?;
-    x.checked_add(y)?.checked_add(z)
+fn checked_dot(lhs: FixedVec3, rhs: FixedVec3) -> Option<FixedQ32_32> {
+    let x_term = lhs.x.checked_mul(rhs.x)?;
+    let y_term = lhs.y.checked_mul(rhs.y)?;
+    let z_term = lhs.z.checked_mul(rhs.z)?;
+    x_term.checked_add(y_term)?.checked_add(z_term)
 }
 
 fn checked_negate(v: FixedVec3) -> Option<FixedVec3> {
