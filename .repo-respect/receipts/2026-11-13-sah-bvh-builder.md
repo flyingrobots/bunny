@@ -4,7 +4,7 @@ Task:
 Implement flyingrobots/bunny#213: add `build_bvh_sah`, a binned surface-area-heuristic
 BVH builder, to `bunny-broadphase` as a new function writing the same buffers and node
 format as `build_bvh`; leave `build_bvh`'s output unchanged; measure traversal through
-both trees on the benchmark scene and record the result as ledger entry 8.
+both trees on the benchmark scene and record the result as ledger entry 9.
 
 Files read:
 CODE_STANDARDS.md
@@ -66,8 +66,8 @@ CHANGELOG.md
 Topic docs:
 docs/topics/bvh-construction/README.md and test-plan.md (new chapter: node format, both
 builders' contracts, BVH-REQ-001..009, BVH-TP-001..021)
-docs/topics/performance/README.md (ledger entry 8, adding-a-case) and test-plan.md
-(PERF-REQ-008, PERF-TP-042, PERF-TP-043)
+docs/topics/performance/README.md (ledger entry 9, adding-a-case) and test-plan.md
+(PERF-REQ-009, PERF-TP-047, PERF-TP-048)
 
 Generated artifacts:
 None.
@@ -82,7 +82,7 @@ and deliberate mutations recorded in the topic docs. Results are in the pull req
 Known risks:
 The `trace/kernel_tri_*` replay cases read 7 to 14 % slower on the head side in both
 runs although no code they run changed; not reproduced in workspace builds, cause not
-established (see ledger entry 8).
+established (see ledger entry 9).
 The traversal measurement is one synthetic scene on one machine. The SAH tree is a
 different tree, so `intersect_ray` and `intersect_aabb` report primitives in a different
 order on it than on a `build_bvh` tree; `closest_hit` and `any_hit` answers are the same.

@@ -41,7 +41,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
 | PERF-REQ-007 | The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
-| PERF-REQ-008 | The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree. | `README.md#adding-a-case` |
+| PERF-REQ-009 | The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree. | `README.md#adding-a-case` |
 
 ```toml
 [[requirement]]
@@ -80,7 +80,7 @@ summary = "The traversal counters come from a harness replica that tests the sam
 status = "active"
 
 [[requirement]]
-id = "PERF-REQ-008"
+id = "PERF-REQ-009"
 summary = "The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree."
 status = "active"
 ```
@@ -130,8 +130,8 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-039 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes` |
 | PERF-TP-040 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb, bit for bit, on an overflow-heavy seeded corpus (coordinates near the i64 extremes, direction components of a few raw units) that hits, misses and saturates bounds. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_the_overflow_corpus` |
 | PERF-TP-041 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases` |
-| PERF-TP-042 | Comparability | PERF-REQ-008 | `closest_hit` returns the same hit and `any_hit` the same answer on all 1 024 camera rays through both trees. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray` |
-| PERF-TP-043 | Quality | PERF-REQ-008 | The SAH tree's exact SAH cost on the benchmark scene is below the quartile tree's; shapes and triangle-test counts are printed for the ledger. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree` |
+| PERF-TP-047 | Comparability | PERF-REQ-009 | `closest_hit` returns the same hit and `any_hit` the same answer on all 1 024 camera rays through both trees. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray` |
+| PERF-TP-048 | Quality | PERF-REQ-009 | The SAH tree's exact SAH cost on the benchmark scene is below the quartile tree's; shapes and triangle-test counts are printed for the ledger. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -459,8 +459,8 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "PERF-TP-042"
-requirements = ["PERF-REQ-008"]
+id = "PERF-TP-047"
+requirements = ["PERF-REQ-009"]
 evidence = "test"
 test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray"
 oracle = "Both trees give the same closest_hit and any_hit answers on every benchmark ray."
@@ -468,8 +468,8 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "PERF-TP-043"
-requirements = ["PERF-REQ-008"]
+id = "PERF-TP-048"
+requirements = ["PERF-REQ-009"]
 evidence = "test"
 test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree"
 oracle = "The exact SAH cost of both trees over the benchmark scene."

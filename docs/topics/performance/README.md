@@ -773,7 +773,7 @@ that needs its own measurement.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
 
-### 8. Binned SAH BVH builder (new API)
+### 9. Binned SAH BVH builder (new API)
 
 **Where:** `build_bvh_sah` in `bunny-broadphase` (flyingrobots/bunny#213). The contract is in
 the [BVH construction chapter](../bvh-construction/README.md#the-binned-sah-builder).

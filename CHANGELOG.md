@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for both builders (`build/bvh`, `build/bvh_sah`) and the benchmark rays traced
   through the SAH tree (`trace/closest_hit_sah`, `trace/any_hit_sah`), with a
   check that both trees give the same `closest_hit` and `any_hit` answers on
-  every ray. Ledger entry 8 in `docs/topics/performance/` records the
+  every ray. Ledger entry 9 in `docs/topics/performance/` records the
   measurement.
 * Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
   `trace/triangle_beyond_limit`, which time `TraceRay::hit_triangle` alone on the
