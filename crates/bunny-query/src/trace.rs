@@ -84,14 +84,18 @@ impl TraceRay {
         let limit = u64::try_from(t_max.raw()).ok()?;
         let lines = map2(self.origin, self.direction, pair);
         let bounds = map2(raw3(aabb.min), raw3(aabb.max), pair);
-        let [x, y, z] = map2(map2(lines, self.reciprocal, pair), bounds, slab);
-        let (x, y, z) = (x?, y?, z?);
-        let enter = x.0.max(y.0).max(z.0);
-        let exit = x.1.min(y.1).min(z.1);
-        if enter > exit || enter > limit {
+        // Every axis's cheap rejections come first, then the lower bounds; the upper bounds
+        // are computed only for a box that has not yet been ruled out.
+        let [x, y, z] = map2(lines, bounds, offsets);
+        let planes = map2([x?, y?, z?], self.reciprocal, pair);
+        let [x, y, z] = planes.map(|((near, _), reciprocal)| scaled(near, reciprocal));
+        let enter = x.max(y).max(z);
+        if enter > limit {
             return None;
         }
-        i64::try_from(enter).ok().map(FixedQ32_32::from_raw)
+        let [x, y, z] = map2(planes, self.direction, upper);
+        // `enter <= limit <= i64::MAX`, so it converts exactly.
+        (enter <= x.min(y).min(z)).then(|| FixedQ32_32::from_raw(enter.cast_signed()))
     }
 
     /// Exact ray–triangle test over distances `t_min..=t_max`.
@@ -240,13 +244,12 @@ const fn pair<A, B>(lhs: A, rhs: B) -> (A, B) {
     (lhs, rhs)
 }
 
-/// Bounds `(lower, upper)` on the distances at which a ray is inside one axis slab, from the
-/// ray's `(origin, direction)` on that axis, its reciprocal and the slab's `(min, max)`.
+/// The raw coordinate distances `(near, far)` from the origin to one axis slab's planes, in
+/// the direction of travel, from the ray's `(origin, direction)` on that axis and the slab's
+/// `(min, max)`; a near plane behind the origin counts as zero. `None` when the slab rules
+/// the box out.
 #[inline]
-fn slab(
-    ((origin, direction), reciprocal): ((i64, i64), u64),
-    (min, max): (i64, i64),
-) -> Option<(u64, u64)> {
+const fn offsets((origin, direction): (i64, i64), (min, max): (i64, i64)) -> Option<(u64, u64)> {
     // Against a negative direction, `!` (which reverses the order of `i64` and keeps
     // `!a - !b == b - a`) turns the slab into one crossed forwards. A zero component is
     // treated as forwards too.
@@ -255,18 +258,23 @@ fn slab(
     let (origin, near, far) = (origin ^ flip, near ^ flip, far ^ flip);
     // A far plane behind the origin rejects the box; so does a near plane ahead of it when
     // the ray runs parallel to the slab.
-    let parallel = direction == 0;
-    if far < origin || (parallel && near > origin) {
+    if far < origin || (direction == 0 && near > origin) {
         return None;
     }
     // A difference `a - b` with `a >= b` lies in `0..2^64`, so the wrapping `i64` difference
     // read as `u64` is exact.
     let far = far.wrapping_sub(origin).cast_unsigned();
     let near = if near > origin { near.wrapping_sub(origin).cast_unsigned() } else { 0 };
-    // A parallel axis has a zero reciprocal, so its lower bound is 0, and its upper bound
-    // saturates to `u64::MAX`.
-    let step = if parallel { u64::MAX } else { 1 };
-    Some((scaled(near, reciprocal), scaled(far, reciprocal + 1).saturating_add(step)))
+    Some((near, far))
+}
+
+/// The slab upper bound `floor(far * (r + 1) / 2^31) + 1`, saturating, from the slab's
+/// `(near, far)` offsets, its reciprocal `r` and the direction component. A parallel axis
+/// (whose reciprocal is zero) gets `u64::MAX`.
+#[inline]
+fn upper(((_, far), reciprocal): ((u64, u64), u64), direction: i64) -> u64 {
+    let step = if direction == 0 { u64::MAX } else { 1 };
+    scaled(far, reciprocal + 1).saturating_add(step)
 }
 
 /// `floor(2^63 / |d|)`, or zero for a zero component.
