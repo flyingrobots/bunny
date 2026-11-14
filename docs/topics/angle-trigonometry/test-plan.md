@@ -37,6 +37,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | AT-REQ-006 | `from_degrees` is exact for whole multiples of 90 degrees. | `README.md#conversions` |
 | AT-REQ-007 | `from_radians` and `from_degrees` are symmetric under negation. | `README.md#conversions` |
 | AT-REQ-008 | `sin_cos` output bits are identical on every supported target. | `README.md#how-it-is-computed` |
+| AT-REQ-009 | The interpolated value, with 62 fractional bits, is rounded to Q32.32 to nearest with ties to even, and exact ties are reachable. | `README.md#how-it-is-computed` |
 
 ```toml
 [[requirement]]
@@ -78,6 +79,11 @@ status = "active"
 id = "AT-REQ-008"
 summary = "sin_cos output bits are identical on every supported target."
 status = "active"
+
+[[requirement]]
+id = "AT-REQ-009"
+summary = "The interpolated value, with 62 fractional bits, is rounded to Q32.32 to nearest with ties to even, and exact ties are reachable."
+status = "active"
 ```
 
 ## Fixtures
@@ -100,6 +106,7 @@ an independent high-precision oracle when you do.
 | AT-TP-005 | Conversion | AT-REQ-005, AT-REQ-001 | Exact raw angles for fractional, multi-turn and negative turns, and wrapping arithmetic. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_005_turns_wrap_exactly` |
 | AT-TP-006 | Conversion | AT-REQ-006 | Exact raw angles for 0, ±90, 180, 270, 360 and 450 degrees. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_006_whole_quarter_degrees_convert_exactly` |
 | AT-TP-007 | Conversion | AT-REQ-007 | `from_radians(-x)` equals the wrapped negation of `from_radians(x)` over 20 000 seeded values. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_007_radians_round_to_the_nearest_unit_symmetrically` |
+| AT-TP-009 | Final rounding tie | AT-REQ-009 | Six quarter-wave positions whose interpolated sine is exactly half a raw unit above an integer (three even, three odd, found by bisection over a replica of the interpolation) give the even neighbour from `sin` and from `cos` at the mirrored angle; rounding ties away from zero or toward zero fails. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_009_an_exact_tie_in_the_last_rounding_goes_to_even` |
 
 ```toml
 [[case]]
@@ -171,6 +178,15 @@ requirements = ["AT-REQ-007"]
 evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_007_radians_round_to_the_nearest_unit_symmetrically"
 oracle = "from_radians(-x) equals the wrapped negation of from_radians(x) over 20 000 seeded values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "AT-TP-009"
+requirements = ["AT-REQ-009"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_009_an_exact_tie_in_the_last_rounding_goes_to_even"
+oracle = "Six quarter-wave positions whose interpolated sine is exactly half a raw unit above an integer (three even, three odd, found by bisection over a replica of the interpolation) give the even neighbour from `sin` and from `cos` at the mirrored angle; rounding ties away from zero or toward zero fails."
 tier = "fast"
 status = "implemented"
 ```

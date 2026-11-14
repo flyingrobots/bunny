@@ -373,6 +373,7 @@ Regenerating them is a contract change.
 | TRACE-TP-418 | The benchmark scene's profile | TRACE-REQ-035 | On all 1 024 benchmark rays, the counts of both counted searches on the compact copy of the scene's tree equal the profile replica's box_calls, box_some, skipped_at_pop, interior_visited, leaf_visited, tri_tests and stack_peak for the same ray. | `crates/bunny-perf/src/profile.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray` |
 | TRACE-TP-419 | Adding counts | TRACE-REQ-035 | Adding two TraversalCounts sums each counter, saturating at u64::MAX, and keeps the larger peak_stack; += agrees with +. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_419_adding_counts_sums_saturates_and_keeps_the_peak` |
 | TRACE-TP-420 | Deliberate counting mutations | TRACE-REQ-035 | A box test not counted, a rejected box counted as entered, a skipped pop counted as a visit, a leaf counted twice, the last primitive test of a leaf not counted, the peak not tracked and the counted search pruning differently from the uncounted one (`<=` made `<` for the counting tally only) each make a case fail. | [Mutation checks](#counting-mutation-checks) |
+| TRACE-TP-421 | Compact visit bound | TRACE-REQ-028 | A three-node compact cycle with a leaf beside each node: `compact_closest_hit` and `compact_any_hit` test primitives 0, 1 and 2 and refuse the fourth interior visit with `InvalidNodeIndex`, so a bound one looser (a fourth primitive test) or one tighter (no test of primitive 2) fails. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_421_the_compact_visit_bound_allows_exactly_one_visit_per_node` |
 
 ```toml
 [[case]]
@@ -1075,6 +1076,15 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#counting-mutation-checks"
 oracle = "Each counting rule broken on purpose makes a case fail."
 tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-421"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_421_the_compact_visit_bound_allows_exactly_one_visit_per_node"
+oracle = "A three-node compact cycle with a leaf beside each node: `compact_closest_hit` and `compact_any_hit` test primitives 0, 1 and 2 and refuse the fourth interior visit with `InvalidNodeIndex`, so a bound one looser (a fourth primitive test) or one tighter (no test of primitive 2) fails."
+tier = "fast"
 status = "implemented"
 ```
 

@@ -610,6 +610,7 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-096 | A hit point one raw unit outside steps inside | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | On each axis and sign, a hit point at `TRACE_COORD_LIMIT_RAW + 1` raw units on that axis (the case's ray along the axis from the origin, distance `TRACE_COORD_LIMIT_RAW + 1` raw, face chosen so the facing normal points inward) against the plane `2a + b = 2 TRACE_COORD_LIMIT_RAW - 1` (`a` the axis, `b` the next): the point and one step are not strictly on the arrival side and two steps are, so `new` returns `Some` and `try_new` `Ok` of the start point `TRACE_COORD_LIMIT_RAW - 1` raw units out on that axis (hand computed), with the facing frame. No comparison with the retained 0.7.1 code. | `crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_096_a_hit_point_one_raw_unit_outside_the_domain_steps_inside` |
 | OPTICS-TP-097 | A hit point two raw units outside is refused | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The scenes of OPTICS-TP-096 at distance `TRACE_COORD_LIMIT_RAW + 2` raw: two steps reach only `TRACE_COORD_LIMIT_RAW`, which is outside, so `new` returns `None` and `try_new` returns `HitPointOutsideTraceDomain` with the unstepped point (hand computed), refused before the plane test. No comparison with the retained 0.7.1 code. | `crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_097_a_hit_point_two_raw_units_outside_the_domain_is_refused_by_both_paths` |
 | OPTICS-TP-098 | Overflow-guard mutations | OPTICS-REQ-042, OPTICS-REQ-043 | The beyond-reach guard of each path moved one raw unit in each direction fails a case that does not compare with the retained 0.7.1 code, except the fast path's loosened guard, which changes no output (shown in the mutation section). | [Overflow-guard mutation checks](#overflow-guard-mutation-checks) |
+| OPTICS-TP-099 | Shared-normal bound | OPTICS-REQ-047 | `smooth_normal` returns the shared normal `(2^32 + 1, 92 681, 0)` unchanged; exact big-integer comparison shows it within 2 and not within 1 raw unit of the exact unit vector along it (1.999 98 by 60-digit decimals), and one more in `y` is not a `FixedUnitVec3`. | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_099_a_shared_normal_is_within_two_raw_units_of_its_exact_direction` |
 
 ```toml
 [[case]]
@@ -1447,6 +1448,15 @@ evidence = "manual-audit"
 artifact = "docs/topics/optics/test-plan.md#overflow-guard-mutation-checks"
 oracle = "Each path's beyond-reach guard tightened and loosened by one raw unit, with each mutant's tests under timeout 120 and every source touched before the build."
 tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-099"
+requirements = ["OPTICS-REQ-047"]
+evidence = "test"
+test = "crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_099_a_shared_normal_is_within_two_raw_units_of_its_exact_direction"
+oracle = "`smooth_normal` returns the shared normal `(2^32 + 1, 92 681, 0)` unchanged; exact big-integer comparison shows it within 2 and not within 1 raw unit of the exact unit vector along it (1.999 98 by 60-digit decimals), and one more in `y` is not a `FixedUnitVec3`."
+tier = "fast"
 status = "implemented"
 ```
 
