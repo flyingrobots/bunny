@@ -202,12 +202,20 @@ also checks that both give the same answer on every input: `scene/closest_visito
 `trace/closest_hit` must choose the same primitive on every ray. The harness runs that
 check before timing and exits with the differing ray indices if it fails.
 
+`bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
+`closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
+the search loop in `crates/bunny-perf/src/profile.rs`, built on public APIs only, so the core
+crates carry no counters; a test checks that it tests the same primitives in the same order as
+the shipped functions on every ray. The same module provides the `trace/kernel_*` cases, which
+replay the box and triangle tests the search makes and time them in isolation. See the
+[profile](#profile-of-closest_hit-on-the-benchmark-scene).
+
 `trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
 on the scene: each camera ray that hits something against the triangle it hits first,
 repeated to fill a batch, once with no upper limit and once with `t_max` one raw unit below
 the hit (the case the traversal meets behind its best hit). The scene's unit tests also
 compare every triangle test of `trace/closest_hit` with the frozen reference copy of the
-kernel and count how many reach the division (entry 5).
+kernel and count how many reach the division (entry 6).
 
 ## Optimization Ledger
 
@@ -556,12 +564,493 @@ follow from this one.
 hand), other scenes, other ray batches, thread scaling, and `closest_hit` against
 `intersect_ray` with a pruning triangle test (the old path here never prunes).
 
+### 5. Prepared divisors and prepared rays (new exact APIs)
+
+**Where:** new `bunny_num::FixedDivisor`, `bunny_query::PreparedRay3` and
+`bunny_query::ray_intersects_aabb_prepared`. Existing functions are unchanged.
+
+**Technique.** Division by an invariant integer (Möller and Granlund, "Improved Division
+by Invariant Integers", IEEE Transactions on Computers 60(2), 2011, Algorithm 4).
+`FixedDivisor::new` normalizes the divisor's magnitude so its top bit is set and computes
+one 64-bit reciprocal with a single 128-bit division. Each later division of a Q32.32
+dividend becomes one or two two-word steps, each one 64×64→128 multiplication, a few
+additions and at most two corrections; quotients small enough for one word take one step.
+The remainder comes out exact, so ties-to-even rounding and the overflow decision are the
+same as `FixedQ32_32::checked_div`.
+
+`PreparedRay3` holds one `FixedDivisor` per nonzero direction component, so the slab test
+in `ray_intersects_aabb_prepared` multiplies where `ray_intersects_aabb` divides. When a
+slab distance or coordinate difference does not fit Q32.32 it calls the same exact wide
+path as `ray_intersects_aabb` (`aabb_wide::exact_slab_hit`), so the two agree there too.
+
+**Fidelity: exact, as new APIs.** `divisor.checked_div(a)` returns exactly
+`a.checked_div(divisor)`, `None` included, and `ray_intersects_aabb_prepared` returns exactly
+what `ray_intersects_aabb` returns for the same ray and box, the overflow inputs of
+flyingrobots/bunny#211 included. Evidence (PERF-TP-034 to PERF-TP-041): boundary values,
+every power-of-two divisor with both signs, 100 000 seeded pairs across all magnitudes,
+10 000 constructed exact ties, 160 000 seeded ray and box pairs including axis-parallel
+rays, up to 240 000 pairs from an overflow-heavy corpus (coordinates near the `i64` extremes,
+direction components of a few raw units; the test asserts more than 100 000 pairs, more than
+5 000 hits, more than 5 000 misses and more than 1 000 hits with a saturated bound) and one
+constructed case answered by the wide path. Deliberate mutation: discarding the wide path's
+hit on overflow (`.filter(|_| false)`) fails both overflow tests.
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), through the guarded container runner with the branch's commits as
+history and the machine to itself (`--exclusive`), on 2026-11-13, base revision
+`cc0521e15084` (`origin/main`). Two complete runs:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code
+```
+
+Run 1:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.23 | +1.0% | 4.11 | 4.19 | +1.9% | 0.98× | 4.80 | 5.09 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.89 | 0.94 | +5.6% | 0.95× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.07 | 11.15 | +0.7% | 10.42 | 10.46 | +0.4% | 1.00× | 11.11 | 11.19 |
+| `linalg/length` | 16.11 | 16.24 | +0.8% | 15.46 | 15.62 | +1.0% | 0.99× | 16.60 | 16.76 |
+| `linalg/normalize` | 41.71 | 41.91 | +0.5% | 38.98 | 39.14 | +0.4% | 1.00× | 45.12 | 43.82 |
+| `num/div` | 6.59 | 6.63 | +0.6% | 6.27 | 6.43 | +2.6% | 0.98× | 6.84 | 6.80 |
+| `num/mul` | 1.38 | 1.42 | +2.9% | 1.34 | 1.34 | +0.0% | 1.00× | 1.46 | 1.46 |
+| `num/sqrt` | 13.59 | 13.88 | +2.1% | 13.31 | 13.27 | -0.3% | 1.00× | 14.16 | 14.12 |
+| `prepared/div` | — | 4.27 | new | — | 3.99 | new | — | — | 4.44 |
+| `prepared/ray_aabb` | — | 36.30 | new | — | 21.73 | new | — | — | 39.10 |
+| `prepared/ray_prepare` | — | 26.45 | new | — | 26.00 | new | — | — | 26.57 |
+| `query/ray_aabb` | 55.09 | 54.24 | -1.5% | 52.29 | 52.25 | -0.1% | 1.00× | 61.28 | 56.88 |
+| `query/ray_build` | 51.96 | 52.21 | +0.5% | 47.93 | 50.25 | +4.8% | 0.95× | 54.36 | 55.09 |
+| `query/ray_sphere_hit` | 65.63 | 68.60 | +4.5% | 62.34 | 61.00 | -2.1% | 1.02× | 71.82 | 71.90 |
+| `query/ray_sphere_miss` | 21.16 | 21.20 | +0.2% | 19.86 | 19.78 | -0.4% | 1.00× | 21.28 | 21.24 |
+| `query/ray_triangle` | 52.61 | 52.41 | -0.4% | 52.49 | 51.80 | -1.3% | 1.01× | 55.26 | 54.97 |
+| `scene/closest_visitor` | 3167.16 | 3189.79 | +0.7% | 3125.86 | 3149.30 | +0.7% | 0.99× | 3229.30 | 3326.10 |
+| `trace/any_hit` | 206.50 | 208.90 | +1.2% | 205.12 | 204.75 | -0.2% | 1.00× | 222.66 | 223.06 |
+| `trace/box_entry` | 6.02 | 6.02 | +0.0% | 5.62 | 5.98 | +6.4% | 0.94× | 6.06 | 6.06 |
+| `trace/box_ray_prepare` | 1.91 | 1.95 | +2.1% | 1.75 | 1.83 | +4.6% | 0.96× | 1.95 | 1.99 |
+| `trace/closest_hit` | 224.65 | 224.57 | -0.0% | 220.87 | 221.64 | +0.3% | 1.00× | 246.83 | 236.70 |
+| `trace/ray_prepare` | 1.99 | 2.03 | +2.0% | 1.87 | 1.87 | +0.0% | 1.00× | 2.04 | 2.04 |
+
+Run 2:
+
+| Case | Before p50 | After p50 | Change | Before best | After best | Best change | Speedup | Before p95 | After p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `angle/f64_sin_cos_reference` | 4.19 | 4.19 | +0.0% | 4.11 | 4.19 | +1.9% | 0.98× | 4.84 | 5.13 |
+| `angle/from_radians` | 0.94 | 0.94 | +0.0% | 0.94 | 0.94 | +0.0% | 1.00× | 0.94 | 0.94 |
+| `angle/sin_cos` | 11.11 | 11.11 | +0.0% | 11.07 | 11.07 | +0.0% | 1.00× | 11.15 | 11.19 |
+| `linalg/length` | 16.36 | 16.36 | +0.0% | 15.75 | 15.18 | -3.6% | 1.04× | 16.68 | 16.68 |
+| `linalg/normalize` | 42.56 | 42.40 | -0.4% | 40.69 | 41.02 | +0.8% | 0.99× | 44.68 | 43.66 |
+| `num/div` | 6.63 | 6.71 | +1.2% | 6.47 | 6.47 | +0.0% | 1.00× | 6.84 | 6.92 |
+| `num/mul` | 1.42 | 1.42 | +0.0% | 1.42 | 1.34 | -5.6% | 1.06× | 1.46 | 1.46 |
+| `num/sqrt` | 14.08 | 14.16 | +0.6% | 12.70 | 13.67 | +7.6% | 0.93× | 14.16 | 14.28 |
+| `prepared/div` | — | 4.03 | new | — | 3.50 | new | — | — | 4.23 |
+| `prepared/ray_aabb` | — | 23.36 | new | — | 21.53 | new | — | — | 23.72 |
+| `prepared/ray_prepare` | — | 26.33 | new | — | 26.04 | new | — | — | 27.14 |
+| `query/ray_aabb` | 54.28 | 53.30 | -1.8% | 51.64 | 51.47 | -0.3% | 1.00× | 60.71 | 59.86 |
+| `query/ray_build` | 51.76 | 51.39 | -0.7% | 50.33 | 50.66 | +0.7% | 0.99× | 54.40 | 54.04 |
+| `query/ray_sphere_hit` | 66.90 | 66.32 | -0.9% | 64.86 | 64.86 | +0.0% | 1.00× | 71.66 | 70.56 |
+| `query/ray_sphere_miss` | 21.20 | 21.16 | -0.2% | 21.04 | 21.04 | +0.0% | 1.00× | 21.32 | 21.24 |
+| `query/ray_triangle` | 52.86 | 52.61 | -0.5% | 52.45 | 52.29 | -0.3% | 1.00× | 55.42 | 55.01 |
+| `scene/closest_visitor` | 3177.54 | 3200.65 | +0.7% | 3146.78 | 3159.27 | +0.4% | 1.00× | 3260.38 | 3257.05 |
+| `trace/any_hit` | 210.08 | 210.74 | +0.3% | 207.11 | 206.95 | -0.1% | 1.00× | 227.34 | 232.54 |
+| `trace/box_entry` | 5.98 | 6.02 | +0.7% | 5.98 | 5.98 | +0.0% | 1.00× | 6.02 | 6.02 |
+| `trace/box_ray_prepare` | 1.87 | 1.91 | +2.1% | 1.83 | 1.83 | +0.0% | 1.00× | 1.91 | 1.95 |
+| `trace/closest_hit` | 226.97 | 224.73 | -1.0% | 222.37 | 221.92 | -0.2% | 1.00× | 251.71 | 251.59 |
+| `trace/ray_prepare` | 1.99 | 1.99 | +0.0% | 1.99 | 1.99 | +0.0% | 1.00× | 2.04 | 2.04 |
+
+`prepared/*` report as new because the base has no such API. Best p50 in nanoseconds, run 1
+and run 2, for the cases that time the same rays and box (`query/ray_aabb`,
+`prepared/ray_aabb`, `trace/box_entry`):
+
+| Operation | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| `num/div` (`checked_div`) | 6.43 (base 6.27) | 6.47 (base 6.47) |
+| `prepared/div` | 3.99 | 3.50 |
+| `query/ray_aabb` (exact distances) | 52.25 (base 52.29) | 51.47 (base 51.64) |
+| `prepared/ray_aabb` (the same exact bits) | 21.73 | 21.53 |
+| `prepared/ray_prepare` (once per ray) | 26.00 | 26.04 |
+| `trace/box_entry` (conservative, no distances) | 5.98 (base 5.62) | 5.98 (base 5.98) |
+| `trace/box_ray_prepare` (once per ray) | 1.83 (base 1.75) | 1.83 (base 1.83) |
+
+A prepared division is 1.6 to 1.8 times faster than `checked_div` (best p50); a prepared box
+test is 2.4 times faster than `ray_intersects_aabb` in the same run, and with its 26 ns
+preparation it is level at one box (26 + 22 = 48 ns against 52 ns) and ahead from the second.
+`trace/box_entry` takes 6.0 ns after a 1.8 ns preparation: 3.6 times faster than the prepared
+exact test per box and 14 times cheaper to prepare. Two things limit these readings.
+`prepared/ray_aabb` and `prepared/div` medians are bimodal (36.30 and 23.36 ns median
+against 21.73 and 21.53 best for the box test), the placement sensitivity described under
+[bimodal cases](#bimodal-cases), so best p50 is used. And `query/ray_aabb`, whose code has
+not changed, measured about 40 ns best p50 in two earlier runs against base `b2fe36638429`
+and measures about 52 ns here against base `cc0521e15084`, in both the base and the
+branch build: its absolute time depends on the build's code layout, so ratios are taken
+within one run only, and no absolute `query/ray_aabb` figure is claimed. Every existing case
+is within 8 % at best p50 in both runs and shows no consistent direction, and
+`FixedQ32_32::sqrt_u128` is byte-identical to `main`'s, so the square root dispatch from
+entry 3 is not re-selected. This run's `origin/main` could not build most groups alone
+(the `case` helper compiled only with the `scene` or `trace` group); the commit
+"bunny-perf: compile the case helper for every feature group" repairs that, and an earlier
+attempt without it reported every `num`, `linalg`, `query` and `angle` case as new.
+
+Two earlier complete runs of this branch against base `b2fe36638429`, before main added
+closest-hit traversal, gave the same picture: best p50 `prepared/div` 3.46 and 3.42 ns,
+`prepared/ray_aabb` 21.81 and 21.00 ns, `prepared/ray_prepare` 26.12 and 26.29 ns,
+`trace/box_entry` 5.98 ns, with `num/div` 6.75 and 6.71 ns and `query/ray_aabb` 39.92 and
+40.97 ns in the same runs.
+
+The numbers of the earlier version of this entry (host measurement, older harness, stacked
+on the two-divide square root) are superseded and not carried over.
+
+**x86-64 (the pull request's `Perf / before and after` job, GitHub `ubuntu-24.04` runner,
+shared and coarse, 7 rounds, base `origin/main`).** The gate passed: no existing case moved
+by more than 2.5 % at best p50 (`num/sqrt` -2.5 %, `linalg/length` +1.4 %, the controls
+within 1.1 %). The new cases are much less favourable to the exact prepared APIs than on the
+M5. Best p50 in nanoseconds:
+
+| Operation | x86-64 CI | M5 Pro (two runs) |
+| --- | ---: | ---: |
+| `num/div` | 9.92 | 6.43, 6.47 |
+| `prepared/div` | 7.97 | 3.99, 3.50 |
+| `query/ray_aabb` | 68.76 | 52.25, 51.47 |
+| `prepared/ray_aabb` | 62.06 | 21.73, 21.53 |
+| `prepared/ray_prepare` | 18.75 | 26.00, 26.04 |
+| `trace/box_entry` | 15.52 | 5.98, 5.98 |
+| `trace/box_ray_prepare` | 8.05 | 1.83, 1.83 |
+
+On x86-64 a prepared division is 1.25 times faster than `checked_div` and a prepared box
+test only 1.11 times faster than `ray_intersects_aabb`, so with its preparation it pays off
+only from a ray's third box (18.75 + 2 x 62.06 = 142.9 against 137.5 ns at two boxes, 205.0
+against 206.3 ns at three). `trace/box_entry` is 4.4 times faster than the exact box test
+there. The speed of the prepared exact API is therefore target-dependent and modest where
+the hardware divides quickly; the
+[target-specific rules](#target-specific-implementations) do not apply because the prepared
+path is a separate API, not a replacement.
+
+**Which API suits which use.**
+
+- *Exact `(enter, exit)` distances, bit for bit as `ray_intersects_aabb`, for many boxes
+  per ray* (for example a caller of `bunny_broadphase::intersect_ray` that wants the
+  existing results faster): `PreparedRay3` with `ray_intersects_aabb_prepared`.
+- *Division by one divisor many times, exactly as `checked_div`:* `FixedDivisor`.
+- *Ray tracing and closest-hit traversal* (deciding whether a node can contain a hit and
+  ordering nodes by a lower bound on the entry distance): `TraceRay::box_entry`. It is
+  faster than the prepared exact test per box and per ray. It does not return the exit
+  distance, may report a box a ray narrowly misses, and limits inputs to the trace domain.
+  `PreparedRay3` does not speed up a ray tracer that can use it, and this entry does not
+  claim it does.
+- *A single division or a single box per ray:* `checked_div` and `ray_intersects_aabb`.
+
+**Does the exact prepared API still earn its place?** `FixedDivisor` does: nothing else in
+Bunny offers exact repeated division, and it is 1.6 to 1.8 times faster. `PreparedRay3` is
+narrower than when it was written. Its use is an exact box test that is faster than
+`ray_intersects_aabb`, and nothing in the workspace calls it yet; the traversals added since
+use `box_entry`. It stays as a new API with an oracle test. If the maintainer prefers not
+to keep an exact box API without a caller, the cheapest course is to keep `FixedDivisor`,
+drop `PreparedRay3` and `ray_intersects_aabb_prepared`, and move this experiment's box part
+to "Tried And Rejected"; the pull request states the same recommendation. Switching
+`intersect_ray` to the prepared test would keep its output bits and is a separate change
+that needs its own measurement.
+
+**Trade-offs.**
+
+- *Preparation costs a division per axis.* `PreparedRay3::new` takes about 26 ns; a single
+  division should still use `checked_div`.
+- *More state per ray.* `PreparedRay3` carries three divisors (25 bytes each, with padding)
+  next to the ray.
+- *Subtle arithmetic.* Algorithm 4's correction steps are easy to get wrong; the
+  equivalence tests against `checked_div` are the guard.
+- *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
+  divisions it would replace there.
+
+## Profile of `closest_hit` on the benchmark scene
+
+This section is an investigation (flyingrobots/bunny#212). Nothing got faster, so it is not
+a ledger entry. It says where the time of `trace/closest_hit` goes, so that the stage 2
+experiments can be chosen by evidence. No library function changed.
+
+### Method
+
+- **Counters live in the harness.** `crates/bunny-perf/src/profile.rs` replicates the search
+  loop of `closest_hit` and `any_hit` using only public items (`TraceRay::box_entry`,
+  `BvhNode`, `TraceRay::hit_triangle`) and counts events. The core crates carry no counters.
+  `bunny-perf --stats` prints the tables below.
+- **The replica is checked against the shipped functions.** On every one of the 1 024 rays
+  the replica calls the primitive test with the same primitives, the same limits and in the
+  same order as `closest_hit` (the same primitives in the same order as `any_hit`), and
+  returns the same hit. Swapping the order of the two pushes in the replica makes both tests
+  fail.
+- **Triangle stages** are redone from the public inputs in `i128` and compared with
+  `hit_triangle` on every test: the stage counter never disagreed. A test that passes the
+  edge checks with a negative distance numerator returns before dividing, so it is counted
+  as `behind_origin`, not as divided (none occur on this scene).
+- **Ray classes** come from the hit `closest_hit` finds: sphere (primitive below 27 648),
+  ground only, or nothing.
+- **Time split.** The replica records every box test (node, limit) and triangle test
+  (primitive, limit) of all 1 024 `closest_hit` searches. The `trace/kernel_*` cases replay
+  exactly those calls on the real node boxes and triangles, in the order the search made
+  them, and report nanoseconds per ray (a batch is the calls of 1 024 rays). The `_chain`
+  cases make each call's limit depend on the previous result, which measures latency instead
+  of overlapped throughput.
+
+### The tree
+
+| | |
+| --- | ---: |
+| nodes | 55 277 |
+| leaves | 27 639 |
+| interior nodes | 27 638 |
+| maximum leaf depth (root is 0) | 19 |
+| mean leaf depth | 15.44 |
+| leaf sizes (primitives: leaves) | 1: 27 628, 2: 11 |
+| interior surface area / root surface area, summed | 3.13 |
+| primitive-weighted leaf area / root area, summed | 1.86 |
+
+The last two rows are the traversal and intersection terms of the surface-area heuristic
+with unit costs (total 4.99 in those units). The root box is dominated by the 40-unit ground
+triangles, so they serve as a baseline for comparing builders, not as a prediction of ray
+cost. The builder's leaves of up to four primitives are almost never used: 99.96 % of
+leaves hold one triangle. The tree is close to the smallest binary tree over these
+primitives, and its mean leaf depth (15.4) is near the 14.8 of a perfectly balanced tree
+with 27 650 leaves.
+
+### Counts per ray: `closest_hit`
+
+| counter per ray | all rays | hit the sphere | hit only the ground | hit nothing |
+| --- | ---: | ---: | ---: | ---: |
+| rays | 1 024 | 236 | 448 | 340 |
+| nodes popped | 11.37 | 30.78 | 7.58 | 2.89 |
+| popped and skipped (entry bound beyond best) | 0.79 | 3.44 | 0.00 | 0.00 |
+| interior nodes visited | 9.38 | 24.14 | 6.54 | 2.89 |
+| leaves visited | 1.20 | 3.21 | 1.04 | 0.00 |
+| `box_entry` calls | 19.76 | 49.27 | 14.08 | 6.78 |
+| `box_entry` returned a bound | 11.37 | 30.78 | 7.58 | 2.89 |
+| `box_entry` rejected | 8.39 | 18.49 | 6.50 | 3.89 |
+| interior visits pushing both children | 2.05 | 7.07 | 0.80 | 0.21 |
+| interior visits pushing one child | 6.27 | 15.65 | 4.98 | 1.46 |
+| interior visits pushing no child | 1.06 | 1.42 | 0.76 | 1.21 |
+| peak stack depth | 2.49 | 6.15 | 1.56 | 1.16 |
+| triangle tests | 1.63 | 3.21 | 2.04 | 0.00 |
+| failed at the determinant | 0.00 | 0.00 | 0.00 | 0.00 |
+| failed the first barycentric check | 0.49 | 1.13 | 0.53 | 0.00 |
+| failed the second barycentric check | 0.44 | 0.95 | 0.51 | 0.00 |
+| passed the edges, behind the origin (no division) | 0.00 | 0.00 | 0.00 | 0.00 |
+| reached the division | 0.70 | 1.13 | 1.00 | 0.00 |
+| divided, then beyond the distance limit | 0.02 | 0.10 | 0.00 | 0.00 |
+| divided, in range but not better | 0.00 | 0.00 | 0.00 | 0.00 |
+| divided, accepted as the new best | 0.67 | 1.03 | 1.00 | 0.00 |
+
+Each class column averages over that class's rays; "all rays" averages over 1 024. Sphere
+rays are 23 % of the rays and 57 % of the box tests (236 x 49.27 of 20 238).
+
+### Counts per ray: `any_hit`
+
+Rays are classed by what `closest_hit` finds, so the columns match.
+
+| counter per ray | all rays | hit the sphere | hit only the ground | hit nothing |
+| --- | ---: | ---: | ---: | ---: |
+| nodes popped | 9.74 | 24.29 | 7.27 | 2.89 |
+| interior nodes visited | 8.69 | 21.74 | 6.23 | 2.89 |
+| leaves visited | 1.04 | 2.55 | 1.04 | 0.00 |
+| `box_entry` calls | 18.39 | 44.48 | 13.45 | 6.78 |
+| `box_entry` returned a bound | 10.77 | 28.64 | 7.34 | 2.89 |
+| triangle tests | 1.26 | 2.55 | 1.55 | 0.00 |
+| reached the division | 0.67 | 1.00 | 1.00 | 0.00 |
+
+`any_hit` costs 91 to 93 % of `closest_hit` because stopping early saves little here. Over
+all rays it makes 93 % of the box tests, 86 % of the pops and 77 % of the triangle tests
+of `closest_hit`. Rays that hit nothing (33 %) do identical work in both. Ground rays
+save 4 % of their box tests and sphere rays 10 % of theirs (21 % of their pops). Read from
+the counts, not tested: the nearer-first descent reaches a first hit early, so stopping
+there only avoids the 3.4 skipped pops and the nearby subtrees the closest search still
+checks, and the descent to the first leaf, which both pay for, dominates.
+
+### Where the time goes
+
+Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container (`aarch64-linux`),
+2026-11-13, two complete runs (run with `--exclusive`, so no other container run
+overlapped) of:
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter trace/
+```
+
+Base revision `e395090e8cd5` (`origin/main`). The harness source is the same on both
+sides, so the base and head columns of a run are a noise reference: no case moved by more
+than about 2 % in best p50 (the `ray_prepare` p50 moved 6 % on 0.1 ns). Head side, best
+p50, nanoseconds per ray:
+
+| Case | Run 1 | Run 2 | What it times |
+| --- | ---: | ---: | --- |
+| `trace/closest_hit` | 216.23 | 213.50 | the whole search |
+| `trace/any_hit` | 197.35 | 198.32 | the whole search |
+| `trace/kernel_box_entry` | 128.58 | 126.59 | the 19.76 box tests of a ray, independent calls |
+| `trace/kernel_box_entry_chain` | 129.96 | 131.88 | the same, each limit depending on the last result |
+| `trace/kernel_tri_rejected` | 15.34 | 15.30 | the 0.93 triangle tests of a ray that do not divide |
+| `trace/kernel_tri_divided` | 22.50 | 22.09 | the 0.70 triangle tests of a ray that divide |
+| `trace/kernel_tri_all_chain` | 37.11 | 38.05 | all 1.63 triangle tests, chained |
+
+The split of one ray (about 214 to 216 ns), from the two replay styles:
+
+| Part | ns per ray | Share | Per call |
+| --- | ---: | ---: | --- |
+| box tests (19.76 calls) | 127 to 132 | 59 to 61 % | 6.4 to 6.7 ns |
+| triangle tests that fail before dividing (0.93) | 15 | 7 % | about 16 ns |
+| triangle tests that divide (0.70) | 22 | 10 % | about 32 ns |
+| everything else | 44 to 50 | 20 to 23 % | about 4 ns per pop |
+
+"Everything else" is the stack, the pop and skip decisions, branch mispredictions, the
+closure call, bounds checks and any cache misses the replays do not repeat.
+
+A divided test costs about 15 ns more than a rejected one. That difference includes the
+products for `qvec` and `t` as well as `shifted_quotient`, so the division is at most about
+15 x 0.70 = 10 ns per ray (under 5 %), and less than that.
+
+**How "everything else" was estimated, and how uncertain it is.** It is the whole-search
+time minus the replayed kernel times, so it is a residual, not a measurement. Two
+effects move it. A replay calls the kernels from a tight loop over inputs known in advance,
+so branch prediction and out-of-order overlap are easier than in the real search, which
+picks the next node from the previous result; any extra cost of that sits in the residual.
+The chained replays bound the overlap effect from the other side: they cost 1 to 5 ns per
+ray more than the independent ones, so hidden latency is small for these kernels. The
+replays do read the real nodes in the search's order, so they include the cache behaviour
+of the 3 MB node array (55 277 nodes of 56 bytes, not checked against this chip's cache
+sizes). Treat the "everything else" row as good to plus or minus 15 ns; the box-test row
+is the better pinned one. The x86-64 CI runner reads about 1.85 times as long for
+`trace/closest_hit` (412 ns, ledger entry 4); this split was not measured there.
+
+### Neighbouring rays
+
+For square blocks of neighbouring camera rays, the box tests the rays make in total
+against the distinct nodes they test (`bunny-perf --stats`):
+
+| block | box tests, summed | distinct nodes | shared |
+| --- | ---: | ---: | ---: |
+| 1 x 1 rays | 20 238 | 20 238 | 0 % |
+| 2 x 2 rays | 20 238 | 10 316 | 49 % |
+| 4 x 4 rays | 20 238 | 7 346 | 64 % |
+| 8 x 8 rays | 20 238 | 6 518 | 68 % |
+
+### Ranked opportunities
+
+"Bound" means the ray's time if that part were free, from the numbers above (about 215 ns
+today). A real change gets a fraction of it. Nothing below was tried.
+
+1. **Fewer box tests per ray: #213 (builder), #216 (4-wide), #217 (packets).** Box tests are
+   127 to 132 ns (60 %); free, the ray would cost about 87 ns. 42 % of them (8.39 of 19.76)
+   reject. Sphere rays make 57 % of all box tests and 24.1 interior visits each where one
+   descent to a leaf takes about 15, so about 9 visits (18 box tests, about 115 ns) are
+   excess for them; averaged over all rays that is about 26 ns of box tests plus about
+   8 ns of pops. **#213 can therefore pay at most about 30 to 35 ns (15 %)** on this scene,
+   and only if the builder makes sphere rays descend almost one path. It cannot shrink the
+   tree: it already has one triangle per leaf and near-minimal depth. It can only reduce
+   box overlap.
+2. **A cheaper box test: #215 (compact node layout).** Bound: the box row, 127 to 132 ns.
+   A box test costs about 6.5 ns, and the chained replay is no slower than 5 ns per ray
+   above the independent one, so the test is limited by its own arithmetic (`i128`
+   products) more than by waiting for loads. A compact node cuts bytes per test, which
+   helps only the load share of that time; the replays do not separate load time from
+   arithmetic time, so that share is unmeasured. With integer-only arithmetic and no SIMD
+   in the core crates, expect a layout change alone to pay a small part of the box row.
+3. **A 4-wide BVH: #216.** Bound: the 44 to 50 ns residual (20 to 23 %), not the box row.
+   A 4-wide node tests four boxes per visit and halves the depth, so the box tests along a
+   path stay about the same (4 per wide level against 2 per binary level, over half the
+   levels) and the 20 238 box tests per 1 024 rays do not fall. What falls is pops, pushes
+   and steps between nodes, by up to about half of the residual, minus the cost of
+   ordering four children. Without SIMD a wide node does not make one box test cheaper.
+   Expect at most 15 to 25 ns.
+4. **Ray packets: #217.** Neighbouring rays do test the same nodes: 49 % of box tests in a
+   2 x 2 block, 64 % in 4 x 4, 68 % in 8 x 8 are repeats. If one test per node served a
+   whole 4 x 4 block, the box row could fall by up to 64 %, to about 47 ns, and the ray
+   would cost about 134 ns. That is a ceiling: each ray still needs its own entry bound
+   to order its children, so only a conservative whole-packet test saves anything, and it
+   saves less as rays diverge. These are primary camera rays on one smooth surface; secondary
+   rays share far less. #217 has the largest ceiling of the five and the least certain
+   payoff.
+5. **Rejecting far triangle hits before dividing: #214 cannot pay off on this scene.** Only
+   0.02 of the 0.70 divisions per ray are rejected by the distance limit afterwards, worth
+   about 0.3 ns. Accepted divisions are 1.03 per sphere ray and 1.00 per ground ray, one
+   per hit plus 0.03, so there is no division left to avoid. All triangle tests together are
+   37 to 38 ns (17 %): free, the ray would cost about 178 ns, and the division is at most
+   10 ns of that. A cheaper rejecting test (15 ns per ray) is a different idea from #214.
+
+No single item reaches the stage 2 target of under 100 ns per ray: free box tests give about
+87 ns, and nothing else comes close. The target needs both fewer box tests (builder,
+packets) and a lower cost per box test or per visit (layout, 4-wide).
+
+### Unmeasured
+
+x86-64 and wasm32; other scenes and ray batches (secondary rays share less between
+neighbours); the split of a box test into arithmetic and loads; whether a packet or a
+4-wide node would reach its ceiling; the effect of another builder on the sphere rays'
+excess visits (the 30 to 35 ns is an arithmetic ceiling, not a trial).
+
+## Contract Change Cost Checks
+
+A declared contract change is not an optimization and does not enter the ledger above, but
+when it must leave the common path's cost alone, the measurement that shows it is recorded
+here.
+
+### `ray_intersects_aabb` overflow handling (flyingrobots/bunny#211)
+
+**Change.** When a coordinate difference or slab distance overflows, `ray_intersects_aabb`
+now falls through to an exact `i128` slab test (`crates/bunny-query/src/ray/aabb_wide.rs`,
+marked `#[cold]`) instead of returning `None`. The rounded slab test, which answers every
+input without overflow, still does the same checked subtractions, divisions and comparisons;
+it now reports which of the two stops (zero-component miss or overflow) it hit. See the
+[ray-tracing chapter](../ray-tracing/README.md#general-purpose-ray-aabb-solver).
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), two complete runs through the guarded container runner with the
+branch's commits as history, base revision `2e92ce2748be` (`origin/main`):
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter query/
+```
+
+| Case | Run 1 p50 before | Run 1 p50 after | Run 1 best change | Run 2 p50 before | Run 2 p50 after | Run 2 best change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `query/ray_aabb` | 53.47 | 52.90 | +0.2% | 51.15 | 52.49 | -2.7% |
+| `query/ray_triangle` (control) | 51.96 | 52.53 | +0.4% | 51.51 | 51.92 | -0.2% |
+
+`query/ray_aabb` moved by +0.2 % and -2.7 % in best p50 and by -1.1 % and +2.6 % in median
+p50: inside the noise band, with no consistent direction. Its rays all reach the unit box
+without overflow, so the cases time the common path only; the exact path's cost is not
+measured and is paid only by inputs that used to return a false miss.
+
 ## Tried And Rejected
 
-Experiments that were measured and did not ship. Each keeps its numbers and the reason, so
-the same idea is not tried again blind, and says what would change the verdict.
+Experiments that kept exact results but did not pay off. They are recorded so the same idea
+is not retried without new evidence (a different target, or a changed design).
 
-### 5. Reject triangle hits beyond the limit before dividing (rejected)
+### Division-free `normalize`
+
+**Idea.** Replace `normalize`'s three divisions by the length with multiplications: a
+reciprocal of the length from a 256-entry seed table and three Newton steps
+(`y <- y(2 - xy)`, within 0–2 units of `2^127 / x` on 1 000 000 samples), a multiplied
+quotient estimate, and an exact remainder correction. No component is longer than the
+length, so the quotient is at most `2^32` and one correction step suffices.
+
+**Fidelity.** Exact: equivalence tests against `checked_div` and against the previous
+`normalize` (100 000 `FixedVec3` and `FixedVec2` cases each) passed.
+
+**Result on an Apple M5 Pro** (`--base origin/perf/fixed-divisor --rounds 11
+--align-code --filter linalg/`; measured with the harness before it passed every result
+through `black_box`, and not re-measured since, so read the sizes as indicative):
+
+| Variant | Best p50 before → after | Median before → after |
+| --- | --- | --- |
+| Branching correction | 42.72 → 41.46 ns (−2.9 %) | 45.49 → 55.66 ns (+22.4 %) |
+| Branch-free correction (masks) | 42.60 → 58.39 ns (+37.1 %) | 44.47 → 61.85 ns (+39.1 %) |
+
+**Why it lost.** The M5's 64-bit divide instruction is fast, so compiler-rt's 128-bit
+division takes few cycles for these operand sizes. The replacement's dependent chain
+(widening multiply, variable 128-bit shift, second multiply, subtract, correct, round) is
+about as long, and the branch-free form only lengthens it. Targets without a fast 64-bit
+divide (wasm32 in particular) were not measured and may behave differently.
+
+**Where it is.** Branch `experiment/divide-free-normalize` (`UnitDivisor` and its tests),
+not proposed for merging.
+
+### 6. Reject triangle hits beyond the limit before dividing
 
 **Where tried:** `TraceRay::hit_triangle` in `bunny-query` (flyingrobots/bunny#214). The
 kernel on `main` is unchanged; the branch added the check, measured it and withdrew it.
@@ -622,7 +1111,9 @@ classifies every triangle test with the reference arithmetic:
 | 1 673 (1.63 per ray) | 714 (42.7 %) | 24 (3.4 % of divisions, 1.4 % of tests) | 24 (all of them) |
 
 The traversal already prunes almost everything behind the best hit at the box level, so
-only 24 divisions in 1 024 rays are wasted. Even a check that cost nothing would save about
+only 24 divisions in 1 024 rays are wasted. This agrees with the
+[profile](#profile-of-closest_hit-on-the-benchmark-scene) (0.02 of 0.70 divisions per ray
+beyond the limit), which predicted that #214 could not pay on this scene. Even a check that cost nothing would save about
 24 × 12.5 ns over 1 024 rays, roughly 0.3 ns per ray, or 0.13 % of `trace/closest_hit`.
 
 **Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
@@ -685,36 +1176,3 @@ test gives the fraction directly; above about 15 % of crossings it is worth re-m
 x86-64 (with a hardware 128-by-64 divide the saving per skipped division is smaller) and
 wasm32 (where both the division and the 128-bit multiply are software routines) were not
 measured; the CI job measured x86-64 only on the withdrawn state.
-
-## Contract Change Cost Checks
-
-A declared contract change is not an optimization and does not enter the ledger above, but
-when it must leave the common path's cost alone, the measurement that shows it is recorded
-here.
-
-### `ray_intersects_aabb` overflow handling (flyingrobots/bunny#211)
-
-**Change.** When a coordinate difference or slab distance overflows, `ray_intersects_aabb`
-now falls through to an exact `i128` slab test (`crates/bunny-query/src/ray/aabb_wide.rs`,
-marked `#[cold]`) instead of returning `None`. The rounded slab test, which answers every
-input without overflow, still does the same checked subtractions, divisions and comparisons;
-it now reports which of the two stops (zero-component miss or overflow) it hit. See the
-[ray-tracing chapter](../ray-tracing/README.md#general-purpose-ray-aabb-solver).
-
-**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
-(`aarch64-linux`), two complete runs through the guarded container runner with the
-branch's commits as history, base revision `2e92ce2748be` (`origin/main`):
-
-```sh
-cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter query/
-```
-
-| Case | Run 1 p50 before | Run 1 p50 after | Run 1 best change | Run 2 p50 before | Run 2 p50 after | Run 2 best change |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `query/ray_aabb` | 53.47 | 52.90 | +0.2% | 51.15 | 52.49 | -2.7% |
-| `query/ray_triangle` (control) | 51.96 | 52.53 | +0.4% | 51.51 | 51.92 | -0.2% |
-
-`query/ray_aabb` moved by +0.2 % and -2.7 % in best p50 and by -1.1 % and +2.6 % in median
-p50: inside the noise band, with no consistent direction. Its rays all reach the unit box
-without overflow, so the cases time the common path only; the exact path's cost is not
-measured and is paid only by inputs that used to return a false miss.
