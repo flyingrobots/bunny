@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
+  `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
+  a tangent (no trigonometry) and return the new `ProjectionError`. The
+  coordinate law now defines the canonical NDC depth range `[0, 1]` (near to
+  `0`, far to `1`) and a `-Z` camera, with golden vectors that run natively and
+  under WebAssembly.
 * Added closest-hit and any-hit BVH ray traversal to `bunny-broadphase`:
   `closest_hit`, `any_hit`, `ClosestHit` and `BvhView` (the borrowed node and
   primitive-index buffers). The search is front to back over existing

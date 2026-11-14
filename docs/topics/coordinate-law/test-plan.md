@@ -57,8 +57,9 @@ formatting.
 | CL-REQ-008 | Future matrix transforms use column-vector semantics and right-to-left composition. | `README.md#transform-convention` |
 | CL-REQ-009 | Positive rotation follows the right-hand rule. | `README.md#rotation-and-angle-direction` |
 | CL-REQ-010 | Bounds require `min <= max`, inclusive boundary contact, and explicit emptiness. | `README.md#bounds-and-boundary-contact` |
-| CL-REQ-011 | Future canonical NDC uses `x/y` in `[-1, 1]`, `z` in `[0, 1]`, and positive `y` up. | `README.md#projection-and-ndc-reservations` |
+| CL-REQ-011 | Canonical NDC uses `x/y` in `[-1, 1]`, `z` in `[0, 1]`, and positive `y` up. | `README.md#projection-and-ndc` |
 | CL-REQ-012 | External boundary adapters document source convention and exact conversion into Bunny convention. | `README.md#external-format-boundaries` |
+| CL-REQ-013 | View space looks down `-Z`; projection builders map the near plane to NDC `z = 0` and the far plane to `z = 1`. | `README.md#projection-and-ndc` |
 
 ```toml
 [[requirement]]
@@ -113,13 +114,18 @@ status = "reserved"
 
 [[requirement]]
 id = "CL-REQ-011"
-summary = "Future canonical NDC uses x/y in [-1, 1], z in [0, 1], and positive y up."
-status = "reserved"
+summary = "Canonical NDC uses x/y in [-1, 1], z in [0, 1], and positive y up."
+status = "active"
 
 [[requirement]]
 id = "CL-REQ-012"
 summary = "External boundary adapters document source convention and exact conversion into Bunny convention."
 status = "reserved"
+
+[[requirement]]
+id = "CL-REQ-013"
+summary = "View space looks down -Z; projection builders map the near plane to NDC z = 0 and the far plane to z = 1."
+status = "active"
 ```
 
 Reserved requirements are part of the coordinate-law vocabulary, but they do
@@ -152,6 +158,8 @@ fixtures. Each fixture must document:
 | CL-TP-001 | Golden path, determinism | CL-REQ-001, CL-REQ-002, CL-REQ-003 | Exact `FixedVec3` equality for public cross-product outputs. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_001_canonical_basis_is_right_handed` |
 | CL-TP-002 | Golden path, winding | CL-REQ-004, CL-REQ-005 | Exact `FixedVec3` equality for `(b - a).cross(c - a)` and reversed winding. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_002_xy_counter_clockwise_winding_points_toward_positive_z` |
 | CL-TP-003 | Golden path, unit policy | CL-REQ-006 | Exact raw Q32.32 values for whole Bunny-unit coordinates. | `crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_003_bunny_units_are_unitless_fixed_raw_values` |
+| CL-TP-004 | Golden path, NDC depth | CL-REQ-011, CL-REQ-013 | Exact raw NDC `z` of near-plane and far-plane points for both projection builders. | `crates/bunny-linalg/tests/projection_tests.rs::cl_tp_004_near_plane_maps_to_zero_and_far_plane_to_one` |
+| CL-TP-005 | Golden path, camera convention | CL-REQ-011, CL-REQ-013 | Exact NDC `x/y` signs for `+X`/`+Y` view points, and `w_clip < 0` behind the camera. | `crates/bunny-linalg/tests/projection_tests.rs::cl_tp_005_camera_looks_down_negative_z_with_positive_y_up` |
 
 ```toml
 [[case]]
@@ -178,6 +186,24 @@ requirements = ["CL-REQ-006"]
 evidence = "test"
 test = "crates/bunny-linalg/tests/coordinate_law_tests.rs::cl_tp_003_bunny_units_are_unitless_fixed_raw_values"
 oracle = "Exact raw Q32.32 values for whole Bunny-unit coordinates."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-004"
+requirements = ["CL-REQ-011", "CL-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::cl_tp_004_near_plane_maps_to_zero_and_far_plane_to_one"
+oracle = "Exact raw NDC z of near-plane and far-plane points for both projection builders."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CL-TP-005"
+requirements = ["CL-REQ-011", "CL-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/projection_tests.rs::cl_tp_005_camera_looks_down_negative_z_with_positive_y_up"
+oracle = "Exact NDC x/y signs for +X/+Y view points, and w_clip < 0 behind the camera."
 tier = "fast"
 status = "implemented"
 ```
@@ -250,5 +276,5 @@ case with a stable test name.
 | `target_from_source` composition examples. | Matrix and transform primitives. |
 | Point versus vector translation behavior. | Typed point/vector/transform APIs. |
 | Positive rotation direction beyond cross-product orientation. | Angle, quaternion, or rotation APIs. |
-| NDC and viewport conversion examples. | Projection and viewport APIs. |
+| Viewport conversion examples. | Viewport APIs. |
 | External source convention conversion tests. | Format-specific adapter APIs that expose convention conversion. |
