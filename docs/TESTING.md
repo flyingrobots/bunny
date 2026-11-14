@@ -108,7 +108,9 @@ configuration. The initial property suites cover:
 * `bunny-optics`: generated camera rays against an exact integer image-plane
   oracle, and basis orthogonality and handedness; exact stratification of
   every power-of-two block of sampler points, and evaluation-order
-  independence of the sample hash and the sampler.
+  independence of the sample hash and the sampler; pixel accumulation order
+  independence and the mean's rounding over seeded samples, and the sRGB tone
+  curve against an `f64` reference oracle over dense deterministic inputs.
 
 Each generated assertion should include enough seed and case metadata to replay
 the failure. A property test discovers classes of defects; a minimized

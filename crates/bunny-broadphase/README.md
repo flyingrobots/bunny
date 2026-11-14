@@ -19,6 +19,9 @@ buffer is large enough for the requested operation.
   `any_hit`) over the same trees, with a caller-supplied primitive test.
   Ties go to the lowest primitive index, and the answer does not depend on
   the tree's shape; see `docs/topics/ray-tracing/` in the repository.
+* A compact copy of a built tree for ray traversal (`compact_bvh`), whose
+  nodes hold both children's boxes, searched by `compact_closest_hit` and
+  `compact_any_hit` with the same calls and answers as the searches above.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 

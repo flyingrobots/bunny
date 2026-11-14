@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added a compact BVH node layout to `bunny-broadphase` (flyingrobots/bunny#215):
+  `compact_bvh` converts a tree from `build_bvh` into nodes that hold both
+  children's boxes and references, with leaf ranges in the parent (`CompactNode`,
+  `CompactChild`, `CompactRoot`, `CompactError`), and `compact_closest_hit` and
+  `compact_any_hit` search it over a `CompactView`. They make the same primitive
+  calls and return the same results as `closest_hit` and `any_hit` on the source
+  tree; malformed input is a typed error, including reference cycles. On the
+  benchmark scene both searches are 10 to 12 % faster on an Apple M5 Pro (ledger
+  entry 8). Existing functions are unchanged.
+* Added `bunny-perf` cases that estimate the memory share of a box test
+  (`trace/kernel_box_load`, `trace/kernel_box_load_chain`,
+  `trace/kernel_box_entry_addr_chain`), a two-box replica of the box test
+  (`trace/kernel_box_single`, `trace/kernel_box_pair`), `closest_hit` on a tree
+  with shuffled sibling pairs (`trace/closest_hit_shuffled`), and a
+  `trace_compact` group that times the compact layout, its conversion and three
+  node orders.
+
 * Added `build_bvh_sah` to `bunny-broadphase`: a binned surface-area-heuristic
   BVH builder that writes the same buffers and node format as `build_bvh`, so
   every traversal accepts its trees. 16 centroid bins per axis, integer `u128`
@@ -66,6 +83,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no variant won outside noise (shared descent -4 % at best, culling 14 to 43 % slower;
   shuffled packets 30 to 86 % slower), so no packet API ships; the x86-64 CI readings,
   which favour the shared descent, are recorded for a later target-specific measurement.
+* Added pixel-value math to `bunny-optics`, integer-only and over
+  caller-provided values and slices (no image type, no allocation).
+  `PixelAccumulator` sums linear radiance samples exactly in `i64` (each
+  channel `0..=2^52` raw, at most 1 024 samples, so no sum exceeds `2^62`), so
+  the result does not depend on sample order or on how partial accumulators are
+  merged; out-of-range samples and over-full pixels return a typed `PixelError`
+  and leave it unchanged. `resolve` returns the mean rounded to nearest with
+  ties to even. `ToneCurve::SrgbV1` (`bunny-tone-srgb/1`) is the sRGB transfer
+  function from a 1 153-knot table with floored linear interpolation, within
+  `1.49 * 10^-6` of the exact curve and monotone; `ToneCurve::LinearClampV1`
+  (`bunny-tone-linear-clamp/1`) clamps to `[0, 1]`. `quantize_8` and
+  `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`) round to nearest with ties
+  to even; 8-bit and 16-bit sRGB codes are within one code of the correctly
+  rounded codes (exceptions within 9 600 inputs of a code boundary, stated in
+  the optics chapter). `write_rgba8` (`bunny-rgba8-opaque/1`) writes one pixel
+  with alpha 255 into a four-byte slice and refuses any other length. Golden
+  vectors, an `f64` reference oracle in the tests and eight recorded mutations;
+  `bunny-perf` gains a `pixel` group with `pixel/resolve_srgb_rgba8`.
 
 ## [0.7.0] - 2026-11-13
 

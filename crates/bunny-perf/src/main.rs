@@ -9,11 +9,21 @@
 //! counters and tree shape of the benchmark scene as Markdown instead of timing anything.
 
 mod cases;
+#[cfg(feature = "trace_compact")]
+mod compact;
+#[cfg(feature = "trace")]
+mod memory;
 #[cfg(feature = "trace")]
 mod profile;
 #[cfg(feature = "sample")]
 mod sample;
-#[cfg(any(feature = "scene", feature = "trace", feature = "build", feature = "sah"))]
+#[cfg(any(
+    feature = "scene",
+    feature = "trace",
+    feature = "trace_compact",
+    feature = "build",
+    feature = "sah"
+))]
 mod scene;
 mod timing;
 
@@ -34,6 +44,14 @@ fn run() -> Result<(), Box<dyn Error>> {
         let bad = scene::disagreeing_rays();
         if !bad.is_empty() {
             return Err(format!("closest-hit paths disagree on rays {bad:?}").into());
+        }
+    }
+    #[cfg(feature = "trace_compact")]
+    {
+        // The compact cases are comparable only if they make the same calls and answers.
+        let bad = compact::disagreeing_rays();
+        if !bad.is_empty() {
+            return Err(format!("compact traversal disagrees on rays {bad:?}").into());
         }
     }
     if options.stats {
