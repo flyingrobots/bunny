@@ -1123,6 +1123,12 @@ the [CI section](#continuous-integration) says) read, best p50:
 | `trace/kernel_tri_rejected` | 20.47 | 20.70 | +1.1 % |
 | `trace/ray_prepare` | 7.72 | 7.72 | +0.0 % |
 
+After the merge with the compact layout (entry 8), the same job against `origin/main` at
+`069bd8dd3c6f` read best p50 `trace/closest_hit` 411.25 to 378.23 ns (-8.0 %),
+`trace/closest_hit_compact` 370.16 to 344.42 ns (-7.0 %), `trace/any_hit` -8.1 %,
+`trace/any_hit_compact` -6.6 %, `trace/kernel_box_entry` -7.0 % and `trace/ray_prepare`
++0.0 %.
+
 Every box-test case is faster there too, by about 7 to 9 % instead of 17 to 21 %: the gain
 is smaller on x86-64 but has the same sign, so no target-specific choice is needed. The
 triangle replays are flat on x86-64 in a full-table run.
