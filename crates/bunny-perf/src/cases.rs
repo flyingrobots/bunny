@@ -40,10 +40,12 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::scene::visitor_cases());
     #[cfg(feature = "trace")]
     cases.extend(crate::scene::trace_cases());
+    #[cfg(feature = "sample")]
+    cases.extend(crate::sample::sample_cases());
     cases
 }
 
-#[cfg(any(feature = "scene", feature = "trace"))]
+#[cfg(any(feature = "scene", feature = "trace", feature = "sample"))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }
 }

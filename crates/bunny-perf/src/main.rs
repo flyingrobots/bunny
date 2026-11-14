@@ -8,6 +8,8 @@
 //! sets the number of timed batches per case (default 101).
 
 mod cases;
+#[cfg(feature = "sample")]
+mod sample;
 #[cfg(any(feature = "scene", feature = "trace"))]
 mod scene;
 mod timing;
