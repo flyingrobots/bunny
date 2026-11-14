@@ -99,6 +99,21 @@ padding can cost a few nanoseconds per call), so use it for comparisons and trea
 numbers as a second opinion. CI always uses it. Inherited `RUSTFLAGS` are kept and the
 alignment flags are appended.
 
+### Codegen-unit noise
+
+Adding code to a crate can change how the release profile (16 codegen units) splits that
+crate, and with it which small functions the compiler inlines along an unrelated hot path.
+Without `#[inline]`, a function in another unit is a call, and a public function of another
+crate is always a call. This is seen in flyingrobots/bunny#271: adding the shading module to
+`bunny-optics` made `pixel/resolve_srgb_rgba8` 30 % slower (median) on the aarch64
+container and 38 % slower (best p50) on the x86-64 CI runner, with no pixel code changed;
+building with `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1` removed most of the gap. The remedy
+for a path of small hot helpers is explicit `#[inline]` on them and on the entry points a
+caller invokes per item (never `#[inline(always)]`, which the `inline_always` lint rejects
+here), checked on both architectures, because an inlining attribute can cost speed on one
+and not the other (ledger entry 3). [Entry 11](#11-inline-on-the-pixel-path-no-output-change)
+records the measurement.
+
 ### Bimodal cases
 
 Some kernels change speed from one process to the next with nothing rebuilt. Running the
@@ -1307,6 +1322,53 @@ is smaller on x86-64 but has the same sign, so no target-specific choice is need
 triangle replays are flat on x86-64 in a full-table run.
 
 **Not measured:** wasm32.
+
+### 11. `#[inline]` on the pixel path (no output change)
+
+**Where:** `crates/bunny-optics/src/pixel.rs` and `pixel/{srgb,tone,accumulate}.rs`
+(flyingrobots/bunny#271).
+
+**Technique.** `#[inline]` on `div_round_half_even`, `srgb::encode`, `srgb::power_segment`,
+`ToneCurve::{apply, encode_8, encode_16}`, `quantize_8`, `quantize_16`, `quantize`,
+`write_rgba8` and `PixelAccumulator::resolve`: the small per-channel helpers and the public
+entry points a renderer calls per pixel. Nothing else changed. `add_sample`, `merge` and
+the accessors are not on the measured path and were left alone.
+
+**Fidelity.** No output bit changes; no arithmetic was touched, and every existing test and
+golden vector passes unmodified.
+
+**Why.** Merging the shading module (PR #270) into `bunny-optics` made
+`pixel/resolve_srgb_rgba8` slower without touching it; see
+[codegen-unit noise](#codegen-unit-noise).
+
+**Measured.** Apple M5 Pro, `aarch64-linux`, `rust-dev:1.96.0` container, `--exclusive`,
+`cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code`, base
+`6b808d4` (`pixel/` rows, nanoseconds per call; "lighting" is a throwaway local merge of
+`origin/feat/optics-lighting`, never pushed):
+
+| Head | Run | Before p50 | After p50 | Change | Best change |
+| --- | --- | ---: | ---: | ---: | ---: |
+| lighting, no fix | filtered | 8.30 | 10.78 | +29.9 % | +19.9 % |
+| fix alone | filtered | 8.18 | 8.30 | +1.5 % | +0.0 % |
+| fix alone | full | 8.18 | 8.30 | +1.5 % | +4.8 % |
+| fix alone | full | 8.46 | 8.46 | +0.0 % | +0.5 % |
+| fix + lighting | filtered | 8.26 | 8.83 | +6.9 % | +8.9 % |
+| fix + lighting | filtered | 8.22 | 8.79 | +6.9 % | -2.6 % |
+
+The fix alone is level with main, and no other case was slower by more than the noise described under
+[Reading the numbers](#reading-the-numbers) and [Bimodal cases](#bimodal-cases) in either
+full run (the largest best-p50 rises were `trace/kernel_tri_divided` +11.1 % and
+`query/ray_aabb` +7.4 % in the first, neither in the second). With the lighting module
+present the pixel case went from about +30 % to about +7 % (median), about the +5 % that
+one codegen unit left; the best-p50 column swings between runs, which is the
+[bimodal](#bimodal-cases) pattern. The x86-64 reading comes from CI.
+
+**Trade-offs.** `#[inline]` lets the compiler copy these bodies into callers; code size
+grows slightly where they are called, and the speed they give is still the compiler's
+choice (`#[inline]` is a hint). A later crate change can still move other paths; this
+only removes the pixel path's dependence on the split.
+
+||||||| 6b808d4
 
 ## Profile of `closest_hit` on the benchmark scene
 
