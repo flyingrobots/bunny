@@ -159,13 +159,13 @@ pub(crate) fn visitor_cases() -> Vec<Case> {
     })]
 }
 
-#[cfg(any(feature = "trace", feature = "packet"))]
+#[cfg(feature = "trace")]
 pub(crate) fn trace_rays() -> Vec<bunny_query::TraceRay> {
     let (origin, directions) = camera();
     directions.iter().filter_map(|&d| bunny_query::TraceRay::new(origin, d)).collect()
 }
 
-#[cfg(any(feature = "trace", feature = "packet"))]
+#[cfg(feature = "trace")]
 pub(crate) fn trace_triangles(scene: &Scene) -> Vec<bunny_query::TraceTriangle> {
     scene
         .triangles
@@ -175,7 +175,7 @@ pub(crate) fn trace_triangles(scene: &Scene) -> Vec<bunny_query::TraceTriangle> 
 }
 
 /// Closest hit with `closest_hit` and the trace triangle test.
-#[cfg(any(feature = "trace", feature = "packet"))]
+#[cfg(feature = "trace")]
 pub(crate) fn trace_closest(
     scene: &Scene,
     triangles: &[bunny_query::TraceTriangle],

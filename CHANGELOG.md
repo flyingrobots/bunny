@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   division (flyingrobots/bunny#214) was measured and not shipped: only 24 of 714
   crossings on the scene are beyond the limit, and the result is within noise;
   see "Tried And Rejected" in the performance chapter.
+* Recorded the ray-packet spike (flyingrobots/bunny#217) as entry 7 under "Tried
+  And Rejected" in the performance chapter: a packet traversal that returned exactly
+  `closest_hit`'s hit for every ray, with an optional whole-packet interval test whose
+  exactness is proved against `box_entry`'s rounding, measured on the benchmark's 1 024
+  camera rays in 2 x 2, 4 x 4 and 8 x 8 tiles and in shuffled packets. On the Apple M5 Pro
+  no variant won outside noise (shared descent -4 % at best, culling 14 to 43 % slower;
+  shuffled packets 30 to 86 % slower), so no packet API ships; the x86-64 CI readings,
+  which favour the shared descent, are recorded for a later target-specific measurement.
 
 ## [0.7.0] - 2026-11-13
 
