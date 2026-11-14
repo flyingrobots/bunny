@@ -175,9 +175,47 @@ fn mt_tp_027_degenerate_inputs_return_typed_errors() {
     assert_eq!(try_look(v(0, 0, 0), v(1, 1, 0), v(3, 3, 0)), Err(LookAtError::ParallelUp));
     // One raw unit apart is a valid direction, not a coincidence.
     assert!(try_look(raw_vec(0, 0, 0), raw_vec(0, 0, -1), y).is_ok());
-    // Looking along +X from the minimum x: dot(-forward, eye) = 2^31 overflows.
-    let far_left = FixedVec3::new(raw(i64::MIN), raw(0), raw(0));
-    assert_eq!(try_look(far_left, v(0, 0, 0), y), Err(LookAtError::Overflow));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn mt_tp_030_exactly_parallel_up_is_refused_and_near_parallel_is_accepted() {
+    let try_look = FixedMat4::try_look_at;
+    let origin = v(0, 0, 0);
+    // Exactly parallel in whole units and in raw units, with the eye at the origin.
+    for scale in [ONE_RAW, 1] {
+        let direction = raw_vec(scale, 2 * scale, 3 * scale);
+        assert_eq!(try_look(origin, direction, direction), Err(LookAtError::ParallelUp));
+        // Antiparallel counts as parallel.
+        let reversed = raw_vec(-scale, -2 * scale, -3 * scale);
+        assert_eq!(try_look(origin, direction, reversed), Err(LookAtError::ParallelUp));
+    }
+    // A different scale of the same direction, and a moved eye.
+    assert_eq!(
+        try_look(v(5, 5, 5), v(6, 7, 8), raw_vec(7 * ONE_RAW, 14 * ONE_RAW, 21 * ONE_RAW)),
+        Err(LookAtError::ParallelUp)
+    );
+    // Raw differences need 65 bits: eye all MIN, target all MAX, up all MAX.
+    let (low, high) =
+        (raw_vec(i64::MIN, i64::MIN, i64::MIN), raw_vec(i64::MAX, i64::MAX, i64::MAX));
+    assert_eq!(try_look(low, high, high), Err(LookAtError::ParallelUp));
+    assert_eq!(try_look(low, high, low), Err(LookAtError::ParallelUp));
+    // One raw unit off parallel is accepted: only exact parallelism is refused.
+    let target = raw_vec(1_000_000, 2_000_000, 3_000_000);
+    assert!(try_look(origin, target, raw_vec(1_000_000, 2_000_000, 3_000_001)).is_ok());
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn mt_tp_031_representable_translation_is_kept_and_real_overflow_is_refused() {
+    let y = v(0, 1, 0);
+    // dot(back, eye) = +2^31 units does not fit, but its negation -2^31 does.
+    let far_left = raw_vec(i64::MIN, 0, 0);
+    assert_eq!(
+        rows_raw(look(far_left, v(0, 0, 0), y)),
+        [[0, 0, ONE_RAW, 0], [0, ONE_RAW, 0, 0], [-ONE_RAW, 0, 0, i64::MIN], [0, 0, 0, ONE_RAW]]
+    );
+    // A diagonal view from far away: the finished entry is 1.41 * 2^63 raw, outside the range.
+    let far = raw_vec(i64::MAX, i64::MAX, 0);
+    assert_eq!(FixedMat4::try_look_at(far, v(0, 0, 0), v(0, 0, 1)), Err(LookAtError::Overflow));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -198,10 +236,15 @@ fn next(state: &mut u64) -> u64 {
     *state >> 33
 }
 
+/// 62 random bits from two draws of 31.
+fn next62(state: &mut u64) -> u64 {
+    (next(state) << 31) | next(state)
+}
+
 /// A signed value with a random magnitude spanning 1 raw unit to about 2^38.
 fn spread(state: &mut u64) -> i64 {
     let bits = next(state) % 38;
-    let magnitude = i64::try_from(next(state) & ((1 << (bits + 1)) - 1)).expect("fits");
+    let magnitude = i64::try_from(next62(state) & ((1 << (bits + 1)) - 1)).expect("fits");
     if next(state).is_multiple_of(2) {
         magnitude
     } else {

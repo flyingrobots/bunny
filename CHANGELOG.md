@@ -116,6 +116,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with equivalence tests over seeded, extreme-coordinate and benchmark-scene
   corpora (`TRACE-TP-308` to `TRACE-TP-312`).
 
+### Changed (behaviour)
+
+* `FixedMat4::try_look_at` (shipped in 0.7.0) changes its result for two input
+  classes (flyingrobots/bunny#273); every other input that returned `Ok` keeps
+  every output bit, checked against the 0.7.0 implementation on 60 000 seeded
+  inputs. First, an `up` vector that is exactly parallel or antiparallel to
+  `target - eye` (their exact integer cross product is zero), or zero, now
+  returns `LookAtError::ParallelUp`; before, rounding of the normalized view
+  direction made some such inputs return `Ok` with a roll made of rounding
+  error (for example `eye = (0, 0, 0)` and `target = up = (1, 2, 3)`). Nearly
+  parallel inputs are still accepted. Second, a translation entry whose finished
+  value `-(row . eye)` is representable no longer returns `Overflow` because an
+  intermediate term or sum was out of range (for example `eye.x = i64::MIN` raw,
+  `target = (0, 0, 0)`, `up = (0, 1, 0)`, where the entry is `-2^31` units);
+  each entry is now summed in a wider integer and only the finished entry is
+  checked. The seeded orthonormality test now draws the 2^38 range it states;
+  the documented bounds hold over it.
+
 ## [0.7.0] - 2026-11-13
 
 This is an early cut of the 0.7 line. It exists so downstream repositories can

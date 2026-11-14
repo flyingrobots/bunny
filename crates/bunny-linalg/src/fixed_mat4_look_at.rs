@@ -84,6 +84,36 @@ impl Raw3 {
     }
 }
 
+/// The exact 256-bit product of two magnitudes below `2^66`, as `(high, low)`.
+///
+/// Proof of no overflow: split each factor into 64-bit limbs `a = a1 * 2^64 +
+/// a0`. With `a, b < 2^66` the high limbs are below 4, so every partial product
+/// is below `2^128` and the cross sum `a0 * b1 + a1 * b0` is below `2^67`.
+fn wide_product(a: u128, b: u128) -> (u128, u128) {
+    const LIMB: u32 = 64;
+    let mask = (1_u128 << LIMB) - 1;
+    let (a0, a1) = (a & mask, a >> LIMB);
+    let (b0, b1) = (b & mask, b >> LIMB);
+    let middle = a0 * b1 + a1 * b0;
+    let (low, carry) = (a0 * b0).overflowing_add(middle << LIMB);
+    (a1 * b1 + (middle >> LIMB) + u128::from(carry), low)
+}
+
+/// Whether `a * b == c * d` exactly. Each factor is a raw difference or a raw
+/// coordinate, so its magnitude is at most `2^64`, within [`wide_product`]'s bound.
+fn products_equal(a: i128, b: i128, c: i128, d: i128) -> bool {
+    let magnitude = |x: i128, y: i128| wide_product(x.unsigned_abs(), y.unsigned_abs());
+    a.signum() * b.signum() == c.signum() * d.signum() && magnitude(a, b) == magnitude(c, d)
+}
+
+/// Whether the cross product of the two raw vectors is exactly zero, which holds
+/// exactly when they are parallel, antiparallel, or either is zero.
+fn exactly_parallel(a: Raw3, b: Raw3) -> bool {
+    products_equal(a.y, b.z, a.z, b.y)
+        && products_equal(a.z, b.x, a.x, b.z)
+        && products_equal(a.x, b.y, a.y, b.x)
+}
+
 /// Target bit length of the largest component before the division.
 const SCALED_BITS: u32 = 61;
 
@@ -128,21 +158,44 @@ fn unit(v: Raw3) -> Option<FixedVec3> {
     Some(FixedVec3::new(component(scaled.x)?, component(scaled.y)?, component(scaled.z)?))
 }
 
-fn checked_dot(lhs: FixedVec3, rhs: FixedVec3) -> Option<FixedQ32_32> {
-    let x_term = lhs.x.checked_mul(rhs.x)?;
-    let y_term = lhs.y.checked_mul(rhs.y)?;
-    let z_term = lhs.z.checked_mul(rhs.z)?;
-    x_term.checked_add(y_term)?.checked_add(z_term)
-}
-
 fn checked_negate(v: FixedVec3) -> Option<FixedVec3> {
     Some(FixedVec3::new(v.x.checked_neg()?, v.y.checked_neg()?, v.z.checked_neg()?))
 }
 
+/// `magnitude / 2^32` rounded to nearest, ties to even, as `checked_mul` rounds.
+const fn round_shift(magnitude: u128) -> u128 {
+    let (quotient, remainder) = (magnitude >> FRAC_BITS, magnitude & ((1 << FRAC_BITS) - 1));
+    let half = 1_u128 << (FRAC_BITS - 1);
+    if remainder > half || (remainder == half && quotient & 1 == 1) {
+        quotient + 1
+    } else {
+        quotient
+    }
+}
+
+/// A Q32.32 product as an unchecked wide integer, rounded exactly as
+/// `FixedQ32_32::checked_mul` rounds it, but without the range check.
+fn wide_term(lhs: FixedQ32_32, rhs: FixedQ32_32) -> i128 {
+    let product = i128::from(lhs.raw()) * i128::from(rhs.raw());
+    let rounded = i128::try_from(round_shift(product.unsigned_abs())).unwrap_or(i128::MAX);
+    if product < 0 {
+        -rounded
+    } else {
+        rounded
+    }
+}
+
+/// The translation entry `-(axis . eye)`. Each term is at most `2^96` and the
+/// sum of three at most `2^98`, so the `i128` accumulator cannot overflow; only
+/// the finished entry is checked against the Q32.32 range.
+fn translation_entry(axis: FixedVec3, eye: FixedVec3) -> Option<FixedQ32_32> {
+    let sum = wide_term(axis.x, eye.x) + wide_term(axis.y, eye.y) + wide_term(axis.z, eye.z);
+    Some(FixedQ32_32::from_raw(i64::try_from(-sum).ok()?))
+}
+
 /// One matrix row: the axis followed by `-(axis . eye)`.
 fn view_row(axis: FixedVec3, eye: FixedVec3) -> Result<FixedMat4Row, LookAtError> {
-    let translation = checked_dot(axis, eye).and_then(FixedQ32_32::checked_neg);
-    let translation = translation.ok_or(LookAtError::Overflow)?;
+    let translation = translation_entry(axis, eye).ok_or(LookAtError::Overflow)?;
     Ok((axis.x, axis.y, axis.z, translation))
 }
 
@@ -160,20 +213,25 @@ impl FixedMat4 {
     /// component of its ideal direction, each length is within 2 raw units of
     /// one, and each pairwise dot product is within 2 raw units of zero. This
     /// holds however close `up` is to the view direction, but a nearly
-    /// parallel `up` fixes the camera roll only to rounding noise.
+    /// parallel `up` is accepted and fixes the camera roll only to rounding
+    /// noise; only exact parallelism is refused.
     ///
     /// # Errors
     /// Returns [`LookAtError::CoincidentEyeTarget`] when `target == eye`,
-    /// [`LookAtError::ParallelUp`] when `up` is zero or exactly parallel to
-    /// the view direction after normalization, and [`LookAtError::Overflow`]
-    /// when a translation entry is outside the Q32.32 range.
+    /// [`LookAtError::ParallelUp`] when `up` is zero or exactly parallel (or
+    /// antiparallel) to `target - eye`, decided on the exact integer inputs
+    /// before any rounding, and [`LookAtError::Overflow`] when a finished
+    /// translation entry is outside the Q32.32 range.
     pub fn try_look_at(
         eye: FixedVec3,
         target: FixedVec3,
         up: FixedVec3,
     ) -> Result<Self, LookAtError> {
-        let forward =
-            unit(Raw3::difference(target, eye)).ok_or(LookAtError::CoincidentEyeTarget)?;
+        let direction = Raw3::difference(target, eye);
+        let forward = unit(direction).ok_or(LookAtError::CoincidentEyeTarget)?;
+        if exactly_parallel(direction, Raw3::from_fixed(up)) {
+            return Err(LookAtError::ParallelUp);
+        }
         let (raw_forward, raw_up) = (Raw3::from_fixed(forward), Raw3::from_fixed(up));
         let right = unit(raw_forward.cross(raw_up)).ok_or(LookAtError::ParallelUp)?;
         let true_up =

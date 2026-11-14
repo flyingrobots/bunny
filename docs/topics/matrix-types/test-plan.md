@@ -66,7 +66,7 @@ formatting.
 | MT-REQ-011 | Projection builders produce `clip_from_view` matrices with the documented entries and NDC depth range, using checked Q32.32 arithmetic. | `README.md#projection-matrices` |
 | MT-REQ-012 | Projection builders return typed errors for non-positive extents, invalid near, `near >= far`, and overflow. | `README.md#projection-matrices` |
 | MT-REQ-013 | `FixedMat4::try_look_at` builds a `view_from_world` matrix with rows right, true up, and back (negated forward) plus the checked translation `-(row . eye)`, right-handed with the camera looking down `-Z`, per the coordinate law. | `README.md#look-at-view-matrix` |
-| MT-REQ-014 | `try_look_at` returns typed errors for coincident eye and target, a zero or parallel up vector, and overflow, and never panics. | `README.md#look-at-view-matrix` |
+| MT-REQ-014 | `try_look_at` returns typed errors for coincident eye and target, a zero or exactly parallel (or antiparallel) up vector decided on the exact integer inputs, and overflow of a finished translation entry, and never panics. A nearly parallel up vector is accepted. | `README.md#look-at-view-matrix` |
 | MT-REQ-015 | The basis rows are orthonormal only within a stated rounding bound: each length within 2 raw units of one and each pairwise dot product within 2 raw units of zero. | `README.md#look-at-view-matrix` |
 
 ```toml
@@ -137,7 +137,7 @@ status = "active"
 
 [[requirement]]
 id = "MT-REQ-014"
-summary = "try_look_at returns typed errors for coincident eye and target, a zero or parallel up vector, and overflow, and never panics."
+summary = "try_look_at returns typed errors for coincident eye and target, a zero or exactly parallel (or antiparallel) up vector decided on the exact integer inputs, and overflow of a finished translation entry, and never panics. A nearly parallel up vector is accepted."
 status = "active"
 
 [[requirement]]
@@ -198,7 +198,10 @@ and regeneration policy.
 | MT-TP-026 | Handedness and eye origin | MT-REQ-013 | Right, up and ahead points map to +X, +Y and -Z; the eye maps to the origin and the target lies on -Z. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_026_camera_right_up_and_forward_follow_the_right_handed_law` |
 | MT-TP-027 | Look-at errors | MT-REQ-014 | Each degenerate class returns its named LookAtError; one raw unit apart stays valid. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_027_degenerate_inputs_return_typed_errors` |
 | MT-TP-028 | Look-at error messages | MT-REQ-014 | Exact Display strings. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_028_look_at_error_messages_are_stable` |
-| MT-TP-029 | Seeded orthonormality bound | MT-REQ-015 | Seeded random views spanning 1 raw unit to 2^38: exact i128 lengths and dot products stay within the stated bounds and the eye maps to the origin. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_029_random_views_are_orthonormal_within_the_documented_bound` |
+| MT-TP-029 | Seeded orthonormality bound | MT-REQ-015 | Seeded random views, drawn with 62-bit values so the range really spans 1 raw unit to 2^38: exact i128 lengths and dot products stay within the stated bounds and the eye maps to the origin. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_029_random_views_are_orthonormal_within_the_documented_bound` |
+| MT-TP-030 | Exactly parallel up refused | MT-REQ-014 | Parallel and antiparallel up vectors in whole and raw units, a moved eye, and 65-bit differences return `ParallelUp`; an up one raw unit off parallel is accepted. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_030_exactly_parallel_up_is_refused_and_near_parallel_is_accepted` |
+| MT-TP-031 | Representable translation kept | MT-REQ-014 | `eye.x = i64::MIN` raw gives the hand-derived rows with entry `i64::MIN`; a diagonal view from `i64::MAX` still returns `Overflow`. | `crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_031_representable_translation_is_kept_and_real_overflow_is_refused` |
+| MT-TP-032 | Fidelity against 0.7.0 | MT-REQ-014 | 60 000 seeded inputs (ordinary, axis-aligned, tiny, 64-bit, parallel and nearly parallel): where the retained 0.7.0 implementation returns `Ok` and the inputs are not exactly parallel (decided by gcd reduction, independent of the cross product), the new matrix is bit-identical; exactly parallel inputs return `ParallelUp`. | `crates/bunny-linalg/tests/look_at_fidelity_tests.rs::mt_tp_032_new_results_are_bit_identical_to_the_shipped_reference` |
 
 ```toml
 [[case]]
@@ -458,7 +461,34 @@ id = "MT-TP-029"
 requirements = ["MT-REQ-015"]
 evidence = "test"
 test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_029_random_views_are_orthonormal_within_the_documented_bound"
-oracle = "Seeded random views spanning 1 raw unit to 2^38: exact i128 lengths and dot products stay within the stated bounds and the eye maps to the origin."
+oracle = "Seeded random views, drawn with 62-bit values so the range really spans 1 raw unit to 2^38: exact i128 lengths and dot products stay within the stated bounds and the eye maps to the origin."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-030"
+requirements = ["MT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_030_exactly_parallel_up_is_refused_and_near_parallel_is_accepted"
+oracle = "Exact constructed parallel and antiparallel cases, including 65-bit differences, return ParallelUp; one raw unit off parallel is accepted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-031"
+requirements = ["MT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_tests.rs::mt_tp_031_representable_translation_is_kept_and_real_overflow_is_refused"
+oracle = "Hand-derived rows for eye.x = i64::MIN (entry -2^31 units); a diagonal view from i64::MAX returns Overflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "MT-TP-032"
+requirements = ["MT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_at_fidelity_tests.rs::mt_tp_032_new_results_are_bit_identical_to_the_shipped_reference"
+oracle = "Retained verbatim 0.7.0 implementation: bit-identical whenever it returns Ok and the inputs are not exactly parallel (gcd-based independent check); exactly parallel inputs return ParallelUp."
 tier = "fast"
 status = "implemented"
 ```
