@@ -30,6 +30,7 @@ evidence exist.
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, and segment clipping with its rounding contract. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | The ray-tracing kernels: trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, and rounding of distances and barycentrics. |
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, segment and convex polygon clipping with its rounding contract. |
+| [`topics/lint-policy/`](topics/lint-policy/) | Rule 10 for the core crates: `clippy::nursery` cherry-picked by name, never set as a group, and the Code Dojo `blanket-nursery` check that enforces it. |
 | [`topics/release-packaging/`](topics/release-packaging/) | The `scripts/publish-crates.sh` archive checks, including building every crate's tests from its own unpacked package, and the rule that a test and the files it reads ship together. |
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |
 | [`NUMERIC_CONSTITUTION.md`](NUMERIC_CONSTITUTION.md) | Q32.32 arithmetic law, construction policy, rounding, overflow, and numeric golden-vector expectations. |

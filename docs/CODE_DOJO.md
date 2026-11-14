@@ -14,8 +14,8 @@ bash scripts/install-githooks.sh
 
 Hooks installed:
 
-- `pre-commit` — checks staged Rust files with the AST policy gate, then runs
-  topic documentation contract checks, repo-respect receipt coverage,
+- `pre-commit` — checks staged Rust files with the AST policy gate and the core
+  crates' Clippy lint policy, then runs topic documentation contract checks, repo-respect receipt coverage,
   `cargo fmt --check`, workspace Clippy, strict package-scoped library Clippy,
   dependency policy, `cargo test`, and doctests.
 - `commit-msg` — enforces focused commit subjects and repo-respect receipt trailers.
@@ -326,6 +326,15 @@ check is `xtask/src/feature_configs.rs`.
   only in a clone where `scripts/install-githooks.sh` has set
   `core.hooksPath` to `.githooks`; nothing installs them automatically, so a
   fresh clone or a new worktree commits and pushes without them.
+
+## Lint Policy
+
+The `blanket-nursery` check (`xtask/src/lint_policy.rs`) holds the core crates
+to Rule 10 of `CODE_STANDARDS.md`: it fails the full gate and the pre-commit
+gate on any `deny`, `warn` or `forbid` of `clippy::nursery` as a group in a
+core crate's `src/lib.rs`, its manifest or the workspace manifest, naming the
+file and line. It runs right after the Rust source rules and has no waiver.
+The chapter is [`topics/lint-policy/`](topics/lint-policy/).
 
 ## Waivers
 

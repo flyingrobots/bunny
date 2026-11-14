@@ -20,7 +20,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which keep their output and measured cost; `TraversalCounts` adds with
   saturation and keeps the larger peak. Part of flyingrobots/bunny#335.
 
+### Changed
+
+* The core crates follow Rule 10 of `CODE_STANDARDS.md`: `bunny-num`,
+  `bunny-linalg`, `bunny-geom`, `bunny-query`, `bunny-broadphase` and
+  `bunny-mesh` no longer deny `clippy::nursery` as a group, and instead deny
+  `missing_const_for_fn`, `redundant_pub_crate` and `use_self` by name, with
+  reasons, as `bunny-optics` does. No library had a finding under the whole
+  group, so no code changes. Code Dojo's new `blanket-nursery` check
+  (`docs/topics/lint-policy/`) fails the full and pre-commit gates on a blanket
+  `deny`, `warn` or `forbid` of the group in a core crate's `lib.rs`, its
+  manifest or the workspace's. `docs/RUST_CODE_STANDARDS.editors-edition.md`,
+  an older copy of the standards, is now a pointer to `CODE_STANDARDS.md`
+  (flyingrobots/bunny#284).
+
 ### Fixed
+
+* The BVH depth contract is stated and tested; no library code changes. The
+  six searches hold at most `d + 1` of their 64 stack entries on a tree of
+  depth `d` (the root at depth 0), so every tree of depth at most 63 is searched
+  completely, and a deeper one gives the complete answer or `StackOverflow`,
+  never another answer; "equals a test of every primitive" now says so.
+  `compact_bvh`'s `TooDeep` means more than 64 interior subtrees waiting at
+  once, not depth: every tree of depth at most 64 converts. `build_bvh_sah`
+  reaches its cap of 60 inside the trace domain (70 collinear points, a capped
+  leaf of 10), and its depth tests now compare with literals, so changing
+  `SAH_MAX_DEPTH` or the build stack fails them. `build_bvh` has no cap and
+  exceeds 63 inside the trace domain (94 collinear points build a tree 90 deep;
+  94 thin triangles, 70); its documentation now says so and recommends
+  `build_bvh_sah` for ray tracing (flyingrobots/bunny#293).
 
 * Code Dojo's dependency check lists the deterministic crates' graph over
   normal and build edges, with the workspace's features and with

@@ -10,7 +10,8 @@ use bunny_geom::FixedAabb3;
 
 use crate::bvh::BvhNode;
 
-/// Deepest tree the conversion accepts; deeper trees overflow the traversal stack anyway.
+/// Interior subtrees the conversion can queue at once. A tree of depth `d` queues at most `d`,
+/// so every tree of depth at most 64 fits; this is not a bound on depth as such.
 const STACK_CAPACITY: usize = 64;
 
 /// What a child slot refers to: another compact node, or a leaf's primitive range.
@@ -62,7 +63,10 @@ pub enum CompactError {
     /// The nodes do not form a tree: more interior nodes are reached than a tree of this
     /// many nodes can have, so some node is reached twice.
     NotATree,
-    /// The tree is deeper than 64 levels.
+    /// More than 64 interior subtrees would wait to be written at once. A tree of depth `d`
+    /// (the root at depth 0) queues at most `d`, so only a tree of depth 65 or more can cause
+    /// this, and not every such tree does (a comb whose right child is the next level queues
+    /// one).
     TooDeep,
 }
 
@@ -76,7 +80,8 @@ pub enum CompactError {
 ///
 /// # Errors
 /// Returns [`CompactError`] when a node index is out of range, `out` is too small, a node is
-/// reached twice or the tree is deeper than 64 levels. Leaf primitive ranges are copied as
+/// reached twice or more than 64 interior subtrees would wait at once (see
+/// [`CompactError::TooDeep`]). Leaf primitive ranges are copied as
 /// they are and checked by the traversal, as [`crate::closest_hit`] checks them.
 pub fn compact_bvh(
     nodes: &[BvhNode],

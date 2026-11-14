@@ -335,8 +335,10 @@ The search is depth first and front to back:
 
 Malformed buffers are reported as `TraversalError::InvalidNodeIndex` or
 `TraversalError::InvalidPrimitiveRange` when the search reaches the malformed
-node; a malformed node the search prunes is not inspected. A tree deeper than
-the 64-entry stack allows returns `TraversalError::StackOverflow`. An empty
+node; a malformed node the search prunes is not inspected. A search that needs
+more than its 64 stack entries returns `TraversalError::StackOverflow`; which
+trees can need that is stated in
+[Depth And The Traversal Stack](#depth-and-the-traversal-stack). An empty
 node buffer is a miss. A buffer that is not a tree is bounded as described
 next.
 
@@ -382,13 +384,45 @@ work; it is not a check that the buffer is a tree, and it does not inspect
 nodes the search does not reach. `InvalidNodeIndex` does not say whether the
 index was out of range or the bound ran out.
 
+### Depth And The Traversal Stack
+
+The depth of a tree is the number of edges from the root to its deepest leaf:
+the root is at depth 0, and a tree of depth `d` has `d + 1` levels.
+
+All six searches (`intersect_aabb`, `intersect_ray`, `closest_hit`,
+`any_hit`, `compact_closest_hit` and `compact_any_hit`) keep a fixed stack of
+64 entries. Every entry waiting on the stack is the other child of a node on
+the path to the node being visited, at most one per level, so a visit at depth
+`k` that pushes both children holds at most `k + 2` entries. The deepest
+interior node of a tree of depth `d` is at depth `d - 1`, so:
+
+- **A tree of depth at most 63 (64 levels) is always searched completely.**
+  It needs at most 64 entries.
+- **A tree of depth 64 or more may not be.** A search returns
+  `TraversalError::StackOverflow` at the first push that would need a 65th
+  entry. Whether that happens depends on the tree's shape and the query: a
+  comb whose deeper level is searched first keeps one waiting leaf per level
+  and overflows at depth 64 in every search (TRACE-TP-412), while
+  `closest_hit` on a 90-level tree completes along a ray that meets each
+  split-off leaf before the rest of its level (BVH-TP-024). `closest_hit` and `any_hit` and their compact forms push only the
+  children the ray can enter within the limit.
+
+`StackOverflow` ends the search with no partial result. On any tree, then,
+each search returns its complete answer or an error, never a different
+answer. `build_bvh_sah` builds no tree deeper than 60, so every search holds
+its trees; `build_bvh` has no depth cap and can exceed 63 even inside the
+trace domain
+([BVH construction](../bvh-construction/README.md#depth)).
+
 ### Correctness: The Answer Does Not Depend On The Tree
 
 The result is the hit a test of every primitive would choose: of all
 primitives whose test reports a distance in `0..=t_max`, the one with the
 smallest distance, and among those the lowest primitive index. That holds for
-every tree over the same primitives, whatever its shape and whatever order its
-leaves list primitives in. The argument, for a tree whose node bounds contain
+every tree over the same primitives whose depth the stack holds (at most 63;
+see [above](#depth-and-the-traversal-stack)), whatever its shape and whatever
+order its leaves list primitives in. A deeper tree gives the same answer or
+`StackOverflow`. The argument, for a tree whose node bounds contain
 the bounds of every primitive below them (as `build_bvh` guarantees) and a
 closure that reports `floor(T)` for a hit at true distance `T` (as
 `hit_triangle` does):
@@ -472,8 +506,16 @@ every target. It returns the root and the number of nodes written, or a
 `CompactError`: `InvalidNodeIndex` when a child index is outside the node
 slice, `OutputTooSmall` when `out` is shorter than the tree needs, `NotATree`
 when more interior nodes are reached than a tree of that size has (a node
-reached twice), and `TooDeep` when more than 64 right subtrees wait at once,
-which needs a tree deeper than 64 levels. Leaf primitive ranges are copied
+reached twice), and `TooDeep` when more than 64 interior subtrees wait to be
+written at once. The conversion writes each node's left subtree first and
+queues its interior children; at most one subtree waits per level above the
+node being written, so a tree of depth `d` queues at most `d`, and every tree
+of depth at most 64 converts. A tree of depth 65 can be `TooDeep` (a spine
+whose right child at every level is an interior node), and a deeper one need
+not be (a comb whose right child is the next level converts at depth 101):
+`TooDeep` is about waiting subtrees, not depth alone. A tree of depth 64
+converts although its searches may overflow; the conversion does not check
+that the searches hold the tree. Leaf primitive ranges are copied
 unchecked and are checked by the search when it reaches them, as
 `closest_hit` checks them.
 
