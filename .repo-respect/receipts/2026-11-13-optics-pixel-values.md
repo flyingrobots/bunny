@@ -98,6 +98,12 @@ num/div p50 6.59 to 6.84 ns in the same runs.
 Renumbered after the sampler (flyingrobots/bunny#221) merged with OPTICS-REQ-010..016 and
 OPTICS-TP-010..021: this work's requirements are now OPTICS-REQ-017..025 and its cases
 OPTICS-TP-022..034, test functions renamed to match, before merging origin/main.
+Merged origin/main with the sampler: lib.rs keeps both modules and re-exports; the chapter,
+test plan, crate README, TESTING.md, capability map, root README, bunny-perf (sample and pixel
+groups) and CHANGELOG keep both sides, the sampler's first. The Pixel Values section now says
+once what a sample is (one sample index, the ray of PixelSampler::camera_sample) and that the
+1 024-sample accumulator limit matches the sampler's tested stratification for power-of-two
+counts up to 1 024.
 
 Known risks:
 The 8-bit and 16-bit sRGB codes are not exactly the correctly rounded codes: 245 of 255 8-bit
