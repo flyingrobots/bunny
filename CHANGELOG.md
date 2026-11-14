@@ -49,6 +49,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no variant won outside noise (shared descent -4 % at best, culling 14 to 43 % slower;
   shuffled packets 30 to 86 % slower), so no packet API ships; the x86-64 CI readings,
   which favour the shared descent, are recorded for a later target-specific measurement.
+* Added pixel-value math to `bunny-optics`, integer-only and over
+  caller-provided values and slices (no image type, no allocation).
+  `PixelAccumulator` sums linear radiance samples exactly in `i64` (each
+  channel `0..=2^52` raw, at most 1 024 samples, so no sum exceeds `2^62`), so
+  the result does not depend on sample order or on how partial accumulators are
+  merged; out-of-range samples and over-full pixels return a typed `PixelError`
+  and leave it unchanged. `resolve` returns the mean rounded to nearest with
+  ties to even. `ToneCurve::SrgbV1` (`bunny-tone-srgb/1`) is the sRGB transfer
+  function from a 1 153-knot table with floored linear interpolation, within
+  `1.49 * 10^-6` of the exact curve and monotone; `ToneCurve::LinearClampV1`
+  (`bunny-tone-linear-clamp/1`) clamps to `[0, 1]`. `quantize_8` and
+  `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`) round to nearest with ties
+  to even; 8-bit and 16-bit sRGB codes are within one code of the correctly
+  rounded codes (exceptions within 9 600 inputs of a code boundary, stated in
+  the optics chapter). `write_rgba8` (`bunny-rgba8-opaque/1`) writes one pixel
+  with alpha 255 into a four-byte slice and refuses any other length. Golden
+  vectors, an `f64` reference oracle in the tests and eight recorded mutations;
+  `bunny-perf` gains a `pixel` group with `pixel/resolve_srgb_rgba8`.
 
 ## [0.7.0] - 2026-11-13
 

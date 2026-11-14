@@ -1,13 +1,16 @@
 # bunny-optics
 
-Deterministic camera, ray-generation and sampling math for Bunny.
+Deterministic camera, ray-generation, sampling and pixel-value math for Bunny.
 
 This crate turns camera parameters and pixel samples into
 `bunny_query::TraceRay`s using the deterministic Q32.32 numeric profile, with
 integer arithmetic only, so every supported target generates the same rays.
 It also chooses the samples: every sample position and random value is a pure
 function of (seed, pixel, sample, dimension), so an image does not depend on
-evaluation order or thread count.
+evaluation order or thread count. And it turns accumulated radiance samples
+into 8-bit and 16-bit output codes, with the same integer-only rule, so every
+target produces the same pixels. It never allocates an image: callers own
+every buffer.
 
 ## Features
 
@@ -34,8 +37,19 @@ evaluation order or thread count.
   `camera_sample` returns pair 0 as a `PixelSample` for `PinholeCamera::ray`.
 * `Xoroshiro128Plus`: a sequential generator, bit for bit compatible with
   Echo's `warp-math` `Prng`, for code that draws in one fixed order.
-* Golden vectors, an exact image-plane oracle and an exact stratification
-  property; see `docs/topics/optics/`.
+* `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
+  samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
+  exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
+  Out-of-range input returns a typed `PixelError`; nothing saturates or wraps.
+* `ToneCurve`: `SrgbV1` (`bunny-tone-srgb/1`, the sRGB transfer function from a
+  1 153-knot table, within `1.49 * 10^-6` of the exact curve and monotone) and
+  `LinearClampV1` (`bunny-tone-linear-clamp/1`).
+* `quantize_8`, `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`): codes
+  rounded to nearest with ties to even; `write_rgba8` writes one opaque RGBA8
+  pixel (`bunny-rgba8-opaque/1`) into a caller-provided four-byte slice.
+* Golden vectors, an exact image-plane oracle, an exact stratification
+  property and an `f64` sRGB reference oracle in the tests; see
+  `docs/topics/optics/`.
 
 ## License
 
