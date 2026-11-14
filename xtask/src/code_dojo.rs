@@ -231,6 +231,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     }
 
     check_rust(Mode::All)?;
+    check_lint_policy()?;
     crate::topic_docs::check()?;
     crate::repo_respect::check_branch()?;
     check_determinism_receipts(true)?;
@@ -248,6 +249,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
 pub(super) fn handle_pre_commit() -> Result<(), DynError> {
     println!("Code Dojo: checking staged Rust changes");
     check_rust(Mode::Staged)?;
+    check_lint_policy()?;
     crate::topic_docs::check_staged()?;
     crate::repo_respect::check_staged()?;
     ensure_cargo_manifest("pre-commit gate")?;
@@ -329,6 +331,27 @@ pub(super) fn dependency_violations(
                     finding.dependency
                 ),
             )
+        })
+        .collect()
+}
+
+/// Rule 10 of `CODE_STANDARDS.md` over the core crates (`docs/topics/lint-policy/`).
+fn check_lint_policy() -> Result<(), DynError> {
+    let violations = lint_policy_violations(&git_root()?);
+    if violations.is_empty() {
+        println!("Code Dojo: core crates name their clippy::nursery lints");
+        return Ok(());
+    }
+    print_violations("Code Dojo: blanket clippy::nursery levels in core crates", &violations);
+    Err(DojoError::new("lint policy violations found").into())
+}
+
+/// The `blanket-nursery` findings for the core crates of the repository at `root`.
+pub(super) fn lint_policy_violations(root: &Path) -> Vec<Violation> {
+    crate::lint_policy::findings(root, CORE_CRATES)
+        .into_iter()
+        .map(|found| {
+            Violation::new(found.path, found.line, crate::lint_policy::RULE, found.message)
         })
         .collect()
 }
