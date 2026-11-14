@@ -43,7 +43,10 @@ pub const fn is_finite(value: Scalar) -> bool {
 //   division splits into two `u64` divisions. No target selects it yet.
 
 /// Floor of the square root of `n`, by the implementation chosen for this target.
-#[inline]
+///
+/// `inline(always)` folds this wrapper into `sqrt_u128`, which stays non-`#[inline]` as on
+/// `main`; marking `sqrt_u128` itself `#[inline]` changed the generated code (see the ledger).
+#[inline(always)]
 pub(crate) const fn isqrt_u128(n: u128) -> u128 {
     // No `cfg(target_arch)` arm selects `isqrt_u128_two_divides` until a target measures
     // as a net win; add the arm together with that target's ledger numbers.

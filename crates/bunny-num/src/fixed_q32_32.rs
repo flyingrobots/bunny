@@ -145,7 +145,6 @@ impl FixedQ32_32 {
     /// previous bit-by-bit loop on every input. The implementation is chosen per target at
     /// compile time; every choice returns identical bits.
     #[must_use]
-    #[inline]
     pub const fn sqrt_u128(val: u128) -> u128 {
         crate::isqrt_u128(val)
     }
