@@ -183,6 +183,7 @@ Useful starting points:
 - [Code Dojo](docs/CODE_DOJO.md)
 - [Testing guide](docs/TESTING.md)
 - [Coordinate law](docs/topics/coordinate-law/)
+- [ASCII PLY reader and decimal conversion](docs/topics/ascii-ply/)
 - [Math and geometry capability map](docs/MATH_GEOMETRY_CAPABILITY_MAP.md)
 - [Technical teardown](docs/TECHNICAL_TEARDOWN.md)
 - [Roadmap](ROADMAP.md)
