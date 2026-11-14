@@ -40,8 +40,15 @@ Generated artifacts:
 None.
 
 Checks run:
-See the pull request description and the final commit; all runs are in the rust-dev
-container through devrun.
+All inside flyingrobots/rust-dev:1.96.0 through devrun; nothing on the host.
+cargo test --locked -p bunny-linalg --test viewport_tests at the test-only commit (does not compile: Viewport missing)
+cargo fmt --all -- --check
+cargo clippy --locked -p bunny-linalg --all-targets -- -D warnings
+cargo test --locked -p bunny-linalg
+Deliberate mutation: y mapped as x_ndc + 1 instead of 1 - y_ndc (y direction flipped) made
+CL-TP-006..010 and CL-TP-012 fail.
+cargo test --locked --workspace
+cargo run --locked -p xtask -- code-dojo --all
 
 Known risks:
 The contract choices (pixel corners, floor rounding, unsigned sizes) are the maintainer's to
