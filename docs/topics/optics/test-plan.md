@@ -1,7 +1,9 @@
 # Optics Test Plan
 
 This document defines how Bunny verifies the [optics contract](README.md): the
-pinhole camera in `bunny-optics` and the rays it generates.
+pinhole camera in `bunny-optics` and the rays it generates, and the
+deterministic sample hash, pixel sampler and sequential generator that choose
+sample positions and random decisions.
 
 ## Scope
 
@@ -15,10 +17,17 @@ and `point_at`:
 - the exact, floored direction formula and its bound against the intended
   image-plane point;
 - sample refusals outside the image;
-- the point at a hit distance and its rounding.
+- the point at a hit distance and its rounding;
+- the counter-based sample hash `bunny-sample-hash/1` (`PixelStream`,
+  `fraction_from_bits`): golden vectors, range, domain separation of its key
+  fields, evaluation-order independence and an avalanche guard;
+- the pixel sampler `bunny-sobol-owen/1` (`PixelSampler`): golden vectors,
+  exact stratification of every power-of-two block of samples, range,
+  decorrelation between dimension pairs and pixels, and use as a camera sample;
+- `Xoroshiro128Plus`, replaying Echo's `warp-math` golden vectors bit for bit.
 
-Projection matrices (flyingrobots/bunny#201, #202), sampling sequences (#221),
-shading and pixel values (#222, #160) are out of scope.
+Projection matrices (flyingrobots/bunny#201, #202), hemisphere and light
+sampling (#160), shading and pixel values (#222, #160) are out of scope.
 
 ## Test Goals
 
@@ -28,6 +37,11 @@ shading and pixel values (#222, #160) are out of scope.
   image-plane point, over seeded cameras and at the extremes of the accepted
   domain.
 - Show that the scaling rule is load bearing by breaking it on purpose.
+- Lock the sample hash and the sampler with golden vectors from an
+  independent reference model, and check the sampler's stratification as an
+  exact counting property, not as a look at the points.
+- Show that each key field and the stratification rule are load bearing by
+  breaking them on purpose.
 - Keep the evidence native and WASM-compatible: every case is a
   `wasm_bindgen_test` that also runs as a native test.
 
@@ -49,6 +63,13 @@ formatting.
 | OPTICS-REQ-007 | `ray` returns `None` for a column or row outside the image and for a sub-pixel offset outside `0..1`. | `README.md#ray-generation` |
 | OPTICS-REQ-008 | `point_at` returns `origin + direction * t` with each product rounded to nearest (ties to even), and `None` when a coordinate is not representable. | `README.md#distances-along-a-ray` |
 | OPTICS-REQ-009 | Ray generation is a pure integer function of the camera and the sample: the same inputs give the same raw outputs on every target. | `README.md#ray-generation` |
+| OPTICS-REQ-010 | `PixelStream::bits` is the stated `bunny-sample-hash/1` function of (seed, x, y, sample, dimension): a pure function with no state, using only wrapping 64-bit multiplications, xors, shifts and additions. | `README.md#sample-hash` |
+| OPTICS-REQ-011 | Keys that differ only in the pixel, or only in (sample, dimension), never give the same bits: each absorption step is a bijection of the absorbed word. The sampler and the hash use separate domains. | `README.md#sample-hash` |
+| OPTICS-REQ-012 | `fraction_from_bits` and `PixelStream::fraction` return the top 32 bits as a Q32.32 fraction, which is in `[0, 1)` and never 1.0; every sampler coordinate is in `[0, 1)`. | `README.md#fractions` |
+| OPTICS-REQ-013 | For every pixel, seed, dimension pair, `k` in `0..=32` and block `m`, the sampler's points for samples `m * 2^k .. (m + 1) * 2^k` form a (0, k, 2)-net in base 2: every cell of each of the `k + 1` partitions of the unit square into `2^p` by `2^(k - p)` dyadic cells holds exactly one point. | `README.md#stratification` |
+| OPTICS-REQ-014 | Every value depends only on its key: computing the same keys in any order, with fresh or reused handles, gives the same bits. | `README.md#determinism` |
+| OPTICS-REQ-015 | `PixelSampler::camera_sample` is pair 0 as a `PixelSample` of the sampler's own pixel, accepted by `PinholeCamera::ray` for every in-range pixel. | `README.md#pixel-sampler` |
+| OPTICS-REQ-016 | `Xoroshiro128Plus` reproduces Echo's `warp-math` `Prng` bit for bit: `from_seed`, `from_seed_u64` (SplitMix64 expansion), the all-zero seed replacement, `next_u64`, `next_int` (refusing an empty range with `None`) and `next_unit` (Echo's `next_f32` value as exact Q32.32). | `README.md#sequential-generator` |
 
 ```toml
 [[requirement]]
@@ -95,6 +116,41 @@ status = "active"
 id = "OPTICS-REQ-009"
 summary = "Ray generation is a pure integer function of the camera and the sample: the same inputs give the same raw outputs on every target."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-010"
+summary = "PixelStream::bits is the stated bunny-sample-hash/1 function of (seed, x, y, sample, dimension): a pure function with no state, using only wrapping 64-bit multiplications, xors, shifts and additions."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-011"
+summary = "Keys that differ only in the pixel, or only in (sample, dimension), never give the same bits: each absorption step is a bijection of the absorbed word. The sampler and the hash use separate domains."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-012"
+summary = "fraction_from_bits and PixelStream::fraction return the top 32 bits as a Q32.32 fraction, which is in [0, 1) and never 1.0; every sampler coordinate is in [0, 1)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-013"
+summary = "For every pixel, seed, dimension pair, k in 0..=32 and block m, the sampler's points for samples m * 2^k .. (m + 1) * 2^k form a (0, k, 2)-net in base 2: every cell of each of the k + 1 partitions of the unit square into 2^p by 2^(k - p) dyadic cells holds exactly one point."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-014"
+summary = "Every value depends only on its key: computing the same keys in any order, with fresh or reused handles, gives the same bits."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-015"
+summary = "PixelSampler::camera_sample is pair 0 as a PixelSample of the sampler's own pixel, accepted by PinholeCamera::ray for every in-range pixel."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-016"
+summary = "Xoroshiro128Plus reproduces Echo's warp-math Prng bit for bit: from_seed, from_seed_u64 (SplitMix64 expansion), the all-zero seed replacement, next_u64, next_int (refusing an empty range with None) and next_unit (Echo's next_f32 value as exact Q32.32)."
+status = "active"
 ```
 
 ## Fixtures
@@ -109,6 +165,25 @@ test plan. Failure messages name the case index.
 The golden vectors in `OPTICS-TP-002` are hand computed; the comments beside
 each case give the exact value each floor is taken of. Regenerating them is a
 contract change.
+
+### The Sampler Reference Model
+
+The golden vectors of `OPTICS-TP-010` and `OPTICS-TP-013` were produced by a
+separate Python model written from the definitions in the
+[chapter](README.md#sample-hash), with Python's unbounded integers masked to
+64 and 32 bits; it shares no code with the crate. The model's `SplitMix64`
+finalizer was first checked against the published SplitMix64 outputs for the
+seeds 0 (`0xE220A8397B1DCDAF`) and 1234567 (`6457827717110365317`,
+`3203168211198807973`, ...), and the crate's copy is checked against the same
+published values through `Xoroshiro128Plus::from_seed_u64` in `OPTICS-TP-020`.
+The model also checked the stratification property of `OPTICS-TP-012` before
+the crate existed. Regenerating these vectors is a contract change: a new
+`bunny-sample-hash` or `bunny-sobol-owen` version.
+
+The Echo vectors in `OPTICS-TP-019` are copied from Echo's
+`crates/warp-math/tests/prng_golden_regression.rs` and
+`crates/warp-math/tests/fixtures/math-fixtures.json` (the `next_f32` values
+converted exactly: each is `k * 2^-23` for the integer `k` in the test).
 
 ### The Image-Plane Oracle
 
@@ -142,6 +217,18 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-007 | Image orientation | OPTICS-REQ-002, OPTICS-REQ-003 | For a camera looking down `-Z` with up `+Y`, pixel `(0, 0)` points left and up, the last pixel points right and down, and moving one column or row changes the direction only along right or up. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_007_pixel_origin_is_top_left_and_rows_grow_downward` |
 | OPTICS-TP-008 | Point at a distance | OPTICS-REQ-008 | Exact points for whole distances, ties rounded to even, an overflow refused, and a camera ray's triangle hit point within two raw units of the hit plane. | `crates/bunny-optics/tests/camera_tests.rs::optics_tp_008_point_at_rounds_and_refuses_overflow` |
 | OPTICS-TP-009 | Deliberate mutations | OPTICS-REQ-004, OPTICS-REQ-005, OPTICS-REQ-006 | Each scaling or rounding rule, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
+| OPTICS-TP-010 | Golden sample hash | OPTICS-REQ-010, OPTICS-REQ-012 | Raw bits and fractions of ten keys from the reference model: all zeros, one unit in each field, all ones, and keys adjacent in `x` and in the sample index; the identity string. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_010_sample_hash_golden_vectors` |
+| OPTICS-TP-011 | Fraction range | OPTICS-REQ-012 | `fraction_from_bits` maps 0 to 0, all ones to `1 - 2^-32`, drops the low 32 bits exactly; 4 096 seeded hash fractions and sampler points are in `[0, 1)`. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_011_fractions_are_in_the_unit_interval` |
+| OPTICS-TP-012 | Stratification property | OPTICS-REQ-013 | For 12 (seed, pixel, pair) keys (fixed extremes and seeded), blocks 0 and 3 of every size `2^k`, `k = 0..=10`, and the last block of 1 024 below `2^32`: each of the `k + 1` dyadic partitions has every cell hit exactly once. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_012_power_of_two_blocks_are_stratified` |
+| OPTICS-TP-013 | Golden sampler points | OPTICS-REQ-013, OPTICS-REQ-015 | Raw `(u, v)` of ten keys from the reference model, including samples 0 to 3, a step in each pixel coordinate and in the pair, all ones, and a mixed key in pairs 0 and 2; `camera_sample` equals pair 0; the identity string. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_013_sampler_golden_vectors` |
+| OPTICS-TP-014 | Evaluation order | OPTICS-REQ-014 | Bits and points of an 8 x 8 image, 16 samples and 4 dimensions computed in forward, reverse and seeded shuffled order are identical, and equal to values from reused handles. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_014_values_do_not_depend_on_evaluation_order` |
+| OPTICS-TP-015 | Domain separation | OPTICS-REQ-011 | `(x, y) = (1, 0)` and `(0, 1)` differ, as do swapped sample and dimension; 64 x 64 grids of pixels, of (sample, dimension) and of sampler pixels (including the top of each range) give 4 096 distinct values each; the sampler's first point differs from the hash of the same key. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_015_key_fields_are_domain_separated` |
+| OPTICS-TP-016 | Avalanche guard | OPTICS-REQ-010 | For each of the 192 key bits, flipping it changes between 28 and 36 of the 64 output bits on average over 256 seeded keys. A regression guard on the mixing, not a statistical test. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_016_adjacent_keys_avalanche` |
+| OPTICS-TP-017 | Decorrelation guard | OPTICS-REQ-013 | Pair 0 against pair 1 over 1 024 samples puts between 32 and 96 points in each cell of a 4 x 4 grid (64 expected), for three pixels; no sample of a 16 x 16 block shares its pair-0 point with the same sample of its right or lower neighbour. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_017_dimension_pairs_and_pixels_are_decorrelated` |
+| OPTICS-TP-018 | Camera samples | OPTICS-REQ-015 | Every one of 16 samples of every pixel of a 16 x 9 camera is a sample of that pixel and yields a ray. | `crates/bunny-optics/tests/sampler_tests.rs::optics_tp_018_camera_samples_are_accepted_by_the_camera` |
+| OPTICS-TP-019 | Echo golden vectors | OPTICS-REQ-016 | Echo's `next_int` regression values and its `math-fixtures.json` `next_f32` and `next_int(5, 10)` values, exactly. | `crates/bunny-optics/tests/xoroshiro_tests.rs::optics_tp_019_echo_golden_vectors_replay` |
+| OPTICS-TP-020 | Sequential seeding | OPTICS-REQ-016 | The published SplitMix64 outputs for seed 1234567 as the state of `from_seed_u64`; draws after both constructors and the zero-seed replacement from the reference model; one-value and empty ranges draw nothing. | `crates/bunny-optics/tests/xoroshiro_tests.rs::optics_tp_020_seeding_and_range_rules` |
+| OPTICS-TP-021 | Sampler mutations | OPTICS-REQ-011, OPTICS-REQ-013 | Each key field and the stratification rule, broken on purpose, makes at least one case above fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -224,6 +311,114 @@ artifact = "docs/topics/optics/test-plan.md#mutation-checks"
 oracle = "Each scaling or rounding rule, broken on purpose, makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-010"
+requirements = ["OPTICS-REQ-010", "OPTICS-REQ-012"]
+evidence = "test"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_010_sample_hash_golden_vectors"
+oracle = "Raw bits and fractions of ten keys from the reference model: all zeros, one unit in each field, all ones, and keys adjacent in x and in the sample index; the identity string."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-011"
+requirements = ["OPTICS-REQ-012"]
+evidence = "test"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_011_fractions_are_in_the_unit_interval"
+oracle = "fraction_from_bits maps 0 to 0, all ones to 1 - 2^-32, drops the low 32 bits exactly; 4 096 seeded hash fractions and sampler points are in [0, 1)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-012"
+requirements = ["OPTICS-REQ-013"]
+evidence = "property"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_012_power_of_two_blocks_are_stratified"
+oracle = "For 12 (seed, pixel, pair) keys (fixed extremes and seeded), blocks 0 and 3 of every size 2^k, k = 0..=10, and the last block of 1 024 below 2^32: each of the k + 1 dyadic partitions has every cell hit exactly once."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-013"
+requirements = ["OPTICS-REQ-013", "OPTICS-REQ-015"]
+evidence = "test"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_013_sampler_golden_vectors"
+oracle = "Raw (u, v) of ten keys from the reference model, including samples 0 to 3, a step in each pixel coordinate and in the pair, all ones, and a mixed key in pairs 0 and 2; camera_sample equals pair 0; the identity string."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-014"
+requirements = ["OPTICS-REQ-014"]
+evidence = "property"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_014_values_do_not_depend_on_evaluation_order"
+oracle = "Bits and points of an 8 x 8 image, 16 samples and 4 dimensions computed in forward, reverse and seeded shuffled order are identical, and equal to values from reused handles."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-015"
+requirements = ["OPTICS-REQ-011"]
+evidence = "property"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_015_key_fields_are_domain_separated"
+oracle = "(x, y) = (1, 0) and (0, 1) differ, as do swapped sample and dimension; 64 x 64 grids of pixels, of (sample, dimension) and of sampler pixels (including the top of each range) give 4 096 distinct values each; the sampler's first point differs from the hash of the same key."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-016"
+requirements = ["OPTICS-REQ-010"]
+evidence = "property"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_016_adjacent_keys_avalanche"
+oracle = "For each of the 192 key bits, flipping it changes between 28 and 36 of the 64 output bits on average over 256 seeded keys. A regression guard on the mixing, not a statistical test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-017"
+requirements = ["OPTICS-REQ-013"]
+evidence = "property"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_017_dimension_pairs_and_pixels_are_decorrelated"
+oracle = "Pair 0 against pair 1 over 1 024 samples puts between 32 and 96 points in each cell of a 4 x 4 grid (64 expected), for three pixels; no sample of a 16 x 16 block shares its pair-0 point with the same sample of its right or lower neighbour."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-018"
+requirements = ["OPTICS-REQ-015"]
+evidence = "test"
+test = "crates/bunny-optics/tests/sampler_tests.rs::optics_tp_018_camera_samples_are_accepted_by_the_camera"
+oracle = "Every one of 16 samples of every pixel of a 16 x 9 camera is a sample of that pixel and yields a ray."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-019"
+requirements = ["OPTICS-REQ-016"]
+evidence = "test"
+test = "crates/bunny-optics/tests/xoroshiro_tests.rs::optics_tp_019_echo_golden_vectors_replay"
+oracle = "Echo's next_int regression values and its math-fixtures.json next_f32 and next_int(5, 10) values, exactly."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-020"
+requirements = ["OPTICS-REQ-016"]
+evidence = "test"
+test = "crates/bunny-optics/tests/xoroshiro_tests.rs::optics_tp_020_seeding_and_range_rules"
+oracle = "The published SplitMix64 outputs for seed 1234567 as the state of from_seed_u64; draws after both constructors and the zero-seed replacement from the reference model; one-value and empty ranges draw nothing."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-021"
+requirements = ["OPTICS-REQ-011", "OPTICS-REQ-013"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#mutation-checks"
+oracle = "Each key field and the stratification rule, broken on purpose, makes at least one implemented case fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -246,17 +441,46 @@ at `k = 0`, but a sample at the very corner of the image has a component of
 `-(1 + 2^-20)`, which `TraceRay::new` refuses. That case was added for this
 reason.
 
+### Sampler Mutations
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/hash.rs` or `sampler.rs`, and the sampler and
+generator tests were run (`cargo test --locked -p bunny-optics --test
+sampler_tests --test xoroshiro_tests`). Every mutation made at least one case
+fail; the restored source passed all eleven.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `y` dropped from the pixel word (`pack(x, y & 0)`) | Every key field reaches the hash | OPTICS-TP-010, OPTICS-TP-013, OPTICS-TP-015, OPTICS-TP-016, OPTICS-TP-017 |
+| `dimension` dropped from the sample word | Every key field reaches the hash | OPTICS-TP-010, OPTICS-TP-015, OPTICS-TP-016 |
+| `pair` dropped from the sampler's pair seed | Each dimension pair has its own scrambles | OPTICS-TP-013, OPTICS-TP-017 |
+| Second Sobol dimension made van der Corput (`direction >>= 1`) | The two coordinates form a (0, 2)-sequence | OPTICS-TP-012, OPTICS-TP-013 |
+| First Laine-Karras constant made odd (`0x6C50B47D`) | The scramble is nested | OPTICS-TP-012, OPTICS-TP-013, OPTICS-TP-017 |
+| Index shuffle replaced by an odd multiply and add | The shuffle maps aligned blocks onto aligned blocks | OPTICS-TP-012, OPTICS-TP-013, OPTICS-TP-017 |
+| `mix64` replaced by the identity | The hash mixes | OPTICS-TP-010, OPTICS-TP-013, OPTICS-TP-016 |
+
 ## Determinism Obligations And Evidence
 
-The camera and its tests use only integer arithmetic: `i64` and `i128`
-additions, multiplications, shifts and floor divisions with defined results.
+The camera, the sample hash, the sampler, the sequential generator and their
+tests use only integer arithmetic: `i64` and `i128` additions,
+multiplications, shifts and floor divisions, and wrapping `u64` and `u32`
+arithmetic and bit reversal, all with defined results.
 There is no floating point, trigonometry, square root per ray, randomness from
 the host, time, filesystem access, parallel scheduling, map iteration, stdout,
 stderr or logging in any oracle. The square roots in construction are those of
 `FixedUnitVec3::new`, an exact integer square root.
 
 Test builds check integer overflow, so `OPTICS-TP-004` turns any overflow at
-the corners of the accepted domain into a test failure.
+the corners of the accepted domain into a test failure. The hash and sampler
+use explicit wrapping operations, so the checks do not apply to them; their
+golden vectors run natively and under WebAssembly, which locks the wrapping
+results on both.
+
+`OPTICS-TP-014` is the evaluation-order evidence: the values are pure
+functions, so no thread-count test is needed beyond showing that order and
+handle reuse do not matter. No statistical test suite (PractRand, TestU01) has
+been run; `OPTICS-TP-016` and `OPTICS-TP-017` are regression guards with
+stated thresholds, not statistical certification.
 
 ## Known Failures
 
@@ -277,7 +501,13 @@ Current tests cover:
 - look and up vectors one raw unit long and as long as Q32.32 allows;
 - up hints just inside and just outside the near-parallel threshold;
 - positions one raw unit inside and outside the trace domain;
-- sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero.
+- sub-pixel offsets of 0, `1 - 2^-32`, 1.0 and below zero;
+- hash and sampler keys of all zeros and all ones, keys one unit apart in each
+  field, swapped pixel coordinates and swapped sample and dimension;
+- the last block of 1 024 samples below `2^32`;
+- `fraction_from_bits` of 0, all ones, and values on either side of a step of
+  the top 32 bits;
+- the all-zero seed of `Xoroshiro128Plus`, one-value and empty ranges.
 
 ## Stress And Fuzz
 
@@ -292,5 +522,6 @@ case with a stable test name.
 | Gap | Blocking API |
 | --- | --- |
 | A differential check that points along a camera ray project, through `FixedMat4::try_look_at`, `FixedMat4::try_perspective` and `Viewport`, back to the ray's sample. | None; a follow-up case (the matrices landed while this chapter was written). |
-| Sample positions from a sampling sequence. | flyingrobots/bunny#221. |
+| A statistical test suite (PractRand or TestU01) over the sample hash and the sampler. | None; it needs a harness outside the core crates. |
+| Stratification evidence above 1 024 samples per pixel (the property is proven for every `k` up to 32 and tested to 10). | None; a slow-tier case. |
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
