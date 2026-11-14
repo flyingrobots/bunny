@@ -18,9 +18,13 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - `point_at`;
 - `MAX_IMAGE_DIMENSION` and `TAN_HALF_FOV_LIMIT_RAW`.
 
-Evidence is listed in the [test plan](test-plan.md). Projection matrices
-(flyingrobots/bunny#201, #202), sampling sequences (#221) and shading or pixel
-values (#222, #160) are not part of this chapter.
+Evidence is listed in the [test plan](test-plan.md). Sampling sequences
+(flyingrobots/bunny#221) and shading or pixel values (#222, #160) are not part
+of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
+(right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
+field of view given by its tangent, aspect `width / height`) and `Viewport`
+(top-left origin, `y` down), but no test yet checks a ray against those
+matrices; that is an open gap in the test plan.
 
 All arithmetic is integer arithmetic on raw Q32.32 values (`i64`, widened to
 `i128`). There is no floating point, no trigonometry, no `unsafe` code and no
@@ -110,23 +114,27 @@ on `forward`. It spans `-tan..=tan` along `up` and
 `-tan * width / height..=tan * width / height` along `right`; pixels are
 square.
 
-- **Origin.** Pixel `(0, 0)` is the bottom-left pixel.
+- **Origin.** Pixel `(0, 0)` is the top-left pixel.
 - **Columns.** `x` counts from the left edge and grows toward `right`.
-- **Rows.** `y` counts from the bottom edge and grows toward `up`, the same
-  direction as `+Y` in the canonical frame and positive NDC `y`.
+- **Rows.** `y` counts from the top edge and grows toward `-up`, downward.
 - **Sub-pixel offsets.** A `PixelSample` names pixel `(x, y)` and an offset
-  `(sub_x, sub_y)` in `[0, 1)` on each axis, as Q32.32 fractions.
+  `(sub_x, sub_y)` in `[0, 1)` on each axis, as Q32.32 fractions, measured
+  rightward and downward from the pixel's top-left corner.
   `PixelSample::centre` uses one half on both axes, the pixel centre.
 
-A renderer that stores rows top first writes sample row `y` to buffer row
-`height - 1 - y`.
+This is the convention of the coordinate law's
+[viewport conversion](../coordinate-law/README.md#viewport-conversion) and of
+`bunny_linalg::Viewport`: origin at the top-left corner, pixel `y` running
+down, pixel `i` spanning `[i, i + 1)`. A sample's continuous viewport
+coordinate is exactly `(x + sub_x, y + sub_y)`, and rows come out in the order
+image buffers store them.
 
 The sample's point on the image rectangle is, relative to the position,
 
 ```text
 P = forward + a * (tan / height) * right + b * (tan / height) * up
 a = 2 * (x + sub_x) - width
-b = 2 * (y + sub_y) - height
+b = height - 2 * (y + sub_y)
 ```
 
 where `a` and `b` are the doubled offsets from the image centre in pixels.

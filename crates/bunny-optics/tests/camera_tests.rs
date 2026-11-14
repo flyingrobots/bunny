@@ -110,7 +110,7 @@ fn check_image_plane(
     let (w, h) = (i128::from(camera.width()), i128::from(camera.height()));
     let k = camera.scale_shift();
     let a = (2 * i128::from(sample.x) - w) * i128::from(ONE) + 2 * i128::from(sample.sub_x.raw());
-    let b = (2 * i128::from(sample.y) - h) * i128::from(ONE) + 2 * i128::from(sample.sub_y.raw());
+    let b = (h - 2 * i128::from(sample.y)) * i128::from(ONE) - 2 * i128::from(sample.sub_y.raw());
     let t = i128::from(camera.tan_half_fov().raw());
     let [f, r, u] = basis(camera).map(|v| v.map(i128::from));
     let denominator = h.checked_mul(1 << (64 + k)).ok_or("denominator overflows")?;
@@ -170,29 +170,29 @@ fn optics_tp_002_golden_rays_lock_raw_outputs() {
     );
     // floor(2^65 / 3) / 2^32 = 2_863_311_530.67: two thirds of a unit, floored either way.
     let two_thirds = 2_863_311_530;
-    // (camera, sample, expected raw direction).
+    // (camera, sample, expected raw direction). Row 0 is the top row.
     let goldens = [
-        // 2x2, tan 1: centres at (-1/2, -1/2, -1) and (1/2, 1/2, -1); the corner sample of the
-        // image rectangle is exactly (-1, -1, -1), on the direction limit.
-        (&square, PixelSample::centre(0, 0), [-HALF, -HALF, -ONE]),
-        (&square, PixelSample::centre(1, 1), [HALF, HALF, -ONE]),
-        (&square, sample(0, 0, (0, 0)), [-ONE, -ONE, -ONE]),
+        // 2x2, tan 1: centres at (-1/2, 1/2, -1) and (1/2, -1/2, -1); the top-left corner of
+        // the image rectangle is exactly (-1, 1, -1), on the direction limit.
+        (&square, PixelSample::centre(0, 0), [-HALF, HALF, -ONE]),
+        (&square, PixelSample::centre(1, 1), [HALF, -HALF, -ONE]),
+        (&square, sample(0, 0, (0, 0)), [-ONE, ONE, -ONE]),
         // x = floor((2^33 - 2) / 2): the last sub-pixel offset of the right column.
-        (&square, sample(1, 0, (LAST_SUB, 0)), [ONE - 1, -ONE, -ONE]),
+        (&square, sample(1, 0, (LAST_SUB, 0)), [ONE - 1, ONE, -ONE]),
         // 4x2, tan 1: corners at x = +-2 need one halving, so directions are half the
-        // image-plane point: (-3/2, -1/2, -1) / 2.
-        (&wide, PixelSample::centre(0, 0), [-3 * ONE / 4, -ONE / 4, -HALF]),
-        (&wide, PixelSample::centre(3, 1), [3 * ONE / 4, ONE / 4, -HALF]),
+        // image-plane point: (-3/2, 1/2, -1) / 2.
+        (&wide, PixelSample::centre(0, 0), [-3 * ONE / 4, ONE / 4, -HALF]),
+        (&wide, PixelSample::centre(3, 1), [3 * ONE / 4, -ONE / 4, -HALF]),
         // 3x3, tan 1: the step is floor(2^65 / 3) fine units, so -2/3 floors to one raw unit
         // below and +2/3 floors to the raw unit below its exact value.
-        (&thirds, PixelSample::centre(0, 0), [-two_thirds - 1, -two_thirds - 1, -ONE]),
-        (&thirds, PixelSample::centre(2, 0), [two_thirds, -two_thirds - 1, -ONE]),
+        (&thirds, PixelSample::centre(0, 0), [-two_thirds - 1, two_thirds, -ONE]),
+        (&thirds, PixelSample::centre(2, 2), [two_thirds, -two_thirds - 1, -ONE]),
         (&thirds, PixelSample::centre(1, 1), [0, 0, -ONE]),
         // Looking along +X with up +Y, right is +Z; tan 1/2 puts the centre of pixel (1, 0)
-        // at (1, -1/4, 1/4).
-        (&moved, PixelSample::centre(1, 0), [ONE, -ONE / 4, ONE / 4]),
-        // Looking along +Y with up +Z, right is +X: pixel (0, 1) is up and to the left.
-        (&upward, PixelSample::centre(0, 1), [-HALF, ONE, HALF]),
+        // at (1, 1/4, 1/4).
+        (&moved, PixelSample::centre(1, 0), [ONE, ONE / 4, ONE / 4]),
+        // Looking along +Y with up +Z, right is +X: pixel (0, 1) is down and to the left.
+        (&upward, PixelSample::centre(0, 1), [-HALF, ONE, -HALF]),
     ];
     for (index, (camera, sample, expected)) in goldens.into_iter().enumerate() {
         assert_eq!(direction(camera, sample), expected, "golden {index}");
@@ -368,19 +368,19 @@ fn optics_tp_006_samples_outside_the_image_are_refused() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_007_pixel_origin_is_bottom_left_and_rows_grow_upward() {
+fn optics_tp_007_pixel_origin_is_top_left_and_rows_grow_downward() {
     let camera = camera(&spec(NEG_Z, POS_Y, ONE, (8, 4)));
     let first = direction(&camera, PixelSample::centre(0, 0));
     let last = direction(&camera, PixelSample::centre(7, 3));
-    assert!(first[0] < 0 && first[1] < 0, "pixel (0, 0) is bottom-left: {first:?}");
-    assert!(last[0] > 0 && last[1] > 0, "the last pixel is top-right: {last:?}");
+    assert!(first[0] < 0 && first[1] > 0, "pixel (0, 0) is top-left: {first:?}");
+    assert!(last[0] > 0 && last[1] < 0, "the last pixel is bottom-right: {last:?}");
     let next_column = direction(&camera, PixelSample::centre(1, 0));
     let next_row = direction(&camera, PixelSample::centre(0, 1));
     // One pixel is 2 * tan / height = 1/2 unit on the plane one unit ahead; the scale shift
     // is 1 here (corners at x = +-2), so one pixel moves the direction by 1/4.
     assert_eq!(camera.scale_shift(), 1);
     assert_eq!(next_column, [first[0] + ONE / 4, first[1], first[2]]);
-    assert_eq!(next_row, [first[0], first[1] + ONE / 4, first[2]]);
+    assert_eq!(next_row, [first[0], first[1] - ONE / 4, first[2]]);
 }
 
 fn ray(origin: [i64; 3], direction: [i64; 3]) -> TraceRay {

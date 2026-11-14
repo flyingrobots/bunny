@@ -12,7 +12,8 @@ integer arithmetic only, so every supported target generates the same rays.
   tangent of half the vertical field of view and an integer image size; no
   trigonometry. Degenerate input returns a typed `CameraError`.
 * A right-handed camera frame (`right = forward x up`) and a named image
-  convention: pixel `(0, 0)` is bottom-left, rows grow upward.
+  convention: pixel `(0, 0)` is top-left and rows grow downward, as in
+  `bunny_linalg::Viewport`.
 * `PinholeCamera::ray(PixelSample)`: one trace ray per pixel and sub-pixel
   offset, with no square root or division in the camera. Directions are not
   normalized; a construction-time scale keeps every component at most 1.0, as

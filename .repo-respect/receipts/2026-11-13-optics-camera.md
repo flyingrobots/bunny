@@ -96,8 +96,10 @@ cargo test --locked --workspace (all passed)
 cargo run --locked -p xtask -- code-dojo --all (full gate, at the final commit)
 
 Known risks:
-The pixel origin is bottom-left with rows growing upward (matching +Y and NDC); renderers
-that store rows top first must flip. The positive-forward corner check and the
+The pixel origin is top-left with rows growing downward, chosen to match the Viewport
+conversion that landed on main while this branch was open (the branch first used a
+bottom-left origin). Agreement with FixedMat4::try_look_at and try_perspective is documented
+but not yet tested. The positive-forward corner check and the
 re-orthogonalized basis are justified by tests, not by a closed-form proof; failure would be
 the defensive Unrepresentable error. Narrow fields of view are accepted down to one raw unit
 of tangent, where neighbouring pixels can share a ray. No timing was measured.

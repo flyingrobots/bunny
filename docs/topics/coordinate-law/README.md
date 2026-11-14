@@ -296,8 +296,9 @@ size cannot be expressed. Nothing panics or saturates.
 
 The pinhole camera in `bunny-optics` names its image convention explicitly:
 its basis is right-handed (`right = forward x up`), so a camera looking down
-`-Z` with up `+Y` has right `+X`; pixel `(0, 0)` is the bottom-left pixel,
-columns grow toward right and rows grow toward up, matching positive NDC `y`.
+`-Z` with up `+Y` has right `+X`; pixel `(0, 0)` is the top-left pixel,
+columns grow toward right and rows grow toward down, as in
+[Viewport Conversion](#viewport-conversion).
 The contract and its evidence live in
 [the optics chapter](../optics/README.md).
 

@@ -33,14 +33,17 @@ pub struct CameraSpec {
     pub height: u32,
 }
 
-/// A point inside one pixel: column `x`, row `y` and a sub-pixel offset in `[0, 1)` on each
-/// axis. Pixel `(0, 0)` is the bottom-left pixel; columns grow toward the camera's right and
-/// rows toward its up.
+/// A point inside one pixel: column, row and sub-pixel offset.
+///
+/// The sub-pixel offset is in `[0, 1)` on each axis. Pixel `(0, 0)` is the top-left pixel;
+/// columns grow toward the camera's right and rows toward its down (`-up`), as in
+/// `bunny_linalg::Viewport`: the sample's continuous viewport coordinate is
+/// `(x + sub_x, y + sub_y)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PixelSample {
     /// Column, counted from the left edge.
     pub x: u32,
-    /// Row, counted from the bottom edge.
+    /// Row, counted from the top edge.
     pub y: u32,
     /// Horizontal offset inside the pixel, in `[0, 1)`.
     pub sub_x: FixedQ32_32,
@@ -108,7 +111,8 @@ impl PinholeCamera {
     #[must_use]
     pub fn ray(&self, sample: PixelSample) -> Option<TraceRay> {
         let x = doubled_offset(sample.x, sample.sub_x, self.lens.width)?;
-        let y = doubled_offset(sample.y, sample.sub_y, self.lens.height)?;
+        // Rows grow downward, against `up`.
+        let y = -doubled_offset(sample.y, sample.sub_y, self.lens.height)?;
         let [dx, dy, dz] = self.plane.direction(Offset { x, y }).map(narrow);
         TraceRay::new(self.position, FixedVec3::new(dx?, dy?, dz?))
     }
@@ -131,7 +135,7 @@ impl PinholeCamera {
         self.lens.basis.right
     }
 
-    /// The unit direction of growing rows, orthogonal to `forward` on the up hint's side.
+    /// The unit up direction, orthogonal to `forward` on the up hint's side; rows grow against it.
     #[must_use]
     pub const fn up(&self) -> FixedUnitVec3 {
         self.lens.basis.up
