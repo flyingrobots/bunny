@@ -76,29 +76,3 @@ fn sqrt_matches_reference_for_every_small_raw_value() {
         assert_eq!(actual, i64::try_from(expected).ok(), "raw={raw}");
     }
 }
-
-#[wasm_bindgen_test(unsupported = test)]
-fn sqrt_u128_matches_core_isqrt_on_many_seeded_inputs() {
-    let mut state = SQRT_EQUIVALENCE_SEED ^ 0x0C0E_0000_0000_0001;
-    for case in 0..200_000 {
-        let value = spread_u128(&mut state);
-        assert_eq!(FixedQ32_32::sqrt_u128(value), value.isqrt(), "case={case}; value={value}");
-    }
-}
-
-#[wasm_bindgen_test(unsupported = test)]
-fn sqrt_u128_matches_core_isqrt_around_the_split_and_correction_points() {
-    let mut cases =
-        vec![u128::from(u64::MAX), u128::from(u64::MAX) + 1, 1_u128 << 126, (1_u128 << 126) - 1];
-    // Squares of roots around 2^32 multiples exercise the Karatsuba quotient overshoot.
-    for high in [1_u128 << 31, (1 << 31) + 1, (1 << 32) - 1, 3 << 30] {
-        for low in [0_u128, 1, 0xFFFF_FFFF, 0x8000_0000] {
-            let root = (high << 32) | low;
-            let square = root * root;
-            cases.extend([square - 1, square, square + 1, square + 2 * root]);
-        }
-    }
-    for value in cases {
-        assert_eq!(FixedQ32_32::sqrt_u128(value), value.isqrt(), "value={value}");
-    }
-}

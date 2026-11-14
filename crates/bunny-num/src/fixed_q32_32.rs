@@ -141,9 +141,9 @@ impl FixedQ32_32 {
 
     /// Computes the integer square root of a `u128` value: the largest `r` with `r * r <= val`.
     ///
-    /// Integer arithmetic only: `u64::isqrt` on the top half, then one Karatsuba step whose
-    /// division is split into two `u64` divisions. It returns the same exact floor as
-    /// `u128::isqrt` and the previous bit-by-bit loop on every input.
+    /// Integer arithmetic only. It returns the same exact floor as `u128::isqrt` and the
+    /// previous bit-by-bit loop on every input. The implementation is chosen per target at
+    /// compile time; every choice returns identical bits.
     #[must_use]
     #[inline]
     pub const fn sqrt_u128(val: u128) -> u128 {
