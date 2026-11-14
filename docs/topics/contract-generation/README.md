@@ -25,6 +25,38 @@ Regenerate those artifacts with:
 cargo run --locked -p xtask -- generate
 ```
 
+## Regeneration Check
+
+Code Dojo's full gate and pre-commit gate check that the committed artifacts
+are exactly what the generator writes now (`xtask/src/generated_check.rs`).
+The step runs `bunny-wesley` with the same arguments as
+`cargo run --locked -p xtask -- generate`, from a scratch directory
+(`target/dojo-generated/`) that holds a copy of the schema at its repository
+path, so the paths the generator records in its output (the schema path in
+every file, the output paths in the manifest) are the repository's. It then
+compares each of the three outputs with the committed file byte for byte.
+
+On any difference the gate fails and names each differing file with the line
+where it first differs, or a committed file that is missing, then the command
+that fixes it:
+
+```text
+Code Dojo: generated contract artifacts differ from what bunny-wesley writes
+  generated/typescript/bunny-graphics.ts:1: differs from the regenerated file
+Regenerate with `cargo run --locked -p xtask -- generate` and commit the result.
+```
+
+A schema edited without regenerating fails the same way, because the schema
+hash is in every output. Run the step alone with
+`cargo run --locked -p xtask -- code-dojo-generated`.
+
+It is cheap enough for the pre-commit gate. Measured in the rust-dev container
+with `--exclusive`: 0.03 s when the generator is built, 0.36 s after every
+source file is touched, and 5.66 s from an empty target directory (building
+`wesley-core` and the generator's other dependencies). The check does not look
+for files the generator does not write, and it does not run the generator's
+unit tests, which the gate runs anyway.
+
 ## Ownership
 
 Bunny owns:

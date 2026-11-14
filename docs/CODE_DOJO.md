@@ -15,7 +15,8 @@ bash scripts/install-githooks.sh
 Hooks installed:
 
 - `pre-commit` — checks staged Rust files with the AST policy gate, then runs
-  topic documentation contract checks, repo-respect receipt coverage,
+  topic documentation contract checks, the generated-artifact regeneration
+  check, repo-respect receipt coverage,
   `cargo fmt --check`, workspace Clippy, strict package-scoped library Clippy,
   dependency policy, `cargo test`, and doctests.
 - `commit-msg` — enforces focused commit subjects and repo-respect receipt trailers.
@@ -326,6 +327,15 @@ check is `xtask/src/feature_configs.rs`.
   only in a clone where `scripts/install-githooks.sh` has set
   `core.hooksPath` to `.githooks`; nothing installs them automatically, so a
   fresh clone or a new worktree commits and pushes without them.
+
+## Generated Artifacts
+
+The full gate and the pre-commit gate regenerate `bunny-wesley`'s contract
+artifacts in `target/dojo-generated/` and fail when a committed artifact
+differs, naming the file, its first differing line and
+`cargo run --locked -p xtask -- generate`. Run it alone with
+`cargo run --locked -p xtask -- code-dojo-generated`. See the
+[contract-generation chapter](topics/contract-generation/README.md#regeneration-check).
 
 ## Waivers
 

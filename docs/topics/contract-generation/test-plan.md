@@ -268,17 +268,19 @@ status = "implemented"
 id = "CG-TP-014"
 requirements = ["CG-REQ-011"]
 evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_014_drift_is_reported_at_the_first_differing_line"
 oracle = "Constructed text pairs whose first differing line is known."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CG-TP-015"
 requirements = ["CG-REQ-011"]
 evidence = "test"
-oracle = "The argument list of generate, written out in the test."
+test = "xtask/src/generated_check/tests.rs::cg_tp_015_the_check_regenerates_what_generate_writes"
+oracle = "The argument list generate used before this change, written out in the test."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CG-TP-016"
@@ -287,12 +289,28 @@ evidence = "manual-audit"
 artifact = "docs/topics/contract-generation/test-plan.md#regeneration-check-evidence"
 oracle = "The check's output on each seeded copy and on the repository."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Regeneration Check Evidence
 
-Planned: CG-TP-016.
+CG-TP-016 was run in a container copy of the repository, one seed at a time,
+with `cargo run --locked -q -p xtask -- code-dojo-generated`, checking that
+each seed changed its file:
+
+| Seed | Result |
+| --- | --- |
+| None (the repository) | Passes |
+| `hash` to `hasH` on line 4 of `crates/bunny-contract/src/generated/graphics.rs` | Fails: `graphics.rs:4` |
+| `generated` to `generateD` on line 1 of `generated/typescript/bunny-graphics.ts` | Fails: `bunny-graphics.ts:1` |
+| The first digit of `schemaSha256` in `generated/bunny-graphics.manifest.json` | Fails: `bunny-graphics.manifest.json:5` |
+| `generated/typescript/bunny-graphics.ts` deleted | Fails: missing |
+| A comment line appended to the schema, nothing regenerated | Fails: `graphics.rs:6`, `bunny-graphics.ts:4`, `bunny-graphics.manifest.json:5` (the schema hash) |
+| Every seed restored | Passes |
+
+Before the step, the first two seeds together passed `cargo test -p
+bunny-contract -p bunny-wesley`: the witness tests (CG-TP-012, CG-TP-013) read
+only the version and scalar-profile strings.
 
 ## Determinism Obligations And Evidence
 

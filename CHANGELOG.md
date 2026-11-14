@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* Code Dojo regenerates `bunny-wesley`'s contract artifacts and compares them
+  with the committed files, in the full gate and the pre-commit gate. A
+  committed DTO or manifest that differs from what the generator writes now
+  (including after a schema edit that was not regenerated) fails the gate,
+  naming the file, its first differing line and
+  `cargo run --locked -p xtask -- generate`; before, a one-byte change passed
+  every test. `cargo run --locked -p xtask -- code-dojo-generated` runs the
+  step alone, which takes 0.03 s once the generator is built. `xtask generate`
+  now runs the generator with `--locked` (flyingrobots/bunny#286).
+
 ### Fixed
 
 * Code Dojo's dependency check lists the deterministic crates' graph over
