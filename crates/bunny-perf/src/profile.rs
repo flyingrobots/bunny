@@ -721,7 +721,7 @@ mod tests {
         assert_eq!(bad, Vec::<usize>::new());
     }
 
-    /// TRACE-TP-304: every box test the benchmark's 1 024 `closest_hit` and `any_hit`
+    /// TRACE-TP-311: every box test the benchmark's 1 024 `closest_hit` and `any_hit`
     /// searches make returns the same `Option` as the retained pre-#258 box test, at the
     /// recorded limit and at the limits that decide each answer.
     #[test]

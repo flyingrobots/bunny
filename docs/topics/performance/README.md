@@ -768,7 +768,7 @@ that needs its own measurement.
 - *Not used inside `normalize`.* Preparing a divisor costs about as much as the three
   divisions it would replace there.
 
-### 8. A straight-line `TraceRay::box_entry` in `i64` (exact replacement)
+### 10. A straight-line `TraceRay::box_entry` in `i64` (exact replacement)
 
 **Where:** `TraceRay::box_entry` and its helpers in `crates/bunny-query/src/trace.rs`
 (flyingrobots/bunny#258). The [profile](#profile-of-closest_hit-on-the-benchmark-scene)
@@ -795,14 +795,14 @@ shape changed:
 
 **Fidelity: exact replacement.** For every ray, box and limit the new test returns the same
 `Option<FixedQ32_32>` as the old one, which is kept verbatim in
-`crates/bunny-query/tests/support/box_entry_reference.rs`. `TRACE-TP-301` to `TRACE-TP-304`
+`crates/bunny-query/tests/support/box_entry_reference.rs`. `TRACE-TP-308` to `TRACE-TP-311`
 compare them on the golden and oracle corpora, 300 000 seeded trace-domain cases, a sweep
 of every pair of 15 extreme coordinates (`i64::MIN`, `i64::MAX`, inverted pairs) plus
 200 000 seeded near-extreme boxes, and every box test of the benchmark scene, each at ten
 limits including `i64::MIN`, -1, 0 and the entry bound and its neighbours. The existing
 tests, including the exact rational oracle `TRACE-TP-007` and the traversal's equality with
 a test of every primitive (`TRACE-TP-101`), pass unmodified. Fourteen deliberate mutations
-(`TRACE-TP-305`) each fail at least one case; three of them (the upper multiplier `r + 1`
+(`TRACE-TP-312`) each fail at least one case; three of them (the upper multiplier `r + 1`
 made `r`, the upper step `+ 1` made `+ 0`, and `enter <= exit` made strict) pass every case
 that existed before and are caught only by the new corpora.
 

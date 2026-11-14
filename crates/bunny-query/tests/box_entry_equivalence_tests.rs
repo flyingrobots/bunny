@@ -123,7 +123,7 @@ impl Checker {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_301_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora() {
+fn trace_tp_308_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora() {
     let one = ONE_RAW;
     let unit = ([-one, -one, -one], [one, one, one]);
     let n = 1 << 20;
@@ -249,7 +249,7 @@ fn placed_box(seeds: &mut Seeds, origin: [i64; 3], direction: [i64; 3]) -> ([i64
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_302_box_entry_matches_the_reference_on_seeded_trace_domain_cases() {
+fn trace_tp_309_box_entry_matches_the_reference_on_seeded_trace_domain_cases() {
     let mut seeds = Seeds(SEEDED_SEED);
     let mut checker = Checker::new(SEEDED_SEED ^ 0xB);
     for case in 0..SEEDED_CASES {
@@ -290,7 +290,7 @@ const EXTREME_DIRECTIONS: [i64; 9] =
     [-DIRECTION_MAX, -DIRECTION_MAX + 1, -3, -1, 0, 1, 3, DIRECTION_MAX - 1, DIRECTION_MAX];
 
 #[wasm_bindgen_test(unsupported = test)]
-fn trace_tp_303_box_entry_matches_the_reference_at_the_ends_of_the_i64_range() {
+fn trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range() {
     let mut seeds = Seeds(EXTREME_SEED);
     let mut checker = Checker::new(EXTREME_SEED ^ 0xB);
     // Every (min, max) pair of extremes on one axis, inverted pairs included, for every

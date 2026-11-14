@@ -76,7 +76,7 @@ formatting.
 | TRACE-REQ-025 | any_hit reports a hit exactly when a test of every primitive finds one, and does not call the primitive test after the first hit. | `README.md#correctness-the-answer-does-not-depend-on-the-tree` |
 | TRACE-REQ-026 | Malformed BVH buffers that the search reaches are errors, an empty tree misses, and reported distances outside 0..=limit are ignored. | `README.md#search-order-and-pruning` |
 | TRACE-REQ-027 | hit_triangle returns exactly what a frozen reference copy of its arithmetic returns (distance, facing and weights) for every ray, triangle and pair of limits, so an exact replacement of the kernel changes no bit. | `README.md#exact-triangle-test` |
-| TRACE-REQ-028 | box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included. | `README.md#conservative-box-test` |
+| TRACE-REQ-029 | box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included. | `README.md#conservative-box-test` |
 
 ```toml
 [[requirement]]
@@ -185,7 +185,7 @@ summary = "hit_triangle returns exactly what a frozen reference copy of its arit
 status = "active"
 
 [[requirement]]
-id = "TRACE-REQ-028"
+id = "TRACE-REQ-029"
 summary = "box_entry returns exactly what the retained pre-#258 box test returns (the whole Option<FixedQ32_32>) for every ray, every FixedAabb3, inverted boxes and boxes at the ends of the i64 range included, and every t_max, negative included."
 status = "active"
 ```
@@ -220,14 +220,14 @@ kernel: it is the plain version that an optimized kernel is held to. The seeded 
 `EQUIVALENCE_SEED` (`0xB002_7ACE_0000_0214`); magnitudes are drawn bit length first, so small
 and large values are equally common.
 
-`TRACE-TP-301` to `TRACE-TP-304` compare `box_entry` with the box test as it was before
+`TRACE-TP-308` to `TRACE-TP-311` compare `box_entry` with the box test as it was before
 flyingrobots/bunny#258, kept in `crates/bunny-query/tests/support/box_entry_reference.rs`
 (which the `bunny-perf` tests include as well). The copy must not be edited to follow the
 kernel: it is the definition the faster kernel is held to. Every comparison covers ten
 distance limits: `i64::MIN`, -1, 0, 1, `i64::MAX`, two seeded values, and the reference's
 own entry bound and its two neighbours, where the limit decides the answer. Seeds are
 `0xB002_0258_0000_0001` (seeded cases) and `0xB002_0258_0000_0002` (extremes);
-`TRACE-TP-301` replays the corpus of `TRACE-TP-007` with its own seed.
+`TRACE-TP-308` replays the corpus of `TRACE-TP-007` with its own seed.
 
 The golden vectors in `TRACE-TP-009` and `TRACE-TP-010` are hand computed; the
 comments beside each case give the exact value the floor is taken of.
@@ -279,11 +279,11 @@ Regenerating them is a contract change.
 | TRACE-TP-203 | Extreme domain values against the reference | TRACE-REQ-027 | The domain-corner triangles and rays of TRACE-TP-005, where det and t use their full bit budgets, equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_203_extreme_domain_values_agree` |
 | TRACE-TP-204 | det at and just past multiples of 2^32 | TRACE-REQ-027 | Raw-unit triangles hit at a corner with det exactly 2^32, 3 * 2^32, 2^32 + 1 (641 * 6 700 417) and 1 equal the frozen reference at the same limits. | `crates/bunny-query/tests/trace_equivalence_tests.rs::trace_tp_204_determinants_at_multiples_of_2_pow_32_agree` |
 | TRACE-TP-205 | The benchmark scene's triangle tests | TRACE-REQ-027 | Every triangle test that closest_hit makes on the benchmark scene's 1 024 camera rays equals the frozen reference at the limit the traversal passed and at the limits around the true distance. | `crates/bunny-perf/src/scene.rs::tests::hit_triangle_matches_the_reference_on_the_scene_traversal` |
-| TRACE-TP-301 | Reference on the golden and oracle corpora | TRACE-REQ-028 | The inputs of TRACE-TP-010 (and an origin-inside case) and the 40 000 seeded cases of TRACE-TP-007, drawn with the same seed, return the same Option as the retained reference at every limit class; over 2 000 cases each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_301_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora` |
-| TRACE-TP-302 | Reference on seeded trace-domain cases | TRACE-REQ-028 | 300 000 seeded rays (origins across the whole trace domain, within 4 units and within 2^20 raw; general, near-axis and axis-parallel directions with zero, tiny, unit and maximum components) against boxes around, ahead of, behind and far from the origin, with faces through the origin, inverted axes and full-range axes, return the same Option as the retained reference at every limit class; over a tenth of them each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_302_box_entry_matches_the_reference_on_seeded_trace_domain_cases` |
-| TRACE-TP-303 | Reference at the ends of i64 | TRACE-REQ-028 | Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_303_box_entry_matches_the_reference_at_the_ends_of_the_i64_range` |
-| TRACE-TP-304 | Reference on the benchmark scene | TRACE-REQ-028 | Every box test the closest_hit and any_hit searches make on the benchmark scene's 1 024 camera rays returns the same Option as the retained reference at the recorded limit, at i64::MAX, 0, -1 and at the reference's entry bound and one below it. | `crates/bunny-perf/src/profile.rs::tests::every_recorded_box_test_matches_the_reference_box_test` |
-| TRACE-TP-305 | Deliberate mutations of the faster box test | TRACE-REQ-028 | Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-301 to TRACE-TP-304 fail. | [Mutation checks](#mutation-checks) |
+| TRACE-TP-308 | Reference on the golden and oracle corpora | TRACE-REQ-029 | The inputs of TRACE-TP-010 (and an origin-inside case) and the 40 000 seeded cases of TRACE-TP-007, drawn with the same seed, return the same Option as the retained reference at every limit class; over 2 000 cases each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_308_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora` |
+| TRACE-TP-309 | Reference on seeded trace-domain cases | TRACE-REQ-029 | 300 000 seeded rays (origins across the whole trace domain, within 4 units and within 2^20 raw; general, near-axis and axis-parallel directions with zero, tiny, unit and maximum components) against boxes around, ahead of, behind and far from the origin, with faces through the origin, inverted axes and full-range axes, return the same Option as the retained reference at every limit class; over a tenth of them each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_309_box_entry_matches_the_reference_on_seeded_trace_domain_cases` |
+| TRACE-TP-310 | Reference at the ends of i64 | TRACE-REQ-029 | Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range` |
+| TRACE-TP-311 | Reference on the benchmark scene | TRACE-REQ-029 | Every box test the closest_hit and any_hit searches make on the benchmark scene's 1 024 camera rays returns the same Option as the retained reference at the recorded limit, at i64::MAX, 0, -1 and at the reference's entry bound and one below it. | `crates/bunny-perf/src/profile.rs::tests::every_recorded_box_test_matches_the_reference_box_test` |
+| TRACE-TP-312 | Deliberate mutations of the faster box test | TRACE-REQ-029 | Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-308 to TRACE-TP-311 fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -665,35 +665,35 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "TRACE-TP-301"
-requirements = ["TRACE-REQ-028"]
+id = "TRACE-TP-308"
+requirements = ["TRACE-REQ-029"]
 evidence = "test"
-test = "crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_301_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora"
+test = "crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_308_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora"
 oracle = "The inputs of TRACE-TP-010 (and an origin-inside case) and the 40 000 seeded cases of TRACE-TP-007, drawn with the same seed, return the same Option as the retained reference at every limit class; over 2 000 cases each reach and miss."
 tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "TRACE-TP-302"
-requirements = ["TRACE-REQ-028"]
+id = "TRACE-TP-309"
+requirements = ["TRACE-REQ-029"]
 evidence = "test"
-test = "crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_302_box_entry_matches_the_reference_on_seeded_trace_domain_cases"
+test = "crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_309_box_entry_matches_the_reference_on_seeded_trace_domain_cases"
 oracle = "300 000 seeded rays (origins across the whole trace domain, within 4 units and within 2^20 raw; general, near-axis and axis-parallel directions with zero, tiny, unit and maximum components) against boxes around, ahead of, behind and far from the origin, with faces through the origin, inverted axes and full-range axes, return the same Option as the retained reference at every limit class; over a tenth of them each reach and miss."
 tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "TRACE-TP-303"
-requirements = ["TRACE-REQ-028"]
+id = "TRACE-TP-310"
+requirements = ["TRACE-REQ-029"]
 evidence = "test"
-test = "crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_303_box_entry_matches_the_reference_at_the_ends_of_the_i64_range"
+test = "crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range"
 oracle = "Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class."
 tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "TRACE-TP-304"
-requirements = ["TRACE-REQ-028"]
+id = "TRACE-TP-311"
+requirements = ["TRACE-REQ-029"]
 evidence = "test"
 test = "crates/bunny-perf/src/profile.rs::tests::every_recorded_box_test_matches_the_reference_box_test"
 oracle = "Every box test the closest_hit and any_hit searches make on the benchmark scene's 1 024 camera rays returns the same Option as the retained reference at the recorded limit, at i64::MAX, 0, -1 and at the reference's entry bound and one below it."
@@ -701,11 +701,11 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
-id = "TRACE-TP-305"
-requirements = ["TRACE-REQ-028"]
+id = "TRACE-TP-312"
+requirements = ["TRACE-REQ-029"]
 evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#mutation-checks"
-oracle = "Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-301 to TRACE-TP-304 fail."
+oracle = "Each rule of the rewritten box test, broken on purpose, makes at least one of TRACE-TP-308 to TRACE-TP-311 fail."
 tier = "manual"
 status = "implemented"
 ```
@@ -772,30 +772,30 @@ survived until `TRACE-TP-204` was added. The table is in the performance chapter
 
 The rewritten box test (flyingrobots/bunny#258) was checked the same way in a container
 copy of the final source, running `box_entry_equivalence_tests`, `trace_tests`,
-`closest_hit_tests` and the `bunny-perf` scene test `TRACE-TP-304`. Every mutation made at
+`closest_hit_tests` and the `bunny-perf` scene test `TRACE-TP-311`. Every mutation made at
 least one case fail; the restored source passed every `bunny-query` and `bunny-broadphase`
 test.
 
 | Mutation in `trace.rs` | Rule broken | Failing cases |
 | --- | --- | --- |
-| Near and far planes swapped in `offsets` | Near and far selection by direction sign | TRACE-TP-301 to 304, TRACE-TP-005, 007, 008, 010, TRACE-TP-101 to 109 |
-| `far >= origin` made `far > origin` | A far plane through the origin is reached | TRACE-TP-301 to 303, TRACE-TP-010 |
-| Parallel-axis near check disabled (`direction == 0` made `direction == i64::MIN`) | A parallel ray outside the slab misses | TRACE-TP-301 to 303 |
-| `!` not applied to the origin in `offsets` | The origin is flipped with the planes for a negative direction | TRACE-TP-301 to 304, TRACE-TP-005, 007, 008, 010, TRACE-TP-101 to 109 |
-| Upper multiplier `r + 1` made `r` | The upper bound rounds up | TRACE-TP-302, 303 |
-| Upper bound step `+ 1` made `+ 0` | The upper bound rounds up | TRACE-TP-302, 303 |
-| Parallel-axis upper bound not `u64::MAX` | A parallel axis does not limit the exit | TRACE-TP-301 to 303, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
-| `saturating_add` made `wrapping_add` in the upper bound | Saturation | TRACE-TP-301 to 303, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
-| `enter <= limit` made `enter < limit` | The distance limit is inclusive | TRACE-TP-301 to 304, TRACE-TP-008 |
-| `limit >= 0` dropped | A negative limit rejects | TRACE-TP-301 to 304, TRACE-TP-008 |
-| The z-axis flag dropped | Every axis can reject | TRACE-TP-301 to 303, TRACE-TP-008 |
-| `enter <= exit` made `enter < exit` | Touching contact is reached | TRACE-TP-302, 303 |
-| Lower-bound saturation replaced by truncation | Saturation | TRACE-TP-301 to 303, TRACE-TP-010 |
-| Near offset not clamped at zero behind the origin | An origin inside the slab enters at 0 | TRACE-TP-301 to 304, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
+| Near and far planes swapped in `offsets` | Near and far selection by direction sign | TRACE-TP-308 to 304, TRACE-TP-005, 007, 008, 010, TRACE-TP-101 to 109 |
+| `far >= origin` made `far > origin` | A far plane through the origin is reached | TRACE-TP-308 to 303, TRACE-TP-010 |
+| Parallel-axis near check disabled (`direction == 0` made `direction == i64::MIN`) | A parallel ray outside the slab misses | TRACE-TP-308 to 303 |
+| `!` not applied to the origin in `offsets` | The origin is flipped with the planes for a negative direction | TRACE-TP-308 to 304, TRACE-TP-005, 007, 008, 010, TRACE-TP-101 to 109 |
+| Upper multiplier `r + 1` made `r` | The upper bound rounds up | TRACE-TP-309, 303 |
+| Upper bound step `+ 1` made `+ 0` | The upper bound rounds up | TRACE-TP-309, 303 |
+| Parallel-axis upper bound not `u64::MAX` | A parallel axis does not limit the exit | TRACE-TP-308 to 303, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
+| `saturating_add` made `wrapping_add` in the upper bound | Saturation | TRACE-TP-308 to 303, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
+| `enter <= limit` made `enter < limit` | The distance limit is inclusive | TRACE-TP-308 to 304, TRACE-TP-008 |
+| `limit >= 0` dropped | A negative limit rejects | TRACE-TP-308 to 304, TRACE-TP-008 |
+| The z-axis flag dropped | Every axis can reject | TRACE-TP-308 to 303, TRACE-TP-008 |
+| `enter <= exit` made `enter < exit` | Touching contact is reached | TRACE-TP-309, 303 |
+| Lower-bound saturation replaced by truncation | Saturation | TRACE-TP-308 to 303, TRACE-TP-010 |
+| Near offset not clamped at zero behind the origin | An origin inside the slab enters at 0 | TRACE-TP-308 to 304, TRACE-TP-007, 008, 010, TRACE-TP-101 to 109 |
 
 Three of these (`r + 1` made `r`, the `+ 0` step and the strict exit) pass every
-case that existed before #258; only the equivalence corpora `TRACE-TP-302` and
-`TRACE-TP-303` catch them. The first run of the parallel-axis mutation deleted the check
+case that existed before #258; only the equivalence corpora `TRACE-TP-309` and
+`TRACE-TP-310` catch them. The first run of the parallel-axis mutation deleted the check
 outright, which left an unused-parentheses lint that `deny(warnings)` turned into a build
 error, so no test ran; it was redone as the comparison change above.
 
@@ -859,7 +859,7 @@ and `TRACE-TP-007` are seeded property cases over 4 000 to 40 000 inputs each;
 `TRACE-TP-101`, `TRACE-TP-102`, `TRACE-TP-103` and `TRACE-TP-106` are seeded
 traversal cases over 1 500 to 3 000 rays each.
 
-`TRACE-TP-302` (300 000 cases) and `TRACE-TP-303` (a 42 525-case sweep and 200 000 seeded
+`TRACE-TP-309` (300 000 cases) and `TRACE-TP-310` (a 42 525-case sweep and 200 000 seeded
 cases) compare `box_entry` with its retained reference at ten limits each; their failure
 messages name the case index, the ray, the box and the limit.
 
