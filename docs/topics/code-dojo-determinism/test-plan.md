@@ -133,7 +133,7 @@ real `cargo tree` output and the real manifests.
 | ND-TP-044 | exact rule name | ND-REQ-002 | A waiver for `std-fs-extra` leaves a `std-fs` finding reported. | `xtask/src/waivers/tests.rs::a_waiver_names_its_rule_exactly` |
 | ND-TP-066 | block comment over lines | ND-REQ-002 | A `/* */` comment whose two lines hold a `std-fs` and a `std-env` clause waives neither: both findings (lines 4 and 5) are reported. | `xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_two_clauses_waives_nothing` |
 | ND-TP-067 | block comment with one clause | ND-REQ-002 | A `/* */` comment over two lines with one clause, its reason running onto the second line, waives the item below it. | `xtask/src/waivers/tests.rs::a_block_comment_over_two_lines_with_one_clause_waives_the_item_below` |
-| ND-TP-068 | manifest multi-line strings | ND-REQ-002, ND-REQ-005 | A waiver line inside a multi-line basic or literal TOML string waives nothing; a whole-line comment after a multi-line string closed on its own line waives. | `xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment` |
+| ND-TP-068 | manifest multi-line strings | ND-REQ-002, ND-REQ-005 | A waiver line inside a multi-line basic or literal TOML string waives nothing, also after an escaped quote that looks like a closing delimiter; a whole-line comment after a multi-line string closed on the same line or on a line of its own waives. | `xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment` |
 | ND-TP-045 | manifest waiver form | ND-REQ-002, ND-REQ-005 | A whole-line manifest comment waives `random`; the same text inside a TOML string, or a comment with two clauses, does not. | `xtask/src/waivers/tests.rs::manifest_waivers_are_whole_line_comments` |
 | ND-TP-046 | trailing waiver | ND-REQ-002 | A waiver after code on a line covers that line only; the next statement's finding (line 3) is reported. | `xtask/src/waivers/tests.rs::a_waiver_after_code_covers_only_its_line` |
 
@@ -557,7 +557,7 @@ id = "ND-TP-068"
 requirements = ["ND-REQ-002", "ND-REQ-005"]
 evidence = "test"
 test = "xtask/src/waivers/tests.rs::manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment"
-oracle = "A waiver line inside a multi-line basic or literal TOML string waives nothing; a whole-line comment after a multi-line string closed on its own line waives."
+oracle = "A waiver line inside a multi-line basic or literal TOML string waives nothing, also after an escaped quote that looks like a closing delimiter; a whole-line comment after a multi-line string closed on the same line or on a line of its own waives."
 tier = "fast"
 status = "implemented"
 

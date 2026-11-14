@@ -233,8 +233,9 @@ fn manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment() {
         format!("[package.metadata]\nnote = \"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n");
     let literal = format!("note = '''\n# dojo: allow random -- {REASON}\n'''\n");
     let closed = format!("note = \"\"\"one line\"\"\"\n# dojo: allow random -- {REASON}\n");
-    let escaped =
-        format!("note = \"\"\"\nescaped quotes: \\\"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n");
+    let escaped = format!(
+        "note = \"\"\"\nescaped quotes: \\\"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n"
+    );
     let closed_below =
         format!("note = \"\"\"\nfirst line\n\"\"\"\n# dojo: allow random -- {REASON}\n");
 
