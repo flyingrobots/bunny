@@ -7,6 +7,9 @@ pub(super) struct HeaderSpec {
     pub(super) face_count: usize,
     pub(super) vertex_properties: usize,
     pub(super) coordinate_slots: [usize; 3],
+    /// 1-based line of `element vertex` and `element face`, for the limits entry point.
+    pub(super) vertex_line: usize,
+    pub(super) face_line: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -27,6 +30,8 @@ struct State {
     vertex_properties: usize,
     slots: [Option<usize>; 3],
     face_property_seen: bool,
+    vertex_line: usize,
+    face_line: usize,
 }
 
 const COORDINATE_TYPES: [&str; 4] = ["float", "float32", "double", "float64"];
@@ -46,7 +51,14 @@ pub(super) fn parse_header(header: &str, end_line: usize) -> Result<HeaderSpec, 
     }
     let mut state = State::default();
     for (index, line) in lines.enumerate() {
+        let (had_vertex, had_face) = (state.vertex_count.is_some(), state.face_count.is_some());
         parse_line(line, &mut state).map_err(|kind| AsciiPlyError::new(kind, index + 2))?;
+        if !had_vertex && state.vertex_count.is_some() {
+            state.vertex_line = index + 2;
+        }
+        if !had_face && state.face_count.is_some() {
+            state.face_line = index + 2;
+        }
     }
     state.finish().map_err(|kind| AsciiPlyError::new(kind, end_line))
 }
@@ -67,6 +79,8 @@ impl State {
             face_count: self.face_count.ok_or(Kind::MissingFaceElement)?,
             vertex_properties: self.vertex_properties,
             coordinate_slots: [x, y, z],
+            vertex_line: self.vertex_line,
+            face_line: self.face_line,
         })
     }
 }

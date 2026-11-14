@@ -5,6 +5,7 @@ mod body;
 mod decimal;
 mod error;
 mod header;
+mod limits;
 
 use body::{read_triangle, read_vertex, trim_blank, Lines};
 pub use decimal::{
@@ -12,6 +13,10 @@ pub use decimal::{
 };
 pub use error::{AsciiPlyError, AsciiPlyErrorKind};
 use header::{parse_header, HeaderSpec};
+pub use limits::{
+    parse_ascii_ply_with_limits, AsciiPlyLimit, AsciiPlyLimitExceeded, AsciiPlyLimitedError,
+    AsciiPlyLimits,
+};
 
 /// Stable identity of the ASCII PLY triangle-mesh profile read by [`parse_ascii_ply`].
 pub const ASCII_PLY_PROFILE_ID: &str = "bunny-ascii-ply-triangle-mesh/1";
