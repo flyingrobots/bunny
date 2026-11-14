@@ -25,6 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have a stated rule; see `docs/topics/ascii-ply/` (flyingrobots/bunny#247). The
   binary PLY reader is unchanged.
 
+* Code Dojo enforces every rule of Echo's `ban-nondeterminism` scan under
+  Echo's rule IDs (`time-system`, `time-instant`, `thread-sleep`,
+  `host-parallelism`, `random`, `host-callback`, `network`,
+  `unordered-container`, `hand-hashed-table`, `json-serialization`,
+  `wasm-serde`, `std-env`, `std-fs`, `std-process`) in the core crates,
+  `bunny-codec` and `bunny-contract`, tests included. The rules resolve
+  paths through `use` declarations, so renamed imports, module aliases,
+  `use` groups and glob imports are caught, and they read macro bodies.
+  The full gate also rejects banned crates (`rand`, `js-sys`,
+  `serde_json` and others) in those crates' normal dependency graphs.
+  `docs/CODE_DOJO.md` maps each Echo rule to its Code Dojo rule
+  (flyingrobots/bunny#279).
+
 * `bunny_optics::SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and
   `ShadingFrame::try_cosine_direction` return `Result<_, SecondaryRayError>`
   and say why an input was refused. `SecondaryRayError` (`#[non_exhaustive]`)
@@ -49,6 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trace kernel reports are not affected (flyingrobots/bunny#280).
 
 ### Changed
+
+* Code Dojo's `ambient-state` rule is split into the Echo rule IDs above,
+  and `nondeterministic-map` is renamed `unordered-container`; a waiver now
+  names one ban. No waiver in the repository used the old names.
+* `float-boundary` also rejects float paths such as `f32::NAN` or
+  `f64::from_bits` and floats inside macro bodies in core crates. Three
+  `f32::from_bits` calls in `bunny_num::fixed_q32_32::to_f32`, the
+  documented float egress, carry waivers; no code changed.
 
 * `bunny-optics` no longer denies the whole `clippy::nursery` group, which
   `CODE_STANDARDS.md` Rule 10 bans; it denies three nursery lints by name

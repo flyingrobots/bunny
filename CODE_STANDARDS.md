@@ -138,6 +138,10 @@ Examples:
 - in-memory adapter instead of filesystem access.
 - passed configuration struct instead of `std::env::var()`.
 
+Code Dojo enforces this rule with the `time-system`, `time-instant`, `thread-sleep`,
+`host-parallelism`, `random`, `host-callback`, `network`, `std-env`, `std-fs` and `std-process`
+rules; see [`docs/CODE_DOJO.md`](docs/CODE_DOJO.md#nondeterminism-rules).
+
 **Sensei's Wisdom™**: Ambient state is global mutable state wearing a fake mustache.
 
 ## Rule 5: Deterministic Collections and Ordering

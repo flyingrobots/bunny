@@ -71,12 +71,14 @@ pub fn try_from_f32(value: f32) -> Result<i64, FloatConversionError> {
 // dojo: allow float-boundary -- explicit lossy display/API egress from Q32.32
 pub fn to_f32(raw: i64) -> f32 {
     if raw == 0 {
+        // dojo: allow float-boundary -- positive zero, built from its bit pattern
         return f32::from_bits(0);
     }
 
     let sign = raw.is_negative();
     let abs: u64 = raw.unsigned_abs();
     if abs == 0 {
+        // dojo: allow float-boundary -- positive zero, built from its bit pattern
         return f32::from_bits(0);
     }
 
@@ -177,5 +179,6 @@ fn f32_from_abs_raw(sign: bool, abs: u64) -> f32 {
     let exp_field = (exp + 127).cast_unsigned();
     let mantissa = (sig & ((1_u128 << 23) - 1)) as u32;
     let bits = (u32::from(sign) << 31) | (exp_field << 23) | mantissa;
+    // dojo: allow float-boundary -- egress value assembled from integer sign, exponent, mantissa
     f32::from_bits(bits)
 }
