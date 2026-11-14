@@ -237,6 +237,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     ensure_cargo_manifest("full gate")?;
     check_dependency_rules()?;
     crate::feature_configs::check_trees(&git_root()?)?;
+    crate::generated_check::check(&git_root()?)?;
     run_quality_commands(true)?;
     for command in crate::feature_configs::commands() {
         run_command_strings(&command)?;
@@ -251,8 +252,14 @@ pub(super) fn handle_pre_commit() -> Result<(), DynError> {
     crate::topic_docs::check_staged()?;
     crate::repo_respect::check_staged()?;
     ensure_cargo_manifest("pre-commit gate")?;
+    crate::generated_check::check(&git_root()?)?;
     run_quality_commands(false)?;
     Ok(())
+}
+
+/// The regeneration check of the full and pre-commit gates, on its own.
+pub(super) fn handle_generated() -> Result<(), DynError> {
+    crate::generated_check::check(&git_root()?)
 }
 
 pub(super) fn handle_rust(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {

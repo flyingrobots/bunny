@@ -2,6 +2,7 @@
 
 mod code_dojo;
 mod feature_configs;
+mod generated_check;
 mod git_helpers;
 mod nondeterminism;
 mod perf;
@@ -35,6 +36,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "code-dojo-rust" => code_dojo::handle_rust(args),
         "code-dojo-determinism" => code_dojo::handle_determinism(args),
         "code-dojo-commit-msg" => code_dojo::handle_commit_msg(args),
+        "code-dojo-generated" => code_dojo::handle_generated(),
         "repo-respect" => repo_respect::handle(args),
         "topic-docs" => topic_docs::handle(),
         "perf" => perf::handle(args),
@@ -66,6 +68,8 @@ fn print_help() {
     println!("                  Check deterministic golden-vector receipts");
     println!("  code-dojo-commit-msg <path>");
     println!("                  Check a commit message file");
+    println!("  code-dojo-generated");
+    println!("                  Check the committed contract artifacts against bunny-wesley");
     println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
     println!(
@@ -80,20 +84,10 @@ fn print_help() {
 
 fn handle_generate() -> Result<(), Box<dyn Error>> {
     println!("Generating graphics DTOs...");
+    // The same arguments as the gate's regeneration check (`generated_check`).
     let status = Command::new("cargo")
-        .args([
-            "run",
-            "-p",
-            "bunny-wesley",
-            "--",
-            "schemas/bunny/v0/graphics.graphql",
-            "--rust",
-            "crates/bunny-contract/src/generated/graphics.rs",
-            "--typescript",
-            "generated/typescript/bunny-graphics.ts",
-            "--manifest",
-            "generated/bunny-graphics.manifest.json",
-        ])
+        .args(["run", "--locked", "-p", "bunny-wesley", "--"])
+        .args(generated_check::generator_args())
         .status()?;
 
     if !status.success() {
