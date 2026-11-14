@@ -34,7 +34,10 @@ fn optics_tp_020_seeding_and_range_rules() {
     assert_eq!(prng.state(), [6_457_827_717_110_365_317, 3_203_168_211_198_807_973]);
     let mut prng = Xoroshiro128Plus::from_seed_u64(1_234_567);
     let draws: Vec<u64> = (0..3).map(|_| prng.next_u64()).collect();
-    assert_eq!(draws, [9_660_995_928_309_173_290, 13_057_124_114_940_788_888, 1_483_754_980_695_055_771]);
+    assert_eq!(
+        draws,
+        [9_660_995_928_309_173_290, 13_057_124_114_940_788_888, 1_483_754_980_695_055_771]
+    );
     let mut prng = Xoroshiro128Plus::from_seed_u64(0);
     assert_eq!([prng.next_u64(), prng.next_u64()], [0x5099_46A4_1CD7_33A3, 0x0088_5667_B193_4BFA]);
 
@@ -42,7 +45,10 @@ fn optics_tp_020_seeding_and_range_rules() {
     let mut prng = Xoroshiro128Plus::from_seed(0, 0);
     assert_eq!(prng.state(), [0x9E37_79B9_7F4A_7C15, 0]);
     let draws: Vec<u64> = (0..3).map(|_| prng.next_u64()).collect();
-    assert_eq!(draws, [11_400_714_819_323_198_485, 4_557_078_984_430_990_530, 5_559_460_909_137_937_373]);
+    assert_eq!(
+        draws,
+        [11_400_714_819_323_198_485, 4_557_078_984_430_990_530, 5_559_460_909_137_937_373]
+    );
 
     // A one-value range returns it without drawing; an empty range is refused, not a panic.
     let mut prng = Xoroshiro128Plus::from_seed(1, 2);
@@ -50,6 +56,7 @@ fn optics_tp_020_seeding_and_range_rules() {
     assert_eq!(prng.state(), [1, 2]);
     assert_eq!(prng.next_int(1, 0), None);
     assert_eq!(prng.state(), [1, 2]);
-    let values: Vec<Option<i32>> = [(-3, 3), (-3, 3), (0, 1 << 20)].iter().map(|&(a, b)| prng.next_int(a, b)).collect();
+    let values: Vec<Option<i32>> =
+        [(-3, 3), (-3, 3), (0, 1 << 20)].iter().map(|&(a, b)| prng.next_int(a, b)).collect();
     assert_eq!(values, [Some(0), Some(3), Some(727_076)]);
 }

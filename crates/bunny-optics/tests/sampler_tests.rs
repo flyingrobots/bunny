@@ -3,19 +3,22 @@
 //! power-of-two sample block, range, evaluation-order independence, domain separation of the
 //! key fields and an adjacent-key avalanche guard.
 
+use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
 use bunny_optics::{
     fraction_from_bits, CameraSpec, PinholeCamera, PixelSample, PixelSampler, PixelStream,
     SAMPLER_ID, SAMPLE_HASH_ID,
 };
-use bunny_linalg::FixedVec3;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 /// The seed of the shuffles and seeded keys in this file; not a sampler seed of any contract.
 const SAMPLER_TEST_SEED: u64 = 0xB002_0221_5A3F_0001;
 const MIXED_SEED: u64 = 0x0123_4567_89AB_CDEF;
 const MAX_K: u32 = 10;
+
+/// A full key: (seed, x, y, sample, dimension or pair).
+type Key = (u64, u32, u32, u32, u32);
 
 struct Seeds(u64);
 
@@ -54,7 +57,7 @@ fn point_raw(sampler: &PixelSampler, sample: u32, pair: u32) -> (u32, u32) {
 fn optics_tp_010_sample_hash_golden_vectors() {
     // (seed, x, y, sample, dimension) -> bits, from the reference model described in the test
     // plan. Zeros, one-unit steps in each field, all-ones, and adjacent keys.
-    let cases: [((u64, u32, u32, u32, u32), u64); 10] = [
+    let cases: [(Key, u64); 10] = [
         ((0, 0, 0, 0, 0), 0x2382_75BC_38FC_BE91),
         ((0, 1, 0, 0, 0), 0x44E5_B981_00C6_7FB0),
         ((0, 0, 1, 0, 0), 0x19AE_FFC3_9B6F_4E53),
@@ -107,7 +110,7 @@ fn cell_partition_is_exact(points: &[(u32, u32)], k: u32, p: u32) -> bool {
     seen.iter().all(|&hit| hit)
 }
 
-/// Checks the (0, k, 2)-net property for every block size up to 2^MAX_K and every elementary
+/// Checks the (0, k, 2)-net property for every block size up to `2^MAX_K` and every elementary
 /// partition, for samples `start .. start + 2^k` with `start` a multiple of 2^k.
 fn check_stratified(sampler: &PixelSampler, pair: u32, block: u32) {
     for k in 0..=MAX_K {
@@ -133,7 +136,8 @@ fn optics_tp_012_power_of_two_blocks_are_stratified() {
         (7, 3, 9, 2),
     ];
     let mut seeds = Seeds(SAMPLER_TEST_SEED ^ 0x12);
-    let seeded = (0..8).map(|_| (seeds.next(), seeds.next_u32(), seeds.next_u32(), seeds.next_u32() % 8));
+    let seeded =
+        (0..8).map(|_| (seeds.next(), seeds.next_u32(), seeds.next_u32(), seeds.next_u32() % 8));
     for (seed, x, y, pair) in fixed_keys.into_iter().chain(seeded) {
         let sampler = PixelSampler::new(seed, x, y);
         check_stratified(&sampler, pair, 0);
@@ -152,7 +156,7 @@ fn optics_tp_012_power_of_two_blocks_are_stratified() {
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_013_sampler_golden_vectors() {
     // (seed, x, y, sample, pair) -> raw (u, v), from the reference model.
-    let cases: [((u64, u32, u32, u32, u32), (u32, u32)); 10] = [
+    let cases: [(Key, (u32, u32)); 10] = [
         ((0, 0, 0, 0, 0), (0x4353_0EFA, 0xC365_A181)),
         ((0, 0, 0, 1, 0), (0xB366_3062, 0x7162_20B7)),
         ((0, 0, 0, 2, 0), (0x12F3_1CF1, 0x109B_153C)),
@@ -262,22 +266,34 @@ fn distinct<T: Ord>(values: &mut Vec<T>) -> usize {
     values.len()
 }
 
-/// The fraction of output bits that change when one key bit flips, summed over seeded keys.
-fn avalanche_counts(keys: &[(u64, u32, u32, u32, u32)]) -> Vec<u32> {
-    let bits = |(seed, x, y, s, d): (u64, u32, u32, u32, u32)| PixelStream::new(seed, x, y).bits(s, d);
+/// The 192 keys one bit away from `key`: each seed bit, then each bit of x, y, sample and
+/// dimension.
+fn flipped_keys((seed, x, y, s, d): Key) -> Vec<Key> {
+    let mut keys: Vec<Key> = (0..64).map(|bit| (seed ^ (1 << bit), x, y, s, d)).collect();
+    for bit in 0..32 {
+        keys.push((seed, x ^ (1 << bit), y, s, d));
+    }
+    for bit in 0..32 {
+        keys.push((seed, x, y ^ (1 << bit), s, d));
+    }
+    for bit in 0..32 {
+        keys.push((seed, x, y, s ^ (1 << bit), d));
+    }
+    for bit in 0..32 {
+        keys.push((seed, x, y, s, d ^ (1 << bit)));
+    }
+    keys
+}
+
+/// For each of the 192 key bits, the number of output bits that change when it flips, summed
+/// over `keys`.
+fn avalanche_counts(keys: &[Key]) -> Vec<u32> {
+    let bits = |(seed, x, y, s, d): Key| PixelStream::new(seed, x, y).bits(s, d);
     let mut counts = vec![0_u32; 192];
     for &key in keys {
         let base = bits(key);
-        let (seed, x, y, s, d) = key;
-        for bit in 0..64 {
-            counts[bit] += (base ^ bits((seed ^ (1 << bit), x, y, s, d))).count_ones();
-        }
-        for bit in 0..32 {
-            let flip = 1_u32 << bit;
-            counts[64 + bit] += (base ^ bits((seed, x ^ flip, y, s, d))).count_ones();
-            counts[96 + bit] += (base ^ bits((seed, x, y ^ flip, s, d))).count_ones();
-            counts[128 + bit] += (base ^ bits((seed, x, y, s ^ flip, d))).count_ones();
-            counts[160 + bit] += (base ^ bits((seed, x, y, s, d ^ flip))).count_ones();
+        for (count, flipped) in counts.iter_mut().zip(flipped_keys(key)) {
+            *count += (base ^ bits(flipped)).count_ones();
         }
     }
     counts
@@ -289,8 +305,10 @@ fn optics_tp_016_adjacent_keys_avalanche() {
     // key bits, flipping it changes on average between 28 and 36 of the 64 output bits over
     // 256 seeded keys (an ideal mix gives 32, with a standard deviation of 0.25 for the mean).
     let mut seeds = Seeds(SAMPLER_TEST_SEED ^ 0x16);
-    let keys: Vec<(u64, u32, u32, u32, u32)> = (0..256)
-        .map(|_| (seeds.next(), seeds.next_u32(), seeds.next_u32(), seeds.next_u32(), seeds.next_u32()))
+    let keys: Vec<Key> = (0..256)
+        .map(|_| {
+            (seeds.next(), seeds.next_u32(), seeds.next_u32(), seeds.next_u32(), seeds.next_u32())
+        })
         .collect();
     for (bit, count) in avalanche_counts(&keys).into_iter().enumerate() {
         let total = u32::try_from(keys.len()).expect("fits") * 64;
@@ -320,9 +338,15 @@ fn optics_tp_017_dimension_pairs_and_pixels_are_decorrelated() {
     for y in 0..16 {
         for x in 0..16 {
             let here = PixelSampler::new(MIXED_SEED, x, y);
-            for next in [PixelSampler::new(MIXED_SEED, x + 1, y), PixelSampler::new(MIXED_SEED, x, y + 1)] {
+            for next in
+                [PixelSampler::new(MIXED_SEED, x + 1, y), PixelSampler::new(MIXED_SEED, x, y + 1)]
+            {
                 for sample in 0..16 {
-                    assert_ne!(point_raw(&here, sample, 0), point_raw(&next, sample, 0), "({x}, {y})");
+                    assert_ne!(
+                        point_raw(&here, sample, 0),
+                        point_raw(&next, sample, 0),
+                        "({x}, {y})"
+                    );
                 }
             }
         }
