@@ -172,6 +172,32 @@ Where the names differ:
   (`wasm-bindgen-test` is a dev-dependency of their tests and is accepted).
   The dependency check is what keeps it that way.
 
+### What The Rules Do Not Cover
+
+The source rules read syntax and each file's own imports. After
+flyingrobots/bunny#321 these remain outside them:
+
+- A float whose type is only inferred, with no float type, literal or
+  `_f32`/`_f64` name on the way (`text.parse()` passed to a float parameter,
+  `x.into()` to an `f64`); pinned as a known gap by
+  `an_inferred_float_with_no_float_name_is_not_seen`.
+- A banned type that reaches a file only as another crate's return type, or
+  only through a `crate::` re-export declared in another file (the re-export
+  itself is reported where it is declared), and code that a dependency's
+  procedural macro generates.
+- Symbolic links behind an `include_str!`, `include_bytes!` or `#[path]`
+  target, and doc text brought in with `#[doc = include_str!(..)]`.
+- Writing to standard output or standard error, and threads: both permitted on
+  purpose (see Lumen below for the difference on threads).
+- Dev-dependencies, in the dependency check.
+
+Known over-reports, each resolvable with a waiver: a zero-argument method of
+Bunny's own named `exists`, `metadata`, `absolute`, `is_terminal` or like the
+other filesystem `Path` methods; a user macro called by the bare name
+`include`, `env` or `option_env`; a `#[path]` inside an inline module, which
+the compiler resolves against a deeper directory; any name ending in `_f32`
+or `_f64` that involves no float.
+
 ### Compared With Lumen's Gate
 
 Lumen's gate (flyingrobots/lumen, `docs/adr/0006-nondeterminism-gate.md`)

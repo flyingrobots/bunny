@@ -38,7 +38,7 @@ CHANGELOG.md
 Topic docs:
 docs/topics/code-dojo-determinism/test-plan.md (ND-REQ-008, ND-TP-059..064)
 docs/topics/code-dojo-determinism/README.md (rules, host access beyond Echo)
-docs/CODE_DOJO.md (mapping, coverage count, Lumen alignment)
+docs/CODE_DOJO.md (mapping, coverage count, what the rules do not cover, Lumen alignment)
 
 Generated artifacts:
 None.
