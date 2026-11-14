@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added two `bunny-perf` cases in the `trace` group, `trace/triangle_hit` and
+  `trace/triangle_beyond_limit`, which time `TraceRay::hit_triangle` alone on the
+  benchmark scene's nearest hits with no limit and with the limit one raw unit
+  short. Added a frozen reference copy of the triangle test's arithmetic
+  (`crates/bunny-query/tests/support/trace_reference.rs`) with equivalence
+  tests over seeded, constructed and domain-corner corpora at limits around the
+  true distance, and scene tests that compare every triangle test of
+  `trace/closest_hit` with it and count how many reach the division. No library
+  function changes. A pre-check that rejects hits beyond the limit before the
+  division (flyingrobots/bunny#214) was measured and not shipped: only 24 of 714
+  crossings on the scene are beyond the limit, and the result is within noise;
+  see "Tried And Rejected" in the performance chapter.
+
 * Added the `bunny-optics` crate with a deterministic pinhole camera.
   `PinholeCamera::new` takes a position, a look direction, an up hint, the
   tangent of half the vertical field of view (no trigonometry) and an integer

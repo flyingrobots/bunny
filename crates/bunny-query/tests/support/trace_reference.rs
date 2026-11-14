@@ -1,10 +1,13 @@
-//! The exact triangle test as it was before the distance-limit pre-check
-//! (flyingrobots/bunny#214), kept as the reference oracle for `TraceRay::hit_triangle`.
+//! A frozen copy of the exact triangle test, kept as the reference oracle for
+//! `TraceRay::hit_triangle`.
 //!
 //! The arithmetic is a verbatim copy of `hit_triangle`, its `crossing` step and
-//! `shifted_quotient` at that revision; only the inputs are read through the public
-//! accessors (`TraceRay::origin`, `TraceRay::direction`, `TraceTriangle::vertices`) instead
-//! of private fields. Do not "improve" it: its value is that it divides on every crossing.
+//! `shifted_quotient` as of flyingrobots/bunny#214; only the inputs are read through the
+//! public accessors (`TraceRay::origin`, `TraceRay::direction`, `TraceTriangle::vertices`)
+//! instead of private fields. Do not "improve" it: its value is that it stays the plain
+//! version (it divides on every crossing) while the kernel may be optimized. An exact
+//! replacement of the kernel must keep agreeing with it (the Fidelity Rule in
+//! `docs/topics/performance/README.md`).
 //!
 //! Shared by `trace_equivalence_tests.rs` and the benchmark scene's tests in `bunny-perf`.
 
@@ -40,7 +43,7 @@ pub(crate) fn hit_triangle(
         .then(|| (distance.raw(), front_face, (weight(u), weight(v))))
 }
 
-/// The exact integer part of the triangle test, as `TraceRay::crossing` computed it.
+/// The exact integer part of the triangle test, as `TraceRay::crossing` computes it.
 pub(crate) fn crossing(ray: &TraceRay, triangle: &TraceTriangle) -> Option<Crossing> {
     let [v0, v1, v2] = triangle.vertices().map(raw3);
     let origin = raw3(ray.origin());

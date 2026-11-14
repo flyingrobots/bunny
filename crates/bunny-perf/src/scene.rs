@@ -320,8 +320,8 @@ pub(crate) fn disagreeing_rays() -> Vec<usize> {
     bad
 }
 
-/// `TraceRay::hit_triangle` as it was before the distance-limit pre-check, the oracle for
-/// the scene tests below (shared with `bunny-query`'s equivalence tests).
+/// A frozen reference copy of `TraceRay::hit_triangle`'s arithmetic, the oracle for the scene
+/// tests below (shared with `bunny-query`'s equivalence tests).
 #[cfg(all(test, feature = "trace"))]
 #[path = "../../bunny-query/tests/support/trace_reference.rs"]
 mod trace_reference;
@@ -361,7 +361,8 @@ mod tests {
         divided: u64,
         /// Divided calls whose distance is beyond the limit passed: the division was wasted.
         beyond_limit: u64,
-        /// Divided calls the pre-check `t >= (t_max + 1) * ceil(det / 2^32)` rejects.
+        /// Divided calls that the pre-check tried in flyingrobots/bunny#214,
+        /// `t >= (t_max + 1) * ceil(det / 2^32)`, would have rejected without dividing.
         pre_checked: u64,
     }
 
@@ -439,14 +440,17 @@ mod tests {
         assert!(tests > 1024, "the traversal must test triangles: {tests}");
     }
 
-    /// How much work a pre-check can remove on this scene. Run with `--nocapture` to see the
-    /// counts; the ledger records them (`docs/topics/performance/README.md`).
+    /// How much work a shortcut on the distance limit can remove on this scene. Run with
+    /// `--nocapture` to see the counts; the performance chapter records them
+    /// (`docs/topics/performance/README.md`, entry 5).
     #[test]
     fn count_the_divisions_the_scene_traversal_makes() {
         let mut counts = TriangleTestCounts::default();
         for_each_triangle_test(|ray, triangle, limit| counts.record(ray, triangle, limit));
         println!("trace/closest_hit triangle tests: {counts:?}");
-        assert!(counts.divided <= counts.calls && counts.pre_checked <= counts.beyond_limit);
-        assert!(counts.divided > 0, "some rays hit the mesh");
+        // The performance chapter's entry 5 quotes these numbers; a change to the scene, the
+        // camera or the traversal must update it.
+        let found = (counts.calls, counts.divided, counts.beyond_limit, counts.pre_checked);
+        assert_eq!(found, (1_673, 714, 24, 24), "update entry 5 of the performance chapter");
     }
 }

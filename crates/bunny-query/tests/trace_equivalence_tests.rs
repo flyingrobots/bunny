@@ -1,10 +1,11 @@
-//! `TraceRay::hit_triangle` against the reference copy of the test as it was before the
-//! distance-limit pre-check (flyingrobots/bunny#214): every output bit must agree.
+//! `TraceRay::hit_triangle` against a frozen reference copy of its arithmetic
+//! (`support/trace_reference.rs`): every output bit must agree, so any future exact
+//! replacement of the kernel is checked against the plain version.
 //!
-//! The corpora concentrate where the pre-check's decision is close: limits equal to the
-//! true distance and one raw unit either side, zero, negative and the maximum, triangles
-//! whose `det` is below, at and far above `2^32`, and values that use the trace domain's full
-//! bit budgets.
+//! The corpora concentrate where a shortcut on the distance limit would be decided closely
+//! (flyingrobots/bunny#214 tried one): limits equal to the true distance and one raw unit
+//! either side, zero, negative and the maximum, triangles whose `det` is below, at and just
+//! past multiples of `2^32`, and values that use the trace domain's full bit budgets.
 
 #[path = "support/trace_reference.rs"]
 mod trace_reference;
@@ -66,7 +67,8 @@ fn assert_same(ray: &TraceRay, triangle: &TraceTriangle, t_min: i64, t_max: i64)
     assert_eq!(got, want, "ray={ray:?} triangle={triangle:?} limits={t_min}..={t_max}");
 }
 
-/// The upper limits where the pre-check's decision is close, around a true distance.
+/// The limits where a shortcut on the distance limit would be decided closely, around a true
+/// distance.
 fn limits_around(distance: Option<i64>) -> Vec<i64> {
     let mut limits = vec![0, -1, 1, i64::MIN, i64::MAX, i64::MAX - 1];
     if let Some(d) = distance {
@@ -148,7 +150,8 @@ fn trace_tp_201_seeded_limits_around_the_true_distance_agree() {
 }
 
 /// Constructed cases whose `det` is an exact multiple of `2^32` and whose distance is a
-/// whole number of raw units, so the pre-check's bound meets `t` exactly at the limit.
+/// whole number of raw units, so `t` equals `(t_max + 1) * ceil(det / 2^32)` or `t_max` times
+/// it exactly at the limits around the hit.
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_202_exact_distances_at_the_limit_agree() {
     let one = ONE_RAW;
