@@ -29,31 +29,12 @@ type Wide3 = [i128; 3];
 ///
 /// The direction need not have unit length. Distances are multiples of the direction: the
 /// point at distance `t` is `origin + direction * t`.
-///
-/// Equality and `Debug` see the origin, direction and reciprocals; the other fields are
-/// functions of them, kept so the box test need not recompute them per call.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TraceRay {
     origin: [i64; 3],
     direction: [i64; 3],
     /// `floor(2^63 / |direction|)` per axis; zero where the direction component is zero.
     reciprocal: [u64; 3],
-    /// The origin with `!` applied on each axis whose direction is negative (see `offsets`).
-    flipped_origin: [i64; 3],
-    /// `reciprocal + 1` per axis, the multiplier of the slab upper bound.
-    upper_reciprocal: [u64; 3],
-}
-
-// The precomputed fields are left out so `Debug` prints what it printed before they existed.
-#[allow(clippy::missing_fields_in_debug)]
-impl core::fmt::Debug for TraceRay {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("TraceRay")
-            .field("origin", &self.origin)
-            .field("direction", &self.direction)
-            .field("reciprocal", &self.reciprocal)
-            .finish()
-    }
 }
 
 impl TraceRay {
@@ -69,16 +50,7 @@ impl TraceRay {
         let valid = origin.iter().all(|&c| in_trace_domain(c))
             && direction.iter().all(|&c| in_direction_domain(c))
             && direction != [0; 3];
-        valid.then(|| {
-            let reciprocal = direction.map(reciprocal);
-            Self {
-                origin,
-                direction,
-                reciprocal,
-                flipped_origin: map2(origin, direction, |o, d| o ^ (d >> 63)),
-                upper_reciprocal: reciprocal.map(|r| r + 1),
-            }
-        })
+        valid.then(|| Self { origin, direction, reciprocal: direction.map(reciprocal) })
     }
 
     /// Prepares a ray from a unit-direction ray.
@@ -111,14 +83,13 @@ impl TraceRay {
     // `&` on the flags keeps the test free of data-dependent branches (ledger entry 7).
     #[allow(clippy::needless_bitwise_bool)]
     pub fn box_entry(&self, aabb: &FixedAabb3, t_max: FixedQ32_32) -> Option<FixedQ32_32> {
-        let lines = map2(self.flipped_origin, self.direction, pair);
+        let lines = map2(self.origin, self.direction, pair);
         let bounds = map2(raw3(aabb.min), raw3(aabb.max), pair);
         // Straight-line integer work with one validity flag: no axis returns early, so the
         // only branch is the caller's on the result.
         let [x, y, z] = map2(lines, bounds, offsets);
-        let reciprocals = map2(self.reciprocal, self.upper_reciprocal, pair);
-        let planes = map2([x, y, z], reciprocals, pair);
-        let [lx, ly, lz] = planes.map(|((near, _, _), (lower, _))| scaled(near, lower));
+        let planes = map2([x, y, z], self.reciprocal, pair);
+        let [lx, ly, lz] = planes.map(|((near, _, _), reciprocal)| scaled(near, reciprocal));
         let [ux, uy, uz] = map2(planes, self.direction, upper);
         let enter = lx.max(ly).max(lz);
         let exit = ux.min(uy).min(uz);
@@ -275,8 +246,8 @@ const fn pair<A, B>(lhs: A, rhs: B) -> (A, B) {
 }
 
 /// The raw coordinate distances `(near, far)` from the origin to one axis slab's planes, in
-/// the direction of travel, from the ray's `(flipped origin, direction)` on that axis and
-/// the slab's `(min, max)`; a near plane behind the origin counts as zero. The flag is false when the
+/// the direction of travel, from the ray's `(origin, direction)` on that axis and the slab's
+/// `(min, max)`; a near plane behind the origin counts as zero. The flag is false when the
 /// slab rules the box out, and the distances are then meaningless.
 #[inline]
 // `&` keeps the flag free of a data-dependent branch, as in `box_entry`.
@@ -285,10 +256,9 @@ const fn offsets((origin, direction): (i64, i64), (min, max): (i64, i64)) -> (u6
     // Against a negative direction, `!` (which reverses the order of `i64` and keeps
     // `!a - !b == b - a`) turns the slab into one crossed forwards. A zero component is
     // treated as forwards too.
-    // The origin arrives flipped already (`TraceRay::flipped_origin`).
     let flip = direction >> 63;
     let (near, far) = if direction < 0 { (max, min) } else { (min, max) };
-    let (near, far) = (near ^ flip, far ^ flip);
+    let (origin, near, far) = (origin ^ flip, near ^ flip, far ^ flip);
     // A far plane behind the origin rejects the box; so does a near plane ahead of it when
     // the ray runs parallel to the slab.
     let ahead = near > origin;
@@ -301,12 +271,12 @@ const fn offsets((origin, direction): (i64, i64), (min, max): (i64, i64)) -> (u6
 }
 
 /// The slab upper bound `floor(far * (r + 1) / 2^31) + 1`, saturating, from the slab's
-/// offsets, its reciprocals `(r, r + 1)` and the direction component. A parallel axis (whose
+/// offsets, its reciprocal `r` and the direction component. A parallel axis (whose
 /// reciprocal is zero) gets `u64::MAX`.
 #[inline]
-fn upper(((_, far, _), (_, upper)): ((u64, u64, bool), (u64, u64)), direction: i64) -> u64 {
+fn upper(((_, far, _), reciprocal): ((u64, u64, bool), u64), direction: i64) -> u64 {
     let step = if direction == 0 { u64::MAX } else { 1 };
-    scaled(far, upper).saturating_add(step)
+    scaled(far, reciprocal + 1).saturating_add(step)
 }
 
 /// `floor(2^63 / |d|)`, or zero for a zero component.
