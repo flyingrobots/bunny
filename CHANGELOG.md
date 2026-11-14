@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added ray-tracing kernels to `bunny-query`: `TraceRay`, `TraceTriangle` and
+  `TriangleHit`. `TraceRay::box_entry` is a division-free conservative ray-box
+  test that never rejects a box the ray reaches and returns an entry bound
+  within `2^11 + 2` raw units plus `distance / 2^30`; `TraceRay::hit_triangle`
+  is an exact integer ray-triangle test (two-sided, inclusive edges, floored
+  distance, barycentrics on demand). Inputs are limited to a trace domain of
+  coordinates below 256.0 and direction components at most 1.0. Existing
+  `bunny-query` functions are unchanged. See the new
+  `docs/topics/ray-tracing/` chapter and test plan.
 * Added `crates/bunny-perf`, a timing harness for Bunny's math and query
   kernels (p50/p95/p99 nanoseconds per call on seeded inputs), and
   `cargo run --locked -p xtask -- perf --base <rev>`, which builds the same

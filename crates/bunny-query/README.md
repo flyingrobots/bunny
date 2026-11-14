@@ -15,6 +15,9 @@ targets.
 * Checked ray-intersection arithmetic: ray queries return `None` when an
   intermediate Q32.32 operation overflows instead of accepting saturated
   geometry as a hit.
+* Ray-tracing kernels (`TraceRay`, `TraceTriangle`): a division-free
+  conservative ray-box test and an exact integer ray-triangle test with
+  inclusive edges; see `docs/topics/ray-tracing/`.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License
