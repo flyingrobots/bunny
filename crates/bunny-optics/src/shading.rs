@@ -7,12 +7,16 @@
 //! ([`DirectionalLight`], [`LightSample`]), the sky ([`SkyLight`]) and the diffuse reflection
 //! that combines them ([`Albedo::reflect`]). The `try_` forms of the secondary-ray steps name
 //! each refusal with a [`SecondaryRayError`]. See `docs/topics/optics/README.md#diffuse-shading`.
+//!
+//! [`VertexNormals`] (`bunny-vertex-normals/1`, not part of the shading model's identity) gives
+//! each vertex of an indexed mesh the area-weighted unit normal of the faces around it.
 
 mod frame;
 mod hit;
 mod light;
 mod refusal;
 mod surface;
+mod vertex_normals;
 mod wide;
 
 pub use frame::ShadingFrame;
@@ -20,6 +24,9 @@ pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;
 pub use surface::TriangleSurface;
+pub use vertex_normals::{
+    VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTEX_NORMALS_ID,
+};
 
 use core::fmt;
 

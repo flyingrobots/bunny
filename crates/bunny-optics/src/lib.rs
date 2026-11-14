@@ -80,7 +80,7 @@ pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
     Albedo, DirectionalLight, LightSample, SecondaryRayError, ShadingError, ShadingFrame, SkyLight,
-    SurfaceHit, TriangleSurface, FRAC_1_PI, MAX_LIGHT_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID,
-    SHADOW_T_MAX,
+    SurfaceHit, TriangleSurface, VertexNormalError, VertexNormals, FRAC_1_PI, MAX_LIGHT_RAW,
+    MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX, VERTEX_NORMALS_ID,
 };
 pub use xoroshiro::Xoroshiro128Plus;
