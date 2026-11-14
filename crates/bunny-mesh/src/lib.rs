@@ -5,13 +5,18 @@
 #![deny(missing_docs)]
 
 //! Quantized mesh layouts and verification hashes for Stanford Bunny.
+//!
+//! The `mesh-hash` feature, on by default, provides `compute_mesh_hash` and is the
+//! crate's only crates.io dependency (`sha2`). Every other item is always available.
 
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
+#[cfg(feature = "mesh-hash")]
 mod hash;
 
+#[cfg(feature = "mesh-hash")]
 pub use hash::compute_mesh_hash;
 
 const QUANTIZATION_STEPS: u128 = u16::MAX as u128;

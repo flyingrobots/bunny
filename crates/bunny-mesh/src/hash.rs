@@ -59,6 +59,8 @@ fn update_bounds(hasher: &mut Sha256, bounds: &FixedAabb3) {
 /// 3. The vertices as little-endian `u16` values `[x, y, z]`.
 /// 4. The index layout tag (`0x00` for `Width16`, `0x01` for `Width32`).
 /// 5. A little-endian `u64` face count, then each face's little-endian indices.
+///
+/// Available with the `mesh-hash` feature, which is on by default.
 #[must_use]
 pub fn compute_mesh_hash(
     vertices: &[QuantizedVertex],
