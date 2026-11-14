@@ -67,7 +67,7 @@ pub(super) fn trim_blank(line: &[u8]) -> &[u8] {
     line.get(start..end).unwrap_or_default()
 }
 
-fn is_blank(line: &[u8]) -> bool {
+pub(super) fn is_blank(line: &[u8]) -> bool {
     line.iter().all(|byte| matches!(byte, b' ' | b'\t'))
 }
 
