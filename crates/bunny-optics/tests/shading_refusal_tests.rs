@@ -144,6 +144,24 @@ fn optics_tp_061_a_sample_outside_the_unit_interval_is_named() {
     );
 }
 
+/// The defensive `BounceRayRefused` cannot be produced through the public API: a `SurfaceHit`'s
+/// start point is inside the trace domain and every bounce direction is a valid trace direction
+/// (`OPTICS-TP-062` and `OPTICS-TP-064` count that it never occurs). This case names the variant
+/// and locks its values and text, built directly.
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_065_the_defensive_bounce_refusal_names_its_ray() {
+    let (origin, direction) = (vec3([0, 1, 0]), vec3([0, 0, 0]));
+    let refusal = SecondaryRayError::BounceRayRefused { origin, direction };
+    assert!(matches!(
+        refusal,
+        SecondaryRayError::BounceRayRefused { origin: o, direction: d } if o == origin && d == direction
+    ));
+    assert_eq!(
+        refusal.to_string(),
+        "bounce ray from raw (0, 1, 0) along raw (0, 0, 0) is not a trace ray"
+    );
+}
+
 /// `SplitMix64`: a seeded source of full 64-bit draws for the generated inputs.
 struct Seeds(u64);
 

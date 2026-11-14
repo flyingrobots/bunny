@@ -16,7 +16,7 @@ docs/topics/performance/README.md (Fidelity Rule)
 docs/topics/optics/README.md
 docs/topics/optics/test-plan.md
 xtask/src/code_dojo.rs (CORE_CRATES)
-crates/bunny-optics/src/** and crates/bunny-optics/tests/**
+`crates/bunny-optics/src/**` and `crates/bunny-optics/tests/**`
 crates/bunny-query/src/trace.rs (TraceRay, TriangleHit)
 crates/bunny-num/src/fixed_q32_32.rs (sqrt)
 crates/bunny-perf/src/shade.rs
