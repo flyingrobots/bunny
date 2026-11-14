@@ -22,7 +22,12 @@ crates/bunny-perf/src/profile.rs
 xtask/src/perf.rs
 xtask/src/code_dojo.rs
 
-Files edited (spike commits, removed again in the last commit):
+Files edited:
+docs/topics/performance/README.md (entry 7 under "Tried And Rejected"; profile item 4)
+CHANGELOG.md
+.repo-respect/receipts/2026-11-14-ray-packets.md
+
+Spike files, added in 89fe36c and 7c65c5e and removed again in the rejection commit:
 crates/bunny-broadphase/src/packet/mod.rs
 crates/bunny-broadphase/src/packet/frustum.rs
 crates/bunny-broadphase/src/packet/tests/mod.rs
@@ -35,11 +40,6 @@ crates/bunny-perf/src/cases.rs
 crates/bunny-perf/src/scene.rs
 crates/bunny-perf/Cargo.toml
 docs/topics/ray-tracing/test-plan.md (TRACE-REQ-028, TRACE-TP-111..116; removed with the tests)
-
-Files edited (kept):
-docs/topics/performance/README.md (entry 7 under "Tried And Rejected"; profile item 4)
-CHANGELOG.md
-.repo-respect/receipts/2026-11-14-ray-packets.md
 
 Topic docs:
 docs/topics/performance/README.md (Tried And Rejected, entry 7)
