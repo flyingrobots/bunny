@@ -306,19 +306,21 @@ and the stack need never fill, so without a bound a cycle is searched forever.
 
 Each traversal therefore allows at most `nodes.len() / 2` interior visits and
 returns `TraversalError::InvalidNodeIndex` when a visit would exceed them. The
-count is a countdown in the search, spent once per interior visit after that
-visit has checked and pushed its two children, so the visit's own errors
-(`StackOverflow` on a full stack, `InvalidNodeIndex` for a child out of range in
-`closest_hit` and `any_hit`) come first.
+count is a countdown in a local of the search loop. The box queries spend it
+after an interior visit has pushed its children, so a full stack still reports
+`StackOverflow` first; `closest_hit` and `any_hit` spend it when they pop an
+interior node.
 
 **Why a tree never reaches the bound.** In a tree every node has at most one
 parent and the root has none, so a search reaches each node at most once, and
 `i` interior visits whose children are all inside the slice name `2i + 1`
 distinct nodes: `2i + 1 <= n`, so `i <= n / 2`. A child outside the slice ends
-the search with the error it always had: `closest_hit` and `any_hit` find it
-during the visit, before the countdown, and the box queries pop the right
-child next, which is out of range whenever either child is (the children are
-`first` and `first + 1`), with no callback in between. So on every buffer in
+the search with the error it always had. The box queries pop the right child
+next, which is out of range whenever either child is (the children are `first`
+and `first + 1`), with no callback in between. In `closest_hit` and `any_hit`
+the count can run out only at an interior node whose children are not both in
+range (the visits before it already name every node), and that visit would
+return the same `InvalidNodeIndex` before calling anything. So on every buffer in
 which no node is reached twice, including ones whose only faults are
 out-of-range indices, bad leaf ranges or a depth past 64, the results, errors
 and callback calls are exactly those of the functions before

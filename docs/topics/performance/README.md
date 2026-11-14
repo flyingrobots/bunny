@@ -1777,10 +1777,61 @@ debug builds) on a caller-modified hit into a refusal. `shade/bounce_direction` 
 
 The rejected versions are recorded under [Tried And Rejected](#shared-core-for-typed-shading-refusals).
 
+### Interior-visit bound on the plain traversals (flyingrobots/bunny#269)
+
+**Change.** `intersect_aabb`, `intersect_ray`, `closest_hit` and `any_hit` count down
+from `nodes.len() / 2` interior visits and return `InvalidNodeIndex` when the count runs
+out, so a cyclic node buffer cannot loop forever. Trees keep every result, error and
+callback (a differential test against frozen copies, `TRACE-TP-406`). See the
+[ray-tracing chapter](../ray-tracing/README.md#malformed-buffers).
+
+**Measured.** Apple M5 Pro, inside the `flyingrobots/rust-dev:1.96.0` container
+(`aarch64-linux`), through the guarded container runner with `--exclusive` and the branch's
+commits as history, base revision `58f3821346fc` (`origin/main`), one command per filter
+(`trace/closest_hit`, `trace/any_hit`, `scene/`):
+
+```sh
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code --filter <filter>
+```
+
+`scene/closest_visitor` runs `intersect_ray`; the `trace/closest_hit*` and `trace/any_hit*`
+cases other than `_compact*` run `closest_hit` and `any_hit`; the `_compact*` cases run
+code this change does not touch and serve as the control. Change in p50 / best p50:
+
+| Version (commit) | `trace/closest_hit` | `trace/closest_hit_sah` | `trace/any_hit` | `scene/closest_visitor` | `trace/closest_hit_compact` (control) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| counter in a field of the search, spent in `visit` (`c50381e`), run 1 | +1.2 % / +1.9 % | +0.7 % / +1.6 % | -1.4 % / -1.3 % | +1.3 % / +1.1 % | +3.4 % / +2.1 % |
+| the same, run 2 (a loaded run) | +0.1 % / +2.7 % | +0.3 % / +0.6 % | -3.2 % / -0.5 % | +0.5 % / +5.0 % | +2.0 % / +0.3 % |
+| `closest_hit` counter in a local of the search loop (`4f04770`) | -1.4 % / +0.0 % | +0.5 % / -2.0 % | not run | not run | +2.8 % / +0.4 % |
+| **both counters in loop locals (`5fb881f`), run 1** | **-1.0 % / -1.0 %** (200.03 → 198.12 ns) | -2.5 % / -0.2 % | +0.8 % / -1.1 % | -0.4 % / +0.9 % | +0.8 % / -2.2 % |
+| **the same, run 2** | **-2.1 % / -1.1 %** (198.08 → 195.84 ns) | -2.3 % / -1.1 % | -0.8 % / -1.4 % | +1.7 % / +1.0 % | +1.9 % / +0.9 % |
+
+The field form read +1.9 % and +2.7 % in best p50 on `trace/closest_hit` (about 4 to 5 ns),
+the same sign on `_sah` and `_shuffled` in both runs, while the untouched compact cases
+moved between -1.9 % and +2.1 %. That is inside the documented noise band but repeated, so
+it was not accepted as free; the field form is recorded under
+[Tried And Rejected](#interior-visit-counter-in-a-field-of-the-search). With the counter in a
+local of the loop, `trace/closest_hit`, `_sah`, `_shuffled` and `trace/any_hit` are level or
+faster in both runs (-0.2 % to -1.5 % best p50), and `scene/closest_visitor` moved +0.9 % and
++1.0 % in best p50 against a ±3 % band, so the selected form's cost is not measurable here.
+x86-64 is read from the pull request's CI perf job.
+
 ## Tried And Rejected
 
 Experiments that kept exact results but did not pay off. They are recorded so the same idea
 is not retried without new evidence (a different target, or a changed design).
+
+### Interior-visit counter in a field of the search
+
+**Idea.** Keep the flyingrobots/bunny#269 visit counter in the `Search` struct of
+`closest_hit` (and the traversal stack of the box queries) and spend it inside `visit`.
+
+**Result.** +1.9 % and +2.7 % best p50 on `trace/closest_hit` over two exclusive runs, with the
+same sign on its `_sah` and `_shuffled` variants, against a control that moved ±2 %; the
+same counter held in a local of the search loop measured level. Numbers are in the
+[contract change cost check](#interior-visit-bound-on-the-plain-traversals-flyingrobotsbunny269).
+The likely cause, not checked in the assembly, is that a field of a struct holding the
+64-entry stack is kept in memory, while a loop local stays in a register.
 
 ### Shared core for typed shading refusals
 

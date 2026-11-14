@@ -947,20 +947,20 @@ dropped-child mutant first failed to compile rather than run; TRACE-TP-306
 gained a case where the nearer leaf's box is entered but its triangle missed.
 
 The interior-visit bound (flyingrobots/bunny#269) was mutated in a container
-checkout of the branch. Each mutant was built once, then each test was run as
+checkout of the final source. Each mutant was built once, then each test was run as
 `timeout 120 cargo test --locked -q -p bunny-broadphase ...`, so a search that
-never ends is recorded as caught by exit status 124. `traverse` holds the bound
-for `intersect_aabb` and `intersect_ray`, `Search` for `closest_hit` and
-`any_hit`, so removing one bound removes it from two functions.
+never ends is recorded as caught by exit status 124. The loop of `traverse` holds
+the bound for `intersect_aabb` and `intersect_ray`, the loop of `Search::run` for
+`closest_hit` and `any_hit`, so removing one bound removes it from two functions.
 
 | Mutation | Rule broken | Failing cases |
 | --- | --- | --- |
-| Bound removed from `traverse` (`intersect_aabb`, `intersect_ray`; run at `74de0dd`, before the bound moved after the pushes) | A cycle is an error, not an endless loop | TRACE-TP-403, TRACE-TP-404 (did not terminate: 124), TRACE-TP-405 |
+| Bound removed from `traverse` (`intersect_aabb`, `intersect_ray`) | A cycle is an error, not an endless loop | TRACE-TP-403, TRACE-TP-404 (did not terminate: 124), TRACE-TP-405 |
 | Bound removed from `Search` (`closest_hit`, `any_hit`) | The same | TRACE-TP-401, TRACE-TP-402 (did not terminate: 124), TRACE-TP-405 |
 | `traverse` budget one smaller (`(n / 2).saturating_sub(1)`) | A tree never reaches the bound | existing: `bvh_tests::test_bvh_build_and_traverse`, `bvh_allocation_tests`, `bvh_sah_tests` TP-009 and TP-010; new: TRACE-TP-403 to 406 |
 | `Search` budget one smaller | The same | existing: TRACE-TP-107, 108, 109, 301 and the `closest_hit` doctest; new: TRACE-TP-405, 406 |
 | Both budgets one larger (`n / 2 + 1`) | The bound is tight | TRACE-TP-403, 404, 405 |
-| `traverse` spends the visit before pushing the children | A tree's own errors come first | TRACE-TP-406 (the truncated comb) |
+| `traverse` spends the visit before `visit_matching_node` pushes the children | A full stack still reports `StackOverflow` first | TRACE-TP-406 (the truncated comb) |
 
 The rewritten box test (flyingrobots/bunny#258) was checked the same way in a container
 copy of the final source, running `box_entry_equivalence_tests`, `trace_tests`,
