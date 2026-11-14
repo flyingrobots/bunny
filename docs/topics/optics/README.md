@@ -1,10 +1,11 @@
 # Optics
 
-This chapter defines Bunny's current contract for camera and ray-generation
-math in `bunny-optics`: a deterministic pinhole camera that turns pixel
-samples into [trace rays](../ray-tracing/README.md), and the deterministic
-sample hash and pixel sampler that choose those samples and every later random
-decision.
+This chapter defines Bunny's current contract for camera, ray-generation,
+sampling and pixel-value math in `bunny-optics`: a deterministic pinhole
+camera that turns pixel samples into [trace rays](../ray-tracing/README.md),
+the deterministic sample hash and pixel sampler that choose those samples and
+every later random decision, and the functions that turn the radiance those
+rays gather into 8-bit and 16-bit output codes.
 
 ## Status
 
@@ -25,11 +26,17 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   the [pixel sampler](#pixel-sampler);
 - `Xoroshiro128Plus` (`from_seed`, `from_seed_u64`, `state`, `next_u64`,
   `next_int`, `next_unit`), a [sequential generator](#sequential-generator)
-  compatible with Echo's.
+  compatible with Echo's;
+- for [pixel values](#pixel-values): `PixelAccumulator` (`new`, `EMPTY`,
+  `add_sample`, `merge`, `count`, `sums`, `resolve`), `ToneCurve` (`SrgbV1`,
+  `LinearClampV1`; `identity`, `apply`, `encode_8`, `encode_16`),
+  `quantize_8`, `quantize_16`, `write_rgba8`, `PixelError`,
+  `MAX_SAMPLE_RADIANCE_RAW`, `MAX_SAMPLES_PER_PIXEL`, `UNORM8_IDENTITY`,
+  `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`.
 
 Evidence is listed in the [test plan](test-plan.md). Mapping unit-square
-points to directions on a hemisphere, and shading or pixel values (#222,
-#160), are not part of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
+points to directions on a hemisphere, and shading (#160), are not part of this
+chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
 (right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
 field of view given by its tangent, aspect `width / height`) and `Viewport`
 (top-left origin, `y` down), but no test yet checks a ray against those
@@ -494,3 +501,184 @@ its timelines:
 `state` returns the state for checkpointing. Each value depends on every draw
 before it, so this generator is for code that draws in one fixed order, not
 for rendering. Echo's golden vectors replay exactly (see the test plan).
+
+## Pixel Values
+
+A renderer adds the linear radiance of each sample to its pixel, resolves the
+mean, maps it through a tone curve to a display-referred value and quantizes
+that to an output code. Each step is a pure integer function in
+`crates/bunny-optics/src/pixel/`: no floating point, no allocation, no I/O and
+no image type. The caller owns every buffer; an accumulator is a small value
+the caller stores wherever it keeps per-pixel state, and `write_rgba8` writes
+into a slice the caller provides.
+
+**What a sample is.** A sample is one sample index of one pixel: the
+radiance gathered along the ray of `PixelSampler::camera_sample(sample)`, with
+every later random decision of that path drawn under the same index from its
+own dimension pair. `PixelAccumulator` takes at most 1 024 samples per pixel
+(`MAX_SAMPLES_PER_PIXEL`), sample indices 0 to 1 023. The sampler stratifies
+every aligned power-of-two block of indices and its test plan counts that up
+to 1 024; so a pixel with a power-of-two count up to 1 024, indices from 0,
+gets stratified positions, and its mean is the rounded shift described under
+[Resolve](#resolve). Other counts up to 1 024 are accepted and resolved by the same
+rule, but their positions are a partial block. Both the sample values and the
+sums are independent of evaluation order, so tiles and threads cannot change a
+pixel.
+
+Radiance is linear light per channel (red, green, blue, in that order) as a
+`FixedQ32_32`. Display values are `FixedQ32_32` in `[0, 1]`. Every rounding is
+to nearest with ties to even, the default of the
+[numeric constitution](../../NUMERIC_CONSTITUTION.md), except the floor inside
+the sRGB table interpolation.
+
+### Accumulation
+
+`PixelAccumulator` holds three `i64` channel sums of raw Q32.32 units and a
+sample count.
+
+| Limit | Value | Refusal |
+| --- | --- | --- |
+| Sample channel | `0..=2^52` raw (0 to 1 048 576.0) | `NegativeRadiance` below zero, `RadianceTooLarge` above |
+| Samples per pixel | `1..=1024` (`MAX_SAMPLES_PER_PIXEL`) | `TooManySamples` |
+
+**Bit budget.** A sum of at most `2^10` samples of at most `2^52` raw each is
+at most `2^62` raw, below `i64::MAX`, so no addition overflows and no wider
+accumulator is needed. A radiance of 65 536 per channel is `2^48` raw; 1 024
+such samples sum to `2^58` raw, with 32 times headroom left. The `2^52` limit
+accepts samples up to 1 048 576.0 per channel and still leaves one bit spare.
+
+`add_sample` checks the count first, then the channels in order (red, green,
+blue), and returns the first error. `merge` adds another accumulator's sums and
+count, refusing with `TooManySamples` when the two together hold more than
+1 024 samples. On any error the accumulator is unchanged: it never saturates
+and never wraps.
+
+**Order independence.** The sums are exact integer sums, and integer addition
+is associative and commutative, so the sums and the count are identical
+whatever order the samples arrive in and however they are split between
+accumulators that are then merged (for example, one per thread or tile). This
+is a property of the representation, not of a careful reduction order.
+
+### Resolve
+
+`resolve` returns, per channel, the sum divided by the count, rounded to
+nearest with ties to even: `round_half_even(sum / count)`. For a power-of-two
+count `2^k` this equals the sum shifted right by `k` with the same rounding
+(the discarded `k` bits compared with one half, an exact half going to the even
+neighbour); the implementation uses one integer division for every count. The
+mean of accepted samples is at most `2^52` raw. An empty accumulator returns
+`NoSamples`. This is a box reconstruction filter: every sample of a pixel has
+equal weight.
+
+### Tone Curves
+
+A `ToneCurve` maps one linear channel to a display-referred value in `[0, 1]`
+(raw `0..=2^32`). Inputs at or below zero give 0 and inputs at or above 1.0
+give 1.0 for both curves: radiance above 1.0 is clipped, not compressed.
+
+**`LinearClampV1`** returns the input clamped to `[0, 1]`.
+
+**`SrgbV1`** is the sRGB transfer function of IEC 61966-2-1: `12.92 x` below
+0.0031308 and `1.055 x^(1/2.4) - 0.055` above. The power cannot be computed
+exactly in fixed point, so the upper segment is a table:
+
+```text
+x <= 0                        0
+x >= 1.0                      1.0 (raw 2^32)
+x <  TOE_END = 13 446 684     round_half_even(1292 * x / 100)
+otherwise                     max(interpolate(x), 173 731 144)
+```
+
+with all values raw Q32.32. `TOE_END` is the first raw input at or above
+0.0031308 (`ceil(0.0031308 * 2^32)`).
+
+- **Knots.** 1 153 knots cover `[2^-9, 1]`: 128 equal segments per octave
+  for the nine octaves `[2^(-e-1), 2^-e)`, `e = 0..=8`, plus a last knot at 1.0.
+  Knot `i` sits at raw `2^(31 - e) + j * 2^(24 - e)` with `e = 8 - i / 128`
+  and `j = i % 128`; its value is `1.055 x^(1/2.4) - 0.055` rounded to the
+  nearest raw unit (computed with 60-digit arithmetic; no knot is within
+  `2.7 * 10^-4` raw units of a tie). Knots below `TOE_END` other than the one
+  that starts its segment are never read; they keep the indexing uniform.
+- **Interpolation.** For `x` in octave `e`, segment width `w = 2^(24 - e)` is a
+  power of two, so `interpolate(x) = K[i] + floor((K[i + 1] - K[i]) * f / w)`
+  with `f` the offset of `x` in its segment: one multiplication and one shift.
+- **The hold at the toe end.** The standard's two pieces do not meet: at
+  0.0031308 the toe gives 0.040449936 and the power curve 0.040449907. Raw
+  input `TOE_END - 1` gives 173 731 144 through the toe, while the table gives
+  173 730 860 at `TOE_END`. The power segment is therefore held at the toe's
+  last value, 173 731 144, until it rises past it, which takes 23 inputs. This
+  keeps the curve monotone and changes no 8-bit or 16-bit code.
+
+**Bound.** For every input, `|SrgbV1(x) - srgb(x)|` is at most 6 400 raw units
+(`1.49 * 10^-6`) of display value: the chord of a concave curve lies below it
+by at most 6 256 raw units (in the top octave), knot rounding adds half a raw
+unit and the floor one. That is at most 0.098 of a 16-bit code and 0.00038 of
+an 8-bit code. The table output is never more than half a raw unit above the
+exact curve (only knot rounding can put it above); the hold is at most 110 raw
+units above it.
+
+**Monotone.** Within a segment the value is the floor of an affine function
+with a non-negative slope; consecutive knots increase; at each knot the value
+equals the knot, which is at least the value one input before it; and the hold
+joins the toe at an equal value. So `SrgbV1` never decreases.
+
+A filmic or Reinhard-style operator, or an exposure control, is not provided:
+the two curves above cover the current consumers, and a new operator would be
+a new `ToneCurve` variant with its own identity.
+
+### Output Codes
+
+`quantize_8(v)` and `quantize_16(v)` clamp `v` to `[0, 1]` and return
+`round_half_even(255 * v)` and `round_half_even(65535 * v)`, from raw values:
+`round_half_even(raw * 255 / 2^32)`. Both are monotone. Because 255 and 65 535
+are odd, the only display value in `[0, 1]` that lands exactly on a half code
+is 0.5 (127.5 and 32 767.5), which goes to the even codes 128 and 32 768.
+
+`ToneCurve::encode_8` and `encode_16` are `quantize_8(apply(x))` and
+`quantize_16(apply(x))`.
+
+`write_rgba8(out, curve, [r, g, b])` writes `[encode_8(r), encode_8(g),
+encode_8(b), 255]` into `out`, which must be exactly four bytes long (one pixel
+of a caller's row-major RGBA8 buffer, such as one item of
+`chunks_exact_mut(4)`). Any other length returns
+`WrongSliceLength { expected: 4, actual }` and leaves `out` unchanged.
+
+### Accuracy Of The Codes
+
+The codes of `SrgbV1` are not always the correctly rounded sRGB codes
+`round(255 * srgb(x))` and `round(65535 * srgb(x))`: near each code boundary
+the table's small error can put an input on the other side. The test plan finds
+exactly where each code begins. With a 60-digit reference over every raw input
+in `[0, 1]`:
+
+| Output | Codes that begin late | Most inputs late | Inputs that begin early | Inputs differing in `[0, 1]` |
+| --- | --- | --- | --- | --- |
+| 8-bit | 245 of 255 | 9 447 (`2.2 * 10^-6` linear) | none | 486 760 of `2^32` (0.011 %) |
+| 16-bit | 62 847 of 65 535 | 9 522 | 4 codes, 1 input each (in the toe) | 125 352 888 (2.9 %) |
+
+Every such input is within one code of the correctly rounded code, and only
+in the direction stated. The codes in the toe are exact for 8-bit; the four
+16-bit toe codes that begin one input early do so because the toe's display
+value is rounded before quantization. The test plan asserts the stated bounds
+(at most 9 600 inputs late and 2 early) against an `f64` reference.
+
+A curve whose 8-bit codes are exactly the correctly rounded ones is possible
+(a table of the 255 input thresholds and a binary search), but it would not be
+the composition of a tone curve and `quantize_8`; it would be a new identity.
+
+### Versioned Identities
+
+These names are contracts. Each one names exact output bits for every input,
+locked by golden vectors; any change to any output is a new version with a new
+name, and the old one keeps its bits.
+
+| Identity | Function |
+| --- | --- |
+| `bunny-tone-srgb/1` | `ToneCurve::SrgbV1`, as defined above, including the knot table, the floor and the hold. |
+| `bunny-tone-linear-clamp/1` | `ToneCurve::LinearClampV1`. |
+| `bunny-unorm8/1` (`UNORM8_IDENTITY`) | `quantize_8`. |
+| `bunny-unorm16/1` (`UNORM16_IDENTITY`) | `quantize_16`. |
+| `bunny-rgba8-opaque/1` (`RGBA8_OPAQUE_IDENTITY`) | `write_rgba8`'s bytes: red, green, blue `bunny-unorm8/1` codes of the toned channels, then alpha 255. |
+
+The accumulation limits and the mean's rounding are part of
+`PixelAccumulator`'s contract and change only with a new type or function.

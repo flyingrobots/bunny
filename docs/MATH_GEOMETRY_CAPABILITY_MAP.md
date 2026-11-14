@@ -96,7 +96,7 @@ policy from their consumers.
 | Collision and contact | Ray and closest queries | Narrowphase coverage |
 | Acceleration | BVH, sweep-and-prune | Dynamic structures |
 | Mesh and codecs | Quantized mesh, PLY/OBJ, decoder | Topology and encoder |
-| Visibility and optics | Trace kernels, pinhole camera | Projection and visibility math |
+| Visibility and optics | Trace kernels, pinhole camera, pixel values | Projection and visibility math |
 | SIMD and performance | Scalar reference | Parity and benchmarks |
 | Consumer confidence | Docs, witnesses, gates | Examples and fixtures |
 
@@ -269,6 +269,9 @@ Current surface:
 - `bunny-optics` sampling: a counter-based sample hash (`bunny-sample-hash/1`)
   and an Owen-scrambled Sobol pixel sampler (`bunny-sobol-owen/1`) whose values
   depend only on (seed, pixel, sample, dimension)
+- `bunny-optics` pixel values: exact sample accumulation, sRGB and linear tone
+  curves, 8-bit and 16-bit codes over caller-provided slices
+  (`docs/topics/optics/`)
 - coordinate law reservations for future projection work
 
 Open work:
