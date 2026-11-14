@@ -24,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-codec`'s `parse_ascii_ply_with_limits(input, &AsciiPlyLimits)` refuses an ASCII
+  PLY input whose declared vertex count, declared face count or line length (bytes
+  without the terminator, blank lines included) is past an inclusive limit, with an
+  `AsciiPlyLimitedError::Limit` naming the limit, the maximum, the observed value and
+  the line; counts are refused before any body line is read. `AsciiPlyLimits::DEFAULT`
+  is `2^24` vertices, `2^24` faces and 4096-byte lines; `UNLIMITED` is `usize::MAX`
+  for each. `parse_ascii_ply` is not changed: a differential test over 20 000
+  generated valid and invalid inputs shows the new function with unreachable limits
+  returns the same meshes and the same errors, and the reader already used constant
+  memory and linear time, so the limits refuse early rather than close a resource
+  hole. Text in skipped vertex columns is still counted, never parsed. A Lumen caller
+  keeping its retired reader's protection passes
+  `AsciiPlyLimits::new(1 << 20, 1 << 20, 256)` (flyingrobots/bunny#300).
+
 * `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
   hits on the benchmark sphere: `shade/smooth_normal` (the shipped
   interpolation from exact numerators), `shade/smooth_normal_divided` (a
