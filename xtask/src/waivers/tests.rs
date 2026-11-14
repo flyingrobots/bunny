@@ -233,10 +233,20 @@ fn manifest_waiver_text_inside_a_multi_line_string_is_not_a_comment() {
         format!("[package.metadata]\nnote = \"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n");
     let literal = format!("note = '''\n# dojo: allow random -- {REASON}\n'''\n");
     let closed = format!("note = \"\"\"one line\"\"\"\n# dojo: allow random -- {REASON}\n");
+    let escaped = format!(
+        "note = \"\"\"\nescaped quotes: \\\"\"\"\n# dojo: allow random -- {REASON}\n\"\"\"\n"
+    );
+    let closed_below =
+        format!("note = \"\"\"\nfirst line\n\"\"\"\n# dojo: allow random -- {REASON}\n");
 
     assert_eq!(
         (dependency_rules(&basic), dependency_rules(&literal), dependency_rules(&closed)),
         (vec!["random"], vec!["random"], vec![]),
         "text in a multi-line basic or literal string waives nothing; a comment after a closed one does"
+    );
+    assert_eq!(
+        (dependency_rules(&escaped), dependency_rules(&closed_below)),
+        (vec!["random"], vec![]),
+        "an escaped quote does not close a basic string; a comment after a closing line waives"
     );
 }
