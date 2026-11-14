@@ -41,6 +41,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
 | PERF-REQ-007 | The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
+| PERF-REQ-008 | Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray. | `README.md#memory-share-of-a-box-test` |
 
 ```toml
 [[requirement]]
@@ -76,6 +77,11 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-007"
 summary = "The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as closest_hit and any_hit on every benchmark ray; the core crates carry no counters."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-008"
+summary = "Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray."
 status = "active"
 ```
 
@@ -116,6 +122,9 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-031 | Profile | PERF-REQ-007 | The the tree statistics account for every primitive, nodes = 2 leaves - 1, depth below the stack capacity. | `crates/bunny-perf/src/profile.rs::tests::the_tree_statistics_account_for_every_primitive` |
 | PERF-TP-032 | Profile | PERF-REQ-007 | The the three ray classes cover all 1 024 rays and the sphere class is not empty. | `crates/bunny-perf/src/profile.rs::tests::rays_split_into_the_three_classes` |
 | PERF-TP-033 | Profile | PERF-REQ-007 | The the stage replica classifies hand-built rays as divided, behind, parallel, first-barycentric and second-barycentric failures. | `crates/bunny-perf/src/profile.rs::tests::the_stage_replica_matches_hit_triangle_on_a_hand_built_case` |
+| PERF-TP-034 | Memory | PERF-REQ-008 | The harness replica of `box_entry` (one box, and two boxes at once) returns `box_entry`'s exact result on every box test of the 1 024 benchmark searches, and the recorded calls split into one root test plus sibling pairs. | `crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_returns_box_entry_bits_on_every_recorded_call` |
+| PERF-TP-035 | Memory | PERF-REQ-008 | The replica returns `box_entry`'s exact result on hand-built axis-parallel, diagonal, inside-the-box and behind-the-origin rays with zero, negative, small and unbounded limits. | `crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_matches_box_entry_on_axis_parallel_and_edge_rays` |
+| PERF-TP-036 | Memory | PERF-REQ-008 | The shuffled tree moves more than half of the nodes, and `closest_hit` on it returns the same `ClosestHit` as on the builder's tree on all 1 024 rays. | `crates/bunny-perf/src/memory.rs::tests::the_shuffled_tree_is_a_permutation_with_the_same_answers` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -367,6 +376,33 @@ requirements = ["PERF-REQ-007"]
 evidence = "test"
 test = "crates/bunny-perf/src/profile.rs::tests::the_stage_replica_matches_hit_triangle_on_a_hand_built_case"
 oracle = "The stage replica classifies hand-built rays as divided, behind, parallel, first-barycentric and second-barycentric failures."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-034"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_returns_box_entry_bits_on_every_recorded_call"
+oracle = "The replica box test (one box and two boxes at once) returns box_entry's exact result on every recorded box test of the 1 024 benchmark searches."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-035"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/memory.rs::tests::the_replica_box_test_matches_box_entry_on_axis_parallel_and_edge_rays"
+oracle = "The replica returns box_entry's exact result on hand-built axis-parallel, diagonal, inside and behind-the-origin rays over zero, negative, small and unbounded limits."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-036"
+requirements = ["PERF-REQ-008"]
+evidence = "test"
+test = "crates/bunny-perf/src/memory.rs::tests::the_shuffled_tree_is_a_permutation_with_the_same_answers"
+oracle = "closest_hit on the shuffled tree returns the same ClosestHit as on the builder's tree on all 1 024 rays; more than half the nodes moved."
 tier = "fast"
 status = "implemented"
 ```

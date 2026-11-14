@@ -10,6 +10,8 @@
 
 mod cases;
 #[cfg(feature = "trace")]
+mod memory;
+#[cfg(feature = "trace")]
 mod profile;
 #[cfg(any(feature = "scene", feature = "trace"))]
 mod scene;
