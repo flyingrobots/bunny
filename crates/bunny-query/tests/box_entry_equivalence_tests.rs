@@ -53,7 +53,9 @@ impl Seeds {
     }
 
     fn pick<T: Copy>(&mut self, values: &[T]) -> T {
-        values[usize::try_from(self.next()).expect("fits usize") % values.len()]
+        let len = u64::try_from(values.len()).expect("a short list");
+        // Reduce first: `usize` is 32 bits on wasm32.
+        values[usize::try_from(self.next() % len).expect("below the length")]
     }
 }
 
