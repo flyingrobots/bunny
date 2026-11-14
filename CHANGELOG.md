@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   round trip is within one raw unit per axis. The coordinate law's new
   Viewport Conversion section records the choices; golden vectors run natively
   and under WebAssembly. Existing functions are unchanged.
+* Added `FixedMat4::try_look_at` and `LookAtError` to `bunny-linalg`: a checked
+  Q32.32 right-handed look-at `view_from_world` matrix (camera looks down `-Z`).
+  The basis is orthonormal within 2 raw units in length and pairwise dot
+  product; eye equal to target, a zero or parallel `up`, and overflow return
+  typed errors. Golden vectors run natively and under WebAssembly.
 * Added `FixedMat4::try_orthographic` and `FixedMat4::try_perspective` to
   `bunny-linalg`: checked Q32.32 `clip_from_view` projection matrices that take
   a tangent (no trigonometry) and return the new `ProjectionError`. The
