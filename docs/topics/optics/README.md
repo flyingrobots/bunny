@@ -48,7 +48,10 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `VertexNormals` (`new`, `normals`), `VertexNormalError`,
   `MAX_NORMAL_TRIANGLES` and `VERTEX_NORMALS_ID`;
 - for the [smooth normal](#smooth-normal) (`bunny-smooth-normal/1`):
-  `smooth_normal` and `SMOOTH_NORMAL_ID`, with `bunny_query::BarycentricNumerators`.
+  `smooth_normal` and `SMOOTH_NORMAL_ID`, with `bunny_query::BarycentricNumerators`;
+- for [smooth shading](#smooth-shading) (`bunny-smooth-shading/1`):
+  `SmoothHit` (`new`, `surface_hit`, `frame`, `light_sample`) and
+  `SMOOTH_SHADING_ID`.
 
 Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
 attenuation and materials other than diffuse (the rest of #160) are not part
@@ -537,8 +540,9 @@ decision uses, the loop over pixels and samples, and the pixel value
 ([Pixel Values](#pixel-values)). Materials other than diffuse, other lights,
 textures, reflection and refraction are not defined here. Per-vertex normals
 for a mesh are ([Vertex Normals](#vertex-normals)), and so is their
-interpolation at a hit ([Smooth Normal](#smooth-normal)); a shading frame built
-from it, and its rule against the geometric normal, are not yet.
+interpolation at a hit ([Smooth Normal](#smooth-normal)) and a hit shaded with
+it ([Smooth Shading](#smooth-shading)); a bounce direction around the shading
+normal is not yet.
 
 ### Shading Identity
 
@@ -679,7 +683,11 @@ rounding. The rule has its own identity, `bunny-smooth-normal/1`
    part of a mesh) gets its vertex normal bit for bit. Without this step the
    normal would be normalized again, which can move a component by a raw
    unit: `FixedUnitVec3` holds vectors whose length is within one raw unit of
-   1.0, not exactly 1.0.
+   1.0, not exactly 1.0. The step is part of the identity, and so is its cost:
+   at a point next to a corner (or next to an edge between equal normals), where
+   another weight is nonzero, the normal is normalized again, so it can differ
+   from the corner's by up to one raw unit per component more than the
+   interpolation itself moves.
 2. **Shift.** Each exact `w_i` is shifted right, floored, by the same `k`: the
    smallest that puts `det >> k` below `2^62` (zero when `det` already is).
    `det` reaches about `2^117` (`3 * 2^115`), and a weight times a normal
@@ -727,6 +735,50 @@ dropped bits are above one half. Changing any of the four rules fails a test.
 multiplications and one normalization (two integer square roots and three
 divisions) per hit; no division by `det`. The measured cost is not yet in this
 chapter.
+
+### Smooth Shading
+
+`SmoothHit::new(hit, weights, normals)` shades a `SurfaceHit` with the
+interpolated normal of its triangle's three vertex normals
+(`[Option<FixedUnitVec3>; 3]`, in vertex order) at the hit's exact weights
+(`TriangleHit::barycentric_numerators`). Its identity is
+`bunny-smooth-shading/1` (`SMOOTH_SHADING_ID`); nothing in
+`bunny-diffuse-shading/1` changes, and the `SurfaceHit` it holds keeps its
+geometric frame, its start point and its exact plane (`surface_hit`).
+
+**The frame.** Let `n = smooth_normal(normals, weights)` and `s = n . N`, the
+exact `i128` dot product with the exact normal `N` of the face the ray arrived
+on: `(v1 - v0) x (v2 - v0)`, negated for a back-face hit, so chosen by the
+kernel's `front_face`, the same plane the start-point rule uses (each product
+is below `2^116`, the sum below `2^118`).
+
+| Case | Shading frame |
+| --- | --- |
+| `s > 0` | `ShadingFrame::new(n)` |
+| `s < 0`: the normals point to the other face (a back-face hit on a mesh wound for its front) | `ShadingFrame::new(n).flipped()`, normal `-n` |
+| `s = 0`, a vertex normal is `None`, or `smooth_normal` returns `None` | `hit.frame()`, the geometric frame |
+
+The shading normal is therefore always strictly on the arrival side of the
+exact plane. Every side decision uses `front_face` and the exact plane, never
+a dot product with the rounded unit geometric normal: that normal is within a
+raw unit of the exact one per component, and for a shading normal nearly
+along the surface the two can disagree in sign (the test plan has such a
+case, found by search). A missing vertex normal falls back even when its
+weight is zero, so the rule depends only on which normals exist.
+
+**The light.** `light_sample` keeps the geometric test of
+`SurfaceHit::light_sample`: no shadow ray and no light unless the light is
+strictly on the arrival side of the exact plane. When it is, the shadow ray is
+the geometric one and the radiance is
+`light.reflected_radiance(light.cosine(n'))` with the shading normal `n'`,
+whose cosine is clamped at zero: a light above the surface but behind the
+shading normal keeps its shadow ray and contributes nothing.
+
+**Estimator.** Against `bunny-diffuse-shading/1` the direct term changes only
+in its cosine, which uses the shading normal; visibility, the start point and
+the shadow ray do not change. A bounce direction around the shading frame,
+and what happens to one that points at or below the geometric surface, are not
+defined yet.
 
 ### Orthonormal Frame
 
