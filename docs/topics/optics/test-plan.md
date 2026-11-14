@@ -119,7 +119,7 @@ formatting.
 | OPTICS-REQ-030 | `TriangleSurface::new` returns `None` exactly for zero-area triangles (an exact zero cross product); otherwise its unit normal points along `(v1 - v0) x (v2 - v0)` and each component is within one raw unit of the exact unit normal. | `README.md#geometric-normal` |
 | OPTICS-REQ-031 | `ShadingFrame::new` is the stated Duff et al. frame with each component within half a raw unit of the exact formula on the given normal; every frame and its `flipped` form is right-handed and orthonormal to within 8 raw units on each pairwise dot product, squared length and cross-product component. | `README.md#orthonormal-frame` |
 | OPTICS-REQ-032 | The facing rule: a `SurfaceHit` frame is the surface frame for a front-face hit and its `flipped` form (bitangent, tangent, negated normal) for a back-face hit, so its normal points to the side the ray arrived from. | `README.md#facing-and-secondary-rays` |
-| OPTICS-REQ-033 | The self-intersection rule: the start point of every secondary ray is `point_at(ray, hit.distance)` moved by the fewest whole raw units (at most two) along the plane normal's dominant axis that put it strictly on the arrival side of the triangle's exact plane; bounce and shadow rays then never hit their own triangle, a coplanar neighbour, a coincident duplicate or a convex neighbour, and geometry at least 4 raw units away on the arrival side is not skipped. | `README.md#facing-and-secondary-rays` |
+| OPTICS-REQ-033 | The self-intersection rule: the start point of every secondary ray is `point_at(ray, hit.distance)` moved by the fewest whole raw units (at most two) along the plane normal's dominant axis (the lowest axis on a tie), toward the arrival side, that put it strictly on the arrival side of the triangle's exact plane; bounce and shadow rays then never hit their own triangle, a coplanar neighbour, a coincident duplicate or a convex neighbour, and geometry at least 4 raw units away on the arrival side is not skipped. | `README.md#facing-and-secondary-rays` |
 | OPTICS-REQ-034 | `ShadingFrame::cosine_direction` maps `[u, v]` in `[0, 1)^2` to the polar disk point lifted to the hemisphere (`cos theta = sqrt(1 - u)`, azimuth `v` turns): each component within 4 raw units of the ideal map on the frame and within `-1.0..=1.0`, length within 8 raw units of 1.0, dot product with the normal at least `MIN_BOUNCE_COSINE_RAW` (`2^15`) raw units; `None` for a coordinate outside `[0, 1)`. | `README.md#cosine-weighted-hemisphere` |
 | OPTICS-REQ-035 | Over stratified sampler points the directions follow the cosine-weighted distribution to the stated regression thresholds: mean cosine within `2^-12` of 2/3 over 4 096 points; over 1 024 points the four cosine bands of weight 1/16, 3/16, 5/16 and 7/16 within one point and each azimuth quarter within two points of the exact count. | `README.md#cosine-weighted-hemisphere` |
 | OPTICS-REQ-036 | The radiometric convention: a directional light's value is the irradiance on a surface perpendicular to it; a white diffuse surface lit at cosine `c` reflects `E * (c * FRAC_1_PI)`, each product rounded to nearest with ties to even; `PI` is raw 13 493 037 705 and `FRAC_1_PI` raw 1 367 130 551; the cosine is within 3 raw units of the exact cosine with the given normal and is clamped to `0..=1.0`. | `README.md#radiometric-convention` |
@@ -282,7 +282,7 @@ status = "active"
 
 [[requirement]]
 id = "OPTICS-REQ-033"
-summary = "The self-intersection rule: the start point of every secondary ray is point_at(ray, hit.distance) moved by the fewest whole raw units (at most two) along the plane normal's dominant axis that put it strictly on the arrival side of the triangle's exact plane; bounce and shadow rays then never hit their own triangle, a coplanar neighbour, a coincident duplicate or a convex neighbour, and geometry at least 4 raw units away on the arrival side is not skipped."
+summary = "The self-intersection rule: the start point of every secondary ray is point_at(ray, hit.distance) moved by the fewest whole raw units (at most two) along the plane normal's dominant axis (the lowest axis on a tie), toward the arrival side, that put it strictly on the arrival side of the triangle's exact plane; bounce and shadow rays then never hit their own triangle, a coplanar neighbour, a coincident duplicate or a convex neighbour, and geometry at least 4 raw units away on the arrival side is not skipped."
 status = "active"
 
 [[requirement]]
@@ -461,6 +461,15 @@ Seeded shading cases use the plan's generator with the seed
 `SHADING_TEST_SEED` (`0xB002_0160_D1FF_0001`), and sampler points from
 `PixelSampler` with the seed `0x0123_4567_89AB_CDEF`.
 
+The start-point goldens (`OPTICS-TP-087`, `OPTICS-TP-088`) were derived by
+hand with exact integers and checked by a separate exact Python model of the
+[start-point rule](README.md#facing-and-secondary-rays) and of the exact
+distance (the floor of the true distance, as `hit_triangle` documents); the
+test asserts that `hit_triangle` reports each hit with that distance and
+face. The generated start-point cases (`OPTICS-TP-089`, `OPTICS-TP-090`) use
+SplitMix64 from `START_POINT_TEST_SEED` (`0xB002_0288_5747_0001`) or a
+per-run seed.
+
 ### The Vertex-Normal Oracle
 
 `crates/bunny-optics/tests/vertex_normal_tests.rs` checks every vertex normal
@@ -589,6 +598,11 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-084 | Grazing bounce | OPTICS-REQ-051 | The triangle of OPTICS-TP-080: the direction `n` is below by the exact plane although `n . g > 0` with the rounded unit normal, and `-n` is above although `-n . g < 0`. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_084_a_grazing_bounce_is_sided_by_the_exact_plane` |
 | OPTICS-TP-085 | Bounce rejection | OPTICS-REQ-051 | A 16 by 16 grid of sampler points on the ground with the shading normal 53 degrees off: each accepted bounce starts at the start point along the frame's direction and is above, each rejected one is not, and the counts are locked (207 rays, 49 below); with the shading normal along the geometric one, 256 rays; a sample of 1.0 gives `None`. | `crates/bunny-optics/tests/smooth_hit_tests.rs::optics_tp_085_bounces_below_the_surface_are_rejected_without_a_ray` |
 | OPTICS-TP-086 | Floored weights against exact numerators | OPTICS-REQ-047 | On the 1 024 sphere hits of the `smooth` benchmark group (shifts `k` of 17 to 26), the replica of the rejected alternative (two floored `barycentrics` weights, `w0 = 2^32 - b1 - b2`, then the same steps) and `smooth_normal` give a normal on every hit and differ by at most the sum of their bounds, `2 + (8 (1 + 2^-32) + 2^-26) / rho`, with `rho` bounded below from the replica's exact sum; the counts are locked: 573 equal, 447 one raw unit apart and 4 two apart. | `crates/bunny-perf/src/smooth.rs::tests::the_divided_replica_agrees_with_smooth_normal_within_both_bounds` |
+| OPTICS-TP-087 | Zero, one and two steps | OPTICS-REQ-033 | Hits the trace kernel reports (distance and face asserted): on the regular octahedron face `(-1, 0, 0), (0, -1, 0), (0, 0, -1)` the hit with plane values `-2^64`, `0`, `+2^64` at `p`, `p + e`, `p + 2e`, two steps along `+x`; a general back-face hit, two steps along `-z`; the ground from above, one step; the diagonal plane from the origin, none. `point_at` and the start point are hand computed. | `crates/bunny-optics/tests/start_point_tests.rs::optics_tp_087_kernel_hits_take_zero_one_or_two_steps` |
+| OPTICS-TP-088 | The tie axis | OPTICS-REQ-033 | Five kernel hits that land exactly on a plane whose largest normal components tie (`x = y`, `y = z`, `x = z`, `\|x\| = \|y\|` with opposite signs, and `x = y = z` from the back): one step, along the lowest tied axis with the sign of its component; the highest-axis rule would step the other one. | `crates/bunny-optics/tests/start_point_tests.rs::optics_tp_088_a_tie_steps_along_the_lowest_axis` |
+| OPTICS-TP-089 | Generated hits | OPTICS-REQ-033 | 100 000 seeded rays, half at regular-octahedron faces (three equal normal components) and half at general triangles, directions with a largest component from 0.5 to 1.0: every hit the kernel reports gets the start point that the rule computes with an exact `i128` plane test (`p + k e`, `k` the fewest steps), `k` is at most 2 and `SurfaceHit::new` refuses none. Witness counts: on octahedron faces at least 10 000 hits with no step, 10 000 with one and 1 000 with two, and on general triangles 10 000 and 5 000 with none and one (the fixed seed gives 18 653, 29 508, 1 800 and 36 687, 12 960, 8 with two). The seed and case are printed on failure. | `crates/bunny-optics/tests/start_point_tests.rs::optics_tp_089_generated_hits_follow_the_start_point_rule` |
+| OPTICS-TP-090 | Generated hits from a fresh seed | OPTICS-REQ-033 | The check of OPTICS-TP-089 from a seed drawn per run (`RandomState`), printed in every failure message and with the counts. On `wasm32-unknown-unknown` the seed repeats. | `crates/bunny-optics/tests/start_point_tests.rs::optics_tp_090_generated_hits_follow_the_start_point_rule_from_a_fresh_seed` |
+| OPTICS-TP-091 | Start-point mutations | OPTICS-REQ-033 | Each rule of the start point broken on purpose fails at least one case above that does not compare with the retained 0.7.1 code. | [Start-point mutation checks](#start-point-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1319,6 +1333,51 @@ test = "crates/bunny-perf/src/smooth.rs::tests::the_divided_replica_agrees_with_
 oracle = "Stated bounds: smooth_normal's (README.md#smooth-normal) plus the replica's 1 + 8 (1 + 2^-32) / rho from its two floors; the difference counts are a regression lock."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-087"
+requirements = ["OPTICS-REQ-033"]
+evidence = "test"
+test = "crates/bunny-optics/tests/start_point_tests.rs::optics_tp_087_kernel_hits_take_zero_one_or_two_steps"
+oracle = "Hand computed with exact integers (plane values in the comments) and checked by a separate exact Python model of the rule; each hit is the one hit_triangle reports."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-088"
+requirements = ["OPTICS-REQ-033"]
+evidence = "test"
+test = "crates/bunny-optics/tests/start_point_tests.rs::optics_tp_088_a_tie_steps_along_the_lowest_axis"
+oracle = "Hand computed: each hit lands exactly on its plane, so one step along the lowest tied axis is the answer."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-089"
+requirements = ["OPTICS-REQ-033"]
+evidence = "property"
+test = "crates/bunny-optics/tests/start_point_tests.rs::optics_tp_089_generated_hits_follow_the_start_point_rule"
+oracle = "Specified: the rule of README.md#facing-and-secondary-rays with an exact i128 plane test, on kernel-reported hits; witness counts per step count and population."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-090"
+requirements = ["OPTICS-REQ-033"]
+evidence = "property"
+test = "crates/bunny-optics/tests/start_point_tests.rs::optics_tp_090_generated_hits_follow_the_start_point_rule_from_a_fresh_seed"
+oracle = "The rule check and witness counts of OPTICS-TP-089, from a per-run seed printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-091"
+requirements = ["OPTICS-REQ-033"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#start-point-mutation-checks"
+oracle = "MAX_STEPS = 1, the highest axis on a tie, the step against the facing normal's sign and an inclusive plane test, each broken on purpose, fail a case that does not compare with the retained 0.7.1 code."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1426,6 +1485,24 @@ side of the fast/diagnostic pair alone, which the agreement cases must catch.
 The second row is the 0.7.1 failure itself: its plane test overflows `i128` on
 a point `2^30` units above the ground (a panic in a debug build; release
 builds return `None`).
+
+### Start-Point Mutation Checks
+
+Each rule of the start point below was broken on purpose in a container copy
+of `crates/bunny-optics/src/shading/hit.rs`, with every source file touched
+before the build, and the crate's tests were run (`timeout 120 cargo test
+--locked -p bunny-optics --no-fail-fast`). Before OPTICS-TP-087 to
+OPTICS-TP-090, the first failed only OPTICS-TP-062 and OPTICS-TP-064, which
+compare with the retained 0.7.1 code, and the second failed nothing. Every
+mutation now fails a case that does not; the restored source passed every test of
+the crate.
+
+| Mutation in `hit.rs` | Rule broken | Failing cases |
+| --- | --- | --- |
+| At most one step (`MAX_STEPS = 1`) | Two steps when one is not enough | OPTICS-TP-087 (the octahedron and general witnesses), OPTICS-TP-089, OPTICS-TP-090; also OPTICS-TP-062, OPTICS-TP-064 |
+| The highest axis on a tie (`>` for `>=` in `dominant_step`) | The lowest axis on a tie | OPTICS-TP-087 (the octahedron witness), OPTICS-TP-088 (every case), OPTICS-TP-089, OPTICS-TP-090 |
+| The step against the facing normal's sign | Steps go toward the arrival side | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054, OPTICS-TP-060, OPTICS-TP-061, OPTICS-TP-079, OPTICS-TP-081, OPTICS-TP-083, OPTICS-TP-085, OPTICS-TP-087 to OPTICS-TP-090; also OPTICS-TP-062, OPTICS-TP-064 |
+| A point on the plane accepted (`>= offset` for `> offset`) | Strictly on the arrival side | OPTICS-TP-046, OPTICS-TP-047, OPTICS-TP-048, OPTICS-TP-050, OPTICS-TP-053, OPTICS-TP-054, OPTICS-TP-060, OPTICS-TP-087 to OPTICS-TP-090 |
 
 ## Vertex-Normal Mutation Checks
 
@@ -1666,5 +1743,4 @@ case with a stable test name.
 | An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |
 | Shrinking for `OPTICS-TP-062` and `OPTICS-TP-064`: a failure reports its seed, case and variant, not a reduced input. | None; a property-testing harness or a hand-written reducer. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
-| A start point needing two steps off the plane: the proof allows two, the seeded cases and a 400 000-hit search in the reference model needed at most one. | None; an exact constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |
