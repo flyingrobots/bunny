@@ -66,28 +66,79 @@ impl Waivers {
     }
 }
 
-/// Whether a manifest waives `rule`: a whole-line TOML comment holding one clause. Lines
-/// inside a multi-line basic (`"""`) or literal (`'''`) string are string content.
+/// Whether a manifest waives `rule`: a whole-line TOML comment holding one clause. A line
+/// inside a multi-line basic (`"""`) or literal (`'''`) string is string content.
 pub(super) fn manifest_waives(manifest: &str, rule: &str) -> bool {
-    let mut open = None::<&str>;
+    let mut open = None::<TomlString>;
     for line in manifest.lines() {
-        if let Some(delimiter) = open {
-            if line.matches(delimiter).count() % 2 == 1 {
-                open = None;
+        if open.is_none() {
+            if let Some(text) = line.trim_start().strip_prefix('#') {
+                if clause_body_rule(text).is_some_and(|named| named == rule) {
+                    return true;
+                }
+                continue;
             }
-            continue;
         }
-        if let Some(text) = line.trim_start().strip_prefix('#') {
-            if clause_body_rule(text).is_some_and(|named| named == rule) {
-                return true;
-            }
-            continue;
-        }
-        open = ["\"\"\"", "'''"]
-            .into_iter()
-            .find(|delimiter| line.matches(delimiter).count() % 2 == 1);
+        open = toml_string_after(line.as_bytes(), open);
     }
     false
+}
+
+/// A multi-line TOML string left open at the end of a line.
+#[derive(Clone, Copy)]
+enum TomlString {
+    Basic,
+    Literal,
+}
+
+/// Which multi-line string is open after `line`, given the one open before it. Basic
+/// strings honour backslash escapes; single-line strings and comments are skipped.
+fn toml_string_after(line: &[u8], mut open: Option<TomlString>) -> Option<TomlString> {
+    let mut at = 0;
+    while let Some(&byte) = line.get(at) {
+        let rest = line.get(at..).unwrap_or_default();
+        at += match open {
+            Some(TomlString::Basic) if byte == b'\\' => 2,
+            Some(TomlString::Basic) if rest.starts_with(b"\"\"\"") => {
+                open = None;
+                closing_length(rest, b'"')
+            }
+            Some(TomlString::Literal) if rest.starts_with(b"'''") => {
+                open = None;
+                closing_length(rest, b'\'')
+            }
+            None if rest.starts_with(b"\"\"\"") => {
+                open = Some(TomlString::Basic);
+                3
+            }
+            None if rest.starts_with(b"'''") => {
+                open = Some(TomlString::Literal);
+                3
+            }
+            None if byte == b'"' || byte == b'\'' => single_line_string_length(rest),
+            None if byte == b'#' => return open,
+            _ => 1,
+        };
+    }
+    open
+}
+
+/// A closing delimiter may be followed by up to two quotes that belong to the content.
+fn closing_length(rest: &[u8], quote: u8) -> usize {
+    3 + rest.iter().skip(3).take(2).take_while(|byte| **byte == quote).count()
+}
+
+/// The length of a single-line string starting at `rest[0]`, its quotes included.
+fn single_line_string_length(rest: &[u8]) -> usize {
+    let quote = rest.first().copied().unwrap_or(b'"');
+    let mut at = 1;
+    while let Some(&byte) = rest.get(at) {
+        if byte == quote {
+            return at + 1;
+        }
+        at += if byte == b'\\' && quote == b'"' { 2 } else { 1 };
+    }
+    rest.len()
 }
 
 /// The lines a waiver on the 0-based line `index` covers, 1-based and inclusive.

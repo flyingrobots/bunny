@@ -63,7 +63,10 @@ five slipped through on the unfixed code. `#[path]` attributes are now also read
 macro tokens, `cfg_attr` is parsed as nested attributes at any depth, and a module path
 must name a file the gate lists. Mutations, under `timeout 120`, all caught: macro tokens
 not searched for path attributes, `cfg_attr` read one level deep, unlisted directories
-accepted.
+accepted. A follow-up review note showed that only the first `path` inside a `cfg_attr`
+was checked, though the compiler may drop it and keep a later one; every `path` is now
+checked (a sixth ND-TP-069 form, red first), and the mutation that checks only the first
+fails it.
 cargo fmt --all; cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings;
 cargo test --locked -p xtask: 103 passed; cargo test -p bunny-contract --test
 generated_version_tests: 2 passed.

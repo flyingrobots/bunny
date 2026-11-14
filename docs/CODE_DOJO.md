@@ -130,7 +130,7 @@ and counted with the forms above:
 
 | `include!` in every spelling: a non-Rust file, a `.rs` file, a `concat!` path, `std::`/`core::`, renamed, in a macro | `include-source` (Bunny's own) | 0 of 8 | `include_of_source_is_rejected_however_it_is_named` |
 | `#[path]` to a non-`.rs` file, outside the crate, absolute, with backslashes, through `cfg_attr` | `include-source` | 0 of 5 | `path_attributes_must_name_a_scanned_file` |
-| `#[path]` emitted by a macro, under nested `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 5 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
+| `#[path]` emitted by a macro, under nested `cfg_attr`, second in a `cfg_attr`, into `vendor`, `third_party` or `target` (found in review) | `include-source` | 0 of 6 | `path_attributes_in_macros_nested_cfg_attr_and_unscanned_directories_are_rejected` |
 | `include_str!`/`include_bytes!` outside the crate, absolute, computed, renamed, in a macro | `include-data` (Bunny's own) | 0 of 5 | `included_data_must_come_from_inside_the_crate` |
 | `env!`, `option_env!`, `std::env!`, `core::option_env!`, `env!("CARGO_PKG_VERSION")`, in a macro | `std-env` | 1 of 6 (`std::env!`, through the `std::env` prefix) | `compile_time_environment_macros_are_std_env` |
 
@@ -143,7 +143,7 @@ and counted with the forms above:
 | `std::io::stdin`, `Stdin`, `IsTerminal`, `.is_terminal()`, by alias, in `format!` | `host-input` (Bunny's own) | 0 of 6 | `terminal_input_is_host_input` |
 | banned code in `///` and `//!` doc tests, behind a hidden `# ` line, in `rust,no_run`, in `/** */` | `std-fs`, `time-instant`, `unordered-container`, `thread-sleep`, `std-env` | 0 of 5 | `doc_tests_are_scanned` |
 
-With these the rule tests seed 179 forms; the gate before #321 caught 93.
+With these the rule tests seed 180 forms; the gate before #321 caught 93.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14
