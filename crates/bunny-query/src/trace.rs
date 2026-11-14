@@ -90,12 +90,13 @@ impl TraceRay {
         let [x, y, z] = map2(lines, bounds, offsets);
         let planes = map2([x, y, z], self.reciprocal, pair);
         let [lx, ly, lz] = planes.map(|((near, _, _), reciprocal)| scaled(near, reciprocal));
+        let [ux, uy, uz] = map2(planes, self.direction, upper);
         let enter = lx.max(ly).max(lz);
-        let [ux, uy, uz] = map2(planes, self.direction, |plane, d| before_exit(plane, d, enter));
+        let exit = ux.min(uy).min(uz);
         let limit = t_max.raw();
         let valid = x.2 & y.2 & z.2 & (limit >= 0) & (enter <= limit.cast_unsigned());
         // `enter <= limit <= i64::MAX` when valid, so it converts exactly.
-        (valid & ux & uy & uz).then(|| FixedQ32_32::from_raw(enter.cast_signed()))
+        (valid & (enter <= exit)).then(|| FixedQ32_32::from_raw(enter.cast_signed()))
     }
 
     /// Exact ray–triangle test over distances `t_min..=t_max`.
@@ -269,22 +270,13 @@ const fn offsets((origin, direction): (i64, i64), (min, max): (i64, i64)) -> (u6
     (near, far, valid)
 }
 
-/// Whether `enter <= upper`, where `upper` is the slab upper bound
-/// `floor(far * (r + 1) / 2^31) + 1` (saturating; `u64::MAX` on a parallel axis) for the
-/// slab's offsets, its reciprocal `r` and the direction component.
-///
-/// For `enter <= 2^63`, `enter <= floor(F / 2^31) + 1` holds exactly when
-/// `(enter - 1) * 2^31 <= F` (taking `enter - 1` as 0 for `enter == 0`), and saturation
-/// never changes it because `(enter - 1) * 2^31 < 2^94` while a saturated bound needs
-/// `F >= 2^95 - 2^31`. So one 128-bit comparison replaces the shift, the saturations and the
-/// minimum. A larger `enter` exceeds every limit, so its answer does not matter.
+/// The slab upper bound `floor(far * (r + 1) / 2^31) + 1`, saturating, from the slab's
+/// offsets, its reciprocal `r` and the direction component. A parallel axis (whose
+/// reciprocal is zero) gets `u64::MAX`.
 #[inline]
-// `|` keeps the flag free of a data-dependent branch, as in `box_entry`.
-#[allow(clippy::needless_bitwise_bool)]
-fn before_exit(((_, far, _), reciprocal): ((u64, u64, bool), u64), direction: i64, enter: u64) -> bool {
-    let exit = u128::from(far) * u128::from(reciprocal + 1);
-    let needed = u128::from(enter.saturating_sub(1)) << RECIPROCAL_SHIFT;
-    (direction == 0) | (needed <= exit)
+fn upper(((_, far, _), reciprocal): ((u64, u64, bool), u64), direction: i64) -> u64 {
+    let step = if direction == 0 { u64::MAX } else { 1 };
+    scaled(far, reciprocal + 1).saturating_add(step)
 }
 
 /// `floor(2^63 / |d|)`, or zero for a zero component.
