@@ -82,6 +82,7 @@ formatting.
 | TRACE-REQ-030 | TriangleHit::barycentric_numerators returns the exact u, v and det the triangle test decided the hit with (the weights of v1 and v2 are u / det and v / det, each below 2^117 in the trace domain), and BarycentricNumerators::new accepts exactly the values with det > 0, u >= 0, v >= 0 and u + v <= det. | `README.md#exact-triangle-test` |
 | TRACE-REQ-031 | intersect_aabb, intersect_ray, closest_hit and any_hit make at most nodes.len() / 2 interior visits: a buffer whose search needs more (a reference cycle, or a subtree reached twice) is InvalidNodeIndex after a bounded number of steps, and on every buffer in which no node is reached twice the results, errors and callback calls are those of the retained pre-#269 functions. | `README.md#malformed-buffers` |
 | TRACE-REQ-032 | `TraceRay::from_ray` returns `None` only for an origin outside the trace domain: it accepts every unit direction, including a component of `2^32 + 1` raw, which `FixedUnitVec3::try_from_unit` allows and `TraceRay::new` refuses; every width bound of the kernels holds for it, and `FixedUnitVec3::new` never produces a component above `2^32`. | `README.md#trace-domain` |
+| TRACE-REQ-033 | `compact_closest_hit_counted` and compact_any_hit_counted return exactly the result or error of compact_closest_hit and compact_any_hit and make the same primitive calls in the same order on every CompactView, and on success their TraversalCounts hold, for that search, the box_entry calls, those that returned a bound, the popped entries skipped beyond the limit, the interior and leaf visits, the primitive tests and the deepest stack; TraversalCounts addition saturates and keeps the larger peak. | `README.md#counting-traversals` |
 
 ```toml
 [[requirement]]
@@ -212,6 +213,11 @@ status = "active"
 [[requirement]]
 id = "TRACE-REQ-032"
 summary = "TraceRay::from_ray returns None only for an origin outside the trace domain: it accepts every unit direction, including a component of 2^32 + 1 raw, which FixedUnitVec3::try_from_unit allows and TraceRay::new refuses; every width bound of the kernels holds for it, and FixedUnitVec3::new never produces a component above 2^32."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-033"
+summary = "compact_closest_hit_counted and compact_any_hit_counted return exactly the result or error of compact_closest_hit and compact_any_hit and make the same primitive calls in the same order on every CompactView, and on success their TraversalCounts hold, for that search, the box_entry calls, those that returned a bound, the popped entries skipped beyond the limit, the interior and leaf visits, the primitive tests and the deepest stack; TraversalCounts addition saturates and keeps the larger peak."
 status = "active"
 ```
 
@@ -346,6 +352,12 @@ Regenerating them is a contract change.
 | TRACE-TP-409 | Normalization never exceeds 1.0 | TRACE-REQ-032 | Over 200 000 generated vectors (scales from 3 raw to `2^61`, axis-aligned, near-axis and tiny), at least 130 000 normalize and at least 50 000 are refused; no result has a component above `2^32`, at least 15 000 have one equal to it, the largest is exactly `2^32`, and `from_ray` accepts every result. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_409_normalisation_never_yields_a_component_above_one` |
 | TRACE-TP-410 | Kernels for long unit directions | TRACE-REQ-032 | 20 000 seeded rays with a component of `2^32 + 1` and 20 000 boxes: `hit_triangle` equals the signed-volume oracle (hit, floor distance, facing, exact numerators; at least 4 000 hits and 4 000 misses) and `box_entry` is never past the exact rational entry and short by at most `T / 2^31 + 2` (at least 1 000 reached and 1 000 certainly missed boxes). | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_410_kernels_agree_with_the_oracles_for_long_unit_directions` |
 | TRACE-TP-411 | Known distance | TRACE-REQ-032 | A triangle in the plane `x = 2.0` and the ray along `+x` from 0 and along `-x` from 4.0, direction `2^32 + 1`: distance `floor(2^65 / (2^32 + 1)) = 8 589 934 590` raw, back face for `+x` and front face for `-x`. | `crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_long_direction_hit_has_the_exactly_floored_distance` |
+| TRACE-TP-412 | Hand-counted trees | TRACE-REQ-033 | Hand-derived counts, written out in the test, on an empty tree (all zero), a one-leaf root of three primitives, a ray missing the root box, a root over two leaves where the nearer hit prunes the farther (one popped_skipped), where the nearer leaf is entered but missed (both leaves visited), where the ray enters the root but neither child, a three-level tree whose nearer subtree's hit skips the farther interior subtree at its pop, and compact_any_hit stopping at its first primitive test. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values` |
+| TRACE-TP-413 | Counts against a recursive reference | TRACE-REQ-033 | On seeded scenes of 1 to 300 triangles built by build_bvh and build_bvh_sah and seeded rays (t_max unbounded and at the nearest hit), the counts and the primitive calls of both counted searches equal those of a recursive search written in the test that shares no code with the loop (it tracks the stack depth as pending siblings); failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_413_counts_equal_a_recursive_reference_search` |
+| TRACE-TP-414 | Counted and uncounted searches agree | TRACE-REQ-033 | On the trees of TRACE-TP-413 and on seeded corruptions of them (a child reference out of range or naming an ancestor, a leaf range past the buffer), and on a 70-level chain past the stack, both counted searches return the uncounted search's result or error and make the same primitive calls (closest: primitive and limit) in the same order; failures name the seed. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_414_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees` |
+| TRACE-TP-415 | The benchmark scene's profile | TRACE-REQ-033 | On all 1 024 benchmark rays, the counts of both counted searches on the compact copy of the scene's tree equal the profile replica's box_calls, box_some, skipped_at_pop, interior_visited, leaf_visited, tri_tests and stack_peak for the same ray. | `crates/bunny-perf/src/profile.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray` |
+| TRACE-TP-416 | Adding counts | TRACE-REQ-033 | Adding two TraversalCounts sums each counter, saturating at u64::MAX, and keeps the larger peak_stack; += agrees with +. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_416_adding_counts_sums_saturates_and_keeps_the_peak` |
+| TRACE-TP-417 | Deliberate counting mutations | TRACE-REQ-033 | A box test not counted, a rejected box counted as entered, a skipped pop counted as a visit, a leaf counted twice, the last primitive test of a leaf not counted, the peak not tracked and the counted search pruning differently from the uncounted one (`<=` made `<` for the counting tally only) each make a case fail. | [Mutation checks](#counting-mutation-checks) |
 
 ```toml
 [[case]]
@@ -968,6 +980,60 @@ test = "crates/bunny-query/tests/trace_unit_direction_tests.rs::trace_tp_411_a_l
 oracle = "Constructed: the distance is floor(2^65 / (2^32 + 1)) raw."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-412"
+requirements = ["TRACE-REQ-033"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_412_counts_on_constructed_trees_are_the_hand_derived_values"
+oracle = "Constructed: counts derived by hand from the search order for each tree."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "TRACE-TP-413"
+requirements = ["TRACE-REQ-033"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_413_counts_equal_a_recursive_reference_search"
+oracle = "Retained reference: an independent recursive search with its own counters."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "TRACE-TP-414"
+requirements = ["TRACE-REQ-033"]
+evidence = "property"
+test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_414_counted_and_uncounted_searches_agree_on_valid_and_malformed_trees"
+oracle = "Differential: the uncounted function, whose results the compact tests tie to closest_hit and a test of every primitive."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "TRACE-TP-415"
+requirements = ["TRACE-REQ-033"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::the_counted_compact_search_matches_the_replica_on_every_ray"
+oracle = "Retained reference: the profile replica, itself checked against closest_hit and any_hit on every ray."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "TRACE-TP-416"
+requirements = ["TRACE-REQ-033"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_416_adding_counts_sums_saturates_and_keeps_the_peak"
+oracle = "Constructed: exact sums and maxima."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "TRACE-TP-417"
+requirements = ["TRACE-REQ-033"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#counting-mutation-checks"
+oracle = "Each counting rule broken on purpose makes a case fail."
+tier = "manual"
+status = "planned"
 ```
 
 ## Mutation Checks
@@ -1118,6 +1184,13 @@ is this plan, running the `bunny-query` tests. The restored source passes both.
 Before `TRACE-TP-315`, the relaxed edges and the rounded distance were caught only by tests
 that compare the kernel with its own frozen copy (and, for the distance, one optics golden
 case).
+
+### Counting Mutation Checks
+
+Planned (flyingrobots/bunny#335). Each counting rule will be broken in a container
+checkout of the final source, the sources touched, and
+`timeout 120 cargo test --locked -p bunny-broadphase --test counted_traversal_tests` and the
+`bunny-perf` profile test run, recording the failing cases here.
 
 ## Determinism Obligations And Evidence
 
