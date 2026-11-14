@@ -117,6 +117,19 @@ type position, a macro body and a glob import, as applicable. The tests are in
 | `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
 | `std-process` | `std-process` | `std::process` | 0 of 5 | `std_process_rejects_every_seeded_form` |
 
+flyingrobots/bunny#321 adds the constructions an independent review found
+getting past these rules, seeded in `xtask/src/nondeterminism/evasion_tests.rs`
+and counted with the forms above:
+
+| Construction | Rules seeded | Caught before #321 | Test |
+| --- | --- | --- | --- |
+| `extern crate std as host;` then `host::env`, `host::fs`, `host::time`; `extern crate rand` | `std-env`, `std-fs`, `time-instant`, `random` | 0 of 5 | `extern_crate_aliases_resolve_like_imports` |
+| raw identifiers: `r#std`, `r#env`, `r#HashMap`, `r#HashSet` in a macro, a raw alias, `r#unwrap`, `r#panic!` | `std-fs`, `std-env`, `unordered-container`, `std-process`, `panic-path` | 0 of 7 | `raw_identifiers_match_their_plain_names` |
+| `r#f64` as a type and a path | `float-boundary` | 0 of 2 | `raw_float_types_are_float_boundary` |
+| `use std::{self as s};` then `s::fs` | `std-fs`, `std-env` | 2 of 2 (no test failed when `self` was treated as a segment) | `self_in_a_use_group_names_the_module_itself` |
+
+With these the rule tests seed 106 forms; the gate before #321 caught 92.
+
 Where the names differ:
 
 - Bunny's earlier `ambient-state` rule covered clocks, `thread_rng`,
@@ -138,8 +151,9 @@ Where the names differ:
 
 ### How the source rules read code
 
-Each path is resolved through the file's `use` declarations before it is
-matched: `use std::time as clock;` makes `clock::Instant::now()` a
+Each path is resolved through the file's `use` declarations and `extern
+crate` renames before it is matched, comparing identifiers without their `r#`
+prefix: `use std::time as clock;` makes `clock::Instant::now()` a
 `time-instant` finding, and `use std::collections::HashMap as Map;` makes
 `Map::new()` an `unordered-container` finding. Every `use` leaf is checked
 itself, inside groups and with `self` resolved, and a glob import is reported

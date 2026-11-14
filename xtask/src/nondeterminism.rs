@@ -10,9 +10,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use proc_macro2::{Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Ident, Spacing, Span, TokenStream, TokenTree};
+use syn::ext::IdentExt;
 use syn::visit::{self, Visit};
-use syn::{File, ItemUse, Lit, Macro, Path as SynPath, UseTree};
+use syn::{File, ItemExternCrate, ItemUse, Lit, Macro, Path as SynPath, UseTree};
 
 /// A source finding: the 1-based line and the rule it breaks.
 pub(super) struct Finding {
@@ -185,17 +186,17 @@ struct UseLeaf {
 fn use_leaves(tree: &UseTree, prefix: &mut Vec<String>, leaves: &mut Vec<UseLeaf>) {
     match tree {
         UseTree::Path(path) => {
-            prefix.push(path.ident.to_string());
+            prefix.push(ident_name(&path.ident));
             use_leaves(&path.tree, prefix, leaves);
             prefix.pop();
         }
         UseTree::Name(name) => {
-            let (path, local) = named_leaf(prefix, &name.ident.to_string(), None);
+            let (path, local) = named_leaf(prefix, &ident_name(&name.ident), None);
             leaves.push(UseLeaf { path, local, glob: false, line: line_of(name.ident.span()) });
         }
         UseTree::Rename(rename) => {
-            let alias = rename.rename.to_string();
-            let (path, local) = named_leaf(prefix, &rename.ident.to_string(), Some(alias));
+            let alias = ident_name(&rename.rename);
+            let (path, local) = named_leaf(prefix, &ident_name(&rename.ident), Some(alias));
             leaves.push(UseLeaf { path, local, glob: false, line: line_of(rename.rename.span()) });
         }
         UseTree::Glob(glob) => leaves.push(UseLeaf {
@@ -237,6 +238,30 @@ impl<'ast> Visit<'ast> for UseCollector {
         use_leaves(&node.tree, &mut Vec::new(), &mut self.leaves);
         visit::visit_item_use(self, node);
     }
+
+    /// `extern crate std as host;` binds `host` to `std` exactly as `use std as host;`
+    /// would, and `extern crate rand;` names the crate itself.
+    fn visit_item_extern_crate(&mut self, node: &'ast ItemExternCrate) {
+        let crate_name = ident_name(&node.ident);
+        if crate_name != "self" {
+            let local = node
+                .rename
+                .as_ref()
+                .map_or_else(|| crate_name.clone(), |(_, alias)| ident_name(alias));
+            self.leaves.push(UseLeaf {
+                path: vec![crate_name],
+                local: Some(local).filter(|name| name != "_"),
+                glob: false,
+                line: line_of(node.ident.span()),
+            });
+        }
+        visit::visit_item_extern_crate(self, node);
+    }
+}
+
+/// An identifier as the compiler compares it: `r#env` and `env` are the same name.
+pub(super) fn ident_name(ident: &Ident) -> String {
+    ident.unraw().to_string()
 }
 
 /// Maps each imported local name to the full path it stands for. The map is file-wide,
@@ -291,7 +316,7 @@ impl Scanner {
 impl<'ast> Visit<'ast> for Scanner {
     fn visit_path(&mut self, node: &'ast SynPath) {
         let written =
-            node.segments.iter().map(|segment| segment.ident.to_string()).collect::<Vec<_>>();
+            node.segments.iter().map(|segment| ident_name(&segment.ident)).collect::<Vec<_>>();
         let line = node.segments.first().map_or(0, |segment| line_of(segment.ident.span()));
         self.check_path(line, &written);
         visit::visit_path(self, node);
@@ -362,12 +387,12 @@ fn collect_token_paths(tokens: &TokenStream, paths: &mut Vec<TokenPath>) {
                 index += 1;
             }
             TokenTree::Ident(ident) => {
-                let mut segments = vec![ident.to_string()];
+                let mut segments = vec![ident_name(ident)];
                 index += 1;
                 while let (true, Some(TokenTree::Ident(next))) =
                     (is_path_separator(&tokens, index), tokens.get(index + 2))
                 {
-                    segments.push(next.to_string());
+                    segments.push(ident_name(next));
                     index += 3;
                 }
                 paths.push(TokenPath { line: line_of(ident.span()), segments });
@@ -466,5 +491,7 @@ fn line_of(span: Span) -> usize {
     span.start().line
 }
 
+#[cfg(test)]
+mod evasion_tests;
 #[cfg(test)]
 mod tests;
