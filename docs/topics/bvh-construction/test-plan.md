@@ -52,6 +52,8 @@ topic-docs`.
 | BVH-REQ-007 | build_bvh_sah never overflows or panics, including boxes at the ends of the Q32.32 range. | `README.md#arithmetic-and-overflow` |
 | BVH-REQ-008 | closest_hit and any_hit on a build_bvh_sah tree equal a test of every primitive and the answers on the build_bvh tree. | `README.md#choosing-a-builder` |
 | BVH-REQ-009 | On the seeded quality scenes, the SAH tree's SAH cost is below the quartile tree's. | `README.md#costs` |
+| BVH-REQ-010 | build_bvh_sah builds no tree deeper than 60 (the root at depth 0), so its trees need at most 61 of the traversals' 64 stack entries: a node at depth 60 is a leaf of whatever size (a capped leaf, which can hold more than SAH_MAX_LEAF_SIZE primitives), and an input inside the trace domain reaches it. | `README.md#depth-and-stack` |
+| BVH-REQ-011 | build_bvh has no depth cap: inputs inside the trace domain build trees deeper than 63, on which a traversal returns its complete answer or StackOverflow, never another answer. | `README.md#depth` |
 
 ```toml
 [[requirement]]
@@ -98,6 +100,16 @@ status = "active"
 id = "BVH-REQ-009"
 summary = "On the seeded quality scenes, the SAH tree's SAH cost is below the quartile tree's."
 status = "active"
+
+[[requirement]]
+id = "BVH-REQ-010"
+summary = "build_bvh_sah builds no tree deeper than 60 (the root at depth 0), so its trees need at most 61 of the traversals' 64 stack entries: a node at depth 60 is a leaf of whatever size (a capped leaf, which can hold more than SAH_MAX_LEAF_SIZE primitives), and an input inside the trace domain reaches it."
+status = "active"
+
+[[requirement]]
+id = "BVH-REQ-011"
+summary = "build_bvh has no depth cap: inputs inside the trace domain build trees deeper than 63, on which a traversal returns its complete answer or StackOverflow, never another answer."
+status = "active"
 ```
 
 ## Fixtures
@@ -120,7 +132,7 @@ constant. The structural checker, fingerprint and SAH cost live in
 | BVH-TP-007 | Degenerate | BVH-REQ-002, BVH-REQ-006 | Nested boxes with one centroid, flat boxes with zero z extent, points, and points on a line all give well-formed trees. | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_007_equal_centroids_and_zero_extent_axes_build` |
 | BVH-TP-008 | Degenerate | BVH-REQ-002, BVH-REQ-009 | Two 40-unit ground boxes among 2 000 small ones give a well-formed tree with a lower SAH cost than the quartile tree. | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_008_one_huge_primitive_among_small_ones` |
 | BVH-TP-009 | Overflow | BVH-REQ-007 | Boxes spanning the whole Q32.32 range and touching both ends build a well-formed tree, and an everywhere query visits every primitive. | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_009_boxes_at_the_ends_of_the_range_build_without_overflow` |
-| BVH-TP-010 | Depth | BVH-REQ-006 | Points at 2^k raw units on each axis stay within the depth cap and the 64-entry traversal stack. | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_010_geometric_spacing_stays_within_the_depth_cap` |
+| BVH-TP-010 | Depth | BVH-REQ-006, BVH-REQ-010 | Points at 2^k raw units on each axis stay within depth 60 (a literal, not `SAH_MAX_DEPTH`) and the 64-entry traversal stack. | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_010_geometric_spacing_stays_within_the_depth_cap` |
 | BVH-TP-011 | Ties | BVH-REQ-005 | Two segments with zero area everywhere (split cost equals leaf cost) make one leaf; two cubes, 13 against 14, split. | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_011_equal_split_and_leaf_costs_make_a_leaf` |
 | BVH-TP-012 | Ties | BVH-REQ-005 | Three boxes on x whose planes all cost 52: the lowest plane wins and box 0 is split off first (hand-derived layout and bounds). | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_012_equal_planes_on_one_axis_choose_the_lowest_plane` |
 | BVH-TP-013 | Ties | BVH-REQ-005 | Four cubes on a square: x wins the tie with y (indices 0, 2, 1, 3); stretched along y, y wins (0, 1, 2, 3). | `crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_013_equal_axes_choose_x_before_y` |
@@ -132,6 +144,10 @@ constant. The structural checker, fingerprint and SAH cost live in
 | BVH-TP-019 | Golden | BVH-REQ-003, BVH-REQ-004 | Node count and FNV-1a fingerprint of the quartile tree over the same boxes. | `crates/bunny-broadphase/tests/bvh_sah_golden.rs::bvh_tp_019_quartile_tree_bytes_golden_vector` |
 | BVH-TP-021 | Allocation | BVH-REQ-001 | A counting allocator sees zero allocations during a build of 240 boxes, 40 of them identical. | `crates/bunny-broadphase/tests/bvh_sah_allocation_tests.rs::bvh_tp_021_build_bvh_sah_allocates_zero_times` |
 | BVH-TP-020 | Mutations | BVH-REQ-005, BVH-REQ-006 | The partition and the cost comparison, broken on purpose, make the cases above fail. | [Mutation checks](#mutation-checks) |
+| BVH-TP-022 | Depth cap reached | BVH-REQ-010, BVH-REQ-008 | 70 collinear point boxes inside the trace domain, at `2^40 - 1 - d_k` raw with `d_0 = 0` and `d_(k+1) = ceil(16 (d_k + 1) / 15)`: every node's lowest point is alone in the lowest bin and every cost is zero, so each level splits off one point and the tree is exactly 60 deep (a literal), with primitives 0 to 9 in one capped leaf at depth 60. The tree is well formed, needs at most 61 stack entries, and closest_hit, any_hit, intersect_aabb and the compact searches equal a test of every primitive. | `crates/bunny-broadphase/tests/bvh_depth_tests.rs::bvh_tp_022_seventy_collinear_points_reach_the_depth_cap` |
+| BVH-TP-023 | The review's witness | BVH-REQ-010 | Point boxes at raw `17^k` (k = 0..14) on each axis in turn plus 2^18 identical boxes at the origin (262 189 primitives) build a valid tree of depth 60 whose 32 768 leaves at depth 60 hold 8 primitives each. Measured once; its 14 s debug build is too slow for the fast tier, and BVH-TP-022 kills the same mutations. | [Depth cap evidence](#depth-cap-evidence) |
+| BVH-TP-024 | Quartile depth inside the domain | BVH-REQ-011, BVH-REQ-004 | 94 collinear point boxes inside the trace domain at `2^40 - 1 - 2^32 - d_k` raw with `d_0 = 0` and `d_(k+1) = ceil(4 (d_k + 1) / 3)`: every cost is zero and the first quartile plane leaves only the farthest point on its left, so build_bvh splits off one point per level until four remain, a tree exactly 90 deep. 94 thin triangles in the planes `x` of those points (bounds one raw unit in y and z) give a tree 70 deep (recorded from the frozen builder). On both, intersect_aabb, any_hit and closest_hit along `-x` return StackOverflow, and closest_hit along `+x` equals a test of every primitive. | `crates/bunny-broadphase/tests/bvh_depth_tests.rs::bvh_tp_024_build_bvh_exceeds_the_traversal_depth_inside_the_trace_domain` |
+| BVH-TP-025 | Depth mutations | BVH-REQ-010 | `SAH_MAX_DEPTH = 64` and the SAH build stack of `SAH_MAX_DEPTH` entries each fail BVH-TP-022. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -220,7 +236,7 @@ id = "BVH-TP-010"
 requirements = ["BVH-REQ-006"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/bvh_sah_tests.rs::bvh_tp_010_geometric_spacing_stays_within_the_depth_cap"
-oracle = "Depth at most SAH_MAX_DEPTH and a traversal that does not overflow its stack."
+oracle = "Depth at most 60, written as a literal (not the constant under test), and a traversal that does not overflow its stack."
 tier = "fast"
 status = "implemented"
 
@@ -315,6 +331,40 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "BVH-TP-022"
+requirements = ["BVH-REQ-010", "BVH-REQ-008"]
+evidence = "test"
+oracle = "Hand derived from the binning rule: each offset is at least 16/15 of the previous one plus one, so a node's lowest point is alone in bin 0, every half area is zero and the lowest plane wins, peeling one point per level; 70 - 60 = 10 points remain at depth 60. Brute force for the searches."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "BVH-TP-023"
+requirements = ["BVH-REQ-010"]
+evidence = "manual-audit"
+artifact = "docs/topics/bvh-construction/test-plan.md#depth-cap-evidence"
+oracle = "The structural walk and a count of leaves at depth 60, measured once in the container."
+tier = "manual"
+status = "planned"
+
+[[case]]
+id = "BVH-TP-024"
+requirements = ["BVH-REQ-011", "BVH-REQ-004"]
+evidence = "test"
+oracle = "Hand derived for the points from the quartile rule (each offset is at least 4/3 of the previous one plus one, so the first quartile plane leaves only the farthest point on its left); the triangles' depth 70 is a recorded value of the frozen build_bvh. Brute force over every primitive for the answer that completes."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "BVH-TP-025"
+requirements = ["BVH-REQ-010"]
+evidence = "manual-audit"
+artifact = "docs/topics/bvh-construction/test-plan.md#mutation-checks"
+oracle = "Each mutant's tests under timeout 120 with every source touched before the build."
+tier = "manual"
+status = "planned"
+
+[[case]]
 id = "BVH-TP-020"
 requirements = ["BVH-REQ-005", "BVH-REQ-006"]
 evidence = "manual-audit"
@@ -340,6 +390,10 @@ cases that failed were recorded.
 | Partition not stable: the two in-place sorts removed | BVH-TP-004, 007, 008, 010, 014 (leaf order) and BVH-TP-018. |
 | Leaf rule: nodes up to twice the leaf size may stay leaves | BVH-TP-006 and BVH-TP-007. |
 
+## Depth Cap Evidence
+
+Planned: BVH-TP-023.
+
 ## Determinism Obligations And Evidence
 
 The builders and their tests use only integer arithmetic (`i64`, `i128`,
@@ -358,6 +412,4 @@ builder, and its earlier tests (`bvh_builder_tests.rs`,
 
 ## Gaps
 
-- No input that reaches `SAH_MAX_DEPTH` through the public function is known;
-  the cap is exercised through the internal builder with a lower cap.
 - Tree quality is measured on synthetic scenes and the benchmark scene only.
