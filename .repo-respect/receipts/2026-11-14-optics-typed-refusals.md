@@ -56,14 +56,16 @@ Shading timing, `cargo run --locked -p xtask -- perf --base origin/main --rounds
 base 8e3d2079e78d), best p50: at 1f82e42 shade/hit_shading +9.1 %; at 4a8e243 (#[inline])
 +6.9 %; at f340827 (shared start-point core, lazy errors, bounce_ray on the Option direction)
 +3.7 % (65.55 -> 67.95 ns), with shade/surface_new, whose code is unchanged, at -0.1 % in the
-same run and shade/bounce_direction at +0.6 %. The subject of f340827 states its aim; the
-residual +3.7 % is a measured slowdown, reported to the maintainer rather than claimed away.
+same run and shade/bounce_direction at +0.6 %; at the commit that split the start point to the
+function limit, +4.1 % (66.12 -> 68.81 ns), surface_new -0.9 %, bounce_direction +0.4 %. The
+subject of f340827 states its aim; the residual of about 4 % is a measured slowdown, reported
+to the maintainer rather than claimed away.
 code-dojo --all at the final commit (see the PR).
 
 Known risks:
 The one behaviour change is the debug-build panic above becoming `None`; release-build outputs
 are unchanged. `BounceRayRefused` is defensive and has no constructed case. The per-hit shading
-step measures about 2.4 ns (3.7 %) slower than 0.7.1; see Checks run.
+step measures about 2.7 ns (4 %) slower than 0.7.1; see Checks run.
 
 Human reviewer:
 James Ross (maintainer); review pending.
