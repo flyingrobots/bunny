@@ -149,3 +149,50 @@ fn every_float_method_of_duration_is_float_boundary() {
     }
     assert!(wrong.is_empty(), "{} misclassified:\n{}", wrong.len(), wrong.join("\n"));
 }
+
+/// The documented `Path` methods that read the filesystem or the current directory, with
+/// their rule; every other documented method is lexical and deterministic.
+const PATH_HOST_METHODS: &[(&str, &str)] = &[
+    ("canonicalize", "std-fs"),
+    ("exists", "std-fs"),
+    ("is_dir", "std-fs"),
+    ("is_file", "std-fs"),
+    ("is_symlink", "std-fs"),
+    ("metadata", "std-fs"),
+    ("read_dir", "std-fs"),
+    ("read_link", "std-fs"),
+    ("symlink_metadata", "std-fs"),
+    ("try_exists", "std-fs"),
+    ("absolute", "std-env"),
+];
+
+#[test]
+fn every_host_method_of_path_gets_its_rule() {
+    let methods = section("[std::path::Path methods]");
+    assert_eq!(methods.len(), 65, "witness: 1.96.0 documents 65 methods of Path");
+    let mut wrong = Vec::new();
+    for name in methods {
+        let expected = PATH_HOST_METHODS
+            .iter()
+            .find(|(method, _)| *method == name)
+            .map(|(_, rule)| (*rule).to_string())
+            .into_iter()
+            .collect::<Vec<_>>();
+        for source in [
+            format!("pub fn f(p: &std::path::Path) {{ let _ = p.{name}(); }}"),
+            format!("pub fn f() {{ let _ = std::path::Path::{name}; }}"),
+        ] {
+            let found = family_rules(&source);
+            if found != expected {
+                wrong.push(format!("`{source}`: expected {expected:?}, gate reported {found:?}"));
+            }
+        }
+    }
+    let documented = section("[std::path::Path methods]");
+    let missing = PATH_HOST_METHODS
+        .iter()
+        .filter(|(method, _)| !documented.contains(method))
+        .collect::<Vec<_>>();
+    assert!(missing.is_empty(), "classified but not documented: {missing:?}");
+    assert!(wrong.is_empty(), "{} misclassified:\n{}", wrong.len(), wrong.join("\n"));
+}

@@ -106,7 +106,7 @@ type position, a macro body and a glob import, as applicable. The tests are in
 | `host-parallelism` | `host-parallelism` | `available_parallelism`, qualified or bare | 0 of 5 | `host_parallelism_rejects_every_seeded_form` |
 | `random` | `random` | `rand`, `getrandom`, `fastrand`, `thread_rng`; the same crates as dependencies | 2 of 7 (as `ambient-state`) | `random_rejects_every_seeded_form` |
 | `host-callback` | `host-callback` | `js_sys`, `wasm_bindgen`, `web_sys` paths; crates `js-sys`, `wasm-bindgen`, `web-sys` | 0 of 4 | `host_callback_rejects_every_seeded_form` |
-| `network` | `network` | `std::net`, `reqwest`, `ureq`; the same crates as dependencies | 1 of 6 (as `ambient-state`) | `network_rejects_every_seeded_form` |
+| `network` | `network` | `std::net`, `reqwest`, `ureq`; the same crates as dependencies; since #321 `std::os::<platform>::net` | 1 of 6 (as `ambient-state`) | `network_rejects_every_seeded_form` |
 | `unordered-container` | `unordered-container` | `HashMap`, `HashSet`, `FxHashMap`, `FxHashSet` by name; `std::collections::hash_map` and `hash_set` except `DefaultHasher`; `std::hash::RandomState`; `hashbrown`, `rustc_hash`; crates `hashbrown`, `rustc-hash` | 2 of 10 (as `nondeterministic-map`) | `unordered_container_rejects_every_seeded_form` |
 | `hand-hashed-table` | `hand-hashed-table` | a line, comments included, naming open addressing | 0 of 2 | `hand_hashed_table_rejects_every_seeded_form` |
 | `json-serialization` | `json-serialization` | `serde_json` paths and macros; crate `serde_json` | 0 of 5 | `json_serialization_rejects_every_seeded_form` |
@@ -114,8 +114,8 @@ type position, a macro body and a glob import, as applicable. The tests are in
 | `float-sentinel` | `float-boundary` | any `f32`/`f64` path in core, so `NAN`, `INFINITY`, `NEG_INFINITY`, `consts` | 0 of 5 | `float_sentinels_are_rejected_as_float_boundary` |
 | `float-op` | `float-boundary` | float types, float literals and float paths in core, also inside macros; since #321 names ending in `_f32`/`_f64` (`Duration::mul_f64`, `as_secs_f64`, `to_f32`) | 1 of 3 | `float_operations_are_rejected_as_float_boundary` |
 | `std-env` | `std-env` | `std::env`; `env!` and `option_env!` since #321 | 1 of 6 (as `ambient-state`) | `std_env_rejects_every_seeded_form` |
-| `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
-| `std-process` | `std-process` | `std::process` | 0 of 5 | `std_process_rejects_every_seeded_form` |
+| `std-fs` | `std-fs` | `std::fs`, and the names `fs::…` and `File::open`; since #321 `Path` methods that read the filesystem, `std::os::<platform>::fs`, `io`, `prelude`, and `std::os::fd` | 2 of 5 (as `ambient-state`) | `std_fs_rejects_every_seeded_form` |
+| `std-process` | `std-process` | `std::process`; since #321 `std::os::<platform>::process` and `std::io::pipe` | 0 of 5 | `std_process_rejects_every_seeded_form` |
 
 flyingrobots/bunny#321 adds the constructions an independent review found
 getting past these rules, seeded in `xtask/src/nondeterminism/evasion_tests.rs`
@@ -138,7 +138,12 @@ and counted with the forms above:
 | `d.mul_f64(d.as_secs_f64())`, `Duration::from_secs_f64(text.parse().ok()?)`, `div_duration_f32`, `as_secs_f32` in `format!`, `x.to_f32()` | `float-boundary` | 0 of 5 | `float_methods_with_no_float_token_are_float_boundary` |
 | `use core::f64::consts::PI as P`, a renamed `to_f32`, the same in a group, a `core::f32::consts` glob (found in review) | `float-boundary` | 0 of 4 | `float_names_in_use_declarations_are_float_boundary` |
 
-With these the rule tests seed 150 forms; the gate before #321 caught 93.
+| `p.exists()`, `try_exists`, `is_file`/`is_dir`, `metadata`, `canonicalize`, `read_dir`, `Path::exists(p)`, `PathBuf::is_symlink`, in `format!` | `std-fs` | 0 of 9 | `path_methods_that_read_the_filesystem_are_std_fs` |
+| `std::os::{unix,windows,linux}::fs`, `std::os::fd`, a platform `prelude` glob; `std::os::unix::net`; `std::os::unix::process`, `std::io::pipe`; `std::path::absolute`, `.absolute()` | `std-fs`, `network`, `std-process`, `std-env` | 0 of 10 | `platform_filesystem_modules_are_banned` |
+| `std::io::stdin`, `Stdin`, `IsTerminal`, `.is_terminal()`, by alias, in `format!` | `host-input` (Bunny's own) | 0 of 6 | `terminal_input_is_host_input` |
+| banned code in `///` and `//!` doc tests, behind a hidden `# ` line, in `rust,no_run`, in `/** */` | `std-fs`, `time-instant`, `unordered-container`, `thread-sleep`, `std-env` | 0 of 5 | `doc_tests_are_scanned` |
+
+With these the rule tests seed 180 forms; the gate before #321 caught 93.
 Separately, `xtask/src/nondeterminism/std_api_tests.rs` probes each of the 29
 documented items of `std::thread` and `std::time` as a path and as a `use`
 (58 probes, 14 of which the gate before #321 got wrong) and each of the 14
@@ -166,6 +171,62 @@ Where the names differ:
   deterministic crate has `js-sys` or `wasm-bindgen` as a normal dependency
   (`wasm-bindgen-test` is a dev-dependency of their tests and is accepted).
   The dependency check is what keeps it that way.
+
+### What The Rules Do Not Cover
+
+The source rules read syntax and each file's own imports. After
+flyingrobots/bunny#321 these remain outside them:
+
+- A float whose type is only inferred, with no float type, literal or
+  `_f32`/`_f64` name on the way (`text.parse()` passed to a float parameter,
+  `x.into()` to an `f64`); pinned as a known gap by
+  `an_inferred_float_with_no_float_name_is_not_seen`.
+- A banned type that reaches a file only as another crate's return type, or
+  only through a `crate::` re-export declared in another file (the re-export
+  itself is reported where it is declared), and code that a dependency's
+  procedural macro generates.
+- Symbolic links behind an `include_str!`, `include_bytes!` or `#[path]`
+  target, and doc text brought in with `#[doc = include_str!(..)]`.
+- Writing to standard output or standard error, and threads: both permitted on
+  purpose (see Lumen below for the difference on threads).
+- Dev-dependencies, in the dependency check.
+
+Known over-reports, each resolvable with a waiver: a zero-argument method of
+Bunny's own named `exists`, `metadata`, `absolute`, `is_terminal` or like the
+other filesystem `Path` methods; a user macro called by the bare name
+`include`, `env` or `option_env`; a `#[path]` inside an inline module, which
+the compiler resolves against a deeper directory; any name ending in `_f32`
+or `_f64` that involves no float.
+
+### Compared With Lumen's Gate
+
+Lumen's gate (flyingrobots/lumen, `docs/adr/0006-nondeterminism-gate.md`)
+uses the same Echo rule IDs. Since flyingrobots/bunny#321 the two lists
+agree on `Path::exists` (Bunny also bans the nine other `Path` methods that
+read the filesystem), `env!` and `option_env!`, module imports and renames,
+glob imports, `std::hash::RandomState`, and float literals and float names
+inside macro bodies. They still differ:
+
+- **Threads.** Lumen bans `std::thread::spawn`, `scope` and `Builder`
+  (`thread-spawn`) outside its scheduler. Bunny permits them: Rule 6 admits
+  parallelism that does not change results, and tests, not the gate, show
+  that. Both ban `available_parallelism` and sleeping.
+- **How floats are caught.** Lumen bans the `f32` and `f64` types through
+  Clippy and denies `clippy::float_arithmetic`, which also sees arithmetic on
+  an inferred float. Bunny's `float-boundary` is syntactic: float types,
+  literals, paths and `_f32`/`_f64` names, with waivers for boundary
+  conversions; an inferred float with no float name is not seen.
+- **Mechanism.** Lumen's first layer is Clippy's `disallowed-types`,
+  `disallowed-methods` and `disallowed-macros`, which resolve paths exactly,
+  re-exports included; Bunny reads syntax with `syn` and resolves through
+  the file's own imports. Lumen's dependency rule is `cargo-deny` allowing no
+  registry at all; Bunny lists banned crates over `cargo tree`.
+- **Bunny only.** `include-source`, `include-data`, `host-input`, the
+  platform modules of `std::os`, `std::path::absolute`, `std::io::pipe`, and
+  doc tests.
+- **Waivers.** Lumen's waiver covers its line or the line below, and a waiver
+  that waives nothing fails; Bunny's covers the item or statement below it,
+  and an unused waiver is not reported.
 
 ### Keeping The Name Lists Current
 

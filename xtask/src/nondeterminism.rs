@@ -14,10 +14,13 @@ use std::path::Path;
 use proc_macro2::{Ident, Spacing, Span, TokenStream, TokenTree};
 use syn::ext::IdentExt;
 use syn::visit::{self, Visit};
-use syn::{File, ItemExternCrate, ItemMod, ItemUse, Lit, Macro, Path as SynPath, UseTree};
+use syn::{
+    ExprMethodCall, File, ItemExternCrate, ItemMod, ItemUse, Lit, Macro, Path as SynPath, UseTree,
+};
 
 use self::includes::Origin;
 
+mod doc_tests;
 mod includes;
 
 /// A source finding: the 1-based line and the rule it breaks.
@@ -61,6 +64,7 @@ const WASM_SERDE: &str = "serde-wasm-bindgen is banned in deterministic crates";
 const ENV: &str = "environment access is banned; pass configuration explicitly";
 const FS: &str = "filesystem access is banned; take bytes from an adapter at the edge";
 const PROCESS: &str = "process access is banned in deterministic crates";
+const INPUT: &str = "terminal input is banned in deterministic crates; take bytes from an adapter";
 const INCLUDE: &str = "importing `include!` is banned; it brings in code the gate does not scan";
 
 const PREFIX_RULES: &[PrefixRule] = &[
@@ -128,6 +132,22 @@ const PREFIX_RULES: &[PrefixRule] = &[
     PrefixRule { prefix: &["std", "env"], rule: "std-env", message: ENV },
     PrefixRule { prefix: &["std", "fs"], rule: "std-fs", message: FS },
     PrefixRule { prefix: &["std", "process"], rule: "std-process", message: PROCESS },
+    // Host access beyond Echo's list that CODE_STANDARDS.md Rule 4 forbids. `*` matches any
+    // platform module of `std::os` (`unix`, `windows`, `linux`, `wasi`, ...).
+    PrefixRule { prefix: &["std", "os", "*", "fs"], rule: "std-fs", message: FS },
+    PrefixRule { prefix: &["std", "os", "*", "io"], rule: "std-fs", message: FS },
+    PrefixRule { prefix: &["std", "os", "*", "prelude"], rule: "std-fs", message: FS },
+    PrefixRule { prefix: &["std", "os", "fd"], rule: "std-fs", message: FS },
+    PrefixRule { prefix: &["std", "os", "*", "net"], rule: "network", message: NETWORK },
+    PrefixRule { prefix: &["std", "os", "*", "process"], rule: "std-process", message: PROCESS },
+    PrefixRule { prefix: &["std", "io", "pipe"], rule: "std-process", message: PROCESS },
+    PrefixRule { prefix: &["std", "io", "PipeReader"], rule: "std-process", message: PROCESS },
+    PrefixRule { prefix: &["std", "io", "PipeWriter"], rule: "std-process", message: PROCESS },
+    PrefixRule { prefix: &["std", "path", "absolute"], rule: "std-env", message: ENV },
+    PrefixRule { prefix: &["std", "io", "stdin"], rule: "host-input", message: INPUT },
+    PrefixRule { prefix: &["std", "io", "Stdin"], rule: "host-input", message: INPUT },
+    PrefixRule { prefix: &["std", "io", "StdinLock"], rule: "host-input", message: INPUT },
+    PrefixRule { prefix: &["std", "io", "IsTerminal"], rule: "host-input", message: INPUT },
     PrefixRule { prefix: &["std", "option_env"], rule: "std-env", message: ENV },
     PrefixRule { prefix: &["core", "env"], rule: "std-env", message: ENV },
     PrefixRule { prefix: &["core", "option_env"], rule: "std-env", message: ENV },
@@ -162,11 +182,48 @@ fn name_rules(segments: &[String]) -> Vec<(&'static str, &'static str)> {
     if names.first() == Some(&"fs") || names.ends_with(&["File", "open"]) {
         rules.push(("std-fs", FS));
     }
+    if let [.., "Path" | "PathBuf", method] = names.as_slice() {
+        rules.extend(method_rules(method));
+    }
     rules
 }
 
+/// `Path` methods (also reached through `PathBuf`) that read the filesystem, as the std
+/// 1.96.0 documentation lists them; `std_api_tests.rs` checks the list.
+const FILESYSTEM_METHODS: &[&str] = &[
+    "canonicalize",
+    "exists",
+    "is_dir",
+    "is_file",
+    "is_symlink",
+    "metadata",
+    "read_dir",
+    "read_link",
+    "symlink_metadata",
+    "try_exists",
+];
+
+/// The rules a call of a zero-argument method named `method` breaks. The receiver's type
+/// is not known, so these are names no deterministic type of Bunny's uses.
+fn method_rules(method: &str) -> Vec<(&'static str, &'static str)> {
+    if FILESYSTEM_METHODS.contains(&method) {
+        vec![("std-fs", FS)]
+    } else if method == "absolute" {
+        vec![("std-env", ENV)]
+    } else if method == "is_terminal" {
+        vec![("host-input", INPUT)]
+    } else {
+        Vec::new()
+    }
+}
+
 fn starts_with(segments: &[String], prefix: &[&str]) -> bool {
-    segments.len() >= prefix.len() && segments.iter().zip(prefix).all(|(left, right)| left == right)
+    segments.len() >= prefix.len() && segments.iter().zip(prefix).all(segment_matches)
+}
+
+/// A written segment against a pattern segment, where `*` matches any one segment.
+fn segment_matches((written, pattern): (&String, &&str)) -> bool {
+    *pattern == "*" || written == pattern
 }
 
 /// Items below a banned prefix that are deterministic. `DefaultHasher::new()` uses fixed
@@ -198,7 +255,7 @@ fn glob_rules(module: &[String]) -> Vec<(&'static str, &'static str)> {
 }
 
 fn is_strict_prefix(module: &[String], banned: &[&str]) -> bool {
-    module.len() < banned.len() && module.iter().zip(banned).all(|(left, right)| left == right)
+    module.len() < banned.len() && module.iter().zip(banned).all(segment_matches)
 }
 
 /// One leaf of a `use` tree: the full imported path, the local name it binds, and where.
@@ -357,10 +414,20 @@ impl<'ast> Visit<'ast> for Scanner {
             let rules = includes::macro_rules(&self.expand(&call.path), &call.args, &self.origin);
             self.report(call.line, rules);
         }
+        for (line, method) in token_method_calls(&node.tokens) {
+            self.report(line, method_rules(&method));
+        }
         for (line, rule) in includes::token_module_path_findings(&node.tokens, &self.origin) {
             self.report(line, vec![rule]);
         }
         visit::visit_macro(self, node);
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        if node.args.is_empty() {
+            self.report(line_of(node.method.span()), method_rules(&ident_name(&node.method)));
+        }
+        visit::visit_expr_method_call(self, node);
     }
 
     fn visit_item_mod(&mut self, node: &'ast ItemMod) {
@@ -386,8 +453,11 @@ pub(super) fn source_findings(path: &Path, file: &File) -> Vec<Finding> {
         scanner.check_use_leaf(leaf);
     }
     scanner.visit_file(file);
-    scanner.findings.sort_by_key(|finding| (finding.line, finding.rule));
-    scanner.findings
+    let mut findings = scanner.findings;
+    findings.extend(doc_tests::findings(path, file));
+    findings.sort_by_key(|finding| (finding.line, finding.rule));
+    findings.dedup_by_key(|finding| (finding.line, finding.rule));
+    findings
 }
 
 /// Finds lines whose text names an open-addressing table, comments included.
@@ -443,6 +513,28 @@ fn collect_token_paths(tokens: &TokenStream, paths: &mut Vec<TokenPath>) {
             TokenTree::Punct(_) | TokenTree::Literal(_) => index += 1,
         }
     }
+}
+
+/// Every `.name()` call with no arguments in a token stream, descending into groups.
+fn token_method_calls(tokens: &TokenStream) -> Vec<(usize, String)> {
+    let tokens = tokens.clone().into_iter().collect::<Vec<_>>();
+    let mut calls = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if let TokenTree::Group(group) = token {
+            calls.extend(token_method_calls(&group.stream()));
+        }
+        if let (TokenTree::Punct(dot), Some(TokenTree::Ident(name)), Some(TokenTree::Group(args))) =
+            (token, tokens.get(index + 1), tokens.get(index + 2))
+        {
+            if dot.as_char() == '.'
+                && args.delimiter() == proc_macro2::Delimiter::Parenthesis
+                && args.stream().is_empty()
+            {
+                calls.push((line_of(name.span()), ident_name(name)));
+            }
+        }
+    }
+    calls
 }
 
 fn is_path_separator(tokens: &[TokenTree], index: usize) -> bool {
@@ -544,6 +636,8 @@ fn line_of(span: Span) -> usize {
 
 #[cfg(test)]
 mod evasion_tests;
+#[cfg(test)]
+mod host_access_tests;
 #[cfg(test)]
 mod std_api_tests;
 #[cfg(test)]
