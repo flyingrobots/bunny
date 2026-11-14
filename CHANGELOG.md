@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   big integers, so determinants up to `2^117` and every `rho` are checked
   against the stated bound. Part of flyingrobots/bunny#289.
 
+* `bunny-num` tests pin the exact ties-to-even result at every rounding site:
+  `checked_mul` and `Mul`, `checked_div`, `Div` and `FixedDivisor`, and float
+  ingress and egress, with hand-derived raw values for both signs, both
+  neighbour parities, near-ties and operands at the widest intermediates. Before
+  them no `bunny-num` test failed when multiplication or float conversion rounded
+  ties away from zero or truncated. No library function changes. See the new
+  `docs/topics/fixed-point-rounding/` chapter (flyingrobots/bunny#287).
+
 * `bunny-optics`'s `SmoothHit` (`bunny-smooth-shading/1`, `SMOOTH_SHADING_ID`)
   shades a `SurfaceHit` with the `smooth_normal` of its triangle's vertex
   normals at the hit's exact weights. The frame faces the arrival side by the
@@ -127,6 +135,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-2^30` units set by the caller): 0.7.1 panicked there in debug builds and
   returned `None` in release builds; it now returns `None` in both. Hits the
   trace kernel reports are not affected (flyingrobots/bunny#280).
+
+* `bunny_broadphase::intersect_aabb`, `intersect_ray`, `closest_hit` and
+  `any_hit` no longer loop forever on a node buffer with a reference cycle
+  (a child index naming an ancestor). Each allows at most
+  `nodes.len() / 2` interior visits, which no tree can exceed, and returns
+  `TraversalError::InvalidNodeIndex` at the next one, after a bounded number
+  of callbacks. On a tree, including one whose only faults are out-of-range
+  indices or a depth past 64, every result, error and callback is unchanged,
+  which a differential test against the previous functions checks. Buffers
+  that are not trees can now get a different answer: a cycle that used to
+  overflow the stack returns `InvalidNodeIndex` instead of `StackOverflow`,
+  and a shared subtree whose unfolding needs more than `nodes.len() / 2`
+  interior visits returns `InvalidNodeIndex` instead of a result that
+  reported its primitives more than once. No variant was added:
+  `TraversalError` is not `#[non_exhaustive]`, so a new variant would break
+  exhaustive matches, and `InvalidNodeIndex` is what the compact searches
+  already return for a cycle; it does not tell a cycle from an out-of-range
+  index (flyingrobots/bunny#269).
 
 ### Changed
 

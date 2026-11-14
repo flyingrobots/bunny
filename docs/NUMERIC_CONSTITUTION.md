@@ -81,6 +81,9 @@ Required tests:
 - negative exact-half to even
 - negative exact-half to odd
 
+Each required test maps to a named test, for every rounding site, in
+[`topics/fixed-point-rounding/test-plan.md`](topics/fixed-point-rounding/test-plan.md).
+
 ## Intermediate Width
 
 All multiplication and division implementations must use `i128` intermediates unless a local proof demonstrates no overflow before the final policy step.
@@ -133,10 +136,13 @@ the geometric predicate.
 | `FixedQ32_32::checked_add` / `checked_sub` / `checked_neg` | Checked | Returns `None` when the exact raw result is outside `i64`. |
 | `FixedQ32_32::checked_mul` | Checked | Uses Q64.64 intermediate math, ties-to-even rounding, then rejects out-of-range results. |
 | `FixedQ32_32::checked_div` | Checked | Returns `None` for division by zero or out-of-range quotient. |
+| `FixedDivisor::new` / `FixedDivisor::checked_div` | Checked | `new` returns `None` for a zero divisor; `checked_div` returns exactly the bits of `FixedQ32_32::checked_div`, ties to even. |
+| `FixedQ32_32::to_f32` / `to_f32` | Proven-infallible | Lossy egress to the nearest `f32`, ties to even; every `i64` is in `f32` range. |
 | `Add` / `Sub` / `Neg` / `Mul` / `Div` operators | Saturating | Clamp to `MIN_RAW` or `MAX_RAW`; division by zero saturates by sign, with `0 / 0 = 0`. |
 | `FixedVec2` / `FixedVec3` arithmetic operators | Saturating | Compose saturating scalar operators component-wise. |
 | `FixedVec2::length` / `FixedVec3::length` | Checked | Uses wide raw-square accumulation and returns `None` if the length cannot fit in Q32.32. |
 | `FixedVec2::try_from_float` / `FixedVec3::try_from_float` | Checked | Rejects invalid float components before fixed-point ingress. |
+| `FixedAngle` arithmetic, conversions and `sin_cos` | Proven-infallible | Every `u64` is an angle and arithmetic wraps at a full turn; `from_degrees` and `from_radians` round half up on the magnitude (`docs/topics/angle-trigonometry/`). |
 | `bunny-query` ray/sphere and ray/triangle intersections | Checked predicate math | Return `None` when intermediate ray math overflows. |
 | `bunny-query::ray_intersects_aabb` | Checked, then exact | A slab distance that overflows saturates by sign; on that path the hit is decided with exact `i128` rationals, so saturation never creates a hit. Hits without overflow are bit-identical to the checked-only version (flyingrobots/bunny#211). |
 | `bunny-query` closest-point helpers | Saturating today | Open audit path: these APIs return values, not `Result`/`Option`, so overflow cannot yet be reported distinctly. |
