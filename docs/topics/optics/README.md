@@ -908,7 +908,10 @@ the trace kernel did not report for this ray and face, as when a caller
 changes `hit.distance` or `hit.front_face`. `SurfaceHit::try_new`, the
 diagnostic path, gives the reason; see [Inputs And Refusals](#inputs-and-refusals). A hit point
 more than two raw units outside the trace domain is refused before the plane
-test, which keeps that test inside `i128`.
+test, which keeps that test inside `i128`. The bound is exact and refuses no
+hit that could start inside: two steps take a coordinate one raw unit outside
+to `TRACE_COORD_LIMIT_RAW - 1`, inside, but take one two raw units outside only
+to `TRACE_COORD_LIMIT_RAW`, outside.
 
 Secondary rays are queried with a minimum distance of zero and no primitive
 excluded. Because the start point is strictly on the arrival side and every
