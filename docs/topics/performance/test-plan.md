@@ -40,6 +40,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-004 | Cases the base revision cannot build are reported as new. | `README.md#measuring` |
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
+| PERF-REQ-007 | The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
 
 ```toml
 [[requirement]]
@@ -70,6 +71,11 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-006"
 summary = "The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-007"
+summary = "The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as closest_hit and any_hit on every benchmark ray; the core crates carry no counters."
 status = "active"
 ```
 
@@ -104,6 +110,20 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-025 | Comparability | PERF-REQ-006 | `scene/closest_visitor` and `trace/closest_hit` choose the same primitive (or both miss) on all 1 024 camera rays. | `crates/bunny-perf/src/scene.rs::tests::both_paths_choose_the_same_primitive_on_every_ray` |
 | PERF-TP-026 | Comparability | PERF-REQ-006 | The benchmark scene has 27 650 triangles. | `crates/bunny-perf/src/scene.rs::tests::the_scene_has_the_stated_size` |
 | PERF-TP-027 | Comparability | PERF-REQ-006 | More than 600 of the 1 024 rays hit the mesh, so the cases do traversal work, not only misses. | `crates/bunny-perf/src/scene.rs::tests::most_rays_hit_something` |
+| PERF-TP-028 | Profile | PERF-REQ-007 | The the replica `closest_hit` search tests the same primitives with the same limits in the same order, and finds the same hit, as `closest_hit` on all 1 024 rays; its stage classification never disagrees with `hit_triangle`. | `crates/bunny-perf/src/profile.rs::tests::the_replica_closest_search_agrees_with_closest_hit_on_every_ray` |
+| PERF-TP-029 | Profile | PERF-REQ-007 | The the replica `any_hit` search tests the same primitives in the same order and gives the same answer as `any_hit` on all 1 024 rays. | `crates/bunny-perf/src/profile.rs::tests::the_replica_any_search_agrees_with_any_hit_on_every_ray` |
+| PERF-TP-030 | Profile | PERF-REQ-007 | The the counters obey their identities (popped = skipped + visited, box calls = 1 + 2 interior visits, triangle stages sum to tests, no overflow). | `crates/bunny-perf/src/profile.rs::tests::counters_obey_their_identities` |
+| PERF-TP-031 | Profile | PERF-REQ-007 | The the tree statistics account for every primitive, nodes = 2 leaves - 1, depth below the stack capacity. | `crates/bunny-perf/src/profile.rs::tests::the_tree_statistics_account_for_every_primitive` |
+| PERF-TP-032 | Profile | PERF-REQ-007 | The the three ray classes cover all 1 024 rays and the sphere class is not empty. | `crates/bunny-perf/src/profile.rs::tests::rays_split_into_the_three_classes` |
+| PERF-TP-033 | Profile | PERF-REQ-007 | The the stage replica classifies hand-built rays as divided, behind, parallel, first-barycentric and second-barycentric failures. | `crates/bunny-perf/src/profile.rs::tests::the_stage_replica_matches_hit_triangle_on_a_hand_built_case` |
+| PERF-TP-034 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on boundary values, signs and overflow. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_boundaries` |
+| PERF-TP-035 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div for every power-of-two divisor and both signs. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_for_every_power_of_two_divisor` |
+| PERF-TP-036 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 100 000 seeded pairs. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_seeded_pairs` |
+| PERF-TP-037 | Exact new API | PERF-REQ-001 | FixedDivisor equals checked_div on 10 000 constructed exact ties. | `crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties` |
+| PERF-TP-038 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes` |
+| PERF-TP-039 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes` |
+| PERF-TP-040 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb, bit for bit, on an overflow-heavy seeded corpus (coordinates near the i64 extremes, direction components of a few raw units) that hits, misses and saturates bounds. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_the_overflow_corpus` |
+| PERF-TP-041 | Exact new API | PERF-REQ-001 | Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path. | `crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -301,6 +321,132 @@ requirements = ["PERF-REQ-006"]
 evidence = "test"
 test = "crates/bunny-perf/src/scene.rs::tests::most_rays_hit_something"
 oracle = "Most benchmark rays hit the mesh."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-028"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::the_replica_closest_search_agrees_with_closest_hit_on_every_ray"
+oracle = "The replica `closest_hit` search tests the same primitives with the same limits in the same order, and finds the same hit, as `closest_hit` on all 1 024 rays; its stage classification never disagrees with `hit_triangle`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-029"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::the_replica_any_search_agrees_with_any_hit_on_every_ray"
+oracle = "The replica `any_hit` search tests the same primitives in the same order and gives the same answer as `any_hit` on all 1 024 rays."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-030"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::counters_obey_their_identities"
+oracle = "The counters obey their identities (popped = skipped + visited, box calls = 1 + 2 interior visits, triangle stages sum to tests, no overflow)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-031"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::the_tree_statistics_account_for_every_primitive"
+oracle = "The tree statistics account for every primitive, nodes = 2 leaves - 1, depth below the stack capacity."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-032"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::rays_split_into_the_three_classes"
+oracle = "The three ray classes cover all 1 024 rays and the sphere class is not empty."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-033"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::the_stage_replica_matches_hit_triangle_on_a_hand_built_case"
+oracle = "The stage replica classifies hand-built rays as divided, behind, parallel, first-barycentric and second-barycentric failures."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-034"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_boundaries"
+oracle = "FixedDivisor equals checked_div on boundary values, signs and overflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-035"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_for_every_power_of_two_divisor"
+oracle = "FixedDivisor equals checked_div for every power-of-two divisor and both signs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-036"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_seeded_pairs"
+oracle = "FixedDivisor equals checked_div on 100 000 seeded pairs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-037"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_divisor_tests.rs::divisor_matches_checked_div_on_exact_ties"
+oracle = "FixedDivisor equals checked_div on 10 000 constructed exact ties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-038"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_seeded_rays_and_boxes"
+oracle = "Prepared ray-box results equal ray_intersects_aabb on 160 000 seeded pairs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-039"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_for_axis_rays_inside_and_outside_boxes"
+oracle = "Prepared ray-box results equal ray_intersects_aabb for axis-parallel rays."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-040"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_the_overflow_corpus"
+oracle = "Prepared ray-box results equal ray_intersects_aabb, bit for bit, on an overflow-heavy seeded corpus (coordinates near the i64 extremes, direction components of a few raw units) that hits, misses and saturates bounds."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-041"
+requirements = ["PERF-REQ-001"]
+evidence = "test"
+test = "crates/bunny-query/tests/prepared_ray_tests.rs::prepared_ray_matches_unprepared_on_constructed_overflow_cases"
+oracle = "Prepared ray-box results equal ray_intersects_aabb on a constructed case whose slab distances overflow and whose result comes from the exact wide path."
 tier = "fast"
 status = "implemented"
 ```

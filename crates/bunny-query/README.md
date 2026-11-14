@@ -20,6 +20,10 @@ targets.
   `i128`, and on that path the hit is decided exactly before the bounds are
   rounded (flyingrobots/bunny#211). See its rustdoc and
   `docs/topics/ray-tracing/README.md`.
+* `PreparedRay3` and `ray_intersects_aabb_prepared`: the exact results of
+  `ray_intersects_aabb` (overflow inputs included) with one prepared reciprocal
+  per direction component, for many exact box tests per ray. Ray tracing that
+  only needs an entry bound should use `TraceRay::box_entry`.
 * Ray-tracing kernels (`TraceRay`, `TraceTriangle`): a division-free
   conservative ray-box test and an exact integer ray-triangle test with
   inclusive edges; see `docs/topics/ray-tracing/`.
