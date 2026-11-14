@@ -1,9 +1,11 @@
 # Optics
 
-This chapter defines Bunny's current contract for camera, ray-generation and
-pixel-value math in `bunny-optics`: a deterministic pinhole camera that turns
-pixel samples into [trace rays](../ray-tracing/README.md), and the functions
-that turn the radiance those rays gather into 8-bit and 16-bit output codes.
+This chapter defines Bunny's current contract for camera, ray-generation,
+sampling and pixel-value math in `bunny-optics`: a deterministic pinhole
+camera that turns pixel samples into [trace rays](../ray-tracing/README.md),
+the deterministic sample hash and pixel sampler that choose those samples and
+every later random decision, and the functions that turn the radiance those
+rays gather into 8-bit and 16-bit output codes.
 
 ## Status
 
@@ -18,6 +20,13 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - `CameraError`;
 - `point_at`;
 - `MAX_IMAGE_DIMENSION` and `TAN_HALF_FOV_LIMIT_RAW`;
+- `PixelStream` (`new`, `bits`, `fraction`), `fraction_from_bits` and
+  `SAMPLE_HASH_ID`, the counter-based [sample hash](#sample-hash);
+- `PixelSampler` (`new`, `point`, `camera_sample`, `x`, `y`) and `SAMPLER_ID`,
+  the [pixel sampler](#pixel-sampler);
+- `Xoroshiro128Plus` (`from_seed`, `from_seed_u64`, `state`, `next_u64`,
+  `next_int`, `next_unit`), a [sequential generator](#sequential-generator)
+  compatible with Echo's;
 - for [pixel values](#pixel-values): `PixelAccumulator` (`new`, `EMPTY`,
   `add_sample`, `merge`, `count`, `sums`, `resolve`), `ToneCurve` (`SrgbV1`,
   `LinearClampV1`; `identity`, `apply`, `encode_8`, `encode_16`),
@@ -25,8 +34,9 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `MAX_SAMPLE_RADIANCE_RAW`, `MAX_SAMPLES_PER_PIXEL`, `UNORM8_IDENTITY`,
   `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`.
 
-Evidence is listed in the [test plan](test-plan.md). Sampling sequences
-(flyingrobots/bunny#221) and shading (#160) are not part of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
+Evidence is listed in the [test plan](test-plan.md). Mapping unit-square
+points to directions on a hemisphere, and shading (#160), are not part of this
+chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
 (right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
 field of view given by its tangent, aspect `width / height`) and `Viewport`
 (top-left origin, `y` down), but no test yet checks a ray against those
@@ -265,6 +275,233 @@ Narrow fields of view are accepted down to a tangent of one raw unit. The ray
 is still exact to the bound above, but the per-pixel step can shrink below one
 raw unit of direction, so neighbouring pixels may share a ray.
 
+## Sampling
+
+A renderer draws several random values per ray: the sub-pixel offset, then
+two values per bounce direction, and so on. If those values came from a
+generator with state, each value would depend on how many values were drawn
+before it, and so on the order in which pixels and samples were computed and
+on how many threads computed them. Every value here is instead a pure function
+of its key:
+
+| Key field | Type | Meaning |
+| --- | --- | --- |
+| `seed` | `u64` | The render's seed. |
+| `x`, `y` | `u32` | The pixel, with the camera's convention (top-left origin). |
+| `sample` | `u32` | The sample index within the pixel, from 0. |
+| `dimension` or `pair` | `u32` | Which value of the sample: a hash dimension, or a sampler dimension pair. |
+
+All arithmetic is wrapping `u64` and `u32` multiplication, addition, xor,
+shifts and bit reversal, whose results Rust defines identically on every
+target, including `wasm32`. There is no floating point, no table and no state.
+
+### Identities
+
+The functions are contracts, named so that an artifact can record which one
+produced its samples:
+
+| Identity | Function | Constant |
+| --- | --- | --- |
+| `bunny-sample-hash/1` | `PixelStream::bits`, and so `PixelStream::fraction` | `SAMPLE_HASH_ID` |
+| `bunny-sobol-owen/1` | `PixelSampler::point`, and so `PixelSampler::camera_sample` | `SAMPLER_ID` |
+
+Any change to any output bit of either function is a new version (`/2`) with
+a new function or type; under the Fidelity Rule the existing one keeps its
+output. The golden vectors in the [test plan](test-plan.md) define version 1.
+
+### Sample Hash
+
+`bunny-sample-hash/1` is built from `mix64`, the output function of
+SplitMix64 (Steele, Lea and Flood, "Fast Splittable Pseudorandom Number
+Generators", OOPSLA 2014; the constants are David Stafford's "Mix13" variant
+of the MurmurHash3 64-bit finalizer):
+
+```text
+mix64(z):  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9
+           z = (z ^ (z >> 27)) * 0x94D049BB133111EB
+           return z ^ (z >> 31)
+absorb(h, w) = mix64((h ^ w) + 0x9E3779B97F4A7C15)     // wrapping u64
+
+PixelStream::new(seed, x, y).state = absorb(absorb(0, seed), x | y << 32)
+bits(sample, dimension)            = absorb(state, sample | dimension << 32)
+```
+
+Key fields are combined as three 64-bit words absorbed in a fixed order:
+the seed, then the pixel word (`x` in bits 0 to 31, `y` in bits 32 to 63),
+then the sample word (`sample` in bits 0 to 31, `dimension` in bits 32 to 63).
+
+**Domain separation.** Each `mix64` step is a bijection of `u64` (an
+xor-shift by at least one bit and a multiplication by an odd constant are each
+invertible), so `absorb(h, w)` is a bijection of `w` for fixed `h`, and of `h`
+for fixed `w`. Therefore:
+
+- for a fixed seed and sample word, two different pixels give different
+  states after the pixel word and so different bits; `(x, y) = (1, 0)` and
+  `(0, 1)` are different pixel words and never collide;
+- for a fixed seed and pixel, two different (sample, dimension) pairs never
+  give the same bits; nor do swapped sample and dimension.
+
+Keys that differ in both the pixel and the (sample, dimension) word can give
+equal bits: 192 key bits cannot map injectively to 64. Nothing beyond the
+construction says how often; for a well-mixed function it is about `2^-64` per
+pair of keys.
+
+The first absorption, `absorb(0, seed) = mix64(seed + 0x9E3779B97F4A7C15)`, is
+exactly the first SplitMix64 output for the state `seed`, which ties the
+implementation to SplitMix64's published reference outputs (see the test plan).
+Holding a `PixelStream` saves two of the three absorptions per value: a
+renderer builds one per pixel.
+
+### Fractions
+
+`fraction_from_bits(bits)` is the Q32.32 value with raw `bits >> 32`: the top
+32 bits, as a fraction of `2^32`. The raw value is at most `2^32 - 1 =
+ONE_RAW - 1`, so the fraction is in `[0, 1 - 2^-32]`; it is never negative and
+never 1.0. Each of the `2^32` possible fractions comes from exactly `2^32`
+inputs. `PixelStream::fraction(sample, dimension)` is
+`fraction_from_bits(bits(sample, dimension))`.
+
+### Pixel Sampler
+
+`PixelSampler::point(sample, pair)` returns a point `[u, v]` in `[0, 1)^2`.
+`bunny-sobol-owen/1` is the first two dimensions of the Sobol sequence, a
+(0, 2)-sequence in base 2, with the sample index shuffled and each coordinate
+scrambled by a hash-based nested uniform (Owen) scramble, in the arrangement
+of Burley ("Practical Hash-based Owen Scrambling", Journal of Computer
+Graphics Techniques 9(4), 2020):
+
+```text
+PixelSampler::new(seed, x, y).state = absorb(absorb(0x534F424F4C5F4F31, seed), x | y << 32)
+
+point(sample, pair):
+  p0 = absorb(state, pair)               // pair as a u64
+  p1 = mix64(p0 + 0x9E3779B97F4A7C15)
+  i  = owen(sample, low32(p0))           // shuffled index
+  u  = owen(reverse32(i), high32(p0))    // Sobol dimension 0: van der Corput
+  v  = owen(sobol1(i), high32(p1))       // Sobol dimension 1
+  return [u * 2^-32, v * 2^-32]
+
+owen(v, s) = reverse32(lk(reverse32(v), s))
+lk(x, s):  x += s
+           x ^= x * 0x6C50B47C;  x ^= x * 0xB82F1E52
+           x ^= x * 0xC7AFE638;  x ^= x * 0x8D22F6E6        // wrapping u32
+sobol1(i)  = xor of V_b over the set bits b of i,
+             V_0 = 2^31, V_(b+1) = V_b ^ (V_b >> 1)
+```
+
+`reverse32` reverses the 32 bits of a word. `V_b` has bit `31 - r` set exactly
+when the binomial coefficient `C(b, r)` is odd: the generator matrix of the
+second Sobol dimension (primitive polynomial `x + 1`) is the Pascal matrix
+modulo 2. The sampler's domain constant (the ASCII bytes `SOBOL_O1`) differs
+from the hash's zero, so for the same seed the two never share a state.
+
+Each coordinate is a `u32` shown as raw Q32.32, so it is in `[0, 1 - 2^-32]`,
+never negative and never 1.0.
+
+`PixelSampler::camera_sample(sample)` is `PixelSample::new(x, y, u, v)` for
+pair 0: `u` is the rightward sub-pixel offset and `v` the downward one, so it
+can be passed straight to `PinholeCamera::ray`.
+
+### Stratification
+
+**The property.** For every seed, pixel and pair, every `k` in `0..=32` and
+every block `m`, the `2^k` points of samples `m * 2^k` to `(m + 1) * 2^k - 1`
+form a (0, k, 2)-net in base 2: for each `p` in `0..=k`, divide the unit
+square into `2^p` columns and `2^(k - p)` rows of equal dyadic cells; every
+cell holds exactly one point. For `k = 4` (16 samples) that is one point in
+each cell of the 16 by 1, 8 by 2, 4 by 4, 2 by 8 and 1 by 16 grids, which
+includes classic jittered stratification (4 by 4) and both one-dimensional
+stratifications.
+
+**Why it holds.**
+
+1. *The unscrambled points.* `(reverse32(i), sobol1(i))` is the first two
+   dimensions of the Sobol sequence, which is a (0, 2)-sequence in base 2
+   (Sobol 1967; Niederreiter, *Random Number Generation and Quasi-Monte Carlo
+   Methods*, 1992): every aligned block of `2^k` consecutive indices is a
+   (0, k, 2)-net, at the full 32 bits of precision.
+2. *The shuffle maps an aligned block onto an aligned block.* In `lk`, the
+   addition changes bit `j` by the carry from bits below `j`, and `x ^= x * c`
+   with an even `c` changes bit `j` by a function of bits below `j` only. So
+   `lk` keeps each bit and flips it by a function of lower bits, and `owen`,
+   which works on reversed bits, flips each bit of the index by a function of
+   higher bits. Samples `m * 2^k ..` share their bits above `k - 1`, so their
+   shuffled indices share those bits too, and the low `k` bits are permuted
+   among themselves: the block maps onto another aligned block of `2^k`
+   indices, which by step 1 is a (0, k, 2)-net.
+3. *The scramble keeps nets.* On a coordinate, `owen` flips each bit by a
+   function of the more significant bits, which maps every dyadic interval of
+   length `2^-p` onto a dyadic interval of the same length, one to one. A
+   dyadic cell with one point is mapped to a dyadic cell with one point.
+
+The test plan checks the property by counting, for `k` up to 10 (1 024
+samples), and shows that it fails when the second dimension, the scramble or
+the shuffle is broken.
+
+**Decorrelation between pixels.** Every pixel has its own shuffle and
+scramble seeds from the hash, so neighbouring pixels do not repeat a pattern.
+This is decorrelation by hashing, not a proven property; the test plan has a
+sanity guard (no neighbouring pixels share a point).
+
+### Dimension Pairs
+
+An integrator draws each two-dimensional decision from its own pair: pair 0 is
+the sub-pixel offset, and pairs 1, 2, ... are free for the integrator to assign
+(for example, one pair per bounce direction and one per light sample). Each
+pair has its own shuffle and scrambles, derived from `(seed, pixel, pair)`.
+So, within a pixel:
+
+- **within a pair**, across sample indices, the points are stratified as
+  stated above;
+- **across pairs**, the points of different pairs are decorrelated by
+  independent hash seeds (padding, in Burley's terms). The joint distribution
+  of two pairs is not a net and is not claimed to be independent; the test
+  plan has a sanity guard on one projection, not a proof.
+
+A one-dimensional decision can use one coordinate of a pair, or
+`PixelStream::fraction` with its own dimension index.
+
+### Determinism
+
+Every value is a pure function of its key, so an image does not depend on the
+order in which pixels or samples are computed, on tile size or on the number
+of threads. `PixelStream` and `PixelSampler` are small `Copy` values holding
+one precomputed state; reusing one gives the same values as building it again.
+
+### Statistical Limits
+
+No statistical test suite (such as PractRand or TestU01) has been run on
+`bunny-sample-hash/1` or `bunny-sobol-owen/1`. Their quality claims are those
+of the constructions: SplitMix64's output function is a well-studied 64-bit
+mixer; the chained absorption is this crate's arrangement of it; the
+Laine-Karras style hash is an approximation of a random Owen scramble whose
+nesting (and so the stratification property) is exact but whose randomness
+is only what Burley reports for these constants. The avalanche and
+decorrelation tests in the test plan are regression guards on the mixing,
+with generous thresholds, not certification.
+
+### Sequential Generator
+
+`Xoroshiro128Plus` is the `xoroshiro128+` generator of Blackman and Vigna
+(2016 parameters `a = 55`, `b = 14`, `c = 36`), seeded and drawn exactly as
+Echo's `warp-math` `Prng`, so Echo can move to it without changing a bit of
+its timelines:
+
+- `from_seed(s0, s1)` uses the state `[s0, s1]`, replacing all zeros with
+  `[0x9E3779B97F4A7C15, 0]`;
+- `from_seed_u64(seed)` uses the first two SplitMix64 outputs for `seed`;
+- `next_u64` returns `s0 + s1` and steps the state;
+- `next_int(min, max)` keeps the low bits of one draw for a power-of-two span
+  and rejects draws at or above the largest multiple of the span otherwise; it
+  returns `None`, drawing nothing, when `min > max`, where Echo panics;
+- `next_unit` returns `(next_u64 >> 41) * 2^-23` as Q32.32, which is exactly
+  the value of Echo's `next_f32` (a 23-bit fraction is exact in both); Bunny
+  has no float version.
+
+`state` returns the state for checkpointing. Each value depends on every draw
+before it, so this generator is for code that draws in one fixed order, not
+for rendering. Echo's golden vectors replay exactly (see the test plan).
+
 ## Pixel Values
 
 A renderer adds the linear radiance of each sample to its pixel, resolves the
@@ -274,6 +511,19 @@ that to an output code. Each step is a pure integer function in
 no image type. The caller owns every buffer; an accumulator is a small value
 the caller stores wherever it keeps per-pixel state, and `write_rgba8` writes
 into a slice the caller provides.
+
+**What a sample is.** A sample is one sample index of one pixel: the
+radiance gathered along the ray of `PixelSampler::camera_sample(sample)`, with
+every later random decision of that path drawn under the same index from its
+own dimension pair. `PixelAccumulator` takes at most 1 024 samples per pixel
+(`MAX_SAMPLES_PER_PIXEL`), sample indices 0 to 1 023. The sampler stratifies
+every aligned power-of-two block of indices and its test plan counts that up
+to 1 024; so a pixel with a power-of-two count up to 1 024, indices from 0,
+gets stratified positions, and its mean is the rounded shift described under
+[Resolve](#resolve). Other counts up to 1 024 are accepted and resolved by the same
+rule, but their positions are a partial block. Both the sample values and the
+sums are independent of evaluation order, so tiles and threads cannot change a
+pixel.
 
 Radiance is linear light per channel (red, green, blue, in that order) as a
 `FixedQ32_32`. Display values are `FixedQ32_32` in `[0, 1]`. Every rounding is

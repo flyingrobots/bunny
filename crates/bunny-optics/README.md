@@ -1,12 +1,16 @@
 # bunny-optics
 
-Deterministic camera, ray-generation and pixel-value math for Bunny.
+Deterministic camera, ray-generation, sampling and pixel-value math for Bunny.
 
 This crate turns camera parameters and pixel samples into
-`bunny_query::TraceRay`s, and accumulated radiance samples into 8-bit and
-16-bit output codes, using the deterministic Q32.32 numeric profile with
-integer arithmetic only, so every supported target produces the same rays and
-the same pixels. It never allocates an image: callers own every buffer.
+`bunny_query::TraceRay`s using the deterministic Q32.32 numeric profile, with
+integer arithmetic only, so every supported target generates the same rays.
+It also chooses the samples: every sample position and random value is a pure
+function of (seed, pixel, sample, dimension), so an image does not depend on
+evaluation order or thread count. And it turns accumulated radiance samples
+into 8-bit and 16-bit output codes, with the same integer-only rule, so every
+target produces the same pixels. It never allocates an image: callers own
+every buffer.
 
 ## Features
 
@@ -22,6 +26,17 @@ the same pixels. It never allocates an image: callers own every buffer.
   the trace kernels require, and each component is within one raw unit plus
   `(width + height) / 2^33` of the exact image-plane point.
 * `point_at`: the point at a trace distance along an unnormalized ray.
+* `PixelStream` (`bunny-sample-hash/1`): 64 mixed bits per (seed, pixel,
+  sample, dimension) from a chain of SplitMix64 mixes, with no state;
+  `fraction` and `fraction_from_bits` give the top 32 bits as a Q32.32
+  fraction in `[0, 1)`.
+* `PixelSampler` (`bunny-sobol-owen/1`): points in `[0, 1)^2` per (seed,
+  pixel, sample, dimension pair) from the first two Sobol dimensions with a
+  hash-based Owen scramble. Every aligned block of `2^k` samples is a
+  (0, k, 2)-net: one point in every dyadic cell of area `2^-k`.
+  `camera_sample` returns pair 0 as a `PixelSample` for `PinholeCamera::ray`.
+* `Xoroshiro128Plus`: a sequential generator, bit for bit compatible with
+  Echo's `warp-math` `Prng`, for code that draws in one fixed order.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
@@ -32,8 +47,9 @@ the same pixels. It never allocates an image: callers own every buffer.
 * `quantize_8`, `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`): codes
   rounded to nearest with ties to even; `write_rgba8` writes one opaque RGBA8
   pixel (`bunny-rgba8-opaque/1`) into a caller-provided four-byte slice.
-* Golden vectors, an exact image-plane oracle and an `f64` sRGB reference
-  oracle in the tests; see `docs/topics/optics/`.
+* Golden vectors, an exact image-plane oracle, an exact stratification
+  property and an `f64` sRGB reference oracle in the tests; see
+  `docs/topics/optics/`.
 
 ## License
 

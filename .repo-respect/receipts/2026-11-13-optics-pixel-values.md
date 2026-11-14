@@ -60,7 +60,7 @@ Topic docs:
 docs/topics/optics/README.md (new Pixel Values sections: accumulation and its bit budget,
 resolve, tone curves with the knot table, hold and error bound, output codes, accuracy of the
 codes against correct rounding, versioned identities)
-docs/topics/optics/test-plan.md (OPTICS-REQ-017..018, OPTICS-TP-022..022 implemented, the sRGB
+docs/topics/optics/test-plan.md (OPTICS-REQ-017..025, OPTICS-TP-022..034 implemented, the sRGB
 reference oracle, pixel mutation checks, timing)
 
 Generated artifacts:

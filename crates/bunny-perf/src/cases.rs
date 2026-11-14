@@ -48,6 +48,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::scene::trace_cases());
     #[cfg(feature = "trace")]
     cases.extend(crate::profile::kernel_cases());
+    #[cfg(feature = "sample")]
+    cases.extend(crate::sample::sample_cases());
     #[cfg(feature = "pixel")]
     cases.extend(pixel_cases());
     cases
@@ -61,6 +63,7 @@ pub(crate) fn all() -> Vec<Case> {
     feature = "prepared",
     feature = "scene",
     feature = "trace",
+    feature = "sample",
     feature = "pixel"
 ))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {

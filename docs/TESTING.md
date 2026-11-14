@@ -106,7 +106,9 @@ configuration. The initial property suites cover:
 * `bunny-mesh`: quantization monotonicity and representative quantized-code
   round trips.
 * `bunny-optics`: generated camera rays against an exact integer image-plane
-  oracle, and basis orthogonality and handedness; pixel accumulation order
+  oracle, and basis orthogonality and handedness; exact stratification of
+  every power-of-two block of sampler points, and evaluation-order
+  independence of the sample hash and the sampler; pixel accumulation order
   independence and the mean's rounding over seeded samples, and the sRGB tone
   curve against an `f64` reference oracle over dense deterministic inputs.
 

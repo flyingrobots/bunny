@@ -19,8 +19,10 @@ use crate::perf_report::{add_run, compare, regressions, render, Heading, Runs};
 
 const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_ROUNDS: usize = 5;
+/// The crates the harness may depend on. A crate missing from the base revision is left out
+/// of that side's manifest, and the groups that need it are reported as new.
 const BASE_CRATES: &[&str] =
-    &["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"];
+    &["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-optics", "bunny-query"];
 
 struct PerfOptions {
     base: String,
@@ -183,7 +185,7 @@ fn build_harness(
     }
     fs::copy(root.join("rust-toolchain.toml"), harness.join("rust-toolchain.toml"))?;
     fs::copy(tree.join("Cargo.lock"), harness.join("Cargo.lock"))?;
-    fs::write(harness.join("Cargo.toml"), harness_manifest(tree, &groups))?;
+    fs::write(harness.join("Cargo.toml"), harness_manifest(tree, &groups, &present_crates(tree)))?;
 
     let built = |features: &[&str]| -> Result<bool, Box<dyn Error>> {
         let status = cargo()
@@ -254,7 +256,16 @@ fn feature_groups(manifest: &str) -> Vec<String> {
         .collect()
 }
 
-fn harness_manifest(tree: &Path, groups: &[String]) -> String {
+/// The harness crates that exist in `tree`; an older revision may lack a newer crate.
+fn present_crates(tree: &Path) -> Vec<&'static str> {
+    BASE_CRATES
+        .iter()
+        .copied()
+        .filter(|name| tree.join("crates").join(name).join("Cargo.toml").is_file())
+        .collect()
+}
+
+fn harness_manifest(tree: &Path, groups: &[String], crates: &[&str]) -> String {
     let mut manifest = String::from(
         "[package]\nname = \"bunny-perf\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n\
          [workspace]\n\n[[bin]]\nname = \"bunny-perf\"\npath = \"src/main.rs\"\n\n[features]\n",
@@ -263,7 +274,7 @@ fn harness_manifest(tree: &Path, groups: &[String]) -> String {
         let _ = writeln!(manifest, "{group} = []");
     }
     manifest.push_str("\n[dependencies]\n");
-    for name in BASE_CRATES {
+    for name in crates {
         let path = toml_path(&tree.join("crates").join(name));
         let _ = writeln!(manifest, "{name} = {{ path = \"{path}\" }}");
     }
@@ -359,7 +370,7 @@ mod tests {
 
     #[test]
     fn harness_manifest_points_at_the_given_crates() {
-        let manifest = harness_manifest(Path::new("/tmp/base"), &["num".to_owned()]);
+        let manifest = harness_manifest(Path::new("/tmp/base"), &["num".to_owned()], BASE_CRATES);
         // Built with Path::join, so this also holds on Windows, where join adds backslashes.
         assert!(manifest.contains("num = []\n"));
         assert!(manifest.contains("bunny-num = { path = \"/tmp/base/crates/bunny-num\" }"));
@@ -368,10 +379,29 @@ mod tests {
 
     #[test]
     fn harness_manifest_includes_every_crate_the_cases_use() {
-        let manifest = harness_manifest(Path::new("/tmp/base"), &["scene".to_owned()]);
-        for name in ["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-query"] {
+        let manifest = harness_manifest(Path::new("/tmp/base"), &["scene".to_owned()], BASE_CRATES);
+        for name in [
+            "bunny-broadphase",
+            "bunny-geom",
+            "bunny-linalg",
+            "bunny-num",
+            "bunny-optics",
+            "bunny-query",
+        ] {
             assert!(manifest.contains(&format!("{name} = {{ path = ")), "{name} is missing");
         }
+    }
+
+    #[test]
+    fn harness_manifest_leaves_out_crates_the_base_lacks() {
+        // This repository has every harness crate; a directory without them has none.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("workspace root");
+        assert_eq!(present_crates(root), BASE_CRATES);
+        assert!(present_crates(&root.join("xtask")).is_empty());
+        let older = ["bunny-num", "bunny-query"];
+        let manifest = harness_manifest(Path::new("/tmp/base"), &["num".to_owned()], &older);
+        assert!(!manifest.contains("bunny-optics"));
+        assert!(manifest.contains("bunny-query = { path = "));
     }
 
     #[test]
