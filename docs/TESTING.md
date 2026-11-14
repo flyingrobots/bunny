@@ -55,7 +55,9 @@ Release candidates must also verify every crates.io archive before tagging:
 scripts/publish-crates.sh verify
 ```
 
-Set `RELEASE_TAG=v<version>` when verifying a specific release tag.
+Set `RELEASE_TAG=v<version>` when verifying a specific release tag. `verify`
+includes `scripts/publish-crates.sh packaged-tests`, which compiles each crate's
+tests from its unpacked archive; it can be run alone.
 
 ## WebAssembly Gates
 

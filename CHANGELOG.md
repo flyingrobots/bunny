@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+* The published `bunny-codec` package no longer contains a test that cannot
+  compile: `tests/ply_ascii_stanford_tests.rs` is excluded together with the
+  Stanford fixture it reads with `include_bytes!`. `bunny-contract` had the same
+  fault, with `tests/generated_version_tests.rs` reading the generated files at
+  the repository root, and is fixed the same way. `scripts/publish-crates.sh
+  packaged-tests`, now part of `verify` and so of the release workflow, packages
+  every crate, unpacks the archives side by side with the sibling crates patched
+  to the unpacked copies, and runs `cargo check --tests` over them; on the old
+  manifests it fails and names both tests. No library code changes
+  (flyingrobots/bunny#283).
+
 ### Added
 
 * `bunny-perf`'s `smooth` group times smooth shading per hit on 1 024 closest
