@@ -72,10 +72,7 @@ fn mt_tp_023_axis_aligned_views_have_exact_golden_rows() {
         [[ONE_RAW, 0, 0, 0], [0, ONE_RAW, 0, 0], [0, 0, ONE_RAW, 0], [0, 0, 0, ONE_RAW]]
     );
     // Moving the eye back to z = 5 translates the world by -5 in z.
-    assert_eq!(
-        rows_raw(look(v(0, 0, 5), v(0, 0, 0), y))[2],
-        [0, 0, ONE_RAW, -5 * ONE_RAW]
-    );
+    assert_eq!(rows_raw(look(v(0, 0, 5), v(0, 0, 0), y))[2], [0, 0, ONE_RAW, -5 * ONE_RAW]);
     // Looking along +Z turns the camera around: x and z flip.
     assert_eq!(
         rows_raw(look(v(0, 0, 0), v(0, 0, 1), y)),
@@ -193,10 +190,7 @@ fn mt_tp_028_look_at_error_messages_are_stable() {
         LookAtError::ParallelUp.to_string(),
         "look-at up vector is zero or parallel to the view direction"
     );
-    assert_eq!(
-        LookAtError::Overflow.to_string(),
-        "look-at arithmetic is outside the Q32.32 range"
-    );
+    assert_eq!(LookAtError::Overflow.to_string(), "look-at arithmetic is outside the Q32.32 range");
 }
 
 fn next(state: &mut u64) -> u64 {
@@ -225,7 +219,8 @@ fn mt_tp_029_random_views_are_orthonormal_within_the_documented_bound() {
     let one = i128::from(ONE_RAW);
     let mut checked = 0;
     for case in 0..CASES {
-        let (eye, target, up) = (random_vec(&mut state), random_vec(&mut state), random_vec(&mut state));
+        let (eye, target, up) =
+            (random_vec(&mut state), random_vec(&mut state), random_vec(&mut state));
         let Ok(matrix) = FixedMat4::try_look_at(eye, target, up) else {
             continue; // coincident or parallel by chance; typed, never a panic
         };

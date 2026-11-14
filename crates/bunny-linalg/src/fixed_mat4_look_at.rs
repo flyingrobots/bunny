@@ -176,8 +176,8 @@ impl FixedMat4 {
             unit(Raw3::difference(target, eye)).ok_or(LookAtError::CoincidentEyeTarget)?;
         let (raw_forward, raw_up) = (Raw3::from_fixed(forward), Raw3::from_fixed(up));
         let right = unit(raw_forward.cross(raw_up)).ok_or(LookAtError::ParallelUp)?;
-        let true_up = unit(Raw3::from_fixed(right).cross(raw_forward))
-            .ok_or(LookAtError::ParallelUp)?;
+        let true_up =
+            unit(Raw3::from_fixed(right).cross(raw_forward)).ok_or(LookAtError::ParallelUp)?;
         let back = checked_negate(forward).ok_or(LookAtError::Overflow)?;
         Ok(Self::from_rows(
             view_row(right, eye)?,
