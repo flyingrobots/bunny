@@ -415,8 +415,10 @@ check is `xtask/src/feature_configs.rs`.
 
 The `blanket-nursery` check (`xtask/src/lint_policy.rs`) holds the core crates
 to Rule 10 of `CODE_STANDARDS.md`: it fails the full gate and the pre-commit
-gate on any `deny`, `warn` or `forbid` of `clippy::nursery` as a group in a
-core crate's `src/lib.rs`, its manifest or the workspace manifest, naming the
+gate on any `deny`, `warn` or `forbid` of `clippy::nursery` as a group, at
+any scope, in a Rust file of a core crate, in its manifest or the workspace
+manifest (parsed as TOML, so every spelling of the table counts), or in the
+`rustflags` of a Cargo configuration at the root or in the crate, naming the
 file and line. It runs right after the Rust source rules and has no waiver.
 The chapter is [`topics/lint-policy/`](topics/lint-policy/).
 
