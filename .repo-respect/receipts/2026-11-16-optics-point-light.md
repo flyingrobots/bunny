@@ -14,7 +14,18 @@ crates/bunny-optics/tests/exact/mod.rs, specular_reflection_tests.rs
 crates/bunny-query/src/trace.rs
 
 Files edited:
-In progress; completed in the final commit of the pull request.
+crates/bunny-optics/src/shading/point_light.rs (new)
+crates/bunny-optics/src/shading/light.rs (LightSample::shadow_t_max, bounded constructor)
+crates/bunny-optics/src/shading/wide.rs (div_round's comment on its operand range)
+crates/bunny-optics/src/shading.rs, crates/bunny-optics/src/lib.rs
+crates/bunny-optics/tests/point_light_tests.rs (new)
+crates/bunny-optics/tests/exact/mod.rs (a big-operand form of the square-root comparison)
+crates/bunny-optics/README.md
+docs/topics/optics/README.md (Status, Point Light)
+docs/topics/optics/test-plan.md (scope; OPTICS-REQ-070 to -072; OPTICS-TP-120 to -126;
+point-light mutation checks)
+CHANGELOG.md (Unreleased)
+.repo-respect/receipts/2026-11-16-optics-point-light.md
 
 Topic docs:
 docs/topics/optics/README.md and test-plan.md
@@ -23,10 +34,18 @@ Generated artifacts:
 None.
 
 Checks run:
-In progress.
+All inside the rust-dev container through devrun; nothing on the host.
+cargo test -p bunny-optics --test point_light_tests: 6 cases pass; the seeds are printed.
+Golden values marked "model" come from Python integers written from the chapter's formulas.
+Mutations (test plan, Point-Light Mutation Checks): twelve, each under `timeout 120`; each
+fails at least one case; the restored source passes.
+cargo fmt, clippy -D warnings; the full local gate at the final commit (see the PR).
 
 Known risks:
-In progress.
+The minimum distance (1/128 unit) and `shadow_t_max = m - 1` are choices this identity fixes;
+the issue named neither value. The cosine bound of three raw units assumes a unit normal, as
+the frame normal is. The shadow ray passes within `m / 2^33` raw units of the light, not
+through it; the stop along the largest axis is exact.
 
 Human reviewer:
 James Ross (maintainer); review pending.
