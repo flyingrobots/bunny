@@ -64,9 +64,18 @@ and `point_at`:
   hand-derived mirrors, Schlick's term at its ends and rounding boundaries,
   exact big-integer oracles for the term and the reflected direction on
   seeded inputs, normal incidence and the two refusals.
+- the GGX rough conductor `bunny-ggx-conductor/1`
+  (`SurfaceHit::ggx_reflection`, `try_ggx_reflection`, `GgxConductor`,
+  `GgxScatter`, `GgxRoughnessError`, `MIN_GGX_ROUGHNESS_RAW`,
+  `GGX_CONDUCTOR_ID`) and the shared `reflect`: hand-derived samples, the
+  rounding of every private step pinned on hand-derived values, the weight
+  against integer bounds of the exact formula, the direction against a model
+  of the published listing, the mirror limit with derived bounds, a
+  white-furnace table, and counts of what the seeded generator reaches.
 
-Projection matrices (flyingrobots/bunny#201, #202), and rough reflection,
-refraction and other material helpers (#160) are out of scope.
+Projection matrices (flyingrobots/bunny#201, #202), and refraction, the
+evaluation of a rough conductor for a given pair of directions and other
+material helpers (#160) are out of scope.
 
 ## Test Goals
 
@@ -148,6 +157,15 @@ formatting.
 | OPTICS-REQ-053 | `schlick_fresnel(f0, cosine)` clamps both inputs to `0..=1.0`, rounds the exact `(1 - cosine)^5` once to nearest and `f0 + (1 - f0) w` once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is `schlick_fresnel(F0_c, c)` per channel with `c` the incidence cosine rounded once, within three raw units of the exact `-(d . n) / |d|`. | `README.md#specular-reflection` |
 | OPTICS-REQ-054 | At normal incidence (`d` along `-n`) the throughput is the base reflectance exactly; at `cosine = 1.0` `schlick_fresnel` is `f0` exactly and at `cosine = 0` it is 1.0. | `README.md#specular-reflection` |
 | OPTICS-REQ-055 | `try_specular_reflection` refuses, in this order, a ray with `d . N >= 0` against the exact facing normal (`SecondaryRayError::ArrivesBelowSurface`) and a reflected direction with `r' . N <= 0` (`SecondaryRayError::ReflectionBelowSurface`), each carrying the direction it saw. | `README.md#specular-reflection` |
+| OPTICS-REQ-080 | `SurfaceHit::ggx_reflection` (`bunny-ggx-conductor/1`) draws the microfacet normal by the steps of the chapter's table (view, incidence axes, stretched view, disk point, warp, hemisphere point, unstretched normal) and reflects the incoming direction about it with `reflect`; `ggx_reflection` returns `None` exactly when `try_ggx_reflection` errs. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-081 | Each step of the sampler rounds as the chapter's table says: the cosines, the disk products, the warp's mean, the hemisphere coordinates, the Smith ratio and the weight once to nearest with ties to even; the disk radius, the warp's two roots and the Smith roots (in units of `2^-60`) floored; the four normalizations by the unit rule. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-082 | `GgxConductor::new` accepts a roughness of raw `2^16..=2^32` (`MIN_GGX_ROUGHNESS_RAW` to 1.0) and refuses any other with a `GgxRoughnessError` carrying the value. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-083 | A reflected sample starts at the hit's start point; its direction is a unit vector with components in `-1.0..=1.0`, strictly above the exact plane (`r . N > 0`) and with a rounded cosine against the frame normal of at least one raw unit. A sample whose view cosine is zero, whose direction has `r . N <= 0` or whose cosine rounds to zero is `GgxScatter::Absorbed`, a result and not an error. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-084 | The throughput is `F_c G` rounded once per channel, with `F_c = schlick_fresnel(F0_c, v . m)` and `G` the height-correlated Smith ratio `c_l (c_v + s(c_v)) / (c_l s(c_v) + c_v s(c_l))` at the rounded cosines: `G` is within `1/2 + 2^-11` raw units of the exact ratio and never above 1.0, and each channel is in `0..=1.0`. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-085 | At the minimum roughness and for `u <= 1/2`: each direction component is within `33 alpha` (raw `2 162 688`) of the mirror's (`specular_reflection`); where the mirror's direction has a cosine of at least 1/4, each throughput channel is within `81 alpha` (raw `5 308 416`) of the mirror's; where it has a cosine of at least `2^-9`, the sample is reflected. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-086 | With `F0 = 1` the mean weight of the `2^16` samples at the centres of a 256 by 256 grid is within `2^-11` (a measured tolerance, not a derived bound) of the single-scattering albedo for 18 pairs of roughness and incidence; at roughness 1.0 that albedo is `1 - c_v ln(1 + 1 / c_v)`. | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-087 | `try_ggx_reflection` refuses, in this order, a sample coordinate outside `[0, 1)` (`SecondaryRayError::SampleOutsideUnitInterval`) and a ray with `d . N >= 0` (`SecondaryRayError::ArrivesBelowSurface`). | `README.md#ggx-rough-conductor` |
+| OPTICS-REQ-088 | `reflect(direction, normal)` is the unit vector along the exact `d (n . n) - 2 (d . n) n`, each component within one raw unit (plus the prescale's floor, below `2^-27`) and clamped to `-1.0..=1.0`, for a normal of any length; `None` when a component of either vector exceeds `2^32 + 1` raw or either vector is zero. The mirror and the GGX sampler both reflect with it. | `README.md#ggx-rough-conductor` |
 
 ```toml
 [[requirement]]
@@ -404,6 +422,51 @@ status = "active"
 id = "OPTICS-REQ-055"
 summary = "try_specular_reflection refuses, in this order, a ray with d . N >= 0 against the exact facing normal (SecondaryRayError::ArrivesBelowSurface) and a reflected direction with r' . N <= 0 (SecondaryRayError::ReflectionBelowSurface), each carrying the direction it saw."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-080"
+summary = "SurfaceHit::ggx_reflection (bunny-ggx-conductor/1) draws the microfacet normal by the steps of the chapter's table (view, incidence axes, stretched view, disk point, warp, hemisphere point, unstretched normal) and reflects the incoming direction about it with reflect; ggx_reflection returns None exactly when try_ggx_reflection errs."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-081"
+summary = "Each step of the sampler rounds as the chapter's table says: the cosines, the disk products, the warp's mean, the hemisphere coordinates, the Smith ratio and the weight once to nearest with ties to even; the disk radius, the warp's two roots and the Smith roots (in units of 2^-60) floored; the four normalizations by the unit rule."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-082"
+summary = "GgxConductor::new accepts a roughness of raw 2^16..=2^32 (MIN_GGX_ROUGHNESS_RAW to 1.0) and refuses any other with a GgxRoughnessError carrying the value."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-083"
+summary = "A reflected sample starts at the hit's start point; its direction is a unit vector with components in -1.0..=1.0, strictly above the exact plane (r . N > 0) and with a rounded cosine against the frame normal of at least one raw unit. A sample whose view cosine is zero, whose direction has r . N <= 0 or whose cosine rounds to zero is GgxScatter::Absorbed, a result and not an error."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-084"
+summary = "The throughput is F_c G rounded once per channel, with F_c = schlick_fresnel(F0_c, v . m) and G the height-correlated Smith ratio c_l (c_v + s(c_v)) / (c_l s(c_v) + c_v s(c_l)) at the rounded cosines: G is within 1/2 + 2^-11 raw units of the exact ratio and never above 1.0, and each channel is in 0..=1.0."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-085"
+summary = "At the minimum roughness and for u <= 1/2: each direction component is within 33 alpha (raw 2 162 688) of the mirror's (specular_reflection); where the mirror's direction has a cosine of at least 1/4, each throughput channel is within 81 alpha (raw 5 308 416) of the mirror's; where it has a cosine of at least 2^-9, the sample is reflected."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-086"
+summary = "With F0 = 1 the mean weight of the 2^16 samples at the centres of a 256 by 256 grid is within 2^-11 (a measured tolerance, not a derived bound) of the single-scattering albedo for 18 pairs of roughness and incidence; at roughness 1.0 that albedo is 1 - c_v ln(1 + 1 / c_v)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-087"
+summary = "try_ggx_reflection refuses, in this order, a sample coordinate outside [0, 1) (SecondaryRayError::SampleOutsideUnitInterval) and a ray with d . N >= 0 (SecondaryRayError::ArrivesBelowSurface)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-088"
+summary = "reflect(direction, normal) is the unit vector along the exact d (n . n) - 2 (d . n) n, each component within one raw unit (plus the prescale's floor, below 2^-27) and clamped to -1.0..=1.0, for a normal of any length; None when a component of either vector exceeds 2^32 + 1 raw or either vector is zero. The mirror and the GGX sampler both reflect with it."
+status = "active"
 ```
 
 ## Fixtures
@@ -543,6 +606,93 @@ image-plane point. The case passes when `-D - slack < d_i * D - S_i <= slack`
 for each component, which is `OPTICS-REQ-005` multiplied through by `D`. All
 products are checked; an overflow fails the case.
 
+### The GGX Oracles
+
+The cases for `bunny-ggx-conductor/1` use no floating point. Their expected
+values come from five places, strongest first.
+
+**Hand arithmetic.** `OPTICS-TP-150` to `OPTICS-TP-160` are unit tests
+beside the sources (the steps are private). Each pins one step on values
+derived in the test's comment, chosen so that the documented rounding and the
+other plausible one (a floor, a ceiling, or half up) give different results;
+most cases include an exact tie. `OPTICS-TP-140` derives its facets and
+directions from the disk point by hand.
+
+**Integer bounds of the Smith ratio.**
+`tests/ggx_reference/mod.rs::ratio_bounds` brackets each root
+`sqrt(alpha^2 + (1 - alpha^2) c^2)` between two integers in units of `2^-64`
+and asserts the bracket by squaring; the ratio rises with the view's root and
+falls with the light's, so the two brackets give a lower and an upper
+fraction. `OPTICS-TP-145` compares the kernel's ratio with them by long
+division. The cosines it uses are recomputed in the test by the chapter's
+rule from the incoming direction, the returned direction and the frame
+normal.
+
+**A model of the published listing.** `tests/ggx_reference/mod.rs::heitz` is
+Heitz's listing 1 with one roughness, in three dimensions with cross
+products, at 60 fractional bits in `i128`, in an orthonormal frame rebuilt
+from the frame's normal and tangent. It shares no step with the kernel's
+two-dimensional form. It takes `sin` and `cos` from `FixedAngle::sin_cos`,
+which has its own evidence, and the listing's own fallback when the direction
+is exactly parallel to the normal. Each model operation loses at most one
+unit of `2^-60`.
+
+**The albedo table.** At roughness 1.0 the entries are the closed form
+`1 - c_v ln(1 + 1 / c_v)`, evaluated with an integer series for the logarithm
+at 200 fractional bits. The other entries come from an integer Python
+quadrature (96 fractional bits) of the reflectance integral in the variables
+of the distribution of normals, which the visible-normal sampler does not
+use:
+
+```text
+albedo = (1 / pi) Int_0^1 dxi Int_0^pi dphi  max(0, 2 c_l (v . h) / (c_h (c_l s(c_v) + c_v s(c_l))))
+tan(theta_h) = alpha p / (1 - p),  xi = p^2 / (p^2 + (1 - p)^2),  l = 2 (v . h) h - v
+```
+
+with the midpoint rule on `N` by `N` cells of `(p, t)`, where `t` in `(0, 1)`
+gives `(cos(phi), sin(phi)) = ((1 - t^2) / (1 + t^2), 2 t / (1 + t^2))` and
+its mirror image, and `pi` from Machin's formula. The table holds `N =
+4 096`. Its accuracy is measured, not proven: `N = 2 048` and `N = 4 096`
+differ by at most `11 994` raw units (`2^-18.4`), and at roughness 1.0 the
+quadrature is within 200 raw units of the three closed forms. The script is
+not committed; the pull request for flyingrobots/bunny#371 holds it.
+
+**An integer port.** Values marked "port" in `OPTICS-TP-140` come from a
+line-by-line Python port of the chapter's steps with unbounded integers. They
+are change detectors, used only where no hand value is practical (the
+channels with a Fresnel term, and one oblique sample).
+
+Two inputs were found by search and are quoted in the tests with their
+premises asserted exactly: the mirror's grazing hit of `OPTICS-TP-107`, and
+for `OPTICS-TP-143` a sample whose direction is above the rounded normal's
+horizon but not above the exact plane, found by running the kernel with its
+plane test removed over triangles whose rounded normal is at least 0.6 raw
+units from the exact one.
+
+**What the generator reaches.** The seeded cases draw a ray of one of three
+shapes (a free direction with one component at exactly 1.0, a direction
+along an edge of the triangle leaning toward its plane by `2^-28` to `2^-4`,
+or a free direction scaled down by `2^4` to `2^28`), a roughness that is the
+minimum or the maximum one time in eight each, and a first sample coordinate
+that is within 64 raw units of an end two times in three. `OPTICS-TP-144`
+and `OPTICS-TP-146` count what results and fail if any class has fewer than
+100 cases. On the committed seeds `OPTICS-TP-144` reaches, of 10 562 hits:
+
+| Class | Cases |
+| --- | --- |
+| Reflected | 7 625 |
+| Absorbed (the direction does not leave the surface) | 2 937 |
+| View cosine below `2^-6` | 1 599 |
+| View cosine below `2^-16`, the minimum roughness | 628 |
+| View cosine above `1 - 2^-6` | 142 |
+| Short direction (largest component below `2^-4`) | 2 869 |
+| Minimum roughness | 1 347 |
+| Maximum roughness | 1 406 |
+| First coordinate within 64 raw units of 1.0 | 3 580 |
+
+A direction exactly parallel to the normal is not reached by the generator;
+`OPTICS-TP-140`, `OPTICS-TP-152` and `OPTICS-TP-157` cover it by hand.
+
 ## Test Cases
 
 | ID | Category | Requirements | Oracle | Test |
@@ -650,6 +800,28 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
 | OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
 | OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
+| OPTICS-TP-140 | Hand-derived GGX samples | OPTICS-REQ-080, OPTICS-REQ-084 | The identity string. On the ground at normal incidence the disk's centre gives the mirror `(0, 1, 0)` and the throughput F0 exactly at three roughness values; roughness 1.0 at `u = (1/4, 1/4)` gives the facet `(0, 1/2, sqrt(3)/2)` on (tangent, bitangent, normal), direction `(0, 1/2, -sqrt(3)/2)` and `G = 2/3` (raw `2 863 311 531`), with the other channels from the port; roughness 1/2 at `u = (1/2, 0)` and `(1/2, 1/2)` gives `(+-4/5, 3/5, 0)` within two raw units and `G = 1.2 / (0.6 + sqrt(0.52))`; one oblique sample from the port. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_140_hand_derived_samples_follow_the_visible_normal` |
+| OPTICS-TP-141 | Roughness range | OPTICS-REQ-082 | `MIN_GGX_ROUGHNESS_RAW` is `2^16`; raw `2^16`, `2^16 + 1`, `2^31`, `2^32 - 1` and `2^32` are accepted and returned as given; `i64::MIN`, `-2^32`, -1, 0, 1, `2^16 - 1`, `2^32 + 1` and `i64::MAX` are refused with the value and the message. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_141_roughness_is_accepted_in_its_closed_range_only` |
+| OPTICS-TP-142 | GGX refusals | OPTICS-REQ-087 | Five samples with a coordinate of -1 raw or 1.0 are refused with `SampleOutsideUnitInterval` and `None`; the largest sample is accepted; rays up from below and along the plane are refused with `ArrivesBelowSurface`; with both faults the sample is named. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_142_a_bad_sample_and_a_ray_from_below_are_refused` |
+| OPTICS-TP-143 | Absorbed samples | OPTICS-REQ-083 | Roughness 1.0 at normal incidence and `u = (3/4, 1/4)`: the facet is 60 degrees from the normal, so the direction is below the surface: `Absorbed` from both forms. The mirror's grazing hit (`d . N < 0`, `d . n > 0`, asserted): `Absorbed` for three samples. A hit, ray and sample found by a search with the plane test removed, whose direction (quoted, with both premises asserted exactly) has a rounded cosine of at least one raw unit but `r . N <= 0`: `Absorbed`. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_143_a_direction_that_does_not_leave_the_surface_is_absorbed` |
+| OPTICS-TP-144 | Unit directions above the surface | OPTICS-REQ-083 | 12 000 seeded triangles, rays (free, grazing along an edge, and short directions), roughness values and samples: every reflected direction passes `FixedUnitVec3::try_from_unit`, has a squared length within `3 * 2^33` of `2^64`, components in `-1.0..=1.0`, `r . N > 0` and `r . n > 0` exactly, and a throughput in `0..=1.0`; the Option and Result forms agree. The counts of each class reached are printed and each must be at least 100. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_144_reflected_directions_are_unit_vectors_above_the_surface` |
+| OPTICS-TP-145 | Weight against the interval oracle | OPTICS-REQ-084, OPTICS-REQ-081 | On 6 000 seeded cases with `F0 = (1, f, f')`: the first channel is within `1/2 + 2^-11` raw units of the exact Smith ratio at the stated cosines (recomputed here by the chapter's rule), decided with integer bounds of the two roots checked by squaring; the other channels lie between `round(schlick_fresnel(F0, c) G)` at the two ends of a bracket of the Fresnel cosine derived from the two directions, and equal it where the ends agree (at least 500 channels pinned exactly). | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_145_the_weight_is_fresnel_times_the_smith_ratio` |
+| OPTICS-TP-146 | Direction against Heitz's listing | OPTICS-REQ-080 | 12 000 seeded cases against a model of the published listing with 60 fractional bits (3-D, with cross products, in a frame rebuilt from the normal and the tangent): for `1 - u >= 2^-12` every reflected direction is within the structural threshold `2^-12` per component, a reflected sample is not clearly below the model's horizon and an absorbed one not clearly above it. The largest differences are printed as measurements. Each class of the generator must be reached at least 100 times. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_146_the_direction_follows_heitz_listing_at_60_bits` |
+| OPTICS-TP-147 | Mirror limit | OPTICS-REQ-085 | 12 000 seeded cases at roughness `2^-16` with `u <= 1/2`, wherever the mirror gives a sample: the direction is within `33 alpha` per component of the mirror's; where the mirror's cosine is at least 1/4 each channel is within `81 alpha` of the mirror's throughput; a sample is absorbed only where the mirror's cosine is below `2^-9`. The bounds are derived in the chapter; the largest differences are printed. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_147_at_the_minimum_roughness_the_sample_approaches_the_mirror` |
+| OPTICS-TP-148 | White furnace | OPTICS-REQ-086 | For roughness 1, 3/4, 1/2, 1/4, 1/16 and `2^-16` and incoming directions `(0, -1, 0)`, `(1, -1, 0)` and `(1, -1/4, 0)` onto the ground, with `F0 = 1`: the mean weight of `2^16` midpoint-stratified samples (an absorbed sample weighs zero) is within `2^-11` of the tabulated albedo: the closed form at roughness 1.0, the integer quadrature elsewhere. Each difference is printed. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_148_the_mean_weight_is_the_single_scattering_albedo` |
+| OPTICS-TP-149 | The shared reflection | OPTICS-REQ-088 | Hand cases: `(1, -1, 0)` and `(3, -4, 0)` about the Y axis with normals of three lengths; straight down about the rounded `(3/5, 4/5, 0)` gives `(24/25, 7/25, 0)` within one raw unit; components of `2^32 + 1` accepted and `2^32 + 2` refused; zero vectors refused. 4 000 seeded pairs of every bit length: within one raw unit (plus `2^-27`) of the unit vector along the exact big-integer reflection, components in `-1.0..=1.0`. | `crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_149_reflect_is_the_exact_reflection_normalized_once` |
+| OPTICS-TP-150 | Cosine rounding | OPTICS-REQ-081 | Products of `a = 1` with `b` at `2^31 +- 1` and at 0.5, 1.5 and 2.5 raw units: 1, 0 and 0, 2, 2; a negative product and one above 1.0 are clamped. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_150_the_cosine_is_rounded_to_nearest_ties_to_even_and_clamped` |
+| OPTICS-TP-151 | Disk point rounding | OPTICS-REQ-081 | `u = 1/2` at angle zero: the radius `3 037 000 499` (floored; to nearest it is `...500`). At an eighth of a turn (sin and cos asserted as `3 037 000 500`): `u = 1/64` gives the tie `379 625 062.5`, to the even `...062`, and `u = 9/64` the tie `1 138 875 187.5`, to the even `...188`. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_151_the_disk_radius_is_floored_and_its_products_are_rounded_to_even` |
+| OPTICS-TP-152 | Incidence axes | OPTICS-REQ-080, OPTICS-REQ-081 | `d = (3, -4, 0) / 8` onto the ground: `(-X, +Z)`; `d = (1, -1, 1)`: components of `-+3 037 000 500` (to nearest; floored `...499`); `d` parallel to the normal, at two lengths: `(-bitangent, tangent)`. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_152_the_incidence_axes_are_the_horizontal_view_and_its_perpendicular` |
+| OPTICS-TP-153 | View cosine and sine | OPTICS-REQ-080, OPTICS-REQ-081 | `d = (3, -4, 0) / 8`: cosine 4/5 and sine 3/5, raw `3 435 973 837` and `2 576 980 378` (to nearest); a direction along the surface and one from below have no view. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_153_the_view_holds_the_cosine_and_the_sine_of_the_incoming_direction` |
+| OPTICS-TP-154 | Stretched view | OPTICS-REQ-081 | `(3, 0, 4)` at two scales: `(3/5, 4/5)` to nearest; a zero horizontal part gives `(0, 1.0)`; the zero vector gives `(0, 1.0)`. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_154_the_stretched_view_is_normalized_to_nearest` |
+| OPTICS-TP-155 | Warp rounding | OPTICS-REQ-081 | `kappa = 0`, `t1 = 1/2`: `q = 3 719 550 786` floored; `t2' = 0` gives `t2 = 1 859 775 393` exactly (a `q` rounded to nearest would give `...394`) and `t3 = 3 221 225 472`, bracketed by squares; `t2' = 1` and `3` give the ties `...393.5` and `...394.5`, both to the even `...394`, and `t3 = 3 221 225 471`. `kappa = 1.0`: `t3 = floor(sqrt(3/4))`; at the rim `t3 = 0`; a negative radicand counts as zero. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_155_the_warp_floors_its_roots_and_rounds_its_mean_to_even` |
+| OPTICS-TP-156 | Hemisphere coordinates | OPTICS-REQ-081 | `sigma = kappa = 1/2`: `(t2, t3) = (1, 4)` gives 1.5 and 2.5, to 2 and 2; `(0, 3)` gives 2 and 2; `(4, 1)` gives -1.5, to -2. `sigma = 1.0`, `kappa = 0`, `t2 = -5`: the height is taken as zero. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_156_the_tilt_rounds_both_coordinates_to_even_and_keeps_the_height_non_negative` |
+| OPTICS-TP-157 | Unstretched normal | OPTICS-REQ-080, OPTICS-REQ-081 | Straight down onto the ground: the point `(3/4, 0, 1)` at roughness 1.0 gives `(0, 4/5, 3/5)` and the point `(0, 3/2, 1)` at roughness 1/2 gives `(3/5, 4/5, 0)`, each to nearest; the zero point gives the frame normal; the disk's centre gives the normal. | `crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_157_the_normal_is_unstretched_and_normalized_to_nearest` |
+| OPTICS-TP-158 | Smith root | OPTICS-REQ-081, OPTICS-REQ-084 | Roughness 1.0 or cosine 1.0: `2^60`; cosine 0: the roughness itself; roughness 1/2 and cosine 1/2: `2^58 sqrt(7)`, the integer `r = 762 585 895 592 031 451` with `r^2 <= 7 * 2^116 < (r + 1)^2` asserted, and its fraction asserted above one half (to nearest it would be `r + 1`); out-of-range arguments are clamped. | `crates/bunny-optics/src/shading/smith/tests.rs::optics_tp_158_the_smith_root_is_floored_in_units_of_two_to_the_minus_sixty` |
+| OPTICS-TP-159 | Smith ratio rounding | OPTICS-REQ-081, OPTICS-REQ-084 | At roughness 1.0 the ratio is `c_l (c_v + 1) / (c_l + c_v)`: `(1.0, 1/2)` gives 2/3, raw `2 863 311 531`; raw cosines `(1, 1)` give the tie `2 147 483 648.5`, to the even `...648`; `(3, 3)` the tie `...649.5`, to the even `...650`; `(3, 1)` gives `...824.75`, to `...825`; equal directions at normal incidence give 1.0. Roughness 1/2 at `(1.0, 1/2)`: `4 (sqrt(7) - 2) / 3`, raw `3 697 974 350`. A cosine of zero or below gives zero. | `crates/bunny-optics/src/shading/smith/tests.rs::optics_tp_159_the_masking_ratio_is_rounded_to_nearest_ties_to_even` |
+| OPTICS-TP-160 | Weight rounding | OPTICS-REQ-081, OPTICS-REQ-084 | With a Fresnel term of 1/2 and ratios of 1, 3 and 5 raw units: 0.5, 1.5 and 2.5, to 0, 2 and 2; just above and below one half; a factor of 1.0 leaves the other unchanged. | `crates/bunny-optics/src/shading/ggx/tests.rs::optics_tp_160_the_weight_is_rounded_to_nearest_ties_to_even` |
+| OPTICS-TP-161 | GGX mutations | OPTICS-REQ-080, OPTICS-REQ-081, OPTICS-REQ-082, OPTICS-REQ-083, OPTICS-REQ-084, OPTICS-REQ-087, OPTICS-REQ-088 | Each rule and each rounding broken on purpose fails at least one case above, except the two listed as not observable. | [GGX mutation checks](#ggx-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1578,6 +1750,204 @@ artifact = "docs/topics/optics/test-plan.md#specular-reflection-mutation-checks"
 oracle = "Eight rules of specular.rs broken on purpose, each mutant's tests under timeout 120; each fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-140"
+requirements = ["OPTICS-REQ-080", "OPTICS-REQ-084"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_140_hand_derived_samples_follow_the_visible_normal"
+oracle = "The identity string. On the ground at normal incidence the disk's centre gives the mirror (0, 1, 0) and the throughput F0 exactly at three roughness values; roughness 1.0 at u = (1/4, 1/4) gives the facet (0, 1/2, sqrt(3)/2) on (tangent, bitangent, normal), direction (0, 1/2, -sqrt(3)/2) and G = 2/3 (raw 2 863 311 531), with the other channels from the port; roughness 1/2 at u = (1/2, 0) and (1/2, 1/2) gives (+-4/5, 3/5, 0) within two raw units and G = 1.2 / (0.6 + sqrt(0.52)); one oblique sample from the port."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-141"
+requirements = ["OPTICS-REQ-082"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_141_roughness_is_accepted_in_its_closed_range_only"
+oracle = "MIN_GGX_ROUGHNESS_RAW is 2^16; raw 2^16, 2^16 + 1, 2^31, 2^32 - 1 and 2^32 are accepted and returned as given; i64::MIN, -2^32, -1, 0, 1, 2^16 - 1, 2^32 + 1 and i64::MAX are refused with the value and the message."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-142"
+requirements = ["OPTICS-REQ-087"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_142_a_bad_sample_and_a_ray_from_below_are_refused"
+oracle = "Five samples with a coordinate of -1 raw or 1.0 are refused with SampleOutsideUnitInterval and None; the largest sample is accepted; rays up from below and along the plane are refused with ArrivesBelowSurface; with both faults the sample is named."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-143"
+requirements = ["OPTICS-REQ-083"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_143_a_direction_that_does_not_leave_the_surface_is_absorbed"
+oracle = "Roughness 1.0 at normal incidence and u = (3/4, 1/4): the facet is 60 degrees from the normal, so the direction is below the surface: Absorbed from both forms. The mirror's grazing hit (d . N < 0, d . n > 0, asserted): Absorbed for three samples. A hit, ray and sample found by a search with the plane test removed, whose direction (quoted, with both premises asserted exactly) has a rounded cosine of at least one raw unit but r . N <= 0: Absorbed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-144"
+requirements = ["OPTICS-REQ-083"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_144_reflected_directions_are_unit_vectors_above_the_surface"
+oracle = "12 000 seeded triangles, rays (free, grazing along an edge, and short directions), roughness values and samples: every reflected direction passes FixedUnitVec3::try_from_unit, has a squared length within 3 * 2^33 of 2^64, components in -1.0..=1.0, r . N > 0 and r . n > 0 exactly, and a throughput in 0..=1.0; the Option and Result forms agree. The counts of each class reached are printed and each must be at least 100."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-145"
+requirements = ["OPTICS-REQ-084", "OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_145_the_weight_is_fresnel_times_the_smith_ratio"
+oracle = "On 6 000 seeded cases with F0 = (1, f, f'): the first channel is within 1/2 + 2^-11 raw units of the exact Smith ratio at the stated cosines (recomputed here by the chapter's rule), decided with integer bounds of the two roots checked by squaring; the other channels lie between round(schlick_fresnel(F0, c) G) at the two ends of a bracket of the Fresnel cosine derived from the two directions, and equal it where the ends agree (at least 500 channels pinned exactly)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-146"
+requirements = ["OPTICS-REQ-080"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_146_the_direction_follows_heitz_listing_at_60_bits"
+oracle = "12 000 seeded cases against a model of the published listing with 60 fractional bits (3-D, with cross products, in a frame rebuilt from the normal and the tangent): for 1 - u >= 2^-12 every reflected direction is within the structural threshold 2^-12 per component, a reflected sample is not clearly below the model's horizon and an absorbed one not clearly above it. The largest differences are printed as measurements. Each class of the generator must be reached at least 100 times."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-147"
+requirements = ["OPTICS-REQ-085"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_147_at_the_minimum_roughness_the_sample_approaches_the_mirror"
+oracle = "12 000 seeded cases at roughness 2^-16 with u <= 1/2, wherever the mirror gives a sample: the direction is within 33 alpha per component of the mirror's; where the mirror's cosine is at least 1/4 each channel is within 81 alpha of the mirror's throughput; a sample is absorbed only where the mirror's cosine is below 2^-9. The bounds are derived in the chapter; the largest differences are printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-148"
+requirements = ["OPTICS-REQ-086"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_148_the_mean_weight_is_the_single_scattering_albedo"
+oracle = "For roughness 1, 3/4, 1/2, 1/4, 1/16 and 2^-16 and incoming directions (0, -1, 0), (1, -1, 0) and (1, -1/4, 0) onto the ground, with F0 = 1: the mean weight of 2^16 midpoint-stratified samples (an absorbed sample weighs zero) is within 2^-11 of the tabulated albedo: the closed form at roughness 1.0, the integer quadrature elsewhere. Each difference is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-149"
+requirements = ["OPTICS-REQ-088"]
+evidence = "test"
+test = "crates/bunny-optics/tests/ggx_conductor_tests.rs::optics_tp_149_reflect_is_the_exact_reflection_normalized_once"
+oracle = "Hand cases: (1, -1, 0) and (3, -4, 0) about the Y axis with normals of three lengths; straight down about the rounded (3/5, 4/5, 0) gives (24/25, 7/25, 0) within one raw unit; components of 2^32 + 1 accepted and 2^32 + 2 refused; zero vectors refused. 4 000 seeded pairs of every bit length: within one raw unit (plus 2^-27) of the unit vector along the exact big-integer reflection, components in -1.0..=1.0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-150"
+requirements = ["OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_150_the_cosine_is_rounded_to_nearest_ties_to_even_and_clamped"
+oracle = "Products of a = 1 with b at 2^31 +- 1 and at 0.5, 1.5 and 2.5 raw units: 1, 0 and 0, 2, 2; a negative product and one above 1.0 are clamped."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-151"
+requirements = ["OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_151_the_disk_radius_is_floored_and_its_products_are_rounded_to_even"
+oracle = "u = 1/2 at angle zero: the radius 3 037 000 499 (floored; to nearest it is ...500). At an eighth of a turn (sin and cos asserted as 3 037 000 500): u = 1/64 gives the tie 379 625 062.5, to the even ...062, and u = 9/64 the tie 1 138 875 187.5, to the even ...188."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-152"
+requirements = ["OPTICS-REQ-080", "OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_152_the_incidence_axes_are_the_horizontal_view_and_its_perpendicular"
+oracle = "d = (3, -4, 0) / 8 onto the ground: (-X, +Z); d = (1, -1, 1): components of -+3 037 000 500 (to nearest; floored ...499); d parallel to the normal, at two lengths: (-bitangent, tangent)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-153"
+requirements = ["OPTICS-REQ-080", "OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_153_the_view_holds_the_cosine_and_the_sine_of_the_incoming_direction"
+oracle = "d = (3, -4, 0) / 8: cosine 4/5 and sine 3/5, raw 3 435 973 837 and 2 576 980 378 (to nearest); a direction along the surface and one from below have no view."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-154"
+requirements = ["OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_154_the_stretched_view_is_normalized_to_nearest"
+oracle = "(3, 0, 4) at two scales: (3/5, 4/5) to nearest; a zero horizontal part gives (0, 1.0); the zero vector gives (0, 1.0)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-155"
+requirements = ["OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_155_the_warp_floors_its_roots_and_rounds_its_mean_to_even"
+oracle = "kappa = 0, t1 = 1/2: q = 3 719 550 786 floored; t2' = 0 gives t2 = 1 859 775 393 exactly (a q rounded to nearest would give ...394) and t3 = 3 221 225 472, bracketed by squares; t2' = 1 and 3 give the ties ...393.5 and ...394.5, both to the even ...394, and t3 = 3 221 225 471. kappa = 1.0: t3 = floor(sqrt(3/4)); at the rim t3 = 0; a negative radicand counts as zero."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-156"
+requirements = ["OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_156_the_tilt_rounds_both_coordinates_to_even_and_keeps_the_height_non_negative"
+oracle = "sigma = kappa = 1/2: (t2, t3) = (1, 4) gives 1.5 and 2.5, to 2 and 2; (0, 3) gives 2 and 2; (4, 1) gives -1.5, to -2. sigma = 1.0, kappa = 0, t2 = -5: the height is taken as zero."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-157"
+requirements = ["OPTICS-REQ-080", "OPTICS-REQ-081"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/visible_normal/tests.rs::optics_tp_157_the_normal_is_unstretched_and_normalized_to_nearest"
+oracle = "Straight down onto the ground: the point (3/4, 0, 1) at roughness 1.0 gives (0, 4/5, 3/5) and the point (0, 3/2, 1) at roughness 1/2 gives (3/5, 4/5, 0), each to nearest; the zero point gives the frame normal; the disk's centre gives the normal."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-158"
+requirements = ["OPTICS-REQ-081", "OPTICS-REQ-084"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/smith/tests.rs::optics_tp_158_the_smith_root_is_floored_in_units_of_two_to_the_minus_sixty"
+oracle = "Roughness 1.0 or cosine 1.0: 2^60; cosine 0: the roughness itself; roughness 1/2 and cosine 1/2: 2^58 sqrt(7), the integer r = 762 585 895 592 031 451 with r^2 <= 7 * 2^116 < (r + 1)^2 asserted, and its fraction asserted above one half (to nearest it would be r + 1); out-of-range arguments are clamped."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-159"
+requirements = ["OPTICS-REQ-081", "OPTICS-REQ-084"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/smith/tests.rs::optics_tp_159_the_masking_ratio_is_rounded_to_nearest_ties_to_even"
+oracle = "At roughness 1.0 the ratio is c_l (c_v + 1) / (c_l + c_v): (1.0, 1/2) gives 2/3, raw 2 863 311 531; raw cosines (1, 1) give the tie 2 147 483 648.5, to the even ...648; (3, 3) the tie ...649.5, to the even ...650; (3, 1) gives ...824.75, to ...825; equal directions at normal incidence give 1.0. Roughness 1/2 at (1.0, 1/2): 4 (sqrt(7) - 2) / 3, raw 3 697 974 350. A cosine of zero or below gives zero."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-160"
+requirements = ["OPTICS-REQ-081", "OPTICS-REQ-084"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/ggx/tests.rs::optics_tp_160_the_weight_is_rounded_to_nearest_ties_to_even"
+oracle = "With a Fresnel term of 1/2 and ratios of 1, 3 and 5 raw units: 0.5, 1.5 and 2.5, to 0, 2 and 2; just above and below one half; a factor of 1.0 leaves the other unchanged."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-161"
+requirements = ["OPTICS-REQ-080", "OPTICS-REQ-081", "OPTICS-REQ-082", "OPTICS-REQ-083", "OPTICS-REQ-084", "OPTICS-REQ-087", "OPTICS-REQ-088"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#ggx-mutation-checks"
+oracle = "Each rule and rounding of the sampler broken on purpose, each mutant's tests under timeout 400; each fails at least one case, except two listed as not observable."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1886,6 +2256,85 @@ case fail; the restored source passed every case.
 | The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
 | `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
 
+## GGX Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/` (`ggx.rs`, `smith.rs`, `visible_normal.rs`
+or `specular.rs`), and the tests were run with `timeout 400 cargo test
+--locked -p bunny-optics --no-fail-fast --lib --test ggx_conductor_tests
+--test specular_reflection_tests` per mutation. The restored sources passed
+every case. Every documented rounding has a row for a floor (or, where the
+rule is a floor, for rounding to nearest) and, where the rule is ties to
+even, a row for ties rounded up.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| A cosine floored | Cosines round to nearest | OPTICS-TP-143, OPTICS-TP-145, OPTICS-TP-150 |
+| A cosine's tie rounded up | Ties to even | OPTICS-TP-150 |
+| A cosine not clamped at 1.0 | Cosines are clamped to `0..=1.0` | OPTICS-TP-150 |
+| The disk radius rounded to nearest | The radius is floored | OPTICS-TP-140, OPTICS-TP-151 |
+| The disk products floored | The disk point rounds to nearest | OPTICS-TP-143, OPTICS-TP-151 |
+| The disk products' ties rounded up | Ties to even | OPTICS-TP-151 |
+| `sin` and `cos` exchanged in the disk point | `t1 = r cos`, `t2' = r sin` | OPTICS-TP-140, OPTICS-TP-146, OPTICS-TP-151 |
+| The parallel fallback `(tangent, bitangent)` | `(-bitangent, tangent)` when `d` is parallel to `n` | OPTICS-TP-140, OPTICS-TP-152, OPTICS-TP-157 |
+| `forward` along the horizontal part of `d` | `forward` is the horizontal part of `-d` | OPTICS-TP-140, OPTICS-TP-143, OPTICS-TP-146, OPTICS-TP-148, OPTICS-TP-152, OPTICS-TP-153 |
+| `across` along `n x d` | `across` is along `d x n` | OPTICS-TP-140, OPTICS-TP-146, OPTICS-TP-152 |
+| A view with a zero cosine kept | A zero view cosine absorbs | OPTICS-TP-143, OPTICS-TP-153 |
+| The view not stretched by `alpha` | The stretched view is along `(alpha s_v, c_v)` | OPTICS-TP-140, OPTICS-TP-143, OPTICS-TP-146, OPTICS-TP-148 |
+| The stretched view one raw unit low | The stretched view is normalized to nearest | OPTICS-TP-140, OPTICS-TP-154 |
+| `q` rounded to nearest | `q` is floored | OPTICS-TP-155 |
+| `t2` floored | `t2` rounds to nearest | OPTICS-TP-140, OPTICS-TP-155 |
+| `t2`'s tie rounded up | Ties to even | OPTICS-TP-155 |
+| No warp (`t2 = t2'`) | The warp of the half disk | OPTICS-TP-140, OPTICS-TP-143, OPTICS-TP-146, OPTICS-TP-147, OPTICS-TP-148, OPTICS-TP-155 |
+| `t3` rounded to nearest | `t3` is floored | OPTICS-TP-140, OPTICS-TP-155 |
+| `t3` from the unwarped `t2'` | `t3 = sqrt(1 - t1^2 - t2^2)` | OPTICS-TP-140, OPTICS-TP-143, OPTICS-TP-146, OPTICS-TP-148, OPTICS-TP-155 |
+| `along` floored | `along` rounds to nearest, ties to even | OPTICS-TP-156 |
+| `along = sigma t3 + kappa t2` | `along = sigma t3 - kappa t2` | OPTICS-TP-140, OPTICS-TP-143, OPTICS-TP-146, OPTICS-TP-148, OPTICS-TP-156 |
+| `up` floored | `up` rounds to nearest | OPTICS-TP-156 |
+| `up`'s tie rounded up | Ties to even | OPTICS-TP-156 |
+| `up` not clamped at zero | `up = max(0, ...)` | OPTICS-TP-156 |
+| The normal not unstretched by `alpha` | `m` is along `alpha (...) + up n` | OPTICS-TP-140, OPTICS-TP-146, OPTICS-TP-147, OPTICS-TP-148, OPTICS-TP-157 |
+| The zero vector's fallback `forward` | The frame normal when the vector is zero | OPTICS-TP-157 |
+| The Smith root rounded to nearest | The Smith root is floored | OPTICS-TP-158 |
+| The Smith root kept to `2^-32` | The Smith root is in units of `2^-60` | OPTICS-TP-140, OPTICS-TP-145, OPTICS-TP-158 |
+| The Smith radicand `2^120 - floor(p / 2^8)` | The radicand is the exact floor | none (see below) |
+| The Smith ratio floored | The ratio rounds to nearest | OPTICS-TP-140, OPTICS-TP-145, OPTICS-TP-159 |
+| The Smith ratio's tie rounded up | Ties to even | OPTICS-TP-159 |
+| `s(c_l)` replaced by `c_l` (no shadowing) | The Smith ratio's denominator | OPTICS-TP-140, OPTICS-TP-145, OPTICS-TP-148, OPTICS-TP-159 |
+| The separable form `G1(l)` | The height-correlated `G2 / G1` | OPTICS-TP-140, OPTICS-TP-145, OPTICS-TP-148, OPTICS-TP-159 |
+| The minimum roughness `2^-17` | The minimum is `2^-16` | OPTICS-TP-141, OPTICS-TP-158 |
+| Roughness `2^32 + 1` accepted | The maximum is 1.0 | OPTICS-TP-141 |
+| The weight's product floored | The weight rounds to nearest | OPTICS-TP-140, OPTICS-TP-145, OPTICS-TP-160 |
+| The weight's tie rounded up | Ties to even | OPTICS-TP-160 |
+| The Fresnel term at `c_v` | The Fresnel cosine is `v . m` | OPTICS-TP-140, OPTICS-TP-145 |
+| No absorption | A direction that does not leave is absorbed | OPTICS-TP-143, OPTICS-TP-144, OPTICS-TP-146 |
+| The leaving test `r . N > 0` removed | A direction along or below the exact plane is absorbed | OPTICS-TP-143 |
+| The `c_l = 0` test removed | A zero light cosine absorbs | OPTICS-TP-143 |
+| The sample test removed | A coordinate outside `[0, 1)` is refused | OPTICS-TP-142 |
+| The arrival test `d . N > 0` | A ray along the plane is refused | OPTICS-TP-142 |
+| The reflection `d (n . n) - (d . n) n` | The factor 2 of the reflection | OPTICS-TP-100, OPTICS-TP-103, OPTICS-TP-104, OPTICS-TP-140, OPTICS-TP-145, OPTICS-TP-146, OPTICS-TP-147, OPTICS-TP-148, OPTICS-TP-149 |
+| `reflect` accepts components of `2^32 + 2` | The domain of `reflect` | OPTICS-TP-149 |
+| `reflect` returns the zero vector | A zero vector has no reflection | OPTICS-TP-149 |
+
+Two rules have no failing case, and each is recorded as not observable, not
+as covered:
+
+- **The exactness of the Smith radicand.** `2^120 - ceil(p / 2^8)` is the
+  exact floor of the radicand; taking `floor(p / 2^8)` instead raises it by
+  one unit of `2^-120` when `p` is not a multiple of `2^8`. That changes the
+  floored root only when the larger radicand is a perfect square, and then by
+  one unit of `2^-60`, which moves the ratio by less than `2^-11` raw units.
+  No input that shows it is known.
+- **The clamp of `reflect` to `-1.0..=1.0`.** The unit rule divides each
+  component by the floored length of the same vector, which is at least the
+  component's magnitude, so no component exceeds `2^32` before the clamp. The
+  clamp belongs to `bunny-specular-reflection/1` and is left as it is.
+
+An earlier form of the sampler also tested `d . m >= 0` before reflecting.
+Removing that test changed no result (a facet that faces away from the view
+reflects below the horizon and is absorbed by the two remaining tests), so
+the test was deleted instead of being kept without evidence.
+
 ## Timing
 
 `pixel/resolve_srgb_rgba8` in `crates/bunny-perf` (feature group `pixel`)
@@ -2059,5 +2508,10 @@ case with a stable test name.
 | An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |
 | Shrinking for `OPTICS-TP-062` and `OPTICS-TP-064`: a failure reports its seed, case and variant, not a reduced input. | None; a property-testing harness or a hand-written reducer. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_specular_reflection`: no input is known to reach it (the start point is inside the domain and the clamped unit direction is a valid trace direction). | None; a constructed case if one is found. |
+| A derived bound for the white-furnace difference of `OPTICS-TP-148`: its `2^-11` is a measured tolerance, because no bound is derived for the error of a 256 by 256 midpoint rule on the weight. | None; a bound on the variation of the weight over the sample square, or an evaluation kernel to integrate against (flyingrobots/bunny#390). |
+| A derived bound for the direction of `bunny-ggx-conductor/1` against the ideal map (`OPTICS-TP-146` asserts a structural threshold and prints measurements), and any statement for samples with `1 - u` below `2^-12`, where the floored root of a small number loses relative precision. | None; a worst-case analysis of the chain, or a form of `t3` that keeps relative precision at the rim (a new contract version). |
+| The mirror-limit bounds of `OPTICS-TP-147` for `u > 1/2`. | None; the same analysis with the rim's rounding bounded. |
+| A case that produces `SecondaryRayError::BounceRayRefused` from `try_ggx_reflection`: no input is known to reach it. | None; a constructed case if one is found. |
+| A statistical test of the sampled distribution beyond its mean weight (for example the fraction of samples per solid-angle cell against the density). | None; flyingrobots/bunny#390 adds the density to compare with. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |
