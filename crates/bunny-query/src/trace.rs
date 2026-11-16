@@ -33,6 +33,11 @@ const RECIPROCAL_BITS: u32 = 63;
 /// `(n * reciprocal) >> 31` is `n * 2^32 / |d|`, a raw Q32.32 distance.
 const RECIPROCAL_SHIFT: u32 = RECIPROCAL_BITS - FixedQ32_32::FRACTIONAL_BITS;
 
+mod sphere;
+mod wide;
+
+pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
+
 type Wide3 = [i128; 3];
 
 /// A ray prepared for repeated box and triangle tests.
