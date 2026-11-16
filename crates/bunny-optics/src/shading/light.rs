@@ -5,7 +5,7 @@ use bunny_num::FixedQ32_32;
 use bunny_query::TraceRay;
 
 use super::wide::{dot, round_shift, unit, wide, Wide, ONE};
-use super::{ShadingError, FRAC_1_PI, MAX_LIGHT_RAW};
+use super::{ShadingError, FRAC_1_PI, MAX_LIGHT_RAW, SHADOW_T_MAX};
 
 const ZERO: [FixedQ32_32; 3] = [FixedQ32_32::ZERO; 3];
 const ONE_RAW: i64 = 1 << 32;
@@ -154,21 +154,35 @@ impl Albedo {
     }
 }
 
-/// A directional light's term at one surface hit, before visibility is known.
+/// A light's term at one surface hit, before visibility is known: a directional light's
+/// ([`super::SurfaceHit::light_sample`]) or a point light's
+/// ([`super::SurfaceHit::point_light_sample`]). A renderer queries [`Self::shadow_ray`] with
+/// any-hit, minimum distance zero and [`Self::shadow_t_max`], whichever the light.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LightSample {
     ray: Option<TraceRay>,
+    t_max: FixedQ32_32,
     radiance: [FixedQ32_32; 3],
 }
 
 impl LightSample {
     /// No shadow ray and no light: the light is behind the surface.
-    pub(crate) const DARK: Self = Self { ray: None, radiance: ZERO };
+    pub(crate) const DARK: Self = Self { ray: None, t_max: FixedQ32_32::ZERO, radiance: ZERO };
 
-    /// A sample with a shadow ray; without one (`TraceRay::new` refused it) it is dark.
+    /// A directional light's sample: its shadow ray is limited by [`SHADOW_T_MAX`].
     pub(crate) const fn new(ray: Option<TraceRay>, radiance: [FixedQ32_32; 3]) -> Self {
+        Self::bounded(ray, SHADOW_T_MAX, radiance)
+    }
+
+    /// A sample whose shadow ray is limited by `t_max`; without a ray (`TraceRay::new` refused
+    /// it) it is dark.
+    pub(crate) const fn bounded(
+        ray: Option<TraceRay>,
+        t_max: FixedQ32_32,
+        radiance: [FixedQ32_32; 3],
+    ) -> Self {
         match ray {
-            Some(_) => Self { ray, radiance },
+            Some(_) => Self { ray, t_max, radiance },
             None => Self::DARK,
         }
     }
@@ -179,6 +193,14 @@ impl LightSample {
     #[must_use]
     pub const fn shadow_ray(&self) -> Option<&TraceRay> {
         self.ray.as_ref()
+    }
+
+    /// The largest distance of the shadow ray's any-hit query: [`SHADOW_T_MAX`] for a
+    /// directional light, the last raw distance before the light for a point light, and zero
+    /// when there is no shadow ray.
+    #[must_use]
+    pub const fn shadow_t_max(&self) -> FixedQ32_32 {
+        self.t_max
     }
 
     /// The direct radiance: the light's reflected radiance when `visible` (the shadow ray's
@@ -193,7 +215,7 @@ impl LightSample {
     }
 }
 
-fn check_radiance(radiance: [FixedQ32_32; 3]) -> Result<(), ShadingError> {
+pub fn check_radiance(radiance: [FixedQ32_32; 3]) -> Result<(), ShadingError> {
     if radiance.iter().any(|c| c.raw() < 0) {
         Err(ShadingError::NegativeRadiance)
     } else if radiance.iter().any(|c| c.raw() > MAX_LIGHT_RAW) {
