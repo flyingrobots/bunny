@@ -93,15 +93,13 @@ pub enum SecondaryRayError {
 impl fmt::Display for SecondaryRayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::HitPointUnrepresentable { distance } => {
-                let distance = distance.raw();
-                write!(f, "hit point at distance raw {distance} is not representable in Q32.32")
+            Self::HitPointUnrepresentable { distance: v }
+            | Self::ChoiceOutsideUnitInterval { choice: v } => {
+                let (subject, reason) = self.value_message();
+                write!(f, "{subject} raw {} {reason}", v.raw())
             }
             Self::SampleOutsideUnitInterval { sample: [u, v] } => {
                 write!(f, "sample raw ({}, {}) is outside [0, 1)", u.raw(), v.raw())
-            }
-            Self::ChoiceOutsideUnitInterval { choice } => {
-                write!(f, "choice raw {} is outside [0, 1)", choice.raw())
             }
             Self::BounceRayRefused { origin, direction } => {
                 let (origin, direction) = (Raw(*origin), Raw(*direction));
@@ -113,7 +111,7 @@ impl fmt::Display for SecondaryRayError {
             | Self::ArrivesBelowSurface { direction: v }
             | Self::ReflectionBelowSurface { direction: v }
             | Self::RefractionAboveSurface { direction: v } => {
-                let (subject, reason) = self.vector_message();
+                let (subject, reason) = self.value_message();
                 write!(f, "{subject} raw {} {reason}", Raw(*v))
             }
         }
@@ -121,10 +119,14 @@ impl fmt::Display for SecondaryRayError {
 }
 
 impl SecondaryRayError {
-    /// The subject and the reason of a refusal that carries one vector; empty for the others,
-    /// whose messages [`fmt::Display`] writes itself.
-    const fn vector_message(&self) -> (&'static str, &'static str) {
+    /// The subject and the reason of a refusal that carries one value or one vector; empty for
+    /// the others, whose messages [`fmt::Display`] writes itself.
+    const fn value_message(&self) -> (&'static str, &'static str) {
         match self {
+            Self::HitPointUnrepresentable { .. } => {
+                ("hit point at distance", "is not representable in Q32.32")
+            }
+            Self::ChoiceOutsideUnitInterval { .. } => ("choice", "is outside [0, 1)"),
             Self::HitPointOutsideTraceDomain { .. } => ("hit point", "is outside the trace domain"),
             Self::NotOnArrivalSide { .. } => {
                 ("hit point", "is not within two steps of the arrival side")
