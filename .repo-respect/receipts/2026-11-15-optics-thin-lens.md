@@ -13,7 +13,18 @@ tests/exact/mod.rs
 crates/bunny-query/src/trace.rs, crates/bunny-num/src/{fixed_q32_32,fixed_angle}.rs
 
 Files edited:
-(work in progress; completed below)
+crates/bunny-optics/src/thin_lens.rs (new)
+crates/bunny-optics/src/camera.rs (shared sample_direction, parts, narrow)
+crates/bunny-optics/src/plane.rs (Margin, fit_with; fit unchanged in output)
+crates/bunny-optics/src/lib.rs (module, exports, crate docs)
+crates/bunny-optics/tests/thin_lens_tests.rs (new)
+crates/bunny-optics/tests/exact/mod.rs (Signed::sign)
+crates/bunny-optics/README.md
+docs/topics/optics/README.md (Status, Thin-Lens Camera)
+docs/topics/optics/test-plan.md (OPTICS-REQ-070 to -075; OPTICS-TP-130 to -137; the
+focus-plane oracle; mutation checks; two open gaps)
+CHANGELOG.md (Unreleased)
+.repo-respect/receipts/2026-11-15-optics-thin-lens.md
 
 Topic docs:
 docs/topics/optics/README.md and test-plan.md
@@ -22,10 +33,17 @@ Generated artifacts:
 None.
 
 Checks run:
-(work in progress)
+All inside the bunny container through devrun; nothing on the host.
+cargo test -p bunny-optics: every case passes, thin_lens_tests 7 of 7.
+Mutations (test plan, Thin-Lens Mutation Checks): eleven; ten fail at least one case; the
+defensive forward margin is not reached (an open gap).
+cargo fmt, clippy -D warnings; code-dojo --all at the final commit (see the PR).
 
 Known risks:
-(work in progress)
+The forward margin is defensive and no test reaches it. A large aperture for its focus
+distance raises the scale shift, shortening directions. The disc is shrunk by sqrt(1 - 2^-28)
+so that its rounded points stay inside the unit disc. IDs OPTICS-REQ-070.. and
+OPTICS-TP-130.. leave room for parallel optics work (#366, #367).
 
 Human reviewer:
 James Ross (maintainer); review pending.
