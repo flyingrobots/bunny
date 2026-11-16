@@ -43,7 +43,7 @@ pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;
 pub use smooth_hit::{SmoothBounce, SmoothHit, SMOOTH_SHADING_ID};
 pub use smooth_normal::{smooth_normal, SMOOTH_NORMAL_ID};
-pub use specular::{schlick_fresnel, SpecularSample, SPECULAR_REFLECTION_ID};
+pub use specular::{reflect, schlick_fresnel, SpecularSample, SPECULAR_REFLECTION_ID};
 pub use surface::TriangleSurface;
 pub use vertex_normals::{
     VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTEX_NORMALS_ID,

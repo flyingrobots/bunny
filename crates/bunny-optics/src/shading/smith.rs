@@ -4,6 +4,9 @@ use bunny_num::FixedQ32_32;
 
 use super::wide::{div_round, ONE};
 
+#[cfg(test)]
+mod tests;
+
 /// The smallest accepted GGX roughness, raw: `2^16` (`2^-16`), whose square is one raw unit.
 pub const MIN_ALPHA: i128 = 1 << 16;
 

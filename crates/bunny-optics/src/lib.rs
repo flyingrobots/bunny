@@ -82,7 +82,7 @@ pub use pixel::{
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
-    schlick_fresnel, smooth_normal, Albedo, DirectionalLight, GgxConductor, GgxRoughnessError,
+    reflect, schlick_fresnel, smooth_normal, Albedo, DirectionalLight, GgxConductor, GgxRoughnessError,
     GgxScatter, LightSample, SecondaryRayError, ShadingError, ShadingFrame, SkyLight,
     SmoothBounce, SmoothHit, SpecularSample, SurfaceHit, TriangleSurface, VertexNormalError,
     VertexNormals, FRAC_1_PI, GGX_CONDUCTOR_ID, MAX_LIGHT_RAW, MAX_NORMAL_TRIANGLES,

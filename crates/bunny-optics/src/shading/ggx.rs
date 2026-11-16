@@ -11,9 +11,12 @@ use super::hit::SurfaceHit;
 use super::light::Albedo;
 use super::refusal::SecondaryRayError;
 use super::smith::{masking_ratio, MIN_ALPHA};
-use super::specular::{mirror, schlick_fresnel, SpecularSample};
-use super::visible_normal::{disk_point, View};
+use super::specular::{reflect_about, schlick_fresnel, SpecularSample};
+use super::visible_normal::{disk_point, rounded_cosine, View};
 use super::wide::{dot, round_shift, wide, Wide, ONE};
+
+#[cfg(test)]
+mod tests;
 
 /// The versioned name of [`SurfaceHit::ggx_reflection`] and
 /// [`SurfaceHit::try_ggx_reflection`]. It names `bunny-specular-reflection/1` for its
@@ -120,25 +123,25 @@ impl SurfaceHit {
     /// The microfacet normal `m` is drawn from the GGX distribution of normals visible from
     /// the incoming direction (Heitz, "Sampling the GGX Distribution of Visible Normals",
     /// JCGT 7(4), 2018), from the one point `sample = [u, v]`. With `d` the incoming
-    /// direction, `n` the facing frame normal and `N` the exact normal of the face:
+    /// direction, `v` the unit vector along `-d`, `n` the facing frame normal and `N` the
+    /// exact normal of the face:
     ///
-    /// 1. **View.** `c_v = -(unit(d) . n)`, rounded once and clamped to `0..=1.0`, as the
-    ///    mirror's cosine is. When `c_v = 0` the sample is absorbed.
+    /// 1. **View.** `c_v = v . n`, rounded once and clamped to `0..=1.0`. When it is zero the
+    ///    sample is absorbed.
     /// 2. **Microfacet normal.** `m`, a unit vector, from `d`, `n`, the roughness and the
     ///    disk point of `sample`; `docs/topics/optics/README.md#ggx-rough-conductor` states
-    ///    each square root, product and normalization. When `d . m >= 0`, exact, the sample
-    ///    is absorbed.
-    /// 3. **Direction.** The mirror of `bunny-specular-reflection/1` about `m`: the unit
-    ///    vector along `d (m . m) - 2 (d . m) m`, exact in `i128` and normalized once.
-    ///    When it is along or below the exact plane (`r . N <= 0`) or its rounded cosine
-    ///    `c_l = r . n` is zero or below, the sample is absorbed.
+    ///    each square root, product and normalization.
+    /// 3. **Direction.** [`super::reflect`]`(d, m)`: the unit vector along
+    ///    `d (m . m) - 2 (d . m) m`, exact in `i128` and normalized once. When it is along or
+    ///    below the exact plane (`r . N <= 0`) or its cosine `c_l = r . n`, rounded once, is
+    ///    zero, the sample is absorbed.
     /// 4. **Weight.** `throughput_c = F_c G`, rounded once to nearest (ties to even), with
-    ///    `F_c = `[`schlick_fresnel`]`(F0_c, -(unit(d) . m))` and `G = G2 / G1`, the
-    ///    height-correlated Smith ratio
+    ///    `F_c = `[`schlick_fresnel`]`(F0_c, v . m)` (the cosine rounded once) and
+    ///    `G = G2 / G1`, the height-correlated Smith ratio
     ///    `c_l (c_v + s(c_v)) / (c_l s(c_v) + c_v s(c_l))`,
-    ///    `s(c) = sqrt(alpha^2 + (1 - alpha^2) c^2)`, rounded once. Each channel is within
-    ///    `2 + 2^-11` raw units of the exact `F_c G` at those rounded cosines, and in
-    ///    `0..=1.0`.
+    ///    `s(c) = sqrt(alpha^2 + (1 - alpha^2) c^2)`, rounded once. `G` is within
+    ///    `1/2 + 2^-11` raw units of the exact ratio at those rounded cosines; each channel
+    ///    is in `0..=1.0`.
     ///
     /// The ray runs from [`Self::point`] along the direction of step 3.
     ///
@@ -184,12 +187,9 @@ impl SurfaceHit {
         let view = View::new(d, &frame)?;
         let alpha = i128::from(conductor.roughness.raw());
         let facet = view.visible_normal(alpha, disk_point(sample));
-        if dot(d, facet) >= 0 {
-            return None;
-        }
-        let direction = mirror(d, facet);
+        let direction = reflect_about(d, facet);
         let leaves = dot(wide(direction), self.facing_normal()) > 0;
-        let light = round_shift(dot(wide(direction), wide(frame.normal())), 32).clamp(0, ONE);
+        let light = rounded_cosine(wide(direction), wide(frame.normal()));
         if !leaves || light == 0 {
             return None;
         }
