@@ -244,7 +244,11 @@ and `shade`) times the smooth path on 1 024 closest hits on this scene's sphere 
 position into an indexed mesh and its vertex normals from `VertexNormals::new`:
 `shade/smooth_normal`, `shade/smooth_normal_divided` (a replica of the alternative that was not
 selected), and `shade/smooth_hit_shading` beside `shade/flat_hit_shading_mesh` on the same hits
-(entry 13). A test checks that the replica agrees with `smooth_normal` within both bounds.
+(entry 13). A test checks that the replica agrees with `smooth_normal` within both bounds. The
+`texture` group (`crates/bunny-perf/src/texture.rs`) times `texture/interpolate_uv` on 1 024
+seeded hits (barycentric `det` in `[2^99, 2^100)`, the size of a trace-domain hit's) and
+`texture/bilinear` on the coordinates it returns, in a 1 024 by 1 024 texture with repeat along
+`u` and clamp along `v`.
 
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
