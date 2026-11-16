@@ -37,6 +37,9 @@
 //! (`bunny-specular-reflection/1`) gives a perfect mirror's continuation ray and its Fresnel
 //! throughput.
 //!
+//! [`SurfaceHit::dielectric_scatter`] (`bunny-dielectric/1`) gives the reflected or refracted
+//! continuation ray at a smooth boundary between two refractive indices.
+//!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
 //! maps linear radiance to a display value, and [`quantize_8`], [`quantize_16`] and
@@ -81,10 +84,11 @@ pub use pixel::{
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
-    schlick_fresnel, smooth_normal, Albedo, DirectionalLight, LightSample, SecondaryRayError,
+    schlick_fresnel, smooth_normal, Albedo, DielectricBoundary, DielectricReflectance,
+    DielectricScatter, DirectionalLight, LightSample, RefractiveIndexError, SecondaryRayError,
     ShadingError, ShadingFrame, SkyLight, SmoothBounce, SmoothHit, SpecularSample, SurfaceHit,
-    TriangleSurface, VertexNormalError, VertexNormals, FRAC_1_PI, MAX_LIGHT_RAW,
-    MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX, SMOOTH_NORMAL_ID,
-    SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
+    TriangleSurface, VertexNormalError, VertexNormals, DIELECTRIC_ID, FRAC_1_PI, MAX_LIGHT_RAW,
+    MAX_NORMAL_TRIANGLES, MAX_REFRACTIVE_INDEX_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID,
+    SHADOW_T_MAX, SMOOTH_NORMAL_ID, SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
 pub use xoroshiro::Xoroshiro128Plus;

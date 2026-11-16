@@ -25,6 +25,11 @@ pub struct SpecularSample {
 }
 
 impl SpecularSample {
+    /// A sample from its parts; each kernel that returns one states its own rules.
+    pub(super) const fn new(ray: TraceRay, throughput: [FixedQ32_32; 3]) -> Self {
+        Self { ray, throughput }
+    }
+
     /// The continuation ray, from the hit's start point. Query it with a minimum distance of
     /// zero, as for [`SurfaceHit::bounce_ray`].
     #[must_use]
