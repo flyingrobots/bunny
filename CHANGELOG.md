@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `bunny-query`: `ShapeFrame`, the rigid frame an analytic shape is placed
+  with, under the contract identity `bunny-shape-frame/1`
+  (`SHAPE_FRAME_ID`). `ShapeFrame::new` takes three right-handed unit axes
+  (exact pairwise dot products at most `2^-24`) and an origin in the trace
+  domain; `to_object` maps a `TraceRay` into object space and `to_world` a
+  normal back, each component one exact `i128` dot product rounded once to
+  Q32.32, ties to even. A direction lengthened past the kernels' limit by the
+  rotation is divided by `2^k` (`k` 0 or 1) inside that one rounding, not
+  refused; the returned `ObjectRay` carries `k`, and `world_distance`
+  (`floor(t / 2^k)`) and `object_distance` map hit distances and limits
+  between the rays. Results outside the trace domain or Q32.32 are typed
+  `ShapeFrameError` refusals. Closes flyingrobots/bunny#357.
+
 ### Fixed
 
 * Code Dojo's dependency check holds every crate a deterministic crate
