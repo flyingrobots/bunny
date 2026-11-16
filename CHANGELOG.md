@@ -115,6 +115,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TraceBoxError`. `ray_intersects_aabb` and `box_entry` are unchanged. Closes
   flyingrobots/bunny#359.
 
+* `bunny-query`: `TraceDisc` and `TraceRay::hit_disc`, the trace-domain ray-disc
+  kernel under the contract `bunny-ray-disc/1`. The disc lies in the plane
+  `z = height`, centred on the `z` axis; a tilted disc is traced through the
+  shape frame. The ray meets the plane at the floor of the true distance in
+  raw units, then the exact hit point is tested against the radius by exact
+  integer comparison (the rim is inside). A ray parallel to the plane misses,
+  including one lying in it. The disc is two-sided: `DiscHit::front_face` is
+  true on the `+z` side, and `DiscHit::normal` is the exact unit axis
+  `FixedUnitVec3::UNIT_Z`. The identity is public as `RAY_DISC_ID`.
+  `TraceDisc::new` refuses a height or radius outside
+  the trace domain, or a radius that is not positive, with `TraceDiscError`.
+  Closes flyingrobots/bunny#363.
+
 * `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
   `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed
   256-entry table, each entry the exact sRGB decode rounded to nearest in raw
