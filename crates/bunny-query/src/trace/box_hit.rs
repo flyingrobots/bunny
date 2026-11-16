@@ -98,14 +98,13 @@ impl BoxHit {
     }
 }
 
-/// An exact crossing distance in raw units: `numerator / denominator`, denominator positive.
+/// An exact crossing distance in raw units: `numerator / denominator`, denominator positive,
+/// with the outward normal of the face crossed.
 #[derive(Clone, Copy)]
 struct Crossing {
     numerator: i128,
     denominator: i128,
-    /// The axis of the face crossed and the sign of its outward normal.
-    axis: usize,
-    outward: i64,
+    normal: [i64; 3],
 }
 
 impl Crossing {
@@ -117,13 +116,42 @@ impl Crossing {
     fn floor(&self) -> i128 {
         self.numerator.div_euclid(self.denominator)
     }
+}
 
-    /// The outward unit normal of the face crossed.
-    fn normal(&self) -> FixedVec3 {
-        let mut raw = [0_i64; 3];
-        raw[self.axis] = self.outward << FixedQ32_32::FRACTIONAL_BITS;
-        vec3(raw)
+/// The raw unit vector along `axis`, pointing the way of `sign`.
+fn unit_normal(axis: usize, sign: i64) -> [i64; 3] {
+    std::array::from_fn(|i| if i == axis { sign << FixedQ32_32::FRACTIONAL_BITS } else { 0 })
+}
+
+/// What one axis says about the line.
+enum Slab {
+    /// The direction is zero and the origin is outside the closed slab: no hit.
+    Miss,
+    /// The direction is zero and the origin is inside the closed slab: no constraint.
+    Free,
+    /// The line is inside the slab between these two crossings, entry first.
+    Between(Crossing, Crossing),
+}
+
+/// The slab of `axis` between the raw bounds `min` and `max`, for a ray with this origin and
+/// direction component. Offsets of the faces from the origin are below `2^41` in magnitude.
+fn slab(axis: usize, origin: i64, direction: i64, (min, max): (i64, i64)) -> Slab {
+    let low = i128::from(min) - i128::from(origin);
+    let high = i128::from(max) - i128::from(origin);
+    let d = i128::from(direction);
+    if d == 0 {
+        return if low > 0 || high < 0 { Slab::Miss } else { Slab::Free };
     }
+    // A positive direction enters at the minimum face and leaves at the maximum face; a
+    // negative one the reverse. Scaling by `2^32` makes the distances raw.
+    let (near, far, outward) = if d > 0 { (low, high, 1) } else { (-high, -low, -1) };
+    let crossing = |offset: i128, sign: i64| Crossing {
+        numerator: offset << FixedQ32_32::FRACTIONAL_BITS,
+        denominator: d.abs(),
+        normal: unit_normal(axis, sign),
+    };
+    // The entry face's outward normal points against the ray, the exit face's along it.
+    Slab::Between(crossing(near, -outward), crossing(far, outward))
 }
 
 impl TraceRay {
@@ -148,12 +176,8 @@ impl TraceRay {
         } else {
             return None;
         };
-        let distance = i64::try_from(crossing.floor()).ok()?;
-        Some(BoxHit {
-            distance: FixedQ32_32::from_raw(distance),
-            front_face,
-            normal: crossing.normal(),
-        })
+        let distance = FixedQ32_32::from_raw(i64::try_from(crossing.floor()).ok()?);
+        Some(BoxHit { distance, front_face, normal: vec3(crossing.normal) })
     }
 
     /// The entry and the exit crossings of the line through the box, or `None` when the line
@@ -163,44 +187,31 @@ impl TraceRay {
     /// its slab, bounds included, and rules the box out otherwise. Among equal entries the
     /// lowest axis wins, and likewise among equal exits.
     fn span(&self, aabb: &TraceBox) -> Option<(Crossing, Crossing)> {
-        let mut entry: Option<Crossing> = None;
-        let mut exit: Option<Crossing> = None;
-        for axis in 0..3 {
-            // Offsets of the faces from the origin: below `2^41` in magnitude.
-            let low = i128::from(aabb.min[axis]) - i128::from(self.origin[axis]);
-            let high = i128::from(aabb.max[axis]) - i128::from(self.origin[axis]);
-            let d = i128::from(self.direction[axis]);
-            if d == 0 {
-                if low > 0 || high < 0 {
-                    return None;
-                }
-                continue;
-            }
-            // A positive direction enters at the minimum face and leaves at the maximum
-            // face; a negative one the reverse. Scaling by `2^32` makes raw distances.
-            let (near, far, outward) = if d > 0 { (low, high, 1) } else { (-high, -low, -1) };
-            let denominator = d.abs();
-            let near = Crossing {
-                numerator: near << FixedQ32_32::FRACTIONAL_BITS,
-                denominator,
-                axis,
-                // The entry face's outward normal points against the ray.
-                outward: -outward,
-            };
-            let far = Crossing {
-                numerator: far << FixedQ32_32::FRACTIONAL_BITS,
-                denominator,
-                axis,
-                outward,
-            };
-            if entry.is_none_or(|best| near.compare(&best) == Ordering::Greater) {
-                entry = Some(near);
-            }
-            if exit.is_none_or(|best| far.compare(&best) == Ordering::Less) {
-                exit = Some(far);
+        let mut span: Option<(Crossing, Crossing)> = None;
+        let axes =
+            self.origin.into_iter().zip(self.direction).zip(aabb.min.into_iter().zip(aabb.max));
+        for (axis, ((origin, direction), bounds)) in axes.enumerate() {
+            match slab(axis, origin, direction, bounds) {
+                Slab::Miss => return None,
+                Slab::Free => {}
+                Slab::Between(near, far) => span = Some(narrow(span, near, far)),
             }
         }
-        let (entry, exit) = (entry?, exit?);
+        let (entry, exit) = span?;
         (entry.compare(&exit) != Ordering::Greater).then_some((entry, exit))
     }
+}
+
+/// The span tightened by one more slab; an earlier axis keeps a tie.
+fn narrow(
+    span: Option<(Crossing, Crossing)>,
+    near: Crossing,
+    far: Crossing,
+) -> (Crossing, Crossing) {
+    span.map_or((near, far), |(entry, exit)| {
+        (
+            if near.compare(&entry) == Ordering::Greater { near } else { entry },
+            if far.compare(&exit) == Ordering::Less { far } else { exit },
+        )
+    })
 }
