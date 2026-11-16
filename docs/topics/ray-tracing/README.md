@@ -32,6 +32,9 @@ as:
 - `TraceTriangle` (`new`, `vertices`, `bounds`);
 - `TriangleHit` (`distance`, `front_face`, `barycentrics`,
   `barycentric_numerators`);
+- `TraceSphere` (`new`, `center`, `radius`, `bounds`), `TraceSphereError`,
+  `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
+  in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
 - `TRACE_COORD_LIMIT_RAW`, `TRACE_DIRECTION_LIMIT_RAW` and
@@ -251,6 +254,77 @@ which `v0, v1, v2` appear counter-clockwise, that is when
 the direction is not normalized. `TraceTriangle::vertices` returns the three
 vertices given to `new`, and `TraceTriangle::bounds` returns the smallest
 `FixedAabb3` that contains them.
+
+## Ray-Sphere
+
+`TraceRay::hit_sphere(sphere, t_min, t_max)` is the exact ray-sphere test.
+Its contract identity is **`bunny-ray-sphere/1`**. The general-purpose
+`ray_intersects_sphere` in `ray.rs` is a separate solver with its own
+contract and is unchanged.
+
+**The sphere.** `TraceSphere::new(center, radius)` takes a centre and a
+radius, so a sphere anywhere in the trace domain needs no change of frame; a
+caller with spheres in an object frame passes a centre at the origin of that
+frame. Every centre coordinate and the radius must be inside the trace domain
+(`abs(raw) < 2^40`), and the radius must be positive. Any other input is
+refused with a typed `TraceSphereError`: `CenterOutsideTraceDomain`,
+`RadiusNotPositive` or `RadiusOutsideTraceDomain`. Nothing wraps, saturates or
+panics. `TraceSphere::bounds` is the box `center -+ radius`.
+
+**The hit** has the form of `TriangleHit`, so a renderer compares distances
+across kinds directly:
+
+- `SphereHit::distance` is in multiples of the ray direction, as for
+  triangles;
+- `SphereHit::front_face` is `true` at the near root (the ray arrives from
+  outside, or touches a tangent point) and `false` at the far root (the ray
+  leaves from inside);
+- `SphereHit::normal` is the outward normal.
+
+**The arithmetic.** With `f = origin - center`, `d` the direction and `r` the
+radius, all raw, the point at distance `t` lies on the sphere when
+`a t^2 + 2 b t + (f . f - r^2) = 0`, with `a = d . d` and `b = f . d`. The
+quarter discriminant is computed as `a r^2 - |f x d|^2` (Lagrange's identity),
+exactly, in 256-bit unsigned integers (`crates/bunny-query/src/trace/wide.rs`).
+The line misses when it is negative. Otherwise `E = 2^64 * discriminant` and
+the roots in raw distance units are `(-2^32 b -+ sqrt(E)) / a`.
+
+`floor(sqrt(E))` is exact: below `2^128` it is `FixedQ32_32::sqrt_u128`,
+Bunny's exact integer square root; above, the root of the high 128 bits gives
+the top 64 bits of the result and the low 64 bits are set one at a time,
+largest first, while the square stays at most `E`.
+
+Widths in the trace domain: `abs(f) < 2^41` and `abs(d) <= 2^32 + 1` per
+component, so `a < 2^66`, `abs(b) < 2^75`, each component of `f x d` is below
+`2^75`, `a r^2 < 2^146`, `E < 2^210` and its root below `2^105`;
+`2^32 b -+ root` is below `2^108`. Every value fits its type with room to
+spare.
+
+**Rounding rule of `bunny-ray-sphere/1`.**
+
+- Each root is the floor of the true root in raw units:
+  `floor((-2^32 b - sqrt(E)) / a)` and `floor((-2^32 b + sqrt(E)) / a)`, with
+  the square root real, not rounded. Over integers this is
+  `floor((-2^32 b - g - 1) / a)` for the near root when `E` is not a perfect
+  square and `floor((-2^32 b - g) / a)` when it is, and
+  `floor((-2^32 b + g) / a)` for the far root, where `g = floor(sqrt(E))`.
+  This is the rule of `TriangleHit::distance`.
+- The distance limits are inclusive and apply to the rounded distance. The
+  near root is reported when `t_min <= near <= t_max`; otherwise the far root
+  when `t_min <= far <= t_max`; otherwise there is no hit.
+- The normal is `floor((f * 2^32 + d * distance) / r)` per component: the
+  offset of the point at the rounded distance from the centre, over the
+  radius, rounded down. Its length is within a few raw units of 1.0, not
+  exactly 1.0.
+
+**Cases.**
+
+- **Tangent rays.** A discriminant of zero is a hit at the one root, front
+  face. Contact is inclusive: a ray whose line touches the sphere hits.
+- **Origin inside.** The near root is negative, so with `t_min >= 0` the far
+  root is reported, with `front_face == false`.
+- **Behind the origin.** When both rounded roots are below `t_min` there is no
+  hit; a negative `t_min` lets a caller see them.
 
 ## General-Purpose Ray-AABB Solver
 
