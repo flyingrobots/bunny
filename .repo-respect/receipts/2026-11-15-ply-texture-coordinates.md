@@ -19,7 +19,6 @@ crates/bunny-codec/src/lib.rs
 crates/bunny-codec/src/ply_ascii.rs
 crates/bunny-codec/src/ply_ascii/header.rs
 crates/bunny-codec/src/ply_ascii/body.rs
-crates/bunny-codec/src/ply_ascii/limits.rs
 crates/bunny-codec/tests/ply_ascii_uv_tests.rs
 docs/topics/ascii-ply/README.md
 docs/topics/ascii-ply/test-plan.md

@@ -11,7 +11,9 @@ This is a living topic chapter, not a proposal. It is implemented in
 `crates/bunny-codec/src/ply_ascii.rs` and the modules beside it, and exported as:
 
 - `parse_ascii_ply`, `AsciiPlyMesh` (`vertex_count`, `face_count`, `vertices`,
-  `triangles`), `AsciiPlyVertices`, `AsciiPlyTriangles`, `AsciiPlyVertex`;
+  `triangles`, `has_texture_coordinates`, `texture_coordinates`), `AsciiPlyVertices`,
+  `AsciiPlyTriangles`, `AsciiPlyVertex`, `AsciiPlyTextureCoordinates` and
+  `AsciiPlyTextureCoordinate` (`u`, `v`); see [Texture Coordinates](#texture-coordinates);
 - `parse_ascii_ply_with_limits`, `AsciiPlyLimits` (`DEFAULT`, `UNLIMITED`, `new`),
   `AsciiPlyLimitedError`, `AsciiPlyLimitExceeded` (`limit`, `maximum`, `observed`,
   `line`) and `AsciiPlyLimit`; see [Limits](#limits);
@@ -32,7 +34,7 @@ differ in what they return and how they are read:
 | --- | --- | --- |
 | Input | `&[u8]`, `binary_little_endian 1.0` | `&[u8]`, `ascii 1.0` |
 | Vertex type | `f32` x, y, z | `FixedQ32_32` x, y, z |
-| Extra vertex properties | refused | skipped by their declaration |
+| Extra vertex properties | refused | `s`, `t` or `u`, `v` read as texture coordinates; others skipped by their declaration |
 | Access | O(1) `vertex(i)`, `triangle(i)` | forward iterators over a re-read of the text |
 | Errors | `PlyError`, no position | `AsciiPlyError`, kind and 1-based line |
 | Allocation | none after warm-up | none after warm-up |
@@ -70,7 +72,8 @@ see [`test-plan.md`](test-plan.md#feature-configurations).
    lines below, then `end_header`.
 2. `element vertex N` with scalar properties `property <type> <name>`. The names
    `x`, `y` and `z` must each appear exactly once, in any order, with type
-   `float`, `float32`, `double` or `float64`. Every other property is skipped by
+   `float`, `float32`, `double` or `float64`. The texture coordinate names `s`, `t`,
+   `u` and `v` follow [Texture Coordinates](#texture-coordinates). Every other property is skipped by
    its position in the declared list. Its type must be one of `char`, `uchar`,
    `short`, `ushort`, `int`, `uint`, `float`, `double`, `int8`, `uint8`, `int16`,
    `uint16`, `int32`, `uint32`, `float32`, `float64` (any other type is
@@ -85,6 +88,25 @@ see [`test-plan.md`](test-plan.md#feature-configurations).
    element before the vertex element, or before `x`, `y` and `z` are all declared, is
    `MissingVertexElement`, reported at the `element face` line.
 5. A body of exactly `N` vertex records, then `M` face records, one record per line.
+
+### Texture Coordinates
+
+The vertex element may declare one pair of texture coordinates: `s` and `t`, or `u` and
+`v`, each once, with type `float`, `float32`, `double` or `float64`, in any order and at any
+position among the other properties. Their text is converted by
+[`bunny-decimal-q32-32/1`](#the-conversion-rule), as positions are, and a value that fails
+the conversion is refused at its body line with the same kinds (`InvalidNumber`,
+`NumberOverflow`, `NumberTooLong`). `AsciiPlyMesh::texture_coordinates` returns them in vertex
+order as `AsciiPlyTextureCoordinate { u, v }`: `u` from `s` or `u`, `v` from `t` or `v`.
+
+A vertex element that declares none of the four names has no texture coordinates:
+`has_texture_coordinates` is false, `texture_coordinates` is `None`, and the file reads exactly
+as it did before texture coordinates were read. Anything else is `UnsupportedProperty` at the
+line of the last of the four names declared: one name of a pair without the other (`s` alone,
+`t` alone, `s` with `v`), names from both pairs, a name declared twice, or an integer type.
+
+No other name is a texture coordinate: `texture_u`, `texcoord` and the like are skipped
+columns. Per-face (wedge) texture coordinates are not part of the profile.
 
 ### Faces
 
@@ -178,7 +200,7 @@ newline search, the blank test, the token count, one lookup per coordinate and t
 conversion of each coordinate token). The limits bound what one declaration or one line can
 claim; a line is still scanned once to find its end before its length is compared.
 
-**Skipped columns.** The text of an extra vertex column is counted, never parsed, with or
+**Skipped columns.** The text of an extra vertex column other than a texture coordinate is counted, never parsed, with or
 without limits, as stated in [The Profile](#the-profile): the header gives a type, but no
 type's value grammar is part of this profile, and the binary reader refuses extra
 properties instead of reading them. Behaviour is unchanged.
@@ -209,7 +231,7 @@ line after the last line of the input. Its `Display` is `line <n>: <message>`.
 | `MissingVertexElement` | no vertex element, or `x`, `y`, `z` not all declared; a face element declared before either |
 | `MissingFaceElement` | no face element or no `vertex_indices` property |
 | `UnsupportedElement` | a non-empty extra element, or a repeated vertex or face element |
-| `UnsupportedProperty` | wrong type, duplicate coordinate, list property in a vertex, wrong face property |
+| `UnsupportedProperty` | wrong type, duplicate coordinate, list property in a vertex, wrong face property, a texture coordinate pair that is incomplete, mixed, repeated or not float-typed |
 | `PayloadTooShort` | fewer vertex or face records than declared |
 | `TrailingData` | a record after the last declared one |
 | `VertexFieldCount` | a vertex line with other than one value per declared property |

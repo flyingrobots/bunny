@@ -45,6 +45,7 @@ off, which is how a consumer without crates.io dependencies uses these readers.
 | APLY-REQ-015 | `parse_ascii_ply` is unchanged, and `parse_ascii_ply_with_limits` with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same `AsciiPlyError` otherwise. | `README.md#limits` |
 | APLY-REQ-016 | The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is `UnsupportedProperty`. | `README.md#the-conversion-rule` |
 | APLY-REQ-017 | The chapter's statements match the code at three points: a face element before the vertex element or before `x`, `y`, `z` are declared is `MissingVertexElement` at the `element face` line; a face count that is not digits is `InvalidIndex` and a run of digits other than 3 is `NonTriangularFace`, with `03` accepted; and the `end_header` line is where a missing coordinate is reported when no face element follows. | `README.md#faces` |
+| APLY-REQ-018 | A vertex element with `s` and `t`, or `u` and `v`, of a float type returns them as texture coordinates converted by `bunny-decimal-q32-32/1`; an incomplete, mixed, repeated or integer-typed pair is `UnsupportedProperty` at the last texture name's line; a file with none of the four names reads as before. | `README.md#texture-coordinates` |
 
 ```toml
 [[requirement]]
@@ -131,6 +132,11 @@ status = "active"
 id = "APLY-REQ-017"
 summary = "The chapter's statements match the code at three points: a face element before the vertex element or before x, y, z are declared is MissingVertexElement at the element face line; a face count that is not digits is InvalidIndex and a run of digits other than 3 is NonTriangularFace, with 03 accepted; and the end_header line is where a missing coordinate is reported when no face element follows."
 status = "active"
+
+[[requirement]]
+id = "APLY-REQ-018"
+summary = "A vertex element with s and t, or u and v, of a float type returns them as texture coordinates converted by bunny-decimal-q32-32/1; an incomplete, mixed, repeated or integer-typed pair is UnsupportedProperty at the last texture name's line; a file with none of the four names reads as before."
+status = "active"
 ```
 
 ## Test Cases
@@ -183,6 +189,11 @@ status = "active"
 | APLY-TP-063 | Missing coordinate line | APLY-REQ-017 | A missing `x` or `z` before the face element is `MissingVertexElement` at the `element face` line; with no face element, and with no vertex element, at the `end_header` line. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up` |
 | APLY-TP-064 | Face count kinds | APLY-REQ-017 | Seven counts that are not digits are `InvalidIndex`, six runs of digits other than 3 (one of 26 digits) are `NonTriangularFace`, and `3`, `03`, `0003` are accepted. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index` |
 | APLY-TP-065 | Face before vertex | APLY-REQ-017 | A face element before the vertex element is `MissingVertexElement` at its line; a repeated vertex element is `UnsupportedElement`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element` |
+| APLY-TP-066 | Generated exact | APLY-REQ-018 | 400 generated meshes (seed `0x3695eed`) in an `x y z s t` layout and a `u nx x v y z` layout: every texture coordinate and position equals `m * 2^(32-k)` for its decimal `m / 2^k`, through both entry points. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_066_both_pairs_return_exact_texture_coordinates_for_generated_decimals` |
+| APLY-TP-067 | Decimal rule | APLY-REQ-018 | Hand-derived raw values (0.5, 1, -0.125, 0.25, 0.1, 0.75) and 2 000 generated decimals (seed `0x369dec`) with signs, up to 18 fractional digits and exponents: each texture coordinate is `parse_decimal_q32_32` of its own text. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_067_texture_coordinates_follow_the_decimal_rule` |
+| APLY-TP-068 | Refused pairs | APLY-REQ-018 | Nine headers (each lone name, `s` with `v`, both pairs in two orders, a repeated `s`, an integer `t`) are `UnsupportedProperty` at the last texture name's line, through both entry points. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_068_an_incomplete_or_ambiguous_pair_is_refused_at_its_line` |
+| APLY-TP-069 | Bad values | APLY-REQ-018 | `nan`, `1e10` and a 29-digit value in `v` are `InvalidNumber`, `NumberOverflow` and `NumberTooLong` at the second vertex's line. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_069_a_bad_texture_coordinate_is_refused_at_its_body_line` |
+| APLY-TP-070 | Unchanged without UVs | APLY-REQ-018 | The Stanford fixture has no texture coordinates and its positions and triangles hash to the FNV-1a digest taken at `origin/main` 4a3957b before the change; a skipped `nx` column stays skipped. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_070_a_file_without_texture_coordinates_reads_as_before` |
 
 ```toml
 [[case]]
@@ -598,6 +609,51 @@ test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_el
 oracle = "Exact kind and line for a reordered header and a repeated vertex element."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "APLY-TP-066"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_066_both_pairs_return_exact_texture_coordinates_for_generated_decimals"
+oracle = "Dyadic decimals whose raw value is a shift of the generating integer; no conversion in the oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-067"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_067_texture_coordinates_follow_the_decimal_rule"
+oracle = "Hand-derived raw values, then the decimal rule applied to the same strings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-068"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_068_an_incomplete_or_ambiguous_pair_is_refused_at_its_line"
+oracle = "Exact kind and line counted by hand."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-069"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_069_a_bad_texture_coordinate_is_refused_at_its_body_line"
+oracle = "Exact kind and line counted by hand."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-070"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_070_a_file_without_texture_coordinates_reads_as_before"
+oracle = "Digest of the reader's output before the change."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Fixtures
@@ -667,6 +723,16 @@ tests and against the new file:
 | `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -11 | 2 | APLY-TP-061 |
 | `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -9 | 8 | APLY-TP-061 |
 | the `SCALAR_TYPES` check disabled | 0 | APLY-TP-062 |
+
+Texture coordinates (flyingrobots/bunny#369) were mutated, each against
+`ply_ascii_uv_tests.rs`:
+
+| Mutant | Tests failing |
+| --- | --- |
+| `u` and `v` read from each other's column | 2 |
+| texture coordinates not validated when the mesh is parsed | 1 |
+| an incomplete or mixed pair accepted as no texture coordinates | 1 |
+| the refusal reported at the first texture name's line, not the last | 1 |
 
 ## Open Gaps
 

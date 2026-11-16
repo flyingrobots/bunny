@@ -21,6 +21,6 @@ pub use ply_ascii::{
     parse_ascii_ply, parse_ascii_ply_with_limits, parse_decimal_q32_32, AsciiPlyError,
     AsciiPlyErrorKind, AsciiPlyLimit, AsciiPlyLimitExceeded, AsciiPlyLimitedError, AsciiPlyLimits,
     AsciiPlyMesh, AsciiPlyTextureCoordinate, AsciiPlyTextureCoordinates, AsciiPlyTriangles,
-    AsciiPlyVertex, AsciiPlyVertices, DecimalError,
-    ASCII_PLY_PROFILE_ID, DECIMAL_Q32_32_ID, MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
+    AsciiPlyVertex, AsciiPlyVertices, DecimalError, ASCII_PLY_PROFILE_ID, DECIMAL_Q32_32_ID,
+    MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
 };
