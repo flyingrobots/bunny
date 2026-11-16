@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
+  `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed
+  256-entry table, each entry the exact sRGB decode rounded to nearest in raw
+  Q32.32. Closes flyingrobots/bunny#366.
+
 * `bunny-optics`: the perfect mirror, `bunny-specular-reflection/1`
   (`SPECULAR_REFLECTION_ID`). `SurfaceHit::specular_reflection` and
   `try_specular_reflection` give the continuation ray from the hit's start
