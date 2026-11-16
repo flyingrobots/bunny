@@ -293,21 +293,31 @@ fn rim_range(seeds: &mut Seeds) -> (i64, i64) {
 }
 
 fn inexact_rim_case(seeds: &mut Seeds) -> Option<Case> {
-    let k = seeds.scale(34);
-    let (a, b) = if seeds.next().is_multiple_of(2) { (3 * k, 4 * k) } else { (4 * k, 3 * k) };
-    let (a, b) = (a * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")], b);
+    let scale = seeds.scale(34);
+    let (rim_x, rim_y) = if seeds.next().is_multiple_of(2) {
+        (3 * scale, 4 * scale)
+    } else {
+        (4 * scale, 3 * scale)
+    };
+    let (rim_x, rim_y) = (rim_x * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")], rim_y);
     let dz = seeds.scale(32) * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")];
     let reach = (ONE / dz.abs()).min(1 << 10);
-    let (u, v) = (seeds.signed(reach), seeds.signed(reach));
+    let (slope_x, slope_y) = (seeds.signed(reach), seeds.signed(reach));
     // The whole number of units between the origin and the plane, either sign.
     let steps = seeds.scale(26) * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")];
     let nudge = seeds.signed(1);
     let origin_z = seeds.signed(DOMAIN / 2);
     let height = origin_z + steps;
-    let origin = [a + nudge - u * steps, b - v * steps, origin_z];
+    let origin = [rim_x + nudge - slope_x * steps, rim_y - slope_y * steps, origin_z];
     let inside = origin.iter().chain([&height]).all(|&c| c.abs() <= DOMAIN);
     let range = rim_range(seeds);
-    inside.then_some(Case { origin, direction: [dz * u, dz * v, dz], height, radius: 5 * k, range })
+    inside.then_some(Case {
+        origin,
+        direction: [dz * slope_x, dz * slope_y, dz],
+        height,
+        radius: 5 * scale,
+        range,
+    })
 }
 
 #[wasm_bindgen_test(unsupported = test)]
