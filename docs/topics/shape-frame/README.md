@@ -83,6 +83,8 @@ returned when a world component does not fit `i64`.
 - A ray parallel to an object plane keeps a zero direction component in that plane when the
   axes map it exactly (for example axis permutations); under a general rotation the
   component is the rounded exact value, which may be a few raw units.
-- A ray whose frame origin is behind it maps to an object ray that also moves away from the
-  object origin; nothing about the ray's distance range changes.
+- With axes that map it exactly (for example axis permutations), a ray whose frame origin is
+  behind it maps to an object ray that also moves away from the object origin. With inexact
+  axes, a ray nearly perpendicular to its offset from the frame origin can map to one that
+  moves slightly toward it. Either way the map does not change the ray's distance range.
 - Nothing wraps or panics: every overflow is one of the refusals above.
