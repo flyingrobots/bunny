@@ -67,16 +67,19 @@ impl TraceCylinder {
         top: FixedQ32_32,
     ) -> Result<Self, TraceCylinderError> {
         let (radius, bottom, top) = (radius.raw(), bottom.raw(), top.raw());
-        if radius <= 0 {
-            Err(TraceCylinderError::RadiusNotPositive)
+        let refusal = if radius <= 0 {
+            Some(TraceCylinderError::RadiusNotPositive)
         } else if !in_trace_domain(radius) {
-            Err(TraceCylinderError::RadiusOutsideTraceDomain)
+            Some(TraceCylinderError::RadiusOutsideTraceDomain)
         } else if !(in_trace_domain(bottom) && in_trace_domain(top)) {
-            Err(TraceCylinderError::CapOutsideTraceDomain)
-        } else if bottom >= top {
-            Err(TraceCylinderError::CapsNotOrdered)
+            Some(TraceCylinderError::CapOutsideTraceDomain)
         } else {
-            Ok(Self { radius, bottom, top })
+            None
+        };
+        match refusal {
+            Some(error) => Err(error),
+            None if bottom >= top => Err(TraceCylinderError::CapsNotOrdered),
+            None => Ok(Self { radius, bottom, top }),
         }
     }
 
