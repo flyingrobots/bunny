@@ -74,9 +74,9 @@ pub use camera::{
 pub use error::CameraError;
 pub use hash::{fraction_from_bits, PixelStream, SAMPLE_HASH_ID};
 pub use pixel::{
-    quantize_16, quantize_8, srgb8_to_linear, write_rgba8, PixelAccumulator, PixelError,
-    ToneCurve, MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW, RGBA8_OPAQUE_IDENTITY,
-    SRGB8_DECODE_IDENTITY, UNORM16_IDENTITY, UNORM8_IDENTITY,
+    quantize_16, quantize_8, srgb8_to_linear, write_rgba8, PixelAccumulator, PixelError, ToneCurve,
+    MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW, RGBA8_OPAQUE_IDENTITY, SRGB8_DECODE_IDENTITY,
+    UNORM16_IDENTITY, UNORM8_IDENTITY,
 };
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};

@@ -7,12 +7,12 @@
 mod accumulate;
 mod decode;
 mod srgb;
-// The knot table is `pub` inside this private module, as `clippy::redundant_pub_crate` asks;
+// The tables are `pub` inside this private modules, as `clippy::redundant_pub_crate` asks;
 // the workspace's `unreachable_pub` lint disagrees, and is allowed here.
 #[allow(unreachable_pub)]
-mod srgb_knots;
-#[allow(unreachable_pub)]
 mod srgb8_table;
+#[allow(unreachable_pub)]
+mod srgb_knots;
 mod tone;
 
 pub use accumulate::{PixelAccumulator, MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW};

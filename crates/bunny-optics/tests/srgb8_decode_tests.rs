@@ -128,15 +128,10 @@ fn optics_tp_121_tone_srgb_encodes_every_entry_back_to_its_code() {
     }
 }
 
-/// `(code, raw)` from the generator's 80-digit decimal run, at the ends, around the toe's end
-/// (code 10 is the last linear entry), and in the middle.
-const GOLDEN: &[(u8, i64)] = &[
-    (0, 0),
-    (1, 1_303_638),
-    (10, 13_036_385),
-    (11, 14_373_262),
-    (255, 4_294_967_296),
-];
+/// `(code, raw)` from the generator's 80-digit decimal run, at the ends and around the toe's
+/// end (code 10 is the last linear entry).
+const GOLDEN: &[(u8, i64)] =
+    &[(0, 0), (1, 1_303_638), (10, 13_036_385), (11, 14_373_262), (255, 4_294_967_296)];
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_122_identity_ends_order_and_golden_entries() {
