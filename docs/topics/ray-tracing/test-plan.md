@@ -1530,7 +1530,7 @@ all eight tests.
 | Mutation | Rule broken | Failing cases |
 | --- | --- | --- |
 | `dz == 0` made `dz == 7` | A ray parallel to the plane misses | TRACE-TP-560, 563 |
-| `outside > reach` made `outside >= reach` | The rim is inside | TRACE-TP-560 to 562, 564 |
+| `outside <= reach` made `outside < reach` | The rim is inside | TRACE-TP-560 to 562, 564 |
 | `front_face: dz < 0` made `dz > 0` | Facing | TRACE-TP-560 to 565, 567 |
 | `div_euclid` made truncating division | The distance is the floor | TRACE-TP-565 only (the generated cases do not reach a negative inexact distance inside the disc, a known gap of TRACE-TP-560) |
 | `o * dz - d * f` made `o * dz + d * f` | The hit point is the exact meeting point | TRACE-TP-560, 561, 567 |

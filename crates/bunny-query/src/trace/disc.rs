@@ -119,29 +119,45 @@ impl TraceRay {
         t_min: FixedQ32_32,
         t_max: FixedQ32_32,
     ) -> Option<DiscHit> {
-        let [ox, oy, oz] = wide3(self.origin);
-        let [dx, dy, dz] = wide3(self.direction);
-        if dz == 0 {
-            return None;
-        }
-        let height = i128::from(disc.height);
-        let f = oz - height;
-        // `t = -f / dz` in raw units is `floor(-f * 2^32 / dz)`; the divisor is made positive.
-        let sign = dz.signum();
-        let t = ((-f * sign) << FixedQ32_32::FRACTIONAL_BITS).div_euclid(dz * sign);
+        let dz = i128::from(self.direction[2]);
+        let f = i128::from(self.origin[2]) - i128::from(disc.height);
+        let t = plane_distance(f, dz)?;
         if !(i128::from(t_min.raw())..=i128::from(t_max.raw())).contains(&t) {
             return None;
         }
-        // Each numerator is below 2^75 and `r dz` below 2^73, so the squares are below 2^150.
-        let across = |o: i128, d: i128| (o * dz - d * f).unsigned_abs();
-        let (x, y) = (across(ox, dx), across(oy, dy));
-        let reach = u128::from(disc.radius.unsigned_abs()) * dz.unsigned_abs();
-        let outside = U256::product(x, x).checked_add(U256::product(y, y))?;
-        if outside > U256::product(reach, reach) {
+        if !self.meets_within(disc.radius, f)? {
             return None;
         }
         // In range, so it fits `i64`.
         let distance = i64::try_from(t).ok()?;
         Some(DiscHit { distance: FixedQ32_32::from_raw(distance), front_face: dz < 0 })
     }
+
+    /// Whether the exact point where the ray meets the plane, `f` raw below the origin, is
+    /// at most `radius` from the axis; `None` when a sum does not fit 256 bits (never in the
+    /// trace domain).
+    ///
+    /// Each numerator is below `2^75` and `radius * d.z` below `2^73`, so the squares are
+    /// below `2^150`.
+    fn meets_within(&self, radius: i64, f: i128) -> Option<bool> {
+        let [ox, oy, _] = wide3(self.origin);
+        let [dx, dy, dz] = wide3(self.direction);
+        let across = |o: i128, d: i128| (o * dz - d * f).unsigned_abs();
+        let (x, y) = (across(ox, dx), across(oy, dy));
+        let reach = u128::from(radius.unsigned_abs()) * dz.unsigned_abs();
+        let outside = U256::product(x, x).checked_add(U256::product(y, y))?;
+        Some(outside <= U256::product(reach, reach))
+    }
+}
+
+/// `floor(-f * 2^32 / dz)`, the raw distance at which a ray `f` raw above the plane with
+/// direction `z` of `dz` meets it, or `None` when the ray is parallel to the plane.
+///
+/// `|f * 2^32| < 2^73` fits `i128`; the divisor is made positive so that `div_euclid` floors.
+fn plane_distance(f: i128, dz: i128) -> Option<i128> {
+    if dz == 0 {
+        return None;
+    }
+    let sign = dz.signum();
+    Some(((-f * sign) << FixedQ32_32::FRACTIONAL_BITS).div_euclid(dz * sign))
 }
