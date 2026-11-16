@@ -16,7 +16,7 @@ evidence exist.
 | Chapter | Owns |
 | --- | --- |
 | [`topics/angle-trigonometry/`](topics/angle-trigonometry/) | Binary angles (`FixedAngle`), conversions from turns, degrees and radians, and table-based deterministic sine and cosine with error bounds. |
-| [`topics/ascii-ply/`](topics/ascii-ply/) | The ASCII PLY triangle-mesh profile `bunny-ascii-ply-triangle-mesh/1` read by `parse_ascii_ply`, its line, whitespace and comment rules and error contract, the caller-chosen limits of `parse_ascii_ply_with_limits`, and the exact integer-only decimal to Q32.32 conversion rule `bunny-decimal-q32-32/1`. |
+| [`topics/ascii-ply/`](topics/ascii-ply/) | The ASCII PLY triangle-mesh profiles `bunny-ascii-ply-triangle-mesh/1` read by `parse_ascii_ply` and `/2` read by `parse_ascii_ply_v2`, which adds `s`/`t` or `u`/`v` texture coordinates, their line, whitespace and comment rules and error contract, the caller-chosen limits of `parse_ascii_ply_with_limits`, and the exact integer-only decimal to Q32.32 conversion rule `bunny-decimal-q32-32/1`. |
 | [`topics/bvh-construction/`](topics/bvh-construction/) | The flat BVH node format and its two builders: the quartile builder `build_bvh` and the binned SAH builder `build_bvh_sah`, with costs, overflow rule, tie rules, depth cap and stable partition. |
 | [`topics/code-dojo-determinism/`](topics/code-dojo-determinism/) | The Code Dojo rules that enforce Echo's `ban-nondeterminism` rule IDs: banned paths and crates, import and macro resolution, crate scope, waivers, and the dependency check. |
 | [`topics/contract-generation/`](topics/contract-generation/) | Schema-to-artifact generation, generated Rust/TypeScript DTO shape, manifest witnesses, and Bunny-owned object boundaries. |
@@ -28,6 +28,7 @@ evidence exist.
 | [`topics/performance/`](topics/performance/) | The fidelity rule for optimizations, the `bunny-perf` harness, `cargo xtask perf` before/after comparisons, CI regression gating, and the ledger of landed speedups. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | Ray tracing: the kernels (trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, rounding of distances and barycentrics) and the closest-hit and any-hit BVH traversals, with the argument that their answer does not depend on the tree. |
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, and segment clipping with its rounding contract. |
+| [`topics/shape-frame/`](topics/shape-frame/) | `ShapeFrame` (`bunny-shape-frame/1`): the rigid frame an analytic shape is traced in, its axis and domain refusals, rays mapped into object space and normals back with one ties-to-even rounding per component. |
 | [`topics/ray-tracing/`](topics/ray-tracing/) | The ray-tracing kernels: trace domain, conservative division-free ray-box bound, exact integer ray-triangle test, edge rule, facing, and rounding of distances and barycentrics. |
 | [`topics/plane-clipping/`](topics/plane-clipping/) | Fixed plane classification, the on-plane rule, segment and convex polygon clipping with its rounding contract. |
 | [`topics/lint-policy/`](topics/lint-policy/) | Rule 10 for the core crates: `clippy::nursery` cherry-picked by name, never set as a group, and the Code Dojo `blanket-nursery` check that enforces it. |

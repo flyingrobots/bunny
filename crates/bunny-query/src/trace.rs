@@ -34,10 +34,12 @@ const RECIPROCAL_BITS: u32 = 63;
 const RECIPROCAL_SHIFT: u32 = RECIPROCAL_BITS - FixedQ32_32::FRACTIONAL_BITS;
 
 mod cylinder;
+mod box_hit;
 mod sphere;
 mod wide;
 
 pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError, RAY_CYLINDER_ID};
+pub use box_hit::{BoxHit, TraceBox, TraceBoxError, RAY_BOX_ID};
 pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
 
 type Wide3 = [i128; 3];
@@ -76,7 +78,11 @@ impl TraceRay {
     }
 
     /// `new` with the inclusive bound on direction components as a parameter.
-    fn prepare(origin: FixedVec3, direction: FixedVec3, direction_limit: i64) -> Option<Self> {
+    pub(crate) fn prepare(
+        origin: FixedVec3,
+        direction: FixedVec3,
+        direction_limit: i64,
+    ) -> Option<Self> {
         let origin = raw3(origin);
         let direction = raw3(direction);
         let valid = origin.iter().all(|&c| in_trace_domain(c))
