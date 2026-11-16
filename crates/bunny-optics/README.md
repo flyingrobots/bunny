@@ -70,6 +70,13 @@ every buffer.
   when it lies along the surface or is missing); its light term uses the
   shading cosine and the geometric shadow test; `bounce` rejects a direction
   at or below the exact geometric plane (`SmoothBounce::BelowSurface`).
+* `SurfaceHit::specular_reflection` (`bunny-specular-reflection/1`): a
+  perfect mirror's continuation ray, along the exact reflection about the
+  frame normal normalized once, and its throughput, `schlick_fresnel` per
+  channel from a base reflectance (each step rounded once; the base
+  reflectance exactly at normal incidence), as a `SpecularSample`; a ray from
+  below the face and a grazing reflection under the plane are refused with a
+  `SecondaryRayError`.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
