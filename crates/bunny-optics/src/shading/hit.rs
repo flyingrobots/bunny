@@ -144,7 +144,9 @@ impl SurfaceHit {
     /// put it strictly on the far side of the triangle's exact plane.
     ///
     /// For a hit the trace kernel reported, `p` is less than `9 |N_k| / 2` above the plane
-    /// (see `docs/topics/optics/README.md#smooth-dielectric`), so `j` is at most five. The
+    /// (plus `3 |N_k| / 2^32` for a `TraceRay::from_ray` direction with a component of
+    /// `2^32 + 1`; see `docs/topics/optics/README.md#smooth-dielectric`), below `5 |N_k|`
+    /// either way, so `j` is at most five. The
     /// point can be outside the trace domain; the caller checks. Exact in `i128`: the plane
     /// value is below `2^126`.
     pub(crate) fn far_point(&self) -> Wide {

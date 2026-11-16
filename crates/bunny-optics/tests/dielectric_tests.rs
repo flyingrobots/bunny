@@ -358,9 +358,9 @@ fn optics_tp_162_refracted_directions_satisfy_snells_law_on_seeded_hits() {
     let mut seeds = Seeds(seed);
     // Refracted, reflected (total or a reflectance of 1.0), refused as grazing, no scene.
     let mut counts = [0_u32; 4];
-    // Entering, leaving, indices at most one raw unit apart, incidence cosine below 1/16,
-    // directions shorter than 0.5.
-    let mut reach = [0_u32; 5];
+    // Entering, leaving, indices exactly one raw unit apart, incidence cosine below 1/16,
+    // directions shorter than 0.5, equal indices.
+    let mut reach = [0_u32; 6];
     for case in 0..3_000 {
         let scene = seeded_scene(&mut seeds);
         let boundary = seeds.boundary();
@@ -372,7 +372,8 @@ fn optics_tp_162_refracted_directions_satisfy_snells_law_on_seeded_hits() {
         let (d, n) = (wide(incoming.direction()), wide(scene.hit.frame().normal()));
         let indices = ordered(&boundary, &scene.hit);
         reach[usize::from(!scene.hit.front_face())] += 1;
-        reach[2] += u32::from((indices[0] - indices[1]).abs() <= 1);
+        reach[2] += u32::from((indices[0] - indices[1]).abs() == 1);
+        reach[5] += u32::from(indices[0] == indices[1]);
         reach[3] += u32::from(is_grazing(d, n));
         reach[4] += u32::from(d.iter().all(|c| c.abs() < i128::from(ONE / 2)));
         let label = format!("seed {seed:#x} case {case}");
@@ -395,7 +396,7 @@ fn optics_tp_162_refracted_directions_satisfy_snells_law_on_seeded_hits() {
         }
     }
     println!("OPTICS-TP-162 refracted, reflected, grazing-refused, no scene: {counts:?}");
-    println!("OPTICS-TP-162 entering, leaving, indices one apart, grazing, short: {reach:?}");
+    println!("OPTICS-TP-162 entering, leaving, one apart, grazing, short, equal: {reach:?}");
     assert!(counts[0] >= 1_000 && counts[1] >= 100, "too few cases: {counts:?}");
     assert!(reach.iter().all(|&count| count >= 50), "a kind of input is not reached: {reach:?}");
 }
@@ -433,6 +434,25 @@ fn optics_tp_163_total_internal_reflection_is_decided_exactly() {
         let got = hit.dielectric_reflectance(&incoming, &dense).expect("arrives");
         assert_eq!(got == DielectricReflectance::Total, total, "odd critical, lift {lift}");
     }
+    // Indices one raw unit apart, at both ends of the range, with x = 1.0. The critical lift
+    // is the largest y with b^2 y^2 <= (a^2 - b^2) x^2 (exact integers, asserted here):
+    // a = 1.0 + 1 raw, b = 1.0: y^2 <= 2^33 + 1, so y = 92 681 (92 682^2 = 8 589 953 124);
+    // a = 8.0, b = 8.0 - 1 raw: (2^35 - 1)^2 y^2 <= (2^36 - 1) 2^64, so y = 32 768.
+    for (a, b, critical) in [(ONE + 1, ONE, 92_681_i64), (8 * ONE, 8 * ONE - 1, 32_768)] {
+        let (a2, b2) = (i128::from(a) * i128::from(a), i128::from(b) * i128::from(b));
+        let fits = |y: i64| b2 * i128::from(y) * i128::from(y) <= (a2 - b2) << 64;
+        assert!(fits(critical) && !fits(critical + 1), "the critical lift for {a} / {b}");
+        let near = boundary(b, a);
+        for (lift, total) in [(1, false), (0, true), (-1, true)] {
+            let d = [ONE, critical + lift, 0];
+            let incoming = ray([0, -ONE, 0], d);
+            let got = hit.dielectric_reflectance(&incoming, &near).expect("arrives");
+            let label = format!("indices {a} / {b}, lift {lift}");
+            assert_eq!(got == DielectricReflectance::Total, total, "{label}");
+            let oracle = Refraction::new(d.map(i128::from), [0, -i128::from(ONE), 0], [a, b]);
+            assert_eq!(oracle.is_total(), total, "the oracle for {label}");
+        }
+    }
     // 45 degrees inside glass (sin = 0.707 > 1 / 1.5) reflects as a mirror does.
     let slant = ray([-ONE, -ONE, 0], [ONE, ONE, 0]);
     let glass = boundary(ONE, GLASS);
@@ -469,8 +489,10 @@ fn optics_tp_164_total_internal_reflection_matches_the_oracle_around_the_critica
     let probe = ray([0, -ONE, 0], [0, ONE, 0]);
     let hit = hit_on(&ground, &probe).expect("hits the ground from below");
     let n = wide(hit.frame().normal());
-    // Total and partial, among directions within three raw units of the critical one.
+    // Total and partial, among directions within three raw units of the critical one; cases
+    // with equal indices (never total), and the smallest difference of unequal indices.
     let mut counts = [0_u32; 2];
+    let (mut equal, mut closest) = (0_u32, i64::MAX);
     for case in 0..1_500 {
         let (first, second) = (seeds.index(), seeds.index());
         let (inside, outside) = (first.max(second), first.min(second));
@@ -482,6 +504,8 @@ fn optics_tp_164_total_internal_reflection_matches_the_oracle_around_the_critica
         let d = [x, lift, 0];
         let incoming = ray([0, -ONE, 0], d);
         let boundary = boundary(outside, inside);
+        equal += u32::from(inside == outside);
+        closest = closest.min(if inside == outside { i64::MAX } else { inside - outside });
         let oracle = Refraction::new(d.map(i128::from), n, [inside, outside]);
         let got = hit.dielectric_reflectance(&incoming, &boundary).expect("arrives");
         let total = got == DielectricReflectance::Total;
@@ -504,6 +528,7 @@ fn optics_tp_164_total_internal_reflection_matches_the_oracle_around_the_critica
         tilted[usize::from(!total)] += 1;
     }
     println!("OPTICS-TP-164 total, partial: near critical {counts:?}, seeded {tilted:?}");
+    println!("OPTICS-TP-164 near critical: {equal} equal pairs, closest unequal {closest}");
     assert!(counts.iter().chain(&tilted).all(|&count| count >= 200), "{counts:?} {tilted:?}");
 }
 
@@ -841,4 +866,54 @@ fn optics_tp_170_a_refraction_that_stays_above_the_plane_is_refused() {
     assert_eq!(scatter(&hit, &grazing, &matched, 0), Err(expected));
     assert!(dot(direction.map(i128::from), plane) >= 0);
     assert!(expected.to_string().contains("does not go through the surface"));
+}
+
+/// Found by a search over index pairs and the continued-fraction convergents of the critical
+/// slope (Python, unbounded integers): leaving index `a` for 1.0 through the ground, this
+/// direction is short of the critical angle (`K > 0`), but so close that the reflectance
+/// rounds to 1.0.
+const NEARLY_CRITICAL: (i64, Raw3) = (8_870_361_974, [1_486_455_473, 2_686_100_064, 0]);
+
+/// The grazing case of `OPTICS-TP-107`: a kernel hit whose ray arrives from above the exact
+/// plane (`d . N < 0`) but has `d . n > 0` against the rounded unit normal.
+const BEHIND_THE_ROUNDED_NORMAL: [Raw3; 3] = [
+    [-14_247_233_187, -16_518_692_768, 8_255_702_029],
+    [14_994_902_859, -9_167_710_013, 11_680_992_187],
+    [-2_466_095_447, 12_133_874_043, -15_050_646_404],
+];
+
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_176_a_reflectance_of_one_has_no_refracted_ray() {
+    // Short of the critical angle: a refracted ray exists in exact arithmetic, the reflectance
+    // is `Partial`, not `Total`, and it is exactly 1.0, so every choice value reflects.
+    let ground = triangle(GROUND);
+    let (inside, d) = NEARLY_CRITICAL;
+    let incoming = ray([0, -ONE, 0], d);
+    let hit = hit_on(&ground, &incoming).expect("hits the ground from below");
+    let oracle = Refraction::new(d.map(i128::from), wide(hit.frame().normal()), [inside, ONE]);
+    assert!(oracle.arrives() && !oracle.is_total(), "the case's premise: short of critical");
+    let dense = boundary(ONE, inside);
+    assert_eq!(hit.dielectric_reflectance(&incoming, &dense), Ok(partial(ONE)));
+    for choice in [0, ONE / 2, LAST_CHOICE] {
+        let _ = reflected(scatter(&hit, &incoming, &dense, choice));
+    }
+    // Along or behind the plane of the rounded normal, but arriving against the exact face:
+    // no refraction is computed, the reflectance is exactly 1.0, and the mirror's own refusal
+    // of a reflection under the plane is the result for every choice value.
+    let d = [ONE, 441_121_301, 1_116_683_283];
+    let grazing = ray([-4_867_775_887, -4_958_630_880, 511_999_321], d);
+    let face = triangle(BEHIND_THE_ROUNDED_NORMAL);
+    let hit = hit_on(&face, &grazing).expect("the kernel reports the hit");
+    let (plane, _) = facing_plane(&face, &hit);
+    let (dw, n) = (d.map(i128::from), wide(hit.frame().normal()));
+    assert!(dot(dw, plane) < 0 && dot(dw, n) > 0, "the case's premise");
+    let glass = boundary(ONE, GLASS);
+    assert_eq!(hit.dielectric_reflectance(&grazing, &glass), Ok(partial(ONE)));
+    let mirror =
+        hit.try_specular_reflection(&grazing, &Albedo::new([fixed(ONE); 3]).expect("white"));
+    assert!(matches!(mirror, Err(SecondaryRayError::ReflectionBelowSurface { .. })));
+    for choice in [0, LAST_CHOICE] {
+        let got = scatter(&hit, &grazing, &glass, choice);
+        assert_eq!(got, mirror.map(DielectricScatter::Reflected), "choice {choice}");
+    }
 }

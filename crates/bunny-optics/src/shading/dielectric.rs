@@ -97,7 +97,11 @@ impl std::error::Error for RefractiveIndexError {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DielectricReflectance {
     /// The unpolarized Fresnel reflectance, in `0..=1.0`: the probability that
-    /// [`SurfaceHit::dielectric_scatter`] reflects. A refracted ray exists.
+    /// [`SurfaceHit::dielectric_scatter`] reflects. Below 1.0 a refracted ray exists and
+    /// some choice value takes it. At exactly 1.0 no choice value refracts: either the exact
+    /// reflectance rounds to 1.0 just short of the critical angle, or the ray arrives along
+    /// or behind the plane of the rounded normal (`d . n >= 0`) while still arriving against
+    /// the exact face, and no refraction is computed.
     Partial(FixedQ32_32),
     /// Total internal reflection: Snell's law has no refracted ray, decided exactly.
     Total,
@@ -118,6 +122,8 @@ impl DielectricReflectance {
 ///
 /// Either way the sample's throughput is exactly 1.0 in every channel: the branch is chosen
 /// with probability equal to its share of the energy, so the share and the probability cancel.
+/// That is a weight for power. A renderer that carries radiance along a path from the camera
+/// owes one more factor on the [`Self::Refracted`] branch, stated there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[must_use]
 pub enum DielectricScatter {
@@ -125,6 +131,16 @@ pub enum DielectricScatter {
     /// base reflectance of 1.0, which stays in the medium the ray arrived through.
     Reflected(SpecularSample),
     /// The ray was refracted: it continues through the surface, into the other medium.
+    ///
+    /// **The radiance factor is not applied.** The throughput of 1.0 conserves power. Radiance
+    /// also changes with the index: a path traced from the camera that refracts from the
+    /// medium of index `a` into the medium of index `b` must multiply its throughput by
+    /// `(a / b)^2` to carry radiance. From air into glass (`a = 1.0`, `b = 1.5`) that is
+    /// `(1 / 1.5)^2 = 4 / 9`; from glass back into air, `9 / 4`. Over a whole path the
+    /// factors multiply to `(first index / last index)^2`, so they cancel on a path that
+    /// enters a medium and leaves it again, and a renderer needs the factor only when a path's
+    /// two ends lie in media of different index. (For light, which travels the other way, the
+    /// factor is the reciprocal.)
     Refracted(SpecularSample),
 }
 
@@ -172,6 +188,9 @@ impl SurfaceHit {
     /// The continuation ray of `boundary` at this hit for the ray `incoming` that reached it
     /// and the choice value `choice` in `[0, 1)`. Returns `None` exactly when
     /// [`Self::try_dielectric_scatter`] returns an error; this is the fast path.
+    ///
+    /// The sample's throughput is exactly 1.0, a weight for power: the radiance factor
+    /// `(a / b)^2` of a refraction is not applied (see [`DielectricScatter::Refracted`]).
     #[must_use]
     pub fn dielectric_scatter(
         &self,
@@ -189,8 +208,10 @@ impl SurfaceHit {
     /// refracted otherwise. `R` of the `2^32` raw choice values reflect and the other
     /// `2^32 - R` refract, so over a uniform choice the reflected share is exactly the
     /// reflectance and the two shares sum to one. Each branch's throughput is exactly 1.0 per
-    /// channel; the factor `(b / a)^2` that radiance gains or loses on entering a medium is not
-    /// applied (it cancels on any path that returns to the medium it started in).
+    /// channel, a weight for power: the radiance factor of a refraction, `(a / b)^2` for a
+    /// path traced from the camera out of index `a` into index `b`, is not applied (see
+    /// [`DielectricScatter::Refracted`]; it cancels on a path that enters a medium and leaves
+    /// it again).
     ///
     /// **Reflected.** [`Self::try_specular_reflection`] with a base reflectance of 1.0: the
     /// same ray and the same refusals.
