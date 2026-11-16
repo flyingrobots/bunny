@@ -10,7 +10,8 @@ use bunny_num::FixedQ32_32;
 
 use crate::basis::Basis;
 
-type Wide3 = [i128; 3];
+/// An `i128` triple.
+pub type Wide3 = [i128; 3];
 
 /// Fine units are raw Q32.32 shifted left by this many bits.
 const FINE_SHIFT: u32 = FixedQ32_32::FRACTIONAL_BITS;
@@ -39,6 +40,20 @@ pub struct Offset {
     pub y: i64,
 }
 
+/// Extra room a lens needs at one scale shift, beyond the pinhole's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Margin {
+    /// Raw units every corner component must keep below the direction limit.
+    pub component: i128,
+    /// Raw-squared units every corner's `d . forward` must exceed beyond the pinhole slack.
+    pub forward: i128,
+}
+
+impl Margin {
+    /// The pinhole's: no extra room.
+    pub const NONE: Self = Self { component: 0, forward: 0 };
+}
+
 /// The direction of every sample, scaled by `2^-shift`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Plane {
@@ -54,10 +69,20 @@ impl Plane {
     /// The smallest scale shift whose image-rectangle corners fit the direction limit, and the
     /// plane at that shift; `None` if no shift fits or a corner does not face forward.
     pub fn fit(lens: &Lens) -> Option<(u32, Self)> {
+        Self::fit_with(lens, |_| Margin::NONE)
+    }
+
+    /// [`Self::fit`] with the corners held `margin(shift).component` raw units inside the
+    /// direction limit and `margin(shift).forward` further above the forward slack. With
+    /// [`Margin::NONE`] at every shift it is exactly [`Self::fit`].
+    pub fn fit_with(lens: &Lens, margin: impl Fn(u32) -> Margin) -> Option<(u32, Self)> {
         (0..=MAX_SCALE_SHIFT)
-            .map(|shift| (shift, Self::at(lens, shift)))
-            .find(|(_, plane)| plane.corners(lens).iter().flatten().all(|c| fits(*c)))
-            .filter(|(_, plane)| plane.faces_forward(lens))
+            .map(|shift| (shift, Self::at(lens, shift), margin(shift)))
+            .find(|(_, plane, m)| {
+                plane.corners(lens).iter().flatten().all(|c| fits(*c, m.component))
+            })
+            .filter(|(_, plane, m)| plane.faces_forward(lens, m.forward))
+            .map(|(shift, plane, _)| (shift, plane))
     }
 
     fn at(lens: &Lens, shift: u32) -> Self {
@@ -85,20 +110,26 @@ impl Plane {
         [(-w, -h), (w, -h), (-w, h), (w, h)].map(|(x, y)| self.direction(Offset { x, y }))
     }
 
-    /// Whether every corner direction `d` has `d . forward > 2 * |forward|_1`, which makes
-    /// `d . forward` positive for every sample inside the rectangle.
-    fn faces_forward(&self, lens: &Lens) -> bool {
+    /// Whether every corner direction `d` has `d . forward > 2 * |forward|_1 + extra`, which
+    /// makes `d . forward > extra` for every sample inside the rectangle.
+    fn faces_forward(&self, lens: &Lens, extra: i128) -> bool {
         let forward = wide(lens.basis.forward);
-        let slack = 2 * forward.iter().map(|c| c.abs()).sum::<i128>();
+        let slack = 2 * l1(forward) + extra;
         self.corners(lens).iter().all(|corner| dot(*corner, forward) > slack)
     }
 }
 
-const fn fits(component: i128) -> bool {
-    -DIRECTION_LIMIT <= component && component <= DIRECTION_LIMIT
+const fn fits(component: i128, margin: i128) -> bool {
+    -DIRECTION_LIMIT + margin <= component && component <= DIRECTION_LIMIT - margin
 }
 
-fn wide(v: FixedUnitVec3) -> Wide3 {
+/// `|v|_1`, the sum of the component magnitudes.
+pub fn l1(v: Wide3) -> i128 {
+    v.iter().map(|c| c.abs()).sum()
+}
+
+/// The raw components of a unit vector.
+pub fn wide(v: FixedUnitVec3) -> Wide3 {
     let v = v.into_inner();
     [v.x, v.y, v.z].map(|c| i128::from(c.raw()))
 }
@@ -109,7 +140,8 @@ fn map3(a: Wide3, b: Wide3, c: Wide3, f: impl Fn(i128, i128, i128) -> i128) -> W
     [f(a0, b0, c0), f(a1, b1, c1), f(a2, b2, c2)]
 }
 
-const fn dot(lhs: Wide3, rhs: Wide3) -> i128 {
+/// The exact dot product.
+pub const fn dot(lhs: Wide3, rhs: Wide3) -> i128 {
     let ([a0, a1, a2], [b0, b1, b2]) = (lhs, rhs);
     a0 * b0 + a1 * b1 + a2 * b2
 }
