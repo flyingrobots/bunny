@@ -180,7 +180,7 @@ impl BilinearTaps {
 /// let one = 1_i64 << 32;
 /// // The centre of texel (1, 0) of a 4 by 2 texture: u = 1.5 / 4, v = 0.5 / 2.
 /// let (u, v) = (FixedQ32_32::from_raw(3 * one / 8), FixedQ32_32::from_raw(one / 4));
-/// let taps = bilinear(FixedVec2::new(u, v), [4, 2], TextureWrap::Repeat).expect("a nonempty texture");
+/// let taps = bilinear(FixedVec2::new(u, v), [4, 2], TextureWrap::Repeat).expect("nonempty");
 /// assert_eq!(taps.texels()[0], [1, 0]);
 /// assert_eq!(taps.weights()[0], FixedQ32_32::ONE);
 /// ```
