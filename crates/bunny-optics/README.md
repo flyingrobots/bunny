@@ -84,6 +84,9 @@ every buffer.
 * `ToneCurve`: `SrgbV1` (`bunny-tone-srgb/1`, the sRGB transfer function from a
   1 153-knot table, within `1.49 * 10^-6` of the exact curve and monotone) and
   `LinearClampV1` (`bunny-tone-linear-clamp/1`).
+* `srgb8_to_linear` (`bunny-srgb8-decode/1`): the linear light of an 8-bit
+  sRGB code from a 256-entry table, each entry the exact decode rounded to
+  nearest; `bunny-tone-srgb/1` encodes each back to its code.
 * `quantize_8`, `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`): codes
   rounded to nearest with ties to even; `write_rgba8` writes one opaque RGBA8
   pixel (`bunny-rgba8-opaque/1`) into a caller-provided four-byte slice.

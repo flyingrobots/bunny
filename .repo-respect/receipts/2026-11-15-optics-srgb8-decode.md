@@ -27,7 +27,7 @@ The table in srgb8_table.rs, generated once with 80-digit decimal arithmetic (ru
 header and in the optics chapter).
 
 Checks run:
-In progress; see the pull request.
+cargo test -p bunny-optics --test srgb8_decode_tests: 3 pass, all in the container. Mutation: entry 1 raised by one fails TP-120 and TP-122. Full gate: see the pull request.
 
 Known risks:
 None known yet.
