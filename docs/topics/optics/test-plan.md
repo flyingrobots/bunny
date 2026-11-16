@@ -155,6 +155,7 @@ formatting.
 | OPTICS-REQ-073 | An aligned block of `2^m` sampler points of one pair maps to one lens point in each of `2^m` equal-area rings and each of `2^m` equal sectors (tested for 16 rings and 8 octants). | `README.md#thin-lens-camera` |
 | OPTICS-REQ-074 | Every in-image sample with a lens sample in `[0, 1)^2` of an accepted thin-lens camera has a ray whose direction components are at most 1.0 in magnitude and whose `direction . forward` is positive. | `README.md#thin-lens-camera` |
 | OPTICS-REQ-075 | `ThinLensCamera::new` refuses, in this order, a refused pinhole spec (`ThinLensError::Camera`), a focus distance of zero or below (`FocusDistanceNotPositive`), a negative aperture (`ApertureNegative`), a position coordinate whose magnitude plus twice the aperture reaches `2^40` raw (`LensOutsideTraceDomain`) and a lens no shift up to 32 fits (`Unrepresentable`); `ray` returns `None` for a sample outside the image or a lens coordinate outside `[0, 1)`. | `README.md#thin-lens-camera` |
+| OPTICS-REQ-066 | `srgb8_to_linear` (`bunny-srgb8-decode/1`) maps each of the 256 8-bit sRGB codes to the exact sRGB decode (IEC 61966-2-1: toe `c / (255 * 12.92)` for `c <= 10`, else `((c / 255 + 0.055) / 1.055)^2.4`) rounded to nearest in raw Q32.32, with code 0 giving 0 and code 255 giving 1.0; encoding each result with `bunny-tone-srgb/1` returns the original code. | `README.md#decoding-srgb-codes` |
 
 ```toml
 [[requirement]]
@@ -441,6 +442,11 @@ status = "active"
 id = "OPTICS-REQ-075"
 summary = "ThinLensCamera::new refuses, in this order, a refused pinhole spec (ThinLensError::Camera), a focus distance of zero or below (FocusDistanceNotPositive), a negative aperture (ApertureNegative), a position coordinate whose magnitude plus twice the aperture reaches 2^40 raw (LensOutsideTraceDomain) and a lens no shift up to 32 fits (Unrepresentable); ray returns None for a sample outside the image or a lens coordinate outside [0, 1)."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-066"
+summary = "srgb8_to_linear (bunny-srgb8-decode/1) maps each of the 256 8-bit sRGB codes to the exact sRGB decode rounded to nearest in raw Q32.32, code 0 to 0 and code 255 to 1.0; encoding each result with bunny-tone-srgb/1 returns the original code."
+status = "active"
 ```
 
 ## Fixtures
@@ -712,6 +718,10 @@ which is `2^32 D` times the raw error of the ray's point at parameter
 | OPTICS-TP-135 | Refusals | OPTICS-REQ-075 | Focus 0 and -1 raw, aperture -1 raw, an empty image with both lens inputs invalid (the pinhole error first), a lens reaching `2^40` raw (refused) next to one reaching `2^40 - 2` (accepted), aperture `2^38` raw over focus 1 raw (`Unrepresentable`), and lens samples and a column outside their ranges (`None`). | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_135_invalid_lenses_and_lens_samples_are_refused` |
 | OPTICS-TP-136 | Hand-computed level camera | OPTICS-REQ-071, OPTICS-REQ-072 | Aperture 1, focus 1, a 4 by 4 image with tangent 1 looking down `-z`: shift 2 (hand: the margin `2^33 / 2^k` raw fits first at `k = 2`, the pinhole's is 0); the lens centre gives a quarter of the pinhole direction; `u = 1/4` along `right` and along `up` gives origin `r = 2^31 - 5` raw and correction `2^29 - 1` raw on that axis (hand: `isqrt(2^62 - 2^34)` and `round(r / 4)`). | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_136_golden_lens_rays_of_a_level_camera` |
 | OPTICS-TP-137 | Thin-lens mutations | OPTICS-REQ-070, OPTICS-REQ-071, OPTICS-REQ-072, OPTICS-REQ-073, OPTICS-REQ-074, OPTICS-REQ-075 | Each rule broken on purpose fails at least one case above, except the forward margin (recorded). | [Thin-lens mutation checks](#thin-lens-mutation-checks) |
+| OPTICS-TP-120 | Every decode entry is the nearest | OPTICS-REQ-066 | Each of the 256 entries `n` satisfies `n - 1/2 < x < n + 1/2` for `x = 2^32 * decode(c)`, decided with exact big-integer comparison (no floating point, no code shared with the generator): on the toe `200 c 2^32` against `odd * 329 460`, above it `2^165 N^12` against `odd^5 D^12` with `N = 1000 c + 14 025`, `D = 269 025`; `x` is never a half-integer; `n - 1` and `n + 1` are both rejected. | `crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_120_every_entry_is_the_exact_decode_rounded_to_nearest` |
+| OPTICS-TP-121 | Round trip through the tone curve | OPTICS-REQ-066 | `ToneCurve::SrgbV1.encode_8(srgb8_to_linear(c)) == c` for all 256 codes. | `crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_121_tone_srgb_encodes_every_entry_back_to_its_code` |
+| OPTICS-TP-122 | Identity, ends, order, golden | OPTICS-REQ-066 | The identity string; codes 0 and 255 give 0 and 1.0; entries strictly increase; entries 0, 1, 10, 11 and 255 equal the generator's 80-digit decimal values. | `crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_122_identity_ends_order_and_golden_entries` |
+| OPTICS-TP-123 | Decode mutation | OPTICS-REQ-066 | Entry 1 raised by one raw unit fails OPTICS-TP-120 and OPTICS-TP-122 (observed in the container); the restored table passes. | [Decode mutation check](#decode-mutation-check) |
 
 ```toml
 [[case]]
@@ -1712,6 +1722,42 @@ artifact = "docs/topics/optics/test-plan.md#thin-lens-mutation-checks"
 oracle = "Eleven rules of thin_lens.rs broken on purpose; ten fail at least one case, and the defensive forward margin is recorded as not reached."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-120"
+requirements = ["OPTICS-REQ-066"]
+evidence = "test"
+test = "crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_120_every_entry_is_the_exact_decode_rounded_to_nearest"
+oracle = "Exact big-integer comparison of 2^32 * decode(c) against the half-integers around each entry; no float, no shared code with the generator; neighbours n - 1 and n + 1 rejected."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-121"
+requirements = ["OPTICS-REQ-066"]
+evidence = "test"
+test = "crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_121_tone_srgb_encodes_every_entry_back_to_its_code"
+oracle = "The original code c, for all 256 codes, through ToneCurve::SrgbV1.encode_8."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-122"
+requirements = ["OPTICS-REQ-066"]
+evidence = "test"
+test = "crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_122_identity_ends_order_and_golden_entries"
+oracle = "The identity string, exact ends 0 and 1.0, strict increase, and five entries from the generator's 80-digit decimal run."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-123"
+requirements = ["OPTICS-REQ-066"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#decode-mutation-check"
+oracle = "Entry 1 of the table raised by one raw unit fails OPTICS-TP-120 and OPTICS-TP-122."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -2045,6 +2091,14 @@ The forward margin is defensive, like the pinhole's own forward check: the
 correction is nearly orthogonal to `forward` (`R . F` and `U . F` are a few
 raw-squared units), so no camera the tests build comes near it. It is an open
 gap below.
+
+## Decode Mutation Check
+
+In a container run of `cargo test --locked -p bunny-optics --test
+srgb8_decode_tests`, entry 1 of `srgb8_table.rs` was raised from `1_303_638`
+to `1_303_639`. OPTICS-TP-120 failed ("entry 1 = 1303639 is not the nearest
+raw value") and OPTICS-TP-122 failed (golden entry); OPTICS-TP-121 passed. The
+restored table passes all three.
 
 ## Timing
 

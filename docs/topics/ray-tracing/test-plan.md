@@ -17,6 +17,11 @@ This plan covers `TraceRay`, `TraceTriangle` and `TriangleHit` in
 - the exact `hit_triangle` test, its edge rule and its facing;
 - rounding of distances and barycentric weights;
 - overflow freedom at the edges of the domain;
+- the exact `hit_sphere` test of `TraceSphere` (contract `bunny-ray-sphere/1`), its
+  rounding rule, its facing and normal, and its typed refusals;
+- the exact `hit_box` test of `TraceBox` (contract `bunny-ray-box/1`), its rounding
+  rule, its face normal, its tie rule at edges and corners, its rule for a ray parallel
+  to a slab, and its typed refusals;
 - the overflow behaviour of the general-purpose `ray_intersects_aabb` and its
   effect on `bunny_broadphase::intersect_ray` (flyingrobots/bunny#211).
 
@@ -85,6 +90,14 @@ formatting.
 | TRACE-REQ-033 | intersect_aabb, intersect_ray, closest_hit, any_hit, compact_closest_hit and compact_any_hit hold at most d + 1 entries of their 64-entry stacks on a tree of depth d (the root at depth 0), so every tree of depth at most 63 is searched completely; on a deeper tree each returns its complete answer or StackOverflow, and a comb that keeps one pending sibling per level returns StackOverflow at depth 64. | `README.md#depth-and-the-traversal-stack` |
 | TRACE-REQ-034 | compact_bvh queues at most d interior subtrees on a tree of depth d, so every tree of depth at most 64 converts unless another error applies; TooDeep means more than 64 interior subtrees waiting at once, which a tree of depth 65 can need. | `README.md#compact-layout` |
 | TRACE-REQ-035 | `compact_closest_hit_counted` and compact_any_hit_counted return exactly the result or error of compact_closest_hit and compact_any_hit and make the same primitive calls in the same order on every CompactView, and on success their TraversalCounts hold, for that search, the box_entry calls, those that returned a bound, the popped entries skipped beyond the limit, the interior and leaf visits, the primitive tests and the deepest stack; TraversalCounts addition saturates and keeps the larger peak. | `README.md#counting-traversals` |
+| TRACE-REQ-040 | TraceSphere::new accepts a centre and a positive radius inside the trace domain and refuses any other with a typed TraceSphereError (CenterOutsideTraceDomain, RadiusNotPositive, RadiusOutsideTraceDomain); no input to TraceSphere::new or TraceRay::hit_sphere wraps or panics. | `README.md#ray-sphere` |
+| TRACE-REQ-041 | TraceRay::hit_sphere (contract bunny-ray-sphere/1) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None. | `README.md#ray-sphere` |
+| TRACE-REQ-042 | SphereHit::normal is floor((f * 2^32 + d * distance) / r) per component, with f = origin - center, at the rounded distance. | `README.md#ray-sphere` |
+| TRACE-REQ-043 | A tangent ray hits at its one root with front_face true; an origin inside the sphere hits the far root from inside; a sphere whose roots are both below t_min is not hit. | `README.md#ray-sphere` |
+| TRACE-REQ-044 | TraceBox::new accepts two corners inside the trace domain with no minimum above its maximum (equal bounds allowed) and refuses any other with a typed TraceBoxError (CornerOutsideTraceDomain, MinimumAboveMaximum); no input to TraceBox::new or TraceRay::hit_box wraps or panics. | `README.md#ray-box` |
+| TRACE-REQ-045 | TraceRay::hit_box (contract bunny-ray-box/1) returns, for every ray and box in the trace domain, the floor in raw units of the true entry distance when that rounded distance is in t_min..=t_max (front_face true), else that of the true exit when it is (front_face false), else None; contact with a face, edge or corner is a hit. | `README.md#ray-box` |
+| TRACE-REQ-046 | BoxHit::normal is the outward unit normal (raw 2^32 or -2^32 in one component, zero in the others) of the face crossed; when several faces are crossed at exactly the same true distance the lowest axis (x, y, z) is reported, for the entry and for the exit, and equal rounded distances are not a tie. | `README.md#ray-box` |
+| TRACE-REQ-047 | An axis with a zero direction component never supplies a face: it rules the box out when the origin's coordinate is outside the closed slab and constrains nothing otherwise (a ray in a face's plane is inside it); an origin inside the box hits the exit from inside; a box whose entry and exit are both below t_min is not hit. | `README.md#ray-box` |
 
 ```toml
 [[requirement]]
@@ -231,6 +244,46 @@ status = "active"
 id = "TRACE-REQ-035"
 summary = "compact_closest_hit_counted and compact_any_hit_counted return exactly the result or error of compact_closest_hit and compact_any_hit and make the same primitive calls in the same order on every CompactView, and on success their TraversalCounts hold, for that search, the box_entry calls, those that returned a bound, the popped entries skipped beyond the limit, the interior and leaf visits, the primitive tests and the deepest stack; TraversalCounts addition saturates and keeps the larger peak."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-040"
+summary = "TraceSphere::new accepts a centre and a positive radius inside the trace domain and refuses any other with a typed TraceSphereError (CenterOutsideTraceDomain, RadiusNotPositive, RadiusOutsideTraceDomain); no input to TraceSphere::new or TraceRay::hit_sphere wraps or panics."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-041"
+summary = "TraceRay::hit_sphere (contract bunny-ray-sphere/1) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-042"
+summary = "SphereHit::normal is floor((f * 2^32 + d * distance) / r) per component, with f = origin - center, at the rounded distance."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-043"
+summary = "A tangent ray hits at its one root with front_face true; an origin inside the sphere hits the far root from inside; a sphere whose roots are both below t_min is not hit."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-044"
+summary = "TraceBox::new accepts two corners inside the trace domain with no minimum above its maximum (equal bounds allowed) and refuses any other with a typed TraceBoxError (CornerOutsideTraceDomain, MinimumAboveMaximum); no input to TraceBox::new or TraceRay::hit_box wraps or panics."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-045"
+summary = "TraceRay::hit_box (contract bunny-ray-box/1) returns, for every ray and box in the trace domain, the floor in raw units of the true entry distance when that rounded distance is in t_min..=t_max (front_face true), else that of the true exit when it is (front_face false), else None; contact with a face, edge or corner is a hit."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-046"
+summary = "BoxHit::normal is the outward unit normal (raw 2^32 or -2^32 in one component, zero in the others) of the face crossed; when several faces are crossed at exactly the same true distance the lowest axis (x, y, z) is reported, for the entry and for the exit, and equal rounded distances are not a tie."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-047"
+summary = "An axis with a zero direction component never supplies a face: it rules the box out when the origin's coordinate is outside the closed slab and constrains nothing otherwise (a ray in a face's plane is inside it); an origin inside the box hits the exit from inside; a box whose entry and exit are both below t_min is not hit."
+status = "active"
 ```
 
 ## Fixtures
@@ -374,6 +427,26 @@ Regenerating them is a contract change.
 | TRACE-TP-419 | Adding counts | TRACE-REQ-035 | Adding two TraversalCounts sums each counter, saturating at u64::MAX, and keeps the larger peak_stack; += agrees with +. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_419_adding_counts_sums_saturates_and_keeps_the_peak` |
 | TRACE-TP-420 | Deliberate counting mutations | TRACE-REQ-035 | A box test not counted, a rejected box counted as entered, a skipped pop counted as a visit, a leaf counted twice, the last primitive test of a leaf not counted, the peak not tracked and the counted search pruning differently from the uncounted one (`<=` made `<` for the counting tally only) each make a case fail. | [Mutation checks](#counting-mutation-checks) |
 | TRACE-TP-421 | Compact visit bound | TRACE-REQ-028 | A three-node compact cycle with a leaf beside each node: `compact_closest_hit` and `compact_any_hit` test primitives 0, 1 and 2 and refuse the fourth interior visit with `InvalidNodeIndex`, so a bound one looser (a fourth primitive test) or one tighter (no test of primitive 2) fails. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_421_the_compact_visit_bound_allows_exactly_one_visit_per_node` |
+| TRACE-TP-501 | Generated exact oracle | TRACE-REQ-041, TRACE-REQ-042 | Exact rational oracle in independent arbitrary-precision integers: discriminant as b^2 - a c, each rounded root found by bisection on the exact predicate k <= root, no square root; 6 000 cases from seed 0x5EED_5F4E_0358_0001 (4 099 misses, 1 023 front hits, 878 back hits; floors 3 070, 765, 655), the seed and case printed on failure. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_501_hits_match_an_exact_rational_oracle_on_generated_rays` |
+| TRACE-TP-502 | Tangent ray | TRACE-REQ-041, TRACE-REQ-043 | Constructed: the line y = 1 touches the unit sphere at distance 4.0 with normal (0, 1, 0), front face; one raw unit further out misses; one raw unit in equals the oracle and lies within the hand-computed half chord. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_502_a_tangent_ray_hits_once_and_a_ray_one_raw_unit_outside_misses` |
+| TRACE-TP-503 | Origin inside | TRACE-REQ-041, TRACE-REQ-043 | Constructed: from the centre of a radius-2 sphere the hit is at 2.0, back face, normal (1, 0, 0); off-centre with a half-length direction the distance is 3.464.. (2 sqrt 3) and equals the oracle; t_min past the exit misses. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_503_an_origin_inside_the_sphere_hits_the_far_side_from_inside` |
+| TRACE-TP-504 | Sphere behind the origin | TRACE-REQ-041, TRACE-REQ-043 | Constructed: roots at -11 and -9 miss with t_min = 0 and give the near root -11.0, front face, normal (-1, 0, 0) with t_min = -20; a ray pointing away misses. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_504_a_sphere_behind_the_origin_is_not_hit` |
+| TRACE-TP-505 | Typed refusals | TRACE-REQ-040 | Constructed: each bound one raw unit past, and i64 extremes, give the stated error variant; the largest accepted sphere round-trips its centre and radius and its bounds are hand-computed. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_505_spheres_outside_the_trace_domain_are_refused_with_a_typed_error` |
+| TRACE-TP-506 | Widest inputs | TRACE-REQ-040, TRACE-REQ-041 | The exact oracle of TRACE-TP-501 on every domain corner against the largest spheres, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_506_the_widest_inputs_match_the_oracle_without_overflow` |
+| TRACE-TP-507 | 256-bit helper | TRACE-REQ-041 | Hand-computed: products of the largest values, carries across limbs, refused overflow, and isqrt of k^2 - 1, k^2 and k^2 + 1 up to k = 2^128 - 1. | `crates/bunny-query/src/trace/wide.rs::tests::isqrt_is_the_floor_root_around_squares` |
+| TRACE-TP-508 | Deliberate mutations of the sphere test | TRACE-REQ-040, TRACE-REQ-041 | Each rule broken on purpose makes a case above fail. | [Sphere mutation checks](#sphere-mutation-checks) |
+| TRACE-TP-509 | Generated exact oracle | TRACE-REQ-045, TRACE-REQ-046, TRACE-REQ-047 | Exact rational oracle in its own reduced fractions: entry as the largest and exit as the smallest slab crossing, the face named by which face planes the exact hit point lies on; 8 000 cases from seed 0x5EED_B0C5_0359_0001 (4 851 misses, 2 415 front hits, 734 back hits, 791 hits with a zero direction component; floors 3 638, 1 811, 550, 593), aimed, inside, parallel, exact-feature and random rays, flat boxes, random ranges; the seed and case printed on failure. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_509_hits_match_an_exact_rational_oracle_on_generated_rays` |
+| TRACE-TP-510 | Grazing rays | TRACE-REQ-045 | Constructed on the box [-1, 1]^3: a ray in the plane y = 1 hits at 4.0 and one raw unit outside misses; a diagonal that touches only the edge hits at 2.0, one raw unit higher misses and one raw unit lower clips through the x face; a ray along an edge line hits the end face and one raw unit off misses. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_510_a_grazing_ray_hits_and_one_raw_unit_outside_misses` |
+| TRACE-TP-511 | Origin inside | TRACE-REQ-045, TRACE-REQ-047 | Constructed: from the centre the exit is at 1.0, back face, normal +x; a quarter-length direction gives 4.0; off-centre the nearer face wins; t_min past the exit misses; an origin on a face gives distance 0 front or back; a flat box in its own plane. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_511_an_origin_inside_the_box_hits_the_exit_from_inside` |
+| TRACE-TP-512 | Box behind the origin | TRACE-REQ-045, TRACE-REQ-047 | Constructed: crossings at -6 and -4 miss with t_min = 0 and give -6.0, front face, normal -x, with t_min = -20; a ray pointing away misses; an entry below t_min reports the exit from inside; an entry above t_max misses. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_512_a_box_behind_the_origin_is_not_hit` |
+| TRACE-TP-513 | Edge and corner ties | TRACE-REQ-046 | Constructed: edges xy, yz and xz and corners hit from both sides report the lowest axis, entering (-x, -y, -x, -x, +x) and leaving; two faces whose floors are both 1 but whose true crossings differ by 2^-32 report the later face, in both axis orders. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_513_edge_and_corner_hits_report_the_lowest_axis` |
+| TRACE-TP-514 | Parallel to a slab | TRACE-REQ-047 | Constructed: an origin one raw unit outside a slab misses, an origin exactly on either bound plane hits through the other axes, a parallel axis never supplies the face, two parallel axes, and a zero-thickness box in and across its plane. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_514_a_ray_parallel_to_a_slab_is_decided_by_the_origin_in_it` |
+| TRACE-TP-515 | Typed refusals | TRACE-REQ-044 | Constructed: each bound one raw unit past, i64 extremes, a reversed box and a corner both reversed and out of domain give the stated error variant; the largest box and a point box are accepted and round-trip. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_515_boxes_outside_the_trace_domain_are_refused_with_a_typed_error` |
+| TRACE-TP-516 | Widest inputs | TRACE-REQ-044, TRACE-REQ-045 | The exact oracle on every domain corner against the largest box and unit boxes, with the longest, shortest and axis-only directions and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_516_the_widest_inputs_match_the_oracle_without_overflow` |
+| TRACE-TP-517 | The oracle's own faces | TRACE-REQ-046 | Hand-computed hits checked against the oracle itself, so a shared mistake cannot hide. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_517_the_oracle_names_the_face_it_expects` |
+| TRACE-TP-518 | Deliberate mutations of the box test | TRACE-REQ-044, TRACE-REQ-045, TRACE-REQ-046, TRACE-REQ-047 | Each rule broken on purpose makes a case above fail. | [Box mutation checks](#box-mutation-checks) |
+| TRACE-TP-519 | Distance limits | TRACE-REQ-045 | Constructed on [-1, 1]^3 from (-5, 0, 0) along +x: entry 4.0, exit 6.0. t_max = 4.0 hits the entry, 4.0 - 1 raw misses; t_min = 4.0 reports the entry, 4.0 + 1 raw the exit; the exit is on t_max = 6.0 and one raw unit short misses; a non-whole entry floor(4/3 * 2^32) = 5726623061 on t_min and t_max and one step past each. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_519_the_distance_limits_are_inclusive_exactly_and_one_step_past` |
+| TRACE-TP-520 | Contract identity | TRACE-REQ-045 | RAY_BOX_ID equals the literal bunny-ray-box/1. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_520_the_contract_identity_is_public` |
 
 ```toml
 [[case]]
@@ -1086,6 +1159,186 @@ test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_421_the_compact
 oracle = "A three-node compact cycle with a leaf beside each node: `compact_closest_hit` and `compact_any_hit` test primitives 0, 1 and 2 and refuse the fourth interior visit with `InvalidNodeIndex`, so a bound one looser (a fourth primitive test) or one tighter (no test of primitive 2) fails."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-501"
+requirements = ["TRACE-REQ-041", "TRACE-REQ-042"]
+evidence = "property"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_501_hits_match_an_exact_rational_oracle_on_generated_rays"
+oracle = "Exact rational oracle in independent arbitrary-precision integers: discriminant as b^2 - a c, each rounded root found by bisection on the exact predicate k <= root, no square root; 6 000 cases from seed 0x5EED_5F4E_0358_0001 (4 099 misses, 1 023 front hits, 878 back hits; floors 3 070, 765, 655), the seed and case printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-502"
+requirements = ["TRACE-REQ-041", "TRACE-REQ-043"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_502_a_tangent_ray_hits_once_and_a_ray_one_raw_unit_outside_misses"
+oracle = "Constructed: the line y = 1 touches the unit sphere at distance 4.0 with normal (0, 1, 0), front face; one raw unit further out misses; one raw unit in equals the oracle and lies within the hand-computed half chord."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-503"
+requirements = ["TRACE-REQ-041", "TRACE-REQ-043"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_503_an_origin_inside_the_sphere_hits_the_far_side_from_inside"
+oracle = "Constructed: from the centre of a radius-2 sphere the hit is at 2.0, back face, normal (1, 0, 0); off-centre with a half-length direction the distance is 3.464.. (2 sqrt 3) and equals the oracle; t_min past the exit misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-504"
+requirements = ["TRACE-REQ-041", "TRACE-REQ-043"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_504_a_sphere_behind_the_origin_is_not_hit"
+oracle = "Constructed: roots at -11 and -9 miss with t_min = 0 and give the near root -11.0, front face, normal (-1, 0, 0) with t_min = -20; a ray pointing away misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-505"
+requirements = ["TRACE-REQ-040"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_505_spheres_outside_the_trace_domain_are_refused_with_a_typed_error"
+oracle = "Constructed: each bound one raw unit past, and i64 extremes, give the stated error variant; the largest accepted sphere round-trips its centre and radius and its bounds are hand-computed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-506"
+requirements = ["TRACE-REQ-040", "TRACE-REQ-041"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_506_the_widest_inputs_match_the_oracle_without_overflow"
+oracle = "The exact oracle of TRACE-TP-501 on every domain corner against the largest spheres, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-507"
+requirements = ["TRACE-REQ-041"]
+evidence = "test"
+test = "crates/bunny-query/src/trace/wide.rs::tests::isqrt_is_the_floor_root_around_squares"
+oracle = "Hand-computed: products of the largest values, carries across limbs, refused overflow, and isqrt of k^2 - 1, k^2 and k^2 + 1 up to k = 2^128 - 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-508"
+requirements = ["TRACE-REQ-040", "TRACE-REQ-041"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#sphere-mutation-checks"
+oracle = "Each rule broken on purpose makes a case above fail."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-509"
+requirements = ["TRACE-REQ-045", "TRACE-REQ-046", "TRACE-REQ-047"]
+evidence = "property"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_509_hits_match_an_exact_rational_oracle_on_generated_rays"
+oracle = "Exact rational oracle in its own reduced fractions: entry as the largest and exit as the smallest slab crossing, the face named by which face planes the exact hit point lies on; 8 000 cases from seed 0x5EED_B0C5_0359_0001 (4 851 misses, 2 415 front hits, 734 back hits, 791 hits with a zero direction component; floors 3 638, 1 811, 550, 593), aimed, inside, parallel, exact-feature and random rays, flat boxes, random ranges; the seed and case printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-510"
+requirements = ["TRACE-REQ-045"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_510_a_grazing_ray_hits_and_one_raw_unit_outside_misses"
+oracle = "Constructed on the box [-1, 1]^3: a ray in the plane y = 1 hits at 4.0 and one raw unit outside misses; a diagonal that touches only the edge hits at 2.0, one raw unit higher misses and one raw unit lower clips through the x face; a ray along an edge line hits the end face and one raw unit off misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-511"
+requirements = ["TRACE-REQ-045", "TRACE-REQ-047"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_511_an_origin_inside_the_box_hits_the_exit_from_inside"
+oracle = "Constructed: from the centre the exit is at 1.0, back face, normal +x; a quarter-length direction gives 4.0; off-centre the nearer face wins; t_min past the exit misses; an origin on a face gives distance 0 front or back; a flat box in its own plane."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-512"
+requirements = ["TRACE-REQ-045", "TRACE-REQ-047"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_512_a_box_behind_the_origin_is_not_hit"
+oracle = "Constructed: crossings at -6 and -4 miss with t_min = 0 and give -6.0, front face, normal -x, with t_min = -20; a ray pointing away misses; an entry below t_min reports the exit from inside; an entry above t_max misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-513"
+requirements = ["TRACE-REQ-046"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_513_edge_and_corner_hits_report_the_lowest_axis"
+oracle = "Constructed: edges xy, yz and xz and corners hit from both sides report the lowest axis, entering (-x, -y, -x, -x, +x) and leaving; two faces whose floors are both 1 but whose true crossings differ by 2^-32 report the later face, in both axis orders."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-514"
+requirements = ["TRACE-REQ-047"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_514_a_ray_parallel_to_a_slab_is_decided_by_the_origin_in_it"
+oracle = "Constructed: an origin one raw unit outside a slab misses, an origin exactly on either bound plane hits through the other axes, a parallel axis never supplies the face, two parallel axes, and a zero-thickness box in and across its plane."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-515"
+requirements = ["TRACE-REQ-044"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_515_boxes_outside_the_trace_domain_are_refused_with_a_typed_error"
+oracle = "Constructed: each bound one raw unit past, i64 extremes, a reversed box and a corner both reversed and out of domain give the stated error variant; the largest box and a point box are accepted and round-trip."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-516"
+requirements = ["TRACE-REQ-044", "TRACE-REQ-045"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_516_the_widest_inputs_match_the_oracle_without_overflow"
+oracle = "The exact oracle on every domain corner against the largest box and unit boxes, with the longest, shortest and axis-only directions and a 2^32 + 1 unit direction, under overflow-checked test arithmetic."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-517"
+requirements = ["TRACE-REQ-046"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_517_the_oracle_names_the_face_it_expects"
+oracle = "Hand-computed hits checked against the oracle itself, so a shared mistake cannot hide."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-518"
+requirements = ["TRACE-REQ-044", "TRACE-REQ-045", "TRACE-REQ-046", "TRACE-REQ-047"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#box-mutation-checks"
+oracle = "Each rule broken on purpose makes a case above fail."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-519"
+requirements = ["TRACE-REQ-045"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_519_the_distance_limits_are_inclusive_exactly_and_one_step_past"
+oracle = "Constructed on [-1, 1]^3 from (-5, 0, 0) along +x: entry 4.0, exit 6.0. t_max = 4.0 hits the entry, 4.0 - 1 raw misses; t_min = 4.0 reports the entry, 4.0 + 1 raw the exit; the exit is on t_max = 6.0 and one raw unit short misses; a non-whole entry floor(4/3 * 2^32) = 5726623061 on t_min and t_max and one step past each."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-520"
+requirements = ["TRACE-REQ-045"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_520_the_contract_identity_is_public"
+oracle = "RAY_BOX_ID equals the literal bunny-ray-box/1."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1285,6 +1538,43 @@ duplicated triangles; the constructed tie tree in TRACE-TP-415 catches it. Its f
 tie tree and the mutant survived; the tie tree was added for that reason. Two mutants were first
 written by deleting a tally call, which left a method unused and failed to compile under
 `deny(warnings)`; they were redone as the changed bodies above.
+
+### Sphere Mutation Checks
+
+Each rule below was broken in a container copy of `trace/sphere.rs` or `trace/wide.rs`
+(flyingrobots/bunny#358) and `cargo test --locked -q -p bunny-query --test trace_sphere_tests`
+run. The restored source passes.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| The near root's `- 1` for a non-square `E` removed | The near root is the floor of an irrational value | TRACE-TP-501 |
+| `front_face` true at the near root made false | Facing | TRACE-TP-501 to 504 |
+| `radius <= 0` made `radius < 0` | A zero radius is refused | TRACE-TP-505 |
+| `isqrt` starts its low bits at bit 62 instead of 63 | The square root is exact above `2^128` | two cases, TRACE-TP-501 among them |
+
+### Box Mutation Checks
+
+Each rule below was broken in a copy of `trace/box_hit.rs` (flyingrobots/bunny#359) in the
+container, on the final source, and `cargo test --locked -q -p bunny-query --test trace_box_tests` run. The restored
+source passes all eleven tests.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Entry replaced on `!= Less` instead of `== Greater` | The lowest axis wins an entry tie | TRACE-TP-509, 513, 516 |
+| Exit replaced on `!= Greater` instead of `== Less` | The lowest axis wins an exit tie | TRACE-TP-509, 513, 516 |
+| Zero-direction test made `low >= 0 \|\| high <= 0` | A face plane belongs to the box | TRACE-TP-509, 510, 511, 514, 516 |
+| Entry normal sign not negated | The entry face points against the ray | TRACE-TP-509 to 514, 516 |
+| Crossings compared by their floors | Ties are of true distances, not rounded ones | TRACE-TP-513 only |
+| Hit test `entry < exit` instead of `<=` | Touching is a hit | TRACE-TP-509, 510, 514, 516 |
+| Negative-direction slab ends swapped | A negative direction enters at the maximum face | TRACE-TP-509, 510, 511, 513, 516 |
+| Floor replaced by truncation toward zero | The distance is rounded down | TRACE-TP-509 only |
+| `front_face` true at the entry made false | Facing | TRACE-TP-509 to 514, 516 |
+| `t_max` made exclusive (`..` for `..=`) | The upper limit is inclusive | TRACE-TP-519 only |
+| Entry skipped when it equals `t_min` | The lower limit is inclusive | TRACE-TP-509, 511, 516, 519 |
+
+The generated cases never put a distance on `t_max` (a reviewer counted none in 8 000), so the upper limit rests on TRACE-TP-519 alone. Three mutants were caught by one test each: comparing floors by TRACE-TP-513, whose pair of faces
+was built for it (the generated rays did not reach a tie of floors without a tie of crossings),
+truncation by the generated oracle, which reaches negative non-integer distances, and an exclusive `t_max` by TRACE-TP-519.
 
 ## Determinism Obligations And Evidence
 

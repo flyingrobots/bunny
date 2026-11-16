@@ -32,6 +32,12 @@ as:
 - `TraceTriangle` (`new`, `vertices`, `bounds`);
 - `TriangleHit` (`distance`, `front_face`, `barycentrics`,
   `barycentric_numerators`);
+- `TraceSphere` (`new`, `center`, `radius`, `bounds`), `TraceSphereError`,
+  `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
+  in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
+- `TraceBox` (`new`, `min`, `max`, `bounds`), `TraceBoxError`, `BoxHit`
+  (`distance`, `front_face`, `normal`) and `TraceRay::hit_box`, in
+  `crates/bunny-query/src/trace/box_hit.rs` (see [Ray-Box](#ray-box));
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
 - `TRACE_COORD_LIMIT_RAW`, `TRACE_DIRECTION_LIMIT_RAW` and
@@ -78,7 +84,7 @@ The kernels accept only values inside a fixed trace domain:
 `TraceRay::new` returns `None` when an origin coordinate or a direction
 component is outside the domain, or when the direction is zero.
 `TraceTriangle::new` returns `None` when any vertex coordinate is outside the
-domain. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
+domain. `TraceBox::new` returns `Err(TraceBoxError::CornerOutsideTraceDomain)` for a corner outside it, and `Err(TraceBoxError::MinimumAboveMaximum)` for a minimum above its maximum. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
 an origin outside the domain: `FixedUnitVec3::try_from_unit` allows the length
 to be off by one raw unit, so a unit direction can have one component of
 magnitude `2^32 + 1` (the other two then have squares summing to at most
@@ -251,6 +257,148 @@ which `v0, v1, v2` appear counter-clockwise, that is when
 the direction is not normalized. `TraceTriangle::vertices` returns the three
 vertices given to `new`, and `TraceTriangle::bounds` returns the smallest
 `FixedAabb3` that contains them.
+
+## Ray-Sphere
+
+`TraceRay::hit_sphere(sphere, t_min, t_max)` is the exact ray-sphere test.
+Its contract identity is **`bunny-ray-sphere/1`**. The general-purpose
+`ray_intersects_sphere` in `ray.rs` is a separate solver with its own
+contract and is unchanged.
+
+**The sphere.** `TraceSphere::new(center, radius)` takes a centre and a
+radius, so a sphere anywhere in the trace domain needs no change of frame; a
+caller with spheres in an object frame passes a centre at the origin of that
+frame. Every centre coordinate and the radius must be inside the trace domain
+(`abs(raw) < 2^40`), and the radius must be positive. Any other input is
+refused with a typed `TraceSphereError`: `CenterOutsideTraceDomain`,
+`RadiusNotPositive` or `RadiusOutsideTraceDomain`. Nothing wraps, saturates or
+panics. `TraceSphere::bounds` is the box `center -+ radius`.
+
+**The hit** has the form of `TriangleHit`, so a renderer compares distances
+across kinds directly:
+
+- `SphereHit::distance` is in multiples of the ray direction, as for
+  triangles;
+- `SphereHit::front_face` is `true` at the near root (the ray arrives from
+  outside, or touches a tangent point) and `false` at the far root (the ray
+  leaves from inside);
+- `SphereHit::normal` is the outward normal.
+
+**The arithmetic.** With `f = origin - center`, `d` the direction and `r` the
+radius, all raw, the point at distance `t` lies on the sphere when
+`a t^2 + 2 b t + (f . f - r^2) = 0`, with `a = d . d` and `b = f . d`. The
+quarter discriminant is computed as `a r^2 - |f x d|^2` (Lagrange's identity),
+exactly, in 256-bit unsigned integers (`crates/bunny-query/src/trace/wide.rs`).
+The line misses when it is negative. Otherwise `E = 2^64 * discriminant` and
+the roots in raw distance units are `(-2^32 b -+ sqrt(E)) / a`.
+
+`floor(sqrt(E))` is exact: below `2^128` it is `FixedQ32_32::sqrt_u128`,
+Bunny's exact integer square root; above, the root of the high 128 bits gives
+the top 64 bits of the result and the low 64 bits are set one at a time,
+largest first, while the square stays at most `E`.
+
+Widths in the trace domain: `abs(f) < 2^41` and `abs(d) <= 2^32 + 1` per
+component, so `a < 2^66`, `abs(b) < 2^75`, each component of `f x d` is below
+`2^75`, `a r^2 < 2^146`, `E < 2^210` and its root below `2^105`;
+`2^32 b -+ root` is below `2^108`. Every value fits its type with room to
+spare.
+
+**Rounding rule of `bunny-ray-sphere/1`.**
+
+- Each root is the floor of the true root in raw units:
+  `floor((-2^32 b - sqrt(E)) / a)` and `floor((-2^32 b + sqrt(E)) / a)`, with
+  the square root real, not rounded. Over integers this is
+  `floor((-2^32 b - g - 1) / a)` for the near root when `E` is not a perfect
+  square and `floor((-2^32 b - g) / a)` when it is, and
+  `floor((-2^32 b + g) / a)` for the far root, where `g = floor(sqrt(E))`.
+  This is the rule of `TriangleHit::distance`.
+- The distance limits are inclusive and apply to the rounded distance. The
+  near root is reported when `t_min <= near <= t_max`; otherwise the far root
+  when `t_min <= far <= t_max`; otherwise there is no hit.
+- The normal is `floor((f * 2^32 + d * distance) / r)` per component: the
+  offset of the point at the rounded distance from the centre, over the
+  radius, rounded down. Its length is within a few raw units of 1.0, not
+  exactly 1.0.
+
+**Cases.**
+
+- **Tangent rays.** A discriminant of zero is a hit at the one root, front
+  face. Contact is inclusive: a ray whose line touches the sphere hits.
+- **Origin inside.** The near root is negative, so with `t_min >= 0` the far
+  root is reported, with `front_face == false`.
+- **Behind the origin.** When both rounded roots are below `t_min` there is no
+  hit; a negative `t_min` lets a caller see them.
+
+## Ray-Box
+
+`TraceRay::hit_box(box, t_min, t_max)` is the exact ray-box test for a box
+aligned with the axes of the frame the ray is in. Its contract identity is
+**`bunny-ray-box/1`**, the public constant `RAY_BOX_ID`. `TraceRay::box_entry` (the conservative traversal test) and the
+general-purpose `ray_intersects_aabb` are separate and unchanged. A box that is
+rotated is traced by a caller that carries the ray into the box's object space
+first.
+
+**The box.** `TraceBox::new(min, max)` takes two corners. Every coordinate of
+both must be inside the trace domain (`abs(raw) < 2^40`) and no minimum may be
+above its maximum. Any other input is refused with a typed `TraceBoxError`:
+`CornerOutsideTraceDomain` (reported first) or `MinimumAboveMaximum`. Nothing
+wraps, saturates or panics. Equal bounds on an axis are allowed: the box is then
+flat (a rectangle, a segment or a point). `TraceBox::bounds` is the same box as a
+`FixedAabb3`.
+
+**The hit** has the form of `SphereHit`:
+
+- `BoxHit::distance` is in multiples of the ray direction, rounded down;
+- `BoxHit::front_face` is `true` at the entry (the ray arrives from outside, or
+  touches the box) and `false` at the exit (the ray leaves from inside);
+- `BoxHit::normal` is the outward normal of the face hit: exactly `1.0` or
+  `-1.0` (raw `2^32` or `-2^32`) in one component and `0` in the other two.
+
+**The arithmetic.** On each axis with a nonzero direction component `d`, the
+ray crosses the faces at the raw distances `(bound - origin) * 2^32 / d`. For a
+positive `d` it enters at the minimum face and leaves at the maximum face; for a
+negative `d` the reverse. The ray is inside the box between the largest entry
+and the smallest exit over the three axes, and hits the closed box exactly when
+that entry is not after that exit. These crossings are kept as exact fractions
+and compared by cross-multiplication, never by their rounded values. Widths in
+the trace domain: each offset `bound - origin` is below `2^41`, each numerator
+below `2^73`, each denominator at most `2^32 + 1`, so every product is below
+`2^107` and fits `i128`.
+
+**Rounding rule of `bunny-ray-box/1`.**
+
+- The distance is the floor of the true crossing in raw units,
+  `floor((bound - origin) * 2^32 / d)`. The floor is monotone, so the floor of
+  the largest entry is the largest of the floors.
+- The distance limits are inclusive and apply to the rounded distance. The entry
+  is reported when `t_min <= entry <= t_max`; otherwise the exit when
+  `t_min <= exit <= t_max`; otherwise there is no hit. A start clipped by `t_min`
+  therefore reports the exit with `front_face == false`, as `hit_sphere` does.
+
+**Tie rule for edges and corners.** When the ray crosses two or three faces at
+exactly the same true distance (it hits an edge or a corner), the face reported
+is the one on the lowest axis, in the order x, y, z. This holds for the entry and
+for the exit alike. Equal rounded distances are not a tie: the face crossed
+later by the exact fractions is the one hit (TRACE-TP-513 has two faces whose
+floors are both 1).
+
+**A ray parallel to a slab** (a zero direction component) never supplies a face.
+Its axis rules the box out when the origin's coordinate is outside the closed
+slab, even by one raw unit, and constrains nothing otherwise. A ray lying
+exactly in the plane of a face, or on the line of an edge, is inside the closed
+box's slab, so it can hit through the faces of the other axes. The direction is
+never zero, so at least one axis supplies a crossing.
+
+**Cases.**
+
+- **Grazing rays.** Contact is inclusive: a ray that touches only a face, edge
+  or corner hits. One raw unit outside it misses.
+- **Origin inside.** The entry is negative, so with `t_min >= 0` the exit is
+  reported, `front_face == false`, with the outward normal of the face left.
+- **Origin on a face.** Entering gives distance `0`, front face; leaving gives
+  distance `0`, back face.
+- **Behind the origin.** When the rounded entry and exit are both below `t_min`
+  there is no hit; a negative `t_min` lets a caller see them.
 
 ## General-Purpose Ray-AABB Solver
 
