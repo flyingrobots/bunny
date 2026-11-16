@@ -37,7 +37,7 @@ mod box_hit;
 mod sphere;
 mod wide;
 
-pub use box_hit::{BoxHit, TraceBox, TraceBoxError};
+pub use box_hit::{BoxHit, TraceBox, TraceBoxError, RAY_BOX_ID};
 pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
 
 type Wide3 = [i128; 3];

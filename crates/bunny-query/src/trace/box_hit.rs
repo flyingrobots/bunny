@@ -13,6 +13,9 @@ use bunny_num::FixedQ32_32;
 use std::cmp::Ordering;
 use std::fmt;
 
+/// The contract identity of [`TraceRay::hit_box`].
+pub const RAY_BOX_ID: &str = "bunny-ray-box/1";
+
 /// A box prepared for [`TraceRay::hit_box`]: two corners in the trace domain, the minimum
 /// not above the maximum on any axis. A box may be flat (equal bounds on an axis).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

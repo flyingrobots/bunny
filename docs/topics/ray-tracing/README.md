@@ -84,7 +84,7 @@ The kernels accept only values inside a fixed trace domain:
 `TraceRay::new` returns `None` when an origin coordinate or a direction
 component is outside the domain, or when the direction is zero.
 `TraceTriangle::new` returns `None` when any vertex coordinate is outside the
-domain. `TraceBox::new` returns `Err(TraceBoxError)` for a corner outside it. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
+domain. `TraceBox::new` returns `Err(TraceBoxError::CornerOutsideTraceDomain)` for a corner outside it, and `Err(TraceBoxError::MinimumAboveMaximum)` for a minimum above its maximum. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
 an origin outside the domain: `FixedUnitVec3::try_from_unit` allows the length
 to be off by one raw unit, so a unit direction can have one component of
 magnitude `2^32 + 1` (the other two then have squares summing to at most
@@ -333,7 +333,7 @@ spare.
 
 `TraceRay::hit_box(box, t_min, t_max)` is the exact ray-box test for a box
 aligned with the axes of the frame the ray is in. Its contract identity is
-**`bunny-ray-box/1`**. `TraceRay::box_entry` (the conservative traversal test) and the
+**`bunny-ray-box/1`**, the public constant `RAY_BOX_ID`. `TraceRay::box_entry` (the conservative traversal test) and the
 general-purpose `ray_intersects_aabb` are separate and unchanged. A box that is
 rotated is traced by a caller that carries the ray into the box's object space
 first.

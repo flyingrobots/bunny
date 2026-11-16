@@ -10,7 +10,7 @@
 
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
-use bunny_query::{TraceBox, TraceBoxError, TraceRay, TRACE_COORD_LIMIT_RAW};
+use bunny_query::{TraceBox, TraceBoxError, TraceRay, RAY_BOX_ID, TRACE_COORD_LIMIT_RAW};
 use std::cmp::Ordering;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -516,4 +516,41 @@ fn trace_tp_517_the_oracle_names_the_face_it_expects() {
     assert_eq!(oracle(unit([0, 3 * ONE, 0], [0, -ONE, 0])), Some((2 * ONE, true, [0, ONE, 0])));
     assert_eq!(oracle(unit([0; 3], [0, 0, -ONE])), Some((ONE, false, [0, 0, -ONE])));
     assert_eq!(oracle(unit([0, 2 * ONE, 0], [ONE, 0, 0])), None);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_519_the_distance_limits_are_inclusive_exactly_and_one_step_past() {
+    // Box [-1, 1]^3, origin (-5, 0, 0), direction +x (raw 2^32): the x faces are crossed at
+    // t = (-1 - -5) = 4.0 (entry, normal -x) and t = (1 - -5) = 6.0 (exit, normal +x).
+    let at = |range: (i64, i64)| agree(Case { range, ..unit([-5 * ONE, 0, 0], [ONE, 0, 0]) });
+    let entry = Some((4 * ONE, true, [-ONE, 0, 0]));
+    let exit = Some((6 * ONE, false, [ONE, 0, 0]));
+    // t_max = 4.0 is the entry itself: inclusive, a hit. One raw unit less excludes the entry
+    // and the exit (6.0) is further out still: a miss.
+    assert_eq!(at((0, 4 * ONE)), entry);
+    assert_eq!(at((0, 4 * ONE - 1)), None);
+    // t_min = 4.0 is the entry itself: inclusive, the entry. One raw unit more excludes it, so
+    // the exit at 6.0 is reported from inside.
+    assert_eq!(at((4 * ONE, i64::MAX)), entry);
+    assert_eq!(at((4 * ONE + 1, i64::MAX)), exit);
+    // The exit on both limits. t_max = 6.0 with t_min past the entry reports the exit; one
+    // raw unit less misses.
+    assert_eq!(at((4 * ONE + 1, 6 * ONE)), exit);
+    assert_eq!(at((4 * ONE + 1, 6 * ONE - 1)), None);
+    // A nonzero entry that is not a whole number on t_min and t_max: origin (-2, 0, 0) and
+    // direction 0.75 (3 * 2^30 raw). The entry at x = -1 is 1 / 0.75 = 4/3, raw
+    // floor(4/3 * 2^32) = 5726623061 (the exact value is 5726623061.33..); the exit at x = 1
+    // is 3 / 0.75 = 4.0.
+    let third =
+        |range: (i64, i64)| agree(Case { range, ..unit([-2 * ONE, 0, 0], [3 * (ONE / 4), 0, 0]) });
+    let floored = 5_726_623_061;
+    assert_eq!(third((floored, i64::MAX)), Some((floored, true, [-ONE, 0, 0])));
+    assert_eq!(third((floored + 1, i64::MAX)), Some((4 * ONE, false, [ONE, 0, 0])));
+    assert_eq!(third((0, floored)), Some((floored, true, [-ONE, 0, 0])));
+    assert_eq!(third((0, floored - 1)), None);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_520_the_contract_identity_is_public() {
+    assert_eq!(RAY_BOX_ID, "bunny-ray-box/1");
 }

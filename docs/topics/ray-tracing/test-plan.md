@@ -445,6 +445,8 @@ Regenerating them is a contract change.
 | TRACE-TP-516 | Widest inputs | TRACE-REQ-044, TRACE-REQ-045 | The exact oracle on every domain corner against the largest box and unit boxes, with the longest, shortest and axis-only directions and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_516_the_widest_inputs_match_the_oracle_without_overflow` |
 | TRACE-TP-517 | The oracle's own faces | TRACE-REQ-046 | Hand-computed hits checked against the oracle itself, so a shared mistake cannot hide. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_517_the_oracle_names_the_face_it_expects` |
 | TRACE-TP-518 | Deliberate mutations of the box test | TRACE-REQ-044, TRACE-REQ-045, TRACE-REQ-046, TRACE-REQ-047 | Each rule broken on purpose makes a case above fail. | [Box mutation checks](#box-mutation-checks) |
+| TRACE-TP-519 | Distance limits | TRACE-REQ-045 | Constructed on [-1, 1]^3 from (-5, 0, 0) along +x: entry 4.0, exit 6.0. t_max = 4.0 hits the entry, 4.0 - 1 raw misses; t_min = 4.0 reports the entry, 4.0 + 1 raw the exit; the exit is on t_max = 6.0 and one raw unit short misses; a non-whole entry floor(4/3 * 2^32) = 5726623061 on t_min and t_max and one step past each. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_519_the_distance_limits_are_inclusive_exactly_and_one_step_past` |
+| TRACE-TP-520 | Contract identity | TRACE-REQ-045 | RAY_BOX_ID equals the literal bunny-ray-box/1. | `crates/bunny-query/tests/trace_box_tests.rs::trace_tp_520_the_contract_identity_is_public` |
 
 ```toml
 [[case]]
@@ -1319,6 +1321,24 @@ artifact = "docs/topics/ray-tracing/test-plan.md#box-mutation-checks"
 oracle = "Each rule broken on purpose makes a case above fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-519"
+requirements = ["TRACE-REQ-045"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_519_the_distance_limits_are_inclusive_exactly_and_one_step_past"
+oracle = "Constructed on [-1, 1]^3 from (-5, 0, 0) along +x: entry 4.0, exit 6.0. t_max = 4.0 hits the entry, 4.0 - 1 raw misses; t_min = 4.0 reports the entry, 4.0 + 1 raw the exit; the exit is on t_max = 6.0 and one raw unit short misses; a non-whole entry floor(4/3 * 2^32) = 5726623061 on t_min and t_max and one step past each."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-520"
+requirements = ["TRACE-REQ-045"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_box_tests.rs::trace_tp_520_the_contract_identity_is_public"
+oracle = "RAY_BOX_ID equals the literal bunny-ray-box/1."
+tier = "fast"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1536,7 +1556,7 @@ run. The restored source passes.
 
 Each rule below was broken in a copy of `trace/box_hit.rs` (flyingrobots/bunny#359) in the
 container, on the final source, and `cargo test --locked -q -p bunny-query --test trace_box_tests` run. The restored
-source passes all nine tests.
+source passes all eleven tests.
 
 | Mutation | Rule broken | Failing cases |
 | --- | --- | --- |
@@ -1549,10 +1569,12 @@ source passes all nine tests.
 | Negative-direction slab ends swapped | A negative direction enters at the maximum face | TRACE-TP-509, 510, 511, 513, 516 |
 | Floor replaced by truncation toward zero | The distance is rounded down | TRACE-TP-509 only |
 | `front_face` true at the entry made false | Facing | TRACE-TP-509 to 514, 516 |
+| `t_max` made exclusive (`..` for `..=`) | The upper limit is inclusive | TRACE-TP-519 only |
+| Entry skipped when it equals `t_min` | The lower limit is inclusive | TRACE-TP-509, 511, 516, 519 |
 
-Two mutants were caught by one test each: comparing floors by TRACE-TP-513, whose pair of faces
+The generated cases never put a distance on `t_max` (a reviewer counted none in 8 000), so the upper limit rests on TRACE-TP-519 alone. Three mutants were caught by one test each: comparing floors by TRACE-TP-513, whose pair of faces
 was built for it (the generated rays did not reach a tie of floors without a tie of crossings),
-and truncation by the generated oracle, which reaches negative non-integer distances.
+truncation by the generated oracle, which reaches negative non-integer distances, and an exclusive `t_max` by TRACE-TP-519.
 
 ## Determinism Obligations And Evidence
 
