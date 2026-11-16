@@ -240,7 +240,8 @@ fn optics_tp_112_hand_derived_lookups() {
     assert_eq!(taps.texels(), [[1, 0], [2, 0], [1, 0], [2, 0]]);
     assert_eq!(taps.weights().map(FixedQ32_32::raw), [ONE / 4, 0, 3 * ONE / 4, 0]);
     // u = v = 1.0 + 1 raw on 1 by 1: fx = fy = 2^31 + 1, and
-    // fx fy = (2^31 + 1)^2 / 2^32 = 2^30 + 1 + 2^-32. w11 rounds to 2^30 + 1; w10 = (2^31 + 1)(2^31 - 1) / 2^32 = 2^30 - 2^-32 rounds to 2^30.
+    // fx fy = (2^31 + 1)^2 / 2^32 = 2^30 + 1 + 2^-32 rounds to 2^30 + 1;
+    // w10 = (2^31 + 1)(2^31 - 1) / 2^32 = 2^30 - 2^-32 rounds to 2^30.
     let t = FixedQ32_32::from_raw(ONE + 1);
     let taps = bilinear(FixedVec2::new(t, t), [1, 1], TextureWrap::Repeat).expect("nonempty");
     let q = ONE / 4;
