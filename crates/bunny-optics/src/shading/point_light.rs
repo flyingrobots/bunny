@@ -185,7 +185,11 @@ impl fmt::Display for PointLightError {
                 write!(f, "lit point raw {:?} is outside the trace domain", raw(point))
             }
             Self::TooNear { to_light } => {
-                write!(f, "point is within the minimum distance of the light: raw {:?}", raw(to_light))
+                write!(
+                    f,
+                    "point is within the minimum distance of the light: raw {:?}",
+                    raw(to_light)
+                )
             }
         }
     }
