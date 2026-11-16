@@ -31,6 +31,10 @@ targets.
   exact ray-sphere test, returning the rounded-down distance, facing and outward
   normal in the form of `TriangleHit`; inputs outside the trace domain are refused
   with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
+* `TraceBox` and `TraceRay::hit_box` (contract `bunny-ray-box/1`): the exact ray-box
+  test for an axis-aligned box, returning the rounded-down distance, facing and
+  face normal (the lowest axis wins an edge or corner tie); inputs outside the trace
+  domain are refused with `TraceBoxError`; identity constant `RAY_BOX_ID`. See `docs/topics/ray-tracing/README.md#ray-box`.
 * `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
   triangle test decided a hit with, as a `BarycentricNumerators` (also
   buildable from any point on a triangle with `BarycentricNumerators::new`).
