@@ -31,6 +31,10 @@ targets.
   exact ray-sphere test, returning the rounded-down distance, facing and outward
   normal in the form of `TriangleHit`; inputs outside the trace domain are refused
   with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
+* `TraceBox` and `TraceRay::hit_box` (contract `bunny-ray-box/1`): the exact ray-box
+  test for an axis-aligned box, returning the rounded-down distance, facing and
+  face normal (the lowest axis wins an edge or corner tie); inputs outside the trace
+  domain are refused with `TraceBoxError`; identity constant `RAY_BOX_ID`. See `docs/topics/ray-tracing/README.md#ray-box`.
 * `TraceDisc` and `TraceRay::hit_disc` (contract `bunny-ray-disc/1`, `RAY_DISC_ID`): the exact
   ray-disc test for a disc in the plane `z = height` about the `z` axis,
   returning the rounded-down distance and facing in a `DiscHit`; the rim is
@@ -40,6 +44,12 @@ targets.
 * `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
   triangle test decided a hit with, as a `BarycentricNumerators` (also
   buildable from any point on a triangle with `BarycentricNumerators::new`).
+* `ShapeFrame` (`bunny-shape-frame/1`): a rigid frame (orthogonal unit axes
+  and an origin) that maps a `TraceRay` into a shape's object space and a
+  normal back to world space, each component one exact dot product rounded
+  once, ties to even, with typed refusals. A direction lengthened by the
+  rotation is halved and the `ObjectRay` maps hit distances back to the
+  world ray; see `docs/topics/shape-frame/`.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License
