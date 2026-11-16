@@ -158,9 +158,9 @@ impl ShapeFrame {
     /// [`ShapeFrameError::NormalOutOfRange`] when a world component does not fit Q32.32.
     pub fn to_world(&self, normal: FixedVec3) -> Result<FixedVec3, ShapeFrameError> {
         let [nx, ny, nz] = wide3(raw3(normal));
-        let [x, y, z] = self.axes.map(wide3);
-        let column = |i: usize| [x[i], y[i], z[i]];
-        let world = [0, 1, 2].map(|i| round_q64(dot(column(i), [nx, ny, nz])));
+        let [[x0, x1, x2], [y0, y1, y2], [z0, z1, z2]] = self.axes.map(wide3);
+        let columns = [[x0, y0, z0], [x1, y1, z1], [x2, y2, z2]];
+        let world = columns.map(|column| round_q64(dot(column, [nx, ny, nz])));
         match world {
             [Some(wx), Some(wy), Some(wz)] => Ok(vec3([wx, wy, wz])),
             _ => Err(ShapeFrameError::NormalOutOfRange),
