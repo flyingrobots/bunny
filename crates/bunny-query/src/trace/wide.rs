@@ -79,42 +79,50 @@ impl U256 {
 #[cfg(test)]
 mod tests {
     use super::U256;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    /// Oracle: hand-computed values of `(2^128 - 1)^2 = 2^256 - 2^129 + 1`.
-    #[test]
+    const ONE: U256 = U256 { hi: 0, lo: 1 };
+    const LOW_MAX: U256 = U256 { hi: 0, lo: u128::MAX };
+
+    /// Oracle: hand-computed products, `(2^128 - 1)^2 = 2^256 - 2^129 + 1` and
+    /// `2^64 * 2^64 = 2^128`.
+    #[wasm_bindgen_test(unsupported = test)]
     fn product_of_largest_values_is_exact() {
         let max = u128::MAX;
-        assert_eq!(U256::product(max, max), U256 { hi: max - 1, lo: 1 });
-        assert_eq!(U256::product(1 << 64, 1 << 64), U256 { hi: 1, lo: 0 });
+        let got = (U256::product(max, max), U256::product(1 << 64, 1 << 64));
+        // dojo: allow panic-path -- test assertion against hand-computed values
+        assert_eq!(got, (U256 { hi: max - 1, lo: 1 }, U256 { hi: 1, lo: 0 }));
     }
 
     /// Oracle: `isqrt` of `k^2 - 1`, `k^2` and `k^2 + 1` is `k - 1`, `k` and `k`.
-    #[test]
+    #[wasm_bindgen_test(unsupported = test)]
     fn isqrt_is_the_floor_root_around_squares() {
         for k in [3_u128, 1 << 64, (1 << 64) + 7, 1 << 100, u128::MAX] {
             let square = U256::product(k, k);
-            let one = U256 { hi: 0, lo: 1 };
-            assert_eq!(square.isqrt(), k, "k = {k}");
-            assert_eq!(square.checked_sub(one).map(U256::isqrt), Some(k - 1), "k = {k}");
-            if let Some(above) = square.checked_add(one) {
-                assert_eq!(above.isqrt(), k, "k = {k}");
-            }
+            let below = square.checked_sub(ONE).map(U256::isqrt);
+            let above = square.checked_add(ONE).map(U256::isqrt);
+            // dojo: allow panic-path -- test assertion against the defining property
+            assert_eq!((below, square.isqrt(), above), (Some(k - 1), k, Some(k)), "k = {k}");
         }
     }
 
-    /// Oracle: carries and borrows across the limb boundary, and the overflow limits.
-    #[test]
+    /// Oracle: hand-computed carries and borrows across the limb boundary, and the overflow
+    /// limits.
+    #[wasm_bindgen_test(unsupported = test)]
     fn add_sub_and_shift_carry_and_refuse_overflow() {
-        let low_max = U256 { hi: 0, lo: u128::MAX };
-        let one = U256 { hi: 0, lo: 1 };
-        assert_eq!(low_max.checked_add(one), Some(U256 { hi: 1, lo: 0 }));
-        assert_eq!(U256 { hi: 1, lo: 0 }.checked_sub(one), Some(low_max));
-        assert_eq!(one.checked_sub(low_max), None);
-        assert_eq!(U256 { hi: u128::MAX, lo: u128::MAX }.checked_add(one), None);
-        assert_eq!(
-            low_max.checked_shl64(),
-            Some(U256 { hi: u128::MAX >> 64, lo: u128::MAX << 64 })
-        );
-        assert_eq!(U256 { hi: 1 << 64, lo: 0 }.checked_shl64(), None);
+        let top = U256 { hi: u128::MAX, lo: u128::MAX };
+        let got = [
+            LOW_MAX.checked_add(ONE),
+            U256 { hi: 1, lo: 0 }.checked_sub(ONE),
+            ONE.checked_sub(LOW_MAX),
+            top.checked_add(ONE),
+            LOW_MAX.checked_shl64(),
+            U256 { hi: 1 << 64, lo: 0 }.checked_shl64(),
+        ];
+        let shifted = U256 { hi: u128::MAX >> 64, lo: u128::MAX << 64 };
+        let expected =
+            [Some(U256 { hi: 1, lo: 0 }), Some(LOW_MAX), None, None, Some(shifted), None];
+        // dojo: allow panic-path -- test assertion against hand-computed values
+        assert_eq!(got, expected);
     }
 }
