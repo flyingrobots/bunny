@@ -33,7 +33,9 @@ targets.
 * `ShapeFrame` (`bunny-shape-frame/1`): a rigid frame (orthogonal unit axes
   and an origin) that maps a `TraceRay` into a shape's object space and a
   normal back to world space, each component one exact dot product rounded
-  once, ties to even, with typed refusals; see `docs/topics/shape-frame/`.
+  once, ties to even, with typed refusals. A direction lengthened by the
+  rotation is halved and the `ObjectRay` maps hit distances back to the
+  world ray; see `docs/topics/shape-frame/`.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License

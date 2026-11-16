@@ -11,8 +11,9 @@ use bunny_geom::FixedRay3;
 use bunny_linalg::{FixedUnitVec3, FixedVec3};
 use bunny_num::FixedQ32_32;
 use bunny_query::{
-    ShapeFrame, ShapeFrameError, TraceRay, SHAPE_FRAME_AXIS_DOT_LIMIT_RAW, SHAPE_FRAME_ID,
-    TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW, TRACE_UNIT_DIRECTION_LIMIT_RAW,
+    ObjectRay, ShapeFrame, ShapeFrameError, TraceRay, SHAPE_FRAME_AXIS_DOT_LIMIT_RAW,
+    SHAPE_FRAME_ID, SHAPE_FRAME_MAX_DIRECTION_SHIFT, TRACE_COORD_LIMIT_RAW,
+    TRACE_DIRECTION_LIMIT_RAW, TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -59,7 +60,12 @@ fn unit(raw: Raw3) -> FixedUnitVec3 {
 /// The multiple of `2^32` nearest `numerator`, ties to the even multiple, as a raw Q32.32
 /// value: the oracle's one rounding. `None` when it does not fit `i64`.
 fn nearest_even(numerator: i128) -> Option<i64> {
-    let step = 1_i128 << 32;
+    nearest_even_over(numerator, 32)
+}
+
+/// The integer nearest `numerator / 2^bits`, ties to even; `None` when it does not fit.
+fn nearest_even_over(numerator: i128, bits: u32) -> Option<i64> {
+    let step = 1_i128 << bits;
     let quotient = numerator.div_euclid(step);
     let twice_rest = 2 * numerator.rem_euclid(step);
     let up = twice_rest > step || (twice_rest == step && quotient.rem_euclid(2) == 1);
@@ -76,7 +82,7 @@ fn oracle_to_object(
     axes: [Raw3; 3],
     origin: Raw3,
     ray: (Raw3, Raw3),
-) -> Result<(Raw3, Raw3), ShapeFrameError> {
+) -> Result<(Raw3, Raw3, u32), ShapeFrameError> {
     let offset = [0, 1, 2].map(|i| i128::from(ray.0[i]) - i128::from(origin[i]));
     let direction = ray.1.map(i128::from);
     let object = |v: [i128; 3]| axes.map(|axis| nearest_even(exact_dot(axis, v)));
@@ -85,12 +91,18 @@ fn oracle_to_object(
     {
         return Err(ShapeFrameError::RayOutsideTraceDomain);
     }
-    let d = object(direction);
+    // The smallest k for which every exact component over 2^(32 + k), rounded, is within the
+    // unit-direction limit; the oracle searches every k up to 62, not only 0 and 1.
     let limit = TRACE_UNIT_DIRECTION_LIMIT_RAW.unsigned_abs();
-    if d.iter().any(|c| c.is_none_or(|c| c.unsigned_abs() > limit)) || d == [Some(0); 3] {
+    let scaled = |k: u32| axes.map(|axis| nearest_even_over(exact_dot(axis, direction), 32 + k));
+    let (d, k) = (0..=62)
+        .map(|k| (scaled(k), k))
+        .find(|(d, _)| d.iter().all(|c| c.is_some_and(|c| c.unsigned_abs() <= limit)))
+        .expect("some shift fits");
+    if d == [Some(0); 3] {
         return Err(ShapeFrameError::DirectionOutsideTraceDomain);
     }
-    Ok((o.map(Option::unwrap), d.map(Option::unwrap)))
+    Ok((o.map(Option::unwrap), d.map(Option::unwrap), k))
 }
 
 /// What `to_world` must return.
@@ -129,8 +141,13 @@ fn frame(axes: [Raw3; 3], origin: Raw3) -> ShapeFrame {
     ShapeFrame::new(axes.map(unit), vec3(origin)).expect("a valid frame")
 }
 
-fn object_ray(result: Result<TraceRay, ShapeFrameError>) -> Result<(Raw3, Raw3), ShapeFrameError> {
-    result.map(|ray| (raw3(ray.origin()), raw3(ray.direction())))
+fn object_ray(
+    result: Result<ObjectRay, ShapeFrameError>,
+) -> Result<(Raw3, Raw3, u32), ShapeFrameError> {
+    result.map(|object| {
+        let ray = object.ray();
+        (raw3(ray.origin()), raw3(ray.direction()), object.direction_shift())
+    })
 }
 
 #[wasm_bindgen_test]
@@ -157,6 +174,7 @@ fn sf_tp_001_maps_equal_the_exact_rational_oracle() {
             let direction = seeds.triple(TRACE_DIRECTION_LIMIT_RAW >> (case % 33));
             let Some(ray) = TraceRay::new(vec3(ray_origin), vec3(direction)) else { continue };
             let expected = oracle_to_object(axes, origin, (ray_origin, direction));
+            assert_ne!(expected, Err(ShapeFrameError::DirectionOutsideTraceDomain));
             refusals += usize::from(expected.is_err());
             maps += usize::from(expected.is_ok());
             let normal = seeds.triple(i64::MAX >> (1 + case % 40));
@@ -184,8 +202,8 @@ fn sf_tp_003_grazing_ray_stays_in_the_object_plane() {
     let shape = frame(axes, origin);
     let ray = TraceRay::new(vec3([3 * ONE, ONE, 7 * ONE]), vec3([0, 1 << 31, -(1 << 30)]))
         .expect("a trace ray");
-    let (o, d) = object_ray(shape.to_object(&ray)).expect("in the domain");
-    assert_eq!((o, d), ([3 * ONE, 2 * ONE, 0], [1 << 31, -(1 << 30), 0]));
+    let mapped = object_ray(shape.to_object(&ray)).expect("in the domain");
+    assert_eq!(mapped, ([3 * ONE, 2 * ONE, 0], [1 << 31, -(1 << 30), 0], 0));
     let axes = quaternion_axes([3, -7, 11, 5]).expect("unit rows");
     let shape = frame(axes, origin);
     let world = |v: Raw3| oracle_to_world(axes, v).expect("small");
@@ -203,10 +221,10 @@ fn sf_tp_004_ray_from_the_frame_origin_starts_at_object_zero() {
     let origin = [-100 * ONE, 17 * ONE + 3, 255 * ONE];
     let ray =
         TraceRay::new(vec3(origin), vec3([1 << 31, -(1 << 31), 1 << 20])).expect("a trace ray");
-    let (o, d) = object_ray(frame(axes, origin).to_object(&ray)).expect("in the domain");
+    let (o, d, k) = object_ray(frame(axes, origin).to_object(&ray)).expect("in the domain");
     assert_eq!(o, [0; 3]);
     assert_eq!(
-        Ok((o, d)),
+        Ok((o, d, k)),
         oracle_to_object(axes, origin, (origin, [1 << 31, -(1 << 31), 1 << 20]))
     );
 }
@@ -222,7 +240,7 @@ fn sf_tp_005_frame_origin_behind_the_ray_stays_behind() {
     let origin = [ONE, ONE, ONE];
     let ray =
         TraceRay::new(vec3([4 * ONE, ONE, -ONE]), vec3([ONE, 0, -(1 << 31)])).expect("a trace ray");
-    let (o, d) = object_ray(frame(axes, origin).to_object(&ray)).expect("in the domain");
+    let (o, d, _) = object_ray(frame(axes, origin).to_object(&ray)).expect("in the domain");
     assert_eq!((o, d), ([-2 * ONE, 3 * ONE, 0], [-(1 << 31), ONE, 0]));
     assert!(exact_dot(o, d.map(i128::from)) > 0, "the object ray moves away from zero");
 }
@@ -238,7 +256,7 @@ fn sf_tp_006_ties_round_to_even() {
     let shape = frame(axes, [0; 3]);
     for (offset, expected) in [(1, 0), (3, 2), (-1, 0), (-3, -2)] {
         let ray = TraceRay::new(vec3([offset, 0, 0]), vec3([0, 0, ONE])).expect("a trace ray");
-        let (o, _) = object_ray(shape.to_object(&ray)).expect("in the domain");
+        let (o, _, _) = object_ray(shape.to_object(&ray)).expect("in the domain");
         assert_eq!(o[0], expected, "offset {offset}");
         assert_eq!(Ok(o[0]), nearest_even(i128::from(offset) << 31).ok_or(()), "offset {offset}");
         let world = shape.to_world(vec3([offset, 0, 0])).map(raw3).expect("small");
@@ -285,22 +303,91 @@ fn sf_tp_008_unrepresentable_results_are_refused() {
     assert_eq!(shape.to_object(&ray), Err(ShapeFrameError::RayOutsideTraceDomain));
     let ray = TraceRay::new(vec3([-1, 0, 0]), vec3([ONE, 0, 0])).expect("a trace ray");
     assert!(shape.to_object(&ray).is_ok());
-    // Rotated 45 degrees about z, the direction (1, 1, 0) has object x of sqrt(2).
-    let h = 3_037_000_500; // round(sqrt(2) / 2 * 2^32)
-    let axes = [[h, h, 0], [-h, h, 0], [0, 0, ONE]];
+    let (_, axes) = diagonal_axes();
     let shape = frame(axes, [0; 3]);
+    let big = shape.to_world(vec3([i64::MAX, i64::MAX, 0]));
+    assert_eq!(big, Err(ShapeFrameError::NormalOutOfRange));
+    assert_eq!(big.map(raw3), oracle_to_world(axes, [i64::MAX, i64::MAX, 0]));
+}
+
+/// Axes rotated 45 degrees about z, and the raw `round(sqrt(2) / 2 * 2^32)` they use.
+fn diagonal_axes() -> (i64, [Raw3; 3]) {
+    let h = 3_037_000_500;
+    (h, [[h, h, 0], [-h, h, 0], [0, 0, ONE]])
+}
+
+/// SF-TP-010: a direction lengthened past the limit by rotation is halved, not refused, at
+/// the limit exactly. `(1, 1, 0)` rotated 45 degrees has object x `sqrt(2)`: halved, with
+/// `k = 1`. The longest unit direction, `2^32 + 1` raw, maps to itself under the world axes
+/// (`k = 0`); under an x axis of that length its exact image `2^32 + 2 + 2^-32` raw is over
+/// the limit, and halved it is `2^31 + 1` raw (`k = 1`).
+#[wasm_bindgen_test]
+#[test]
+fn sf_tp_010_lengthened_directions_are_halved_not_refused() {
+    let (_, axes) = diagonal_axes();
     let ray = TraceRay::new(vec3([0; 3]), vec3([ONE, ONE, 0])).expect("a trace ray");
-    assert_eq!(shape.to_object(&ray), Err(ShapeFrameError::DirectionOutsideTraceDomain));
-    // The longest unit direction, `2^32 + 1` raw, maps to itself under the world axes and is
-    // accepted; under an x axis of that length it becomes `2^32 + 2` raw and is refused.
+    let mapped = object_ray(frame(axes, [0; 3]).to_object(&ray));
+    assert_eq!(mapped, oracle_to_object(axes, [0; 3], ([0; 3], [ONE, ONE, 0])));
+    assert_eq!(mapped.map(|m| m.2), Ok(1));
     let longest = unit([TRACE_UNIT_DIRECTION_LIMIT_RAW, 0, 0]);
     let ray = TraceRay::from_ray(&FixedRay3::new(vec3([0; 3]), longest)).expect("a trace ray");
     let identity = ShapeFrame::translation(vec3([0; 3])).expect("in the domain");
     let mapped = object_ray(identity.to_object(&ray)).expect("at the limit");
-    assert_eq!(mapped.1, [TRACE_UNIT_DIRECTION_LIMIT_RAW, 0, 0]);
+    assert_eq!((mapped.1, mapped.2), ([TRACE_UNIT_DIRECTION_LIMIT_RAW, 0, 0], 0));
     let long_x = frame([[TRACE_UNIT_DIRECTION_LIMIT_RAW, 0, 0], [0, ONE, 0], [0, 0, ONE]], [0; 3]);
-    assert_eq!(long_x.to_object(&ray), Err(ShapeFrameError::DirectionOutsideTraceDomain));
-    let big = shape.to_world(vec3([i64::MAX, i64::MAX, 0]));
-    assert_eq!(big, Err(ShapeFrameError::NormalOutOfRange));
-    assert_eq!(big.map(raw3), oracle_to_world(axes, [i64::MAX, i64::MAX, 0]));
+    let mapped = object_ray(long_x.to_object(&ray)).expect("halved");
+    assert_eq!((mapped.1, mapped.2), ([(1 << 31) + 1, 0, 0], 1));
+}
+
+const RENDER_SEED: u64 = 0x5AFE_F4A3_0357_0002;
+
+/// A camera-like direction (one component exactly ±1.0, the others anywhere in `-1..=1`,
+/// length up to `sqrt(3)`) or a light-like one (largest component exactly 1.0, the others
+/// at most half, as `(0.5, 0.3125, 1.0)`).
+fn render_direction(seeds: &mut Seeds, case: usize) -> Raw3 {
+    if case == 0 {
+        return [1 << 31, 5 << 28, ONE];
+    }
+    let spread = if case.is_multiple_of(2) { ONE } else { ONE / 2 };
+    let mut d = seeds.triple(spread);
+    let axis = usize::try_from(seeds.next() % 3).expect("small");
+    d[axis] = if seeds.next() & 1 == 1 { ONE } else { -ONE };
+    d
+}
+
+/// SF-TP-011: camera-like and light-like rays (direction components at most 1.0, lengths up
+/// to `sqrt(3)`, including `(0.5, 0.3125, 1.0)`) through generated rotations are never
+/// refused; the object ray and `k` equal the oracle's (which searches every shift), both
+/// shifts occur, and `world_distance` and `object_distance` equal exact `floor(t / 2^k)` and
+/// `t * 2^k`.
+#[wasm_bindgen_test]
+#[test]
+fn sf_tp_011_render_rays_map_with_their_shift_and_distances_map_back() {
+    let mut seeds = Seeds(RENDER_SEED);
+    let (mut frames, mut shifts) = (0, [0_usize; 2]);
+    while frames < ORACLE_FRAMES {
+        let q = [0; 4].map(|_| seeds.signed(1 << 15));
+        let Some(axes) = quaternion_axes(q) else { continue };
+        frames += 1;
+        let origin = seeds.triple(64 * ONE);
+        let shape = frame(axes, origin);
+        for case in 0..RAYS_PER_FRAME {
+            let context = format!("seed {RENDER_SEED:#x}, frame {frames}, case {case}");
+            let start = seeds.triple(64 * ONE);
+            let direction = render_direction(&mut seeds, case);
+            let ray = TraceRay::new(vec3(start), vec3(direction)).expect("a trace ray");
+            let object = shape.to_object(&ray).unwrap_or_else(|e| panic!("{e}, {context}"));
+            let expected = oracle_to_object(axes, origin, (start, direction));
+            assert_eq!(object_ray(Ok(object)), expected, "{context}");
+            let k = object.direction_shift();
+            assert!(k <= SHAPE_FRAME_MAX_DIRECTION_SHIFT, "{context}");
+            *shifts.get_mut(usize::try_from(k).expect("small")).expect("k <= 1") += 1;
+            let t = seeds.signed(1 << 50);
+            let world = i64::try_from(i128::from(t).div_euclid(1 << k)).expect("smaller");
+            assert_eq!(object.world_distance(FixedQ32_32::from_raw(t)).raw(), world, "{context}");
+            let back = object.object_distance(FixedQ32_32::from_raw(world)).raw();
+            assert_eq!(i128::from(back), i128::from(world) << k, "{context}");
+        }
+    }
+    assert!(shifts.iter().all(|&n| n > 0), "seed {RENDER_SEED:#x}: shifts {shifts:?}");
 }

@@ -25,8 +25,8 @@ CHANGELOG.md
 
 Topic docs:
 docs/topics/shape-frame/README.md (contract identity, frame refusals, the rounding rule of
-both maps, degenerate cases); docs/topics/shape-frame/test-plan.md (SF-REQ-001 to 005,
-SF-TP-001 and 003 to 009, mutations).
+both maps, degenerate cases); docs/topics/shape-frame/test-plan.md (SF-REQ-001 to 007,
+SF-TP-001 and 003 to 011, mutations).
 
 Generated artifacts:
 None.
@@ -40,11 +40,16 @@ removed, exclusive direction limit, `to_world` transposed): each fails the cases
 the test plan. The full gate, `code-dojo --all` with `--history origin/main..HEAD`: see the
 pull request.
 
+Coordinator decision (2026-11-16): a direction lengthened by the rotation is divided by
+`2^k` (k 0 or 1) inside the one rounding, not refused; `ObjectRay` carries k and maps
+distances. Tests SF-TP-010 and SF-TP-011 and six more mutations (no shift, always shift,
+round then shift, world_distance nearest or unscaled, object_distance unscaled), all killed.
+
 Known risks:
-The axis tolerance (`2^-24`) and the right-handedness requirement are this change's
-choices; the issue says only "orthonormal basis from unit vectors". A direction of length
-above 1.0 (allowed by `TraceRay::new`) can be refused after rotation rather than mapped,
-because the kernels accept components only up to `2^32 + 1` raw.
+The axis tolerance (`2^-24`) and the right-handedness requirement were this change's
+choices and the coordinator kept them; the issue says only "orthonormal basis from unit
+vectors". The world parameter of an object hit is exact for the object ray; relative to the
+world ray it carries the mapping's rounding.
 
 Human reviewer:
 James Ross (maintainer); review pending.

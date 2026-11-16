@@ -20,6 +20,10 @@ pub const SHAPE_FRAME_ID: &str = "bunny-shape-frame/1";
 /// is at most `2^-24`.
 pub const SHAPE_FRAME_AXIS_DOT_LIMIT_RAW: i128 = 1 << 40;
 
+/// The largest direction shift [`ShapeFrame::to_object`] applies (see its documentation).
+pub const SHAPE_FRAME_MAX_DIRECTION_SHIFT: u32 = 1;
+const MAX_DIRECTION_SHIFT: u32 = SHAPE_FRAME_MAX_DIRECTION_SHIFT;
+
 type Wide3 = [i128; 3];
 
 /// Why a [`ShapeFrame`] could not be built or could not map a value.
@@ -34,8 +38,8 @@ pub enum ShapeFrameError {
     AxesLeftHanded,
     /// The ray origin in object coordinates is outside the trace domain.
     RayOutsideTraceDomain,
-    /// A component of the ray direction in object coordinates exceeds
-    /// [`TRACE_UNIT_DIRECTION_LIMIT_RAW`] in magnitude, or every component rounds to zero.
+    /// Every component of the ray direction in object coordinates rounds to zero. Defensive:
+    /// no ray a [`TraceRay`] accepts reaches it.
     DirectionOutsideTraceDomain,
     /// A component of the normal in world coordinates does not fit Q32.32.
     NormalOutOfRange,
@@ -120,30 +124,37 @@ impl ShapeFrame {
         vec3(self.origin)
     }
 
-    /// The ray in object coordinates.
+    /// The ray in object coordinates, with its direction scaled to fit the trace domain.
     ///
-    /// The origin is `(ray.origin - origin) . axis` and the direction `ray.direction . axis`
-    /// for each axis, each exact dot product rounded once to Q32.32, ties to even. The
-    /// direction is not renormalized, so a distance along the object ray is a distance along
-    /// the world ray to within that rounding.
+    /// The origin is `(ray.origin - origin) . axis` for each axis, each exact dot product
+    /// rounded once to Q32.32, ties to even. The direction is `(ray.direction . axis) / 2^k`,
+    /// each exact dot product divided by `2^k` and rounded once the same way, for the smallest
+    /// `k` that keeps every component within [`TRACE_UNIT_DIRECTION_LIMIT_RAW`]. Every
+    /// direction a [`TraceRay`] holds is shorter than `sqrt(3) * (1 + 2^-32)`, and every axis
+    /// shorter than `1 + 2^-31`, so each exact component is below 2.0 and `k` is 0 or 1
+    /// ([`ObjectRay::direction_shift`]). Use [`ObjectRay::world_distance`] to map a distance
+    /// along the object ray back to the world ray.
     ///
     /// # Errors
     ///
     /// [`ShapeFrameError::RayOutsideTraceDomain`] when an object origin coordinate is outside
-    /// the trace domain, and [`ShapeFrameError::DirectionOutsideTraceDomain`] when an object
-    /// direction component exceeds [`TRACE_UNIT_DIRECTION_LIMIT_RAW`] in magnitude or every
-    /// component is zero.
-    pub fn to_object(&self, ray: &TraceRay) -> Result<TraceRay, ShapeFrameError> {
+    /// the trace domain, and [`ShapeFrameError::DirectionOutsideTraceDomain`] when every
+    /// object direction component rounds to zero (a defensive refusal: a nonzero direction of
+    /// a `TraceRay` has a component of at least one raw unit, so no accepted input reaches it).
+    pub fn to_object(&self, ray: &TraceRay) -> Result<ObjectRay, ShapeFrameError> {
         let offset = sub3(raw3(ray.origin()), self.origin);
-        let origin = self.project(offset).ok_or(ShapeFrameError::RayOutsideTraceDomain)?;
+        let origin = self.project(offset, 0).ok_or(ShapeFrameError::RayOutsideTraceDomain)?;
         if !origin.iter().all(|&c| in_trace_domain(c)) {
             return Err(ShapeFrameError::RayOutsideTraceDomain);
         }
-        let direction = self.project(wide3(raw3(ray.direction())));
+        let world = wide3(raw3(ray.direction()));
         let limit = TRACE_UNIT_DIRECTION_LIMIT_RAW.unsigned_abs();
-        direction
-            .filter(|d| d.iter().all(|c| c.unsigned_abs() <= limit))
-            .and_then(|d| TraceRay::prepare(vec3(origin), vec3(d), TRACE_UNIT_DIRECTION_LIMIT_RAW))
+        let fits = |d: &[i64; 3]| d.iter().all(|c| c.unsigned_abs() <= limit);
+        let (direction, shift) = (0..=MAX_DIRECTION_SHIFT)
+            .find_map(|k| self.project(world, k).filter(fits).map(|d| (d, k)))
+            .ok_or(ShapeFrameError::DirectionOutsideTraceDomain)?;
+        TraceRay::prepare(vec3(origin), vec3(direction), TRACE_UNIT_DIRECTION_LIMIT_RAW)
+            .map(|ray| ObjectRay { ray, shift })
             .ok_or(ShapeFrameError::DirectionOutsideTraceDomain)
     }
 
@@ -160,17 +171,65 @@ impl ShapeFrame {
         let [nx, ny, nz] = wide3(raw3(normal));
         let [[x0, x1, x2], [y0, y1, y2], [z0, z1, z2]] = self.axes.map(wide3);
         let columns = [[x0, y0, z0], [x1, y1, z1], [x2, y2, z2]];
-        let world = columns.map(|column| round_q64(dot(column, [nx, ny, nz])));
+        let world = columns.map(|column| round_q64(dot(column, [nx, ny, nz]), 0));
         match world {
             [Some(wx), Some(wy), Some(wz)] => Ok(vec3([wx, wy, wz])),
             _ => Err(ShapeFrameError::NormalOutOfRange),
         }
     }
 
-    /// `v . axis` for each axis, rounded to Q32.32, or `None` when one does not fit `i64`.
-    fn project(&self, v: Wide3) -> Option<[i64; 3]> {
-        let [x, y, z] = self.axes.map(|axis| round_q64(dot(wide3(axis), v)));
+    /// `(v . axis) / 2^shift` for each axis, rounded to Q32.32, or `None` when one does not
+    /// fit `i64`.
+    fn project(&self, v: Wide3, shift: u32) -> Option<[i64; 3]> {
+        let [x, y, z] = self.axes.map(|axis| round_q64(dot(wide3(axis), v), shift));
         Some([x?, y?, z?])
+    }
+}
+
+/// A ray mapped into a shape's object frame by [`ShapeFrame::to_object`].
+///
+/// The object direction is the world direction rotated and divided by `2^k`, `k` being
+/// [`Self::direction_shift`], so the object point at distance `t` is the world point at
+/// distance `t / 2^k` along the world ray (to within the rounding of the mapped ray).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectRay {
+    ray: TraceRay,
+    shift: u32,
+}
+
+impl ObjectRay {
+    /// The ray in object coordinates, for the shape kernels.
+    #[must_use]
+    pub const fn ray(&self) -> &TraceRay {
+        &self.ray
+    }
+
+    /// `k`: the object direction is the rotated world direction divided by `2^k`. It is 0 or
+    /// 1 ([`SHAPE_FRAME_MAX_DIRECTION_SHIFT`]).
+    #[must_use]
+    pub const fn direction_shift(&self) -> u32 {
+        self.shift
+    }
+
+    /// The world-ray distance of an object-ray distance: `floor(t / 2^k)` in raw units.
+    ///
+    /// A kernel's distance is the floor of the true object distance, and the floor of a
+    /// floor divided by `2^k` is the floor of the true value divided by `2^k`, so the result
+    /// is the floor of the exact world distance of the object hit, the same rounding as a
+    /// triangle hit on the world ray. Exact, never fails.
+    #[must_use]
+    pub const fn world_distance(&self, object_distance: FixedQ32_32) -> FixedQ32_32 {
+        FixedQ32_32::from_raw(object_distance.raw() >> self.shift)
+    }
+
+    /// The object-ray distance of a world-ray distance limit: `t * 2^k`, saturating at the
+    /// Q32.32 range. A saturated limit is beyond every distance a kernel reports in the
+    /// trace domain.
+    #[must_use]
+    pub const fn object_distance(&self, world_distance: FixedQ32_32) -> FixedQ32_32 {
+        let raw = world_distance.raw();
+        let scaled = raw.saturating_mul(1 << self.shift);
+        FixedQ32_32::from_raw(scaled)
     }
 }
 
@@ -187,12 +246,14 @@ const fn vec3(raw: [i64; 3]) -> FixedVec3 {
     FixedVec3::new(FixedQ32_32::from_raw(x), FixedQ32_32::from_raw(y), FixedQ32_32::from_raw(z))
 }
 
-/// A Q64.64 value rounded to Q32.32, ties to even, or `None` when it does not fit `i64`.
-fn round_q64(value: i128) -> Option<i64> {
-    const HALF: i128 = 1 << 31;
-    let floor = value >> 32;
-    let rest = value - (floor << 32);
-    let up = rest > HALF || (rest == HALF && floor & 1 == 1);
+/// A Q64.64 value divided by `2^shift` and rounded to Q32.32, ties to even, or `None` when
+/// it does not fit `i64`.
+fn round_q64(value: i128, shift: u32) -> Option<i64> {
+    let bits = FixedQ32_32::FRACTIONAL_BITS + shift;
+    let half = 1_i128 << (bits - 1);
+    let floor = value >> bits;
+    let rest = value - (floor << bits);
+    let up = rest > half || (rest == half && floor & 1 == 1);
     i64::try_from(floor + i128::from(up)).ok()
 }
 

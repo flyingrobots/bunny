@@ -17,7 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (exact pairwise dot products at most `2^-24`) and an origin in the trace
   domain; `to_object` maps a `TraceRay` into object space and `to_world` a
   normal back, each component one exact `i128` dot product rounded once to
-  Q32.32, ties to even. Results outside the trace domain or Q32.32 are typed
+  Q32.32, ties to even. A direction lengthened past the kernels' limit by the
+  rotation is divided by `2^k` (`k` 0 or 1) inside that one rounding, not
+  refused; the returned `ObjectRay` carries `k`, and `world_distance`
+  (`floor(t / 2^k)`) and `object_distance` map hit distances and limits
+  between the rays. Results outside the trace domain or Q32.32 are typed
   `ShapeFrameError` refusals. Closes flyingrobots/bunny#357.
 
 ### Fixed
