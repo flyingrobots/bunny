@@ -69,7 +69,11 @@ impl TraceRay {
     }
 
     /// `new` with the inclusive bound on direction components as a parameter.
-    fn prepare(origin: FixedVec3, direction: FixedVec3, direction_limit: i64) -> Option<Self> {
+    pub(crate) fn prepare(
+        origin: FixedVec3,
+        direction: FixedVec3,
+        direction_limit: i64,
+    ) -> Option<Self> {
         let origin = raw3(origin);
         let direction = raw3(direction);
         let valid = origin.iter().all(|&c| in_trace_domain(c))

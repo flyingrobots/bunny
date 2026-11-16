@@ -14,19 +14,37 @@ crates/bunny-optics/src/error.rs
 docs/topics/ray-tracing/README.md, docs/topics/ray-tracing/test-plan.md
 
 Files edited:
-In progress; listed when the change is complete.
+crates/bunny-query/src/frame.rs (new), crates/bunny-query/src/lib.rs,
+crates/bunny-query/src/trace.rs (`TraceRay::prepare` made crate-visible)
+crates/bunny-query/tests/shape_frame_tests.rs (new)
+crates/bunny-query/README.md
+docs/topics/shape-frame/README.md, docs/topics/shape-frame/test-plan.md (new)
+docs/README.md, docs/NUMERIC_CONSTITUTION.md
+CHANGELOG.md
+.repo-respect/receipts/2026-11-15-shape-frame.md
 
 Topic docs:
-In progress.
+docs/topics/shape-frame/README.md (contract identity, frame refusals, the rounding rule of
+both maps, degenerate cases); docs/topics/shape-frame/test-plan.md (SF-REQ-001 to 005,
+SF-TP-001 and 003 to 009, mutations).
 
 Generated artifacts:
 None.
 
 Checks run:
-In progress.
+All inside the bunny container through devrun; nothing on the host.
+`cargo test --locked -p bunny-query`: all pass, the eight new tests included. Clippy with
+`-D warnings` on `bunny-query --all-targets`: clean. Mutations of `frame.rs` (ties half up,
+floor, handedness accepting negatives, exclusive orthogonality limit, origin domain check
+removed, exclusive direction limit, `to_world` transposed): each fails the cases listed in
+the test plan. The full gate, `code-dojo --all` with `--history origin/main..HEAD`: see the
+pull request.
 
 Known risks:
-In progress.
+The axis tolerance (`2^-24`) and the right-handedness requirement are this change's
+choices; the issue says only "orthonormal basis from unit vectors". A direction of length
+above 1.0 (allowed by `TraceRay::new`) can be refused after rotation rather than mapped,
+because the kernels accept components only up to `2^32 + 1` raw.
 
 Human reviewer:
 James Ross (maintainer); review pending.
