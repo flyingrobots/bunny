@@ -94,7 +94,5 @@ pub use shading::{
     MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX, SMOOTH_NORMAL_ID,
     SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
-pub use thin_lens::{
-    lens_disc_point, ThinLensCamera, ThinLensError, ThinLensSpec, THIN_LENS_ID,
-};
+pub use thin_lens::{lens_disc_point, ThinLensCamera, ThinLensError, ThinLensSpec, THIN_LENS_ID};
 pub use xoroshiro::Xoroshiro128Plus;
