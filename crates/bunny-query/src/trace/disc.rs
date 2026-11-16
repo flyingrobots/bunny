@@ -52,7 +52,7 @@ impl TraceDisc {
     ///
     /// Returns [`TraceDiscError`] when the height or the radius is outside the trace domain
     /// ([`crate::TRACE_COORD_LIMIT_RAW`]) or the radius is not positive.
-    pub fn new(height: FixedQ32_32, radius: FixedQ32_32) -> Result<Self, TraceDiscError> {
+    pub const fn new(height: FixedQ32_32, radius: FixedQ32_32) -> Result<Self, TraceDiscError> {
         let (height, radius) = (height.raw(), radius.raw());
         if !in_trace_domain(height) {
             Err(TraceDiscError::HeightOutsideTraceDomain)
@@ -79,7 +79,7 @@ impl TraceDisc {
 
     /// The smallest box that contains the disc: flat, at `z = height`.
     #[must_use]
-    pub fn bounds(&self) -> FixedAabb3 {
+    pub const fn bounds(&self) -> FixedAabb3 {
         // Each bound is below 2^40 in magnitude, so it fits.
         let (r, h) = (self.radius, self.height);
         FixedAabb3::new(vec3([-r, -r, h]), vec3([r, r, h]))
@@ -155,7 +155,7 @@ impl TraceRay {
 /// direction `z` of `dz` meets it, or `None` when the ray is parallel to the plane.
 ///
 /// `|f * 2^32| < 2^73` fits `i128`; the divisor is made positive so that `div_euclid` floors.
-fn plane_distance(f: i128, dz: i128) -> Option<i128> {
+const fn plane_distance(f: i128, dz: i128) -> Option<i128> {
     if dz == 0 {
         return None;
     }

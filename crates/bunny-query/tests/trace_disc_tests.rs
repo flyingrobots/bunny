@@ -192,14 +192,14 @@ impl Seeds {
 fn generate(seeds: &mut Seeds) -> Case {
     let rim = seeds.next().is_multiple_of(2);
     loop {
-        let candidate = if rim { rim_case(seeds) } else { random_case(seeds) };
+        let candidate = if rim { rim_case(seeds) } else { Some(random_case(seeds)) };
         if let Some(candidate) = candidate {
             return candidate;
         }
     }
 }
 
-fn random_case(seeds: &mut Seeds) -> Option<Case> {
+fn random_case(seeds: &mut Seeds) -> Case {
     let radius = seeds.scale(39);
     let height = seeds.signed(DOMAIN);
     let reach = (3 * radius).min(DOMAIN);
@@ -230,7 +230,7 @@ fn random_case(seeds: &mut Seeds) -> Option<Case> {
         }
         _ => full(),
     };
-    Some(Case { origin, direction, height, radius, range })
+    Case { origin, direction, height, radius, range }
 }
 
 fn rim_case(seeds: &mut Seeds) -> Option<Case> {
