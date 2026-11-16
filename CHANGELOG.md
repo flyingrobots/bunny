@@ -85,6 +85,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   radius that is not positive, with `TraceSphereError`. `ray_intersects_sphere`
   is unchanged. Closes flyingrobots/bunny#358.
 
+* `bunny-optics`: the perfect mirror, `bunny-specular-reflection/1`
+  (`SPECULAR_REFLECTION_ID`). `SurfaceHit::specular_reflection` and
+  `try_specular_reflection` give the continuation ray from the hit's start
+  point along the exact reflection of the incoming direction about the frame
+  normal (normalized once, each component within one raw unit of the exact
+  unit vector) and its throughput, Schlick's Fresnel term per channel from a
+  base reflectance, as a `SpecularSample` (`ray`, `throughput`).
+  `schlick_fresnel` is public for the rough-metal and glass samplers: the
+  exact `(1 - cos)^5` and the sum are each rounded once, within one raw unit
+  of the exact formula, and at normal incidence the throughput is the base
+  reflectance exactly. A ray arriving from below the face and a grazing
+  reflection that stays under the exact plane are refused with two new
+  `SecondaryRayError` variants, `ArrivesBelowSurface` and
+  `ReflectionBelowSurface`. No existing output changes. Closes
+  flyingrobots/bunny#370.
+
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and
   `compact_any_hit` together with a `TraversalCounts` record of the search's
