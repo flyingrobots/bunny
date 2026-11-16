@@ -148,6 +148,7 @@ formatting.
 | OPTICS-REQ-053 | `schlick_fresnel(f0, cosine)` clamps both inputs to `0..=1.0`, rounds the exact `(1 - cosine)^5` once to nearest and `f0 + (1 - f0) w` once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is `schlick_fresnel(F0_c, c)` per channel with `c` the incidence cosine rounded once, within three raw units of the exact `-(d . n) / |d|`. | `README.md#specular-reflection` |
 | OPTICS-REQ-054 | At normal incidence (`d` along `-n`) the throughput is the base reflectance exactly; at `cosine = 1.0` `schlick_fresnel` is `f0` exactly and at `cosine = 0` it is 1.0. | `README.md#specular-reflection` |
 | OPTICS-REQ-055 | `try_specular_reflection` refuses, in this order, a ray with `d . N >= 0` against the exact facing normal (`SecondaryRayError::ArrivesBelowSurface`) and a reflected direction with `r' . N <= 0` (`SecondaryRayError::ReflectionBelowSurface`), each carrying the direction it saw. | `README.md#specular-reflection` |
+| OPTICS-REQ-066 | `srgb8_to_linear` (`bunny-srgb8-decode/1`) maps each of the 256 8-bit sRGB codes to the exact sRGB decode (IEC 61966-2-1: toe `c / (255 * 12.92)` for `c <= 10`, else `((c / 255 + 0.055) / 1.055)^2.4`) rounded to nearest in raw Q32.32, with code 0 giving 0 and code 255 giving 1.0; encoding each result with `bunny-tone-srgb/1` returns the original code. | `README.md#decoding-srgb-codes` |
 
 ```toml
 [[requirement]]
@@ -404,6 +405,11 @@ status = "active"
 id = "OPTICS-REQ-055"
 summary = "try_specular_reflection refuses, in this order, a ray with d . N >= 0 against the exact facing normal (SecondaryRayError::ArrivesBelowSurface) and a reflected direction with r' . N <= 0 (SecondaryRayError::ReflectionBelowSurface), each carrying the direction it saw."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-066"
+summary = "srgb8_to_linear (bunny-srgb8-decode/1) maps each of the 256 8-bit sRGB codes to the exact sRGB decode rounded to nearest in raw Q32.32, code 0 to 0 and code 255 to 1.0; encoding each result with bunny-tone-srgb/1 returns the original code."
+status = "active"
 ```
 
 ## Fixtures
@@ -650,6 +656,10 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
 | OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
 | OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
+| OPTICS-TP-120 | Every decode entry is the nearest | OPTICS-REQ-066 | Each of the 256 entries `n` satisfies `n - 1/2 < x < n + 1/2` for `x = 2^32 * decode(c)`, decided with exact big-integer comparison (no floating point, no code shared with the generator): on the toe `200 c 2^32` against `odd * 329 460`, above it `2^165 N^12` against `odd^5 D^12` with `N = 1000 c + 14 025`, `D = 269 025`; `x` is never a half-integer; `n - 1` and `n + 1` are both rejected. | `crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_120_every_entry_is_the_exact_decode_rounded_to_nearest` |
+| OPTICS-TP-121 | Round trip through the tone curve | OPTICS-REQ-066 | `ToneCurve::SrgbV1.encode_8(srgb8_to_linear(c)) == c` for all 256 codes. | `crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_121_tone_srgb_encodes_every_entry_back_to_its_code` |
+| OPTICS-TP-122 | Identity, ends, order, golden | OPTICS-REQ-066 | The identity string; codes 0 and 255 give 0 and 1.0; entries strictly increase; entries 0, 1, 10, 11 and 255 equal the generator's 80-digit decimal values. | `crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_122_identity_ends_order_and_golden_entries` |
+| OPTICS-TP-123 | Decode mutation | OPTICS-REQ-066 | Entry 1 raised by one raw unit fails OPTICS-TP-120 and OPTICS-TP-122 (observed in the container); the restored table passes. | [Decode mutation check](#decode-mutation-check) |
 
 ```toml
 [[case]]
@@ -1578,6 +1588,42 @@ artifact = "docs/topics/optics/test-plan.md#specular-reflection-mutation-checks"
 oracle = "Eight rules of specular.rs broken on purpose, each mutant's tests under timeout 120; each fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-120"
+requirements = ["OPTICS-REQ-066"]
+evidence = "test"
+test = "crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_120_every_entry_is_the_exact_decode_rounded_to_nearest"
+oracle = "Exact big-integer comparison of 2^32 * decode(c) against the half-integers around each entry; no float, no shared code with the generator; neighbours n - 1 and n + 1 rejected."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-121"
+requirements = ["OPTICS-REQ-066"]
+evidence = "test"
+test = "crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_121_tone_srgb_encodes_every_entry_back_to_its_code"
+oracle = "The original code c, for all 256 codes, through ToneCurve::SrgbV1.encode_8."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-122"
+requirements = ["OPTICS-REQ-066"]
+evidence = "test"
+test = "crates/bunny-optics/tests/srgb8_decode_tests.rs::optics_tp_122_identity_ends_order_and_golden_entries"
+oracle = "The identity string, exact ends 0 and 1.0, strict increase, and five entries from the generator's 80-digit decimal run."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-123"
+requirements = ["OPTICS-REQ-066"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#decode-mutation-check"
+oracle = "Entry 1 of the table raised by one raw unit fails OPTICS-TP-120 and OPTICS-TP-122."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1885,6 +1931,14 @@ case fail; the restored source passed every case.
 | The leaving test removed | A grazing reflection is refused | OPTICS-TP-107 |
 | The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
 | `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
+
+## Decode Mutation Check
+
+In a container run of `cargo test --locked -p bunny-optics --test
+srgb8_decode_tests`, entry 1 of `srgb8_table.rs` was raised from `1_303_638`
+to `1_303_639`. OPTICS-TP-120 failed ("entry 1 = 1303639 is not the nearest
+raw value") and OPTICS-TP-122 failed (golden entry); OPTICS-TP-121 passed. The
+restored table passes all three.
 
 ## Timing
 
