@@ -19,9 +19,11 @@ const DISC_ORACLE_SEED: u64 = 0x5EED_D15C_0363_0001;
 const DISC_ORACLE_CASES: usize = 6_000;
 const ONE: i64 = 1 << 32;
 const DOMAIN: i64 = TRACE_COORD_LIMIT_RAW - 1;
-const MISS_FLOOR: usize = 2_650;
-const FRONT_FLOOR: usize = 930;
-const BACK_FLOOR: usize = 910;
+const MISS_FLOOR: usize = 2_750;
+const FRONT_FLOOR: usize = 880;
+const BACK_FLOOR: usize = 820;
+const BEHIND_FLOOR: usize = 165;
+const DISCRIMINATING_FLOOR: usize = 129;
 
 type Raw3 = [i64; 3];
 
@@ -110,7 +112,19 @@ fn case(origin: Raw3, direction: Raw3, height: i64, radius: i64) -> Case {
 /// `(o.a td + d.a tn) / td`; it is inside the disc when the sum of the two squared
 /// numerators is at most `r^2 td^2`. The raw distance is `floor(tn 2^32 / td)`.
 fn oracle(case: Case) -> Expected {
-    let Case { origin, direction, height, radius, range } = case;
+    let (distance, inside) = meeting(case)?;
+    let range = case.range;
+    if distance < i128::from(range.0) || distance > i128::from(range.1) || !inside {
+        return None;
+    }
+    let front = case.direction[2] < 0;
+    Some((i64::try_from(distance).expect("within an i64 range"), front))
+}
+
+/// The raw distance to the plane and whether the exact meeting point is within the radius;
+/// `None` for a ray parallel to the plane.
+fn meeting(case: Case) -> Option<(i128, bool)> {
+    let Case { origin, direction, height, radius, .. } = case;
     let [ox, oy, oz] = origin.map(i128::from);
     let [dx, dy, dz] = direction.map(i128::from);
     if dz == 0 {
@@ -123,15 +137,20 @@ fn oracle(case: Case) -> Expected {
     if scaled % td < 0 {
         distance -= 1;
     }
-    if distance < i128::from(range.0) || distance > i128::from(range.1) {
-        return None;
-    }
     let lengths = square(ox * td + dx * tn).add(&square(oy * td + dy * tn));
     let limit = square(i128::from(radius) * td);
-    if lengths.compare(&limit) == Ordering::Greater {
-        return None;
-    }
-    Some((i64::try_from(distance).expect("within an i64 range"), dz < 0))
+    Some((distance, lengths.compare(&limit) != Ordering::Greater))
+}
+
+/// The radius test on the point at the rounded distance, floor-rounded per coordinate: the
+/// decision a kernel that tested the rounded hit point would make. Used only to count how
+/// many generated cases tell it from the exact test.
+fn rounded_inside(case: Case, distance: i128) -> bool {
+    let [ox, oy, _] = case.origin.map(i128::from);
+    let [dx, dy, _] = case.direction.map(i128::from);
+    let (x, y) = (ox + ((dx * distance) >> 32), oy + ((dy * distance) >> 32));
+    let lengths = square(x).add(&square(y));
+    lengths.compare(&square(i128::from(case.radius))) != Ordering::Greater
 }
 
 fn vec(raw: Raw3) -> FixedVec3 {
@@ -182,17 +201,30 @@ impl Seeds {
     }
 }
 
-/// A generated case. Half are random: height anywhere, the direction aimed at
-/// a point near the disc (so many rays pass close to the rim), from an origin
-/// within three radii of the axis, or random, with the distance range `0..=i64::MAX` (most), all of `i64` or a
-/// random one, and a small `|d.z|` or a zero `d.z` now and then.
-/// The other half are built to meet the plane exactly on a Pythagorean point `(3k, 4k)` of
-/// the circle of radius `5k`, then moved by -1, 0 or +1 raw unit along `x`: exactly on the
-/// rim, just inside and just outside.
+/// A generated case, of three kinds (one half, one quarter, one quarter):
+///
+/// - random: height anywhere, the direction aimed at a point near the disc (so many rays
+///   pass close to the rim), from an origin within three radii of the axis, or random, with
+///   a small `|d.z|` or a zero `d.z` now and then;
+/// - rim, whole distance: built to meet the plane exactly on a Pythagorean point `(3k, 4k)`
+///   of the circle of radius `5k` after a whole number of direction lengths, then moved by
+///   -1, 0 or +1 raw unit along `x`: exactly on the rim, just inside and just outside;
+/// - rim, inexact distance: `d.x = d.z u`, `d.y = d.z v`, so the exact meeting point is
+///   `origin + (u, v) s` with whole `s`, placed on the rim as above, while the distance
+///   `s / d.z` is not a whole raw unit (any `d.z` that is not a power of two, down to
+///   `|d.z| = 1`), either sign. The hit point of the rounded distance is then off the exact
+///   one, so the exact and the rounded radius test can disagree.
+///
+/// The distance range is `0..=i64::MAX` (most), all of `i64` or a random one; the rim kinds
+/// use all of `i64` half the time, so hits behind the origin are reached.
 fn generate(seeds: &mut Seeds) -> Case {
-    let rim = seeds.next().is_multiple_of(2);
+    let kind = seeds.next() % 4;
     loop {
-        let candidate = if rim { rim_case(seeds) } else { Some(random_case(seeds)) };
+        let candidate = match kind {
+            0 | 1 => Some(random_case(seeds)),
+            2 => rim_case(seeds),
+            _ => inexact_rim_case(seeds),
+        };
         if let Some(candidate) = candidate {
             return candidate;
         }
@@ -248,18 +280,54 @@ fn rim_case(seeds: &mut Seeds) -> Option<Case> {
     let height = origin_z + dz * q;
     let origin = [a + nudge - dx * q, b - dy * q, origin_z];
     let inside = origin.iter().chain([&height]).all(|&c| c.abs() <= DOMAIN);
-    inside.then_some(Case { origin, direction: [dx, dy, dz], height, radius: 5 * k, range: full() })
+    let range = rim_range(seeds);
+    inside.then_some(Case { origin, direction: [dx, dy, dz], height, radius: 5 * k, range })
+}
+
+fn rim_range(seeds: &mut Seeds) -> (i64, i64) {
+    if seeds.next().is_multiple_of(2) {
+        (i64::MIN, i64::MAX)
+    } else {
+        full()
+    }
+}
+
+fn inexact_rim_case(seeds: &mut Seeds) -> Option<Case> {
+    let k = seeds.scale(34);
+    let (a, b) = if seeds.next().is_multiple_of(2) { (3 * k, 4 * k) } else { (4 * k, 3 * k) };
+    let (a, b) = (a * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")], b);
+    let dz = seeds.scale(32) * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")];
+    let reach = (ONE / dz.abs()).min(1 << 10);
+    let (u, v) = (seeds.signed(reach), seeds.signed(reach));
+    // The whole number of units between the origin and the plane, either sign.
+    let steps = seeds.scale(26) * [-1, 1][usize::try_from(seeds.next() % 2).expect("bit")];
+    let nudge = seeds.signed(1);
+    let origin_z = seeds.signed(DOMAIN / 2);
+    let height = origin_z + steps;
+    let origin = [a + nudge - u * steps, b - v * steps, origin_z];
+    let inside = origin.iter().chain([&height]).all(|&c| c.abs() <= DOMAIN);
+    let range = rim_range(seeds);
+    inside.then_some(Case { origin, direction: [dz * u, dz * v, dz], height, radius: 5 * k, range })
 }
 
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_560_hits_match_an_exact_rational_oracle_on_generated_rays() {
     let mut seeds = Seeds(DISC_ORACLE_SEED);
     let mut reached = [0_usize; 3];
+    let (mut behind, mut discriminating) = (0_usize, 0_usize);
     for index in 0..DISC_ORACLE_CASES {
         let case = generate(&mut seeds);
         let context = format!("seed={DISC_ORACLE_SEED:#018x} case={index} {case:?}");
         let expected = oracle(case);
         assert_eq!(kernel(case), expected, "{context}");
+        if let Some((distance, _)) = expected {
+            behind += usize::from(distance < 0);
+        }
+        if let Some((distance, inside)) = meeting(case) {
+            let in_range =
+                (i128::from(case.range.0)..=i128::from(case.range.1)).contains(&distance);
+            discriminating += usize::from(in_range && inside != rounded_inside(case, distance));
+        }
         reached[match expected {
             None => 0,
             Some((_, true)) => 1,
@@ -268,8 +336,9 @@ fn trace_tp_560_hits_match_an_exact_rational_oracle_on_generated_rays() {
     }
     // Each floor is about 75 % of what the fixed seed reaches (counts in the test plan).
     let [misses, front, back] = reached;
-    let context = format!("seed={DISC_ORACLE_SEED:#018x} reached={reached:?}");
+    let context = format!("seed={DISC_ORACLE_SEED:#018x} reached={reached:?} behind={behind} discriminating={discriminating}");
     assert!(misses >= MISS_FLOOR && front >= FRONT_FLOOR && back >= BACK_FLOOR, "{context}");
+    assert!(behind >= BEHIND_FLOOR && discriminating >= DISCRIMINATING_FLOOR, "{context}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
