@@ -8,6 +8,8 @@ use bunny_codec::{
     parse_ascii_ply, parse_ascii_ply_with_limits, parse_decimal_q32_32, AsciiPlyErrorKind as Kind,
     AsciiPlyLimitedError, AsciiPlyLimits, AsciiPlyMesh,
 };
+use std::fmt::Write as _;
+
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const STANFORD: &[u8] = include_bytes!("fixtures/stanford-bunny-ascii/bun_zipper_res3.ply");
@@ -45,7 +47,7 @@ fn dyadic(seeds: &mut Seeds) -> (String, i64) {
 fn mesh(properties: &[(&str, &str)], rows: &[Vec<String>]) -> String {
     let mut text = format!("ply\nformat ascii 1.0\nelement vertex {}\n", rows.len());
     for (kind, name) in properties {
-        text.push_str(&format!("property {kind} {name}\n"));
+        writeln!(text, "property {kind} {name}").expect("writing to a String");
     }
     text.push_str("element face 1\nproperty list uchar int vertex_indices\nend_header\n");
     for row in rows {
@@ -146,7 +148,8 @@ fn aply_tp_067_texture_coordinates_follow_the_decimal_rule() {
         };
         let (s, t) = (decimal(&mut seeds), decimal(&mut seeds));
         let text = mesh(&layout, &[row(&s, &t)]);
-        let convert = |text: &str| parse_decimal_q32_32(text.as_bytes()).map(|value| value.raw());
+        let convert =
+            |text: &str| parse_decimal_q32_32(text.as_bytes()).map(bunny_num::FixedQ32_32::raw);
         let context = format!("seed {seed:#x}, case {case}: s = {s}, t = {t}");
         match (convert(&s), convert(&t)) {
             (Ok(s), Ok(t)) => {
