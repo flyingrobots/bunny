@@ -52,11 +52,17 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - for [smooth shading](#smooth-shading) (`bunny-smooth-shading/1`):
   `SmoothHit` (`new`, `surface_hit`, `frame`, `light_sample`,
   `is_above_surface`, `bounce`), `SmoothBounce` (`Ray`, `BelowSurface`) and
-  `SMOOTH_SHADING_ID`.
+  `SMOOTH_SHADING_ID`;
+- for [specular reflection](#specular-reflection)
+  (`bunny-specular-reflection/1`): `SurfaceHit` (`specular_reflection`,
+  `try_specular_reflection`), `SpecularSample` (`ray`, `throughput`),
+  `schlick_fresnel` and `SPECULAR_REFLECTION_ID`, with the
+  `SecondaryRayError` variants `ArrivesBelowSurface` and
+  `ReflectionBelowSurface`.
 
-Evidence is listed in the [test plan](test-plan.md). Reflection, refraction,
-attenuation and materials other than diffuse (the rest of #160) are not part
-of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
+Evidence is listed in the [test plan](test-plan.md). Rough reflection,
+refraction, attenuation and materials other than diffuse and the perfect
+mirror (the rest of #160) are not part of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
 (right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
 field of view given by its tangent, aspect `width / height`) and `Viewport`
 (top-left origin, `y` down), but no test yet checks a ray against those
@@ -1232,6 +1238,63 @@ A one-bounce path traces up to four rays (two closest-hit, two shadow) and
 shades up to two hits, so shading is a small part of a sample's cost. The
 per-hit step includes the bounce direction (27 ns of its 74 when timed alone)
 and building two `TraceRay`s, which compute three reciprocals each.
+
+## Specular Reflection
+
+`SurfaceHit::specular_reflection(&incoming, &reflectance)` gives the
+continuation ray of a perfect mirror at a hit and the throughput that weights
+the radiance it brings back. `incoming` is the ray the hit was built from and
+`reflectance` the base reflectance `F0` per channel (an `Albedo`, each
+channel in `0..=1.0`). Its identity is `bunny-specular-reflection/1`
+(`SPECULAR_REFLECTION_ID`); nothing in `bunny-diffuse-shading/1` changes.
+`try_specular_reflection` is the diagnostic path: the same result, with the
+reason for a refusal. The result is a `SpecularSample`: `ray()`, from the
+hit's start point, to be queried with a minimum distance of zero as for the
+bounce ray, and `throughput()`, each channel in `0..=1.0`. For a delta lobe
+the throughput is the whole weight: the sample contributes
+`throughput_c * L_c`, with `L` the radiance along the ray.
+
+With `d` the incoming direction, `n` the facing frame normal
+(`SurfaceHit::frame().normal()`, the rounded unit normal of the face the ray
+arrived on) and `N` that face's exact normal (the plane of the start-point
+rule), each step and its rounding:
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Arrival test | `d . N < 0`, else `ArrivesBelowSurface` | exact (`i128`) |
+| Reflection | `r = d (n . n) - 2 (d . n) n`, the exact reflection of `d` about the line of `n`, scaled by `n . n` | exact (`i128`, every term below `2^99`) |
+| Direction | `r'`, the unit vector along `r`, normalized as `TriangleSurface::new` normalizes a face normal, then clamped to `-1.0..=1.0` | the prescale floors (below `2^-27` raw units); each component within one raw unit of the exact unit vector along the prescaled `r` |
+| Leaving test | `r' . N > 0`, else `ReflectionBelowSurface` | exact |
+| Cosine | `c = -(u . n)`, with `u` the unit vector along `d` (normalized the same way), clamped to `0..=1.0` | once, to nearest, ties to even; within three raw units of the exact `-(d . n) / \|d\|` |
+| Weight | `w = (1 - c)^5` | the exact 160-bit product, rounded once to nearest; no tie can occur (one needs `(1 - c)^5` raw to be an odd multiple of `2^127`, and 127 is not a multiple of five) |
+| Throughput | `schlick_fresnel(F0_c, c) = F0_c + (1 - F0_c) w` per channel | exact in units of `2^-64`, rounded once to nearest, ties to even |
+
+`schlick_fresnel(f0, cosine)` is public, for the samplers that will reuse it:
+both inputs are clamped to `0..=1.0`, the result is in `0..=1.0` and within
+one raw unit of Schlick's exact `f0 + (1 - f0)(1 - cosine)^5` on the clamped
+inputs, `f0` exactly at `cosine = 1.0` and 1.0 exactly at `cosine = 0`.
+
+**Normal incidence.** For `d` along `-n`, `u` is within a raw unit of `-n`,
+`c` within a few raw units of 1.0 and `w` rounds to zero, so the throughput is
+the base reflectance exactly, on every normal (the test plan checks it on
+seeded hits).
+
+**Refusals.** Checked in this order. `ArrivesBelowSurface { direction }`
+when `d . N >= 0`: the ray comes from below the face this hit faces, or along
+it, so it is not the ray the hit was built from (a hit the trace kernel
+reported for `incoming` never gives this). `ReflectionBelowSurface
+{ direction }` when `r' . N <= 0`: a grazing ray that arrives above the exact
+plane but has `d . n >= 0` against the rounded normal reflects about `n` along
+or under the plane; tracing it would hit the surface it left, so it is
+refused and the caller treats the sample as dark (the test plan has such a
+case, found by search; none of 3 000 seeded kernel hits reaches it). The
+defensive `BounceRayRefused` if `TraceRay::new` refused the ray, which no
+input is known to reach. `specular_reflection` returns `None` exactly when
+`try_specular_reflection` returns an error.
+
+**The normal.** The reflection is about the frame normal of the
+`SurfaceHit`, the geometric normal. Reflection about a smooth-shading normal
+is not part of this identity.
 
 ## Pixel Values
 

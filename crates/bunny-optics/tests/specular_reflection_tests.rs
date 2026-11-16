@@ -119,8 +119,9 @@ fn optics_tp_101_schlick_is_pinned_at_its_ends_and_rounding_boundaries() {
     // cos = 2^31 + 9: w = 134 217 725 (model), exact 2 214 592 510.5, so 2 214 592 510 (even);
     // ties away from zero would give ...511.
     assert_eq!(schlick_fresnel(fixed(half), fixed(half + 9)).raw(), 2_214_592_510);
-    // The weight's rounding: cos = 0.75 gives m^5 = 2^-10, w = 4 194 304 exactly; cos raw
-    // 1 234 567 890 gives w = 788 952 942 (model; floored it is ...941) and F = 2 541 960 119.
+    // An exact weight: cos = 0.75 gives m^5 = 2^-10, w = 4 194 304. An inexact one: cos raw
+    // 1 234 567 890 gives w = 788 952 942 (model) and F = 2 541 960 119. A floored weight
+    // (...941) gives the same F here; OPTICS-TP-102 and OPTICS-TP-103 catch it.
     assert_eq!(schlick_fresnel(fixed(half), fixed(3 << 30)).raw(), 2_149_580_800);
     assert_eq!(schlick_fresnel(fixed(half), fixed(1_234_567_890)).raw(), 2_541_960_119);
     // Inputs are clamped to 0..=1.0.

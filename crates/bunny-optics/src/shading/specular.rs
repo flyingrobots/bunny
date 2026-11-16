@@ -79,7 +79,7 @@ impl SurfaceHit {
     /// 1. **Direction.** `r = d (n . n) - 2 (d . n) n`, exact in `i128`: the exact reflection of
     ///    `d` about the line of `n`, scaled by `n . n`. It is normalized as
     ///    [`super::TriangleSurface`] normalizes a face normal (each component within one raw
-    ///    unit of the exact unit vector along `r`, plus the prescale's floor, below `2^-28`
+    ///    unit of the exact unit vector along `r`, plus the prescale's floor, below `2^-27`
     ///    raw units) and clamped to `-1.0..=1.0`, so it is a valid trace direction.
     /// 2. **Cosine.** `c = -(u . n)`, with `u` the unit vector along `d` (normalized the same
     ///    way), exact in `i128`, rounded once to nearest (ties to even) and clamped to

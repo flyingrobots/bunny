@@ -58,9 +58,15 @@ and `point_at`:
 - the smooth-shaded hit `bunny-smooth-shading/1` (`SmoothHit`,
   `SMOOTH_SHADING_ID`): the choice of frame on each side and its fallbacks, a
   grazing case decided by the exact plane, and the light term.
+- the perfect mirror `bunny-specular-reflection/1`
+  (`SurfaceHit::specular_reflection`, `try_specular_reflection`,
+  `SpecularSample`, `schlick_fresnel`, `SPECULAR_REFLECTION_ID`):
+  hand-derived mirrors, Schlick's term at its ends and rounding boundaries,
+  exact big-integer oracles for the term and the reflected direction on
+  seeded inputs, normal incidence and the two refusals.
 
-Projection matrices (flyingrobots/bunny#201, #202), and reflection, refraction
-and other material helpers (#160) are out of scope.
+Projection matrices (flyingrobots/bunny#201, #202), and rough reflection,
+refraction and other material helpers (#160) are out of scope.
 
 ## Test Goals
 
@@ -138,6 +144,10 @@ formatting.
 | OPTICS-REQ-049 | `SmoothHit::new` (`bunny-smooth-shading/1`) uses `ShadingFrame::new(n)` when the exact `n . N > 0` and `ShadingFrame::new(n).flipped()` when it is negative, where `n` is `smooth_normal` at the hit's exact weights and `N` the exact normal of the face the ray arrived on (chosen by `front_face`), and the geometric frame when `n . N = 0`, a vertex normal is missing or `smooth_normal` returns `None`; the `SurfaceHit` it holds is unchanged. | `README.md#smooth-shading` |
 | OPTICS-REQ-050 | `SmoothHit::light_sample` has the shadow ray and the side test of `SurfaceHit::light_sample` (the exact geometric plane) and the radiance `reflected_radiance(cosine(n'))` of the shading normal `n'`, clamped at zero. | `README.md#smooth-shading` |
 | OPTICS-REQ-051 | `SmoothHit::is_above_surface(d)` is the exact `d . N > 0` with the facing plane normal `N`; `SmoothHit::bounce(sample)` returns `SmoothBounce::Ray` from the start point along the shading frame's `cosine_direction` when it is above, `SmoothBounce::BelowSurface` (no ray, zero contribution) when it is at or below the plane, and `None` for a sample outside the unit square. | `README.md#smooth-shading` |
+| OPTICS-REQ-052 | `SurfaceHit::specular_reflection` (`bunny-specular-reflection/1`) gives the ray from the hit's start point along the unit vector of the exact reflection `d (n . n) - 2 (d . n) n` of the incoming direction about the frame normal `n`, each component within one raw unit (plus the prescale's floor, below `2^-27`) of the exact unit vector, and clamped to `-1.0..=1.0`; `specular_reflection` returns `None` exactly when `try_specular_reflection` errs. | `README.md#specular-reflection` |
+| OPTICS-REQ-053 | `schlick_fresnel(f0, cosine)` clamps both inputs to `0..=1.0`, rounds the exact `(1 - cosine)^5` once to nearest and `f0 + (1 - f0) w` once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is `schlick_fresnel(F0_c, c)` per channel with `c` the incidence cosine rounded once, within three raw units of the exact `-(d . n) / |d|`. | `README.md#specular-reflection` |
+| OPTICS-REQ-054 | At normal incidence (`d` along `-n`) the throughput is the base reflectance exactly; at `cosine = 1.0` `schlick_fresnel` is `f0` exactly and at `cosine = 0` it is 1.0. | `README.md#specular-reflection` |
+| OPTICS-REQ-055 | `try_specular_reflection` refuses, in this order, a ray with `d . N >= 0` against the exact facing normal (`SecondaryRayError::ArrivesBelowSurface`) and a reflected direction with `r' . N <= 0` (`SecondaryRayError::ReflectionBelowSurface`), each carrying the direction it saw. | `README.md#specular-reflection` |
 
 ```toml
 [[requirement]]
@@ -373,6 +383,26 @@ status = "active"
 [[requirement]]
 id = "OPTICS-REQ-051"
 summary = "SmoothHit::is_above_surface(d) is the exact d . N > 0 with the facing plane normal N; SmoothHit::bounce(sample) returns SmoothBounce::Ray from the start point along the shading frame's cosine_direction when it is above, SmoothBounce::BelowSurface (no ray, zero contribution) when it is at or below the plane, and None for a sample outside the unit square."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-052"
+summary = "SurfaceHit::specular_reflection (bunny-specular-reflection/1) gives the ray from the hit's start point along the unit vector of the exact reflection d (n . n) - 2 (d . n) n of the incoming direction about the frame normal n, each component within one raw unit (plus the prescale's floor, below 2^-27) of the exact unit vector, and clamped to -1.0..=1.0; specular_reflection returns None exactly when try_specular_reflection errs."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-053"
+summary = "schlick_fresnel(f0, cosine) clamps both inputs to 0..=1.0, rounds the exact (1 - cosine)^5 once to nearest and f0 + (1 - f0) w once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is schlick_fresnel(F0_c, c) per channel with c the incidence cosine rounded once, within three raw units of the exact -(d . n) / |d|."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-054"
+summary = "At normal incidence (d along -n) the throughput is the base reflectance exactly; at cosine = 1.0 schlick_fresnel is f0 exactly and at cosine = 0 it is 1.0."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-055"
+summary = "try_specular_reflection refuses, in this order, a ray with d . N >= 0 against the exact facing normal (SecondaryRayError::ArrivesBelowSurface) and a reflected direction with r' . N <= 0 (SecondaryRayError::ReflectionBelowSurface), each carrying the direction it saw."
 status = "active"
 ```
 
@@ -611,6 +641,15 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-097 | A hit point two raw units outside is refused | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The scenes of OPTICS-TP-096 at distance `TRACE_COORD_LIMIT_RAW + 2` raw: two steps reach only `TRACE_COORD_LIMIT_RAW`, which is outside, so `new` returns `None` and `try_new` returns `HitPointOutsideTraceDomain` with the unstepped point (hand computed), refused before the plane test. No comparison with the retained 0.7.1 code. | `crates/bunny-optics/tests/domain_guard_tests.rs::optics_tp_097_a_hit_point_two_raw_units_outside_the_domain_is_refused_by_both_paths` |
 | OPTICS-TP-098 | Overflow-guard mutations | OPTICS-REQ-042, OPTICS-REQ-043 | The beyond-reach guard of each path moved one raw unit in each direction fails a case that does not compare with the retained 0.7.1 code, except the fast path's loosened guard, which changes no output (shown in the mutation section). | [Overflow-guard mutation checks](#overflow-guard-mutation-checks) |
 | OPTICS-TP-099 | Shared-normal bound | OPTICS-REQ-047 | `smooth_normal` returns the shared normal `(2^32 + 1, 92 681, 0)` unchanged; exact big-integer comparison shows it within 2 and not within 1 raw unit of the exact unit vector along it (1.999 98 by 60-digit decimals), and one more in `y` is not a `FixedUnitVec3`. | `crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_099_a_shared_normal_is_within_two_raw_units_of_its_exact_direction` |
+| OPTICS-TP-100 | Hand-derived mirrors | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-054 | Straight down onto the ground: direction `(0, 1, 0)`, origin the start point, throughput F0 exactly; at 45 degrees `(1, -1, 0)` reflects to `(1, 1, 0) / sqrt(2)`, raw `3 037 000 500` each, and F0 = 0.04 gives raw `180 686 152` (model; exact `180 686 151.93`); a back-face hit reflects downward. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_100_hand_derived_mirrors_reflect_about_the_normal` |
+| OPTICS-TP-101 | Schlick's ends and roundings | OPTICS-REQ-053, OPTICS-REQ-054 | `f0` exactly at cosine 1.0 and 1.0 at cosine 0 for six `f0`; cosine 0.5 gives `2^31 + 2^26`; with F0 = 0.5 two final-rounding ties (model), one to the upper and one to the lower even neighbour; an exact and an inexact weight (model); both inputs clamped. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_101_schlick_is_pinned_at_its_ends_and_rounding_boundaries` |
+| OPTICS-TP-102 | Schlick against the exact formula | OPTICS-REQ-053 | 4 000 seeded `(f0, cosine)`, a third within 64 raw units of an end: each result in `0..=1.0` and within one raw unit of the exact big-integer `f0 2^160 + (2^32 - f0)(2^32 - cosine)^5`; the seed is printed. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_102_schlick_is_within_one_raw_unit_of_the_exact_formula` |
+| OPTICS-TP-103 | Seeded mirrors against the exact reflection | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | 3 000 seeded triangles and rays aimed inside them (the trace kernel's hits): the Option and Result forms agree; each sample starts at the start point, its direction is within one raw unit plus `2^-27` of the unit vector along the exact big-integer reflection about `n`, and each throughput channel is within one raw unit of the exact Schlick value at some cosine within three raw units of the exact `-(d . n) / |d|` (bracketed by exact squares); no other refusal than a grazing one; at least 1 000 accepted (2 952 on the committed seed); the seed and counts are printed. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_103_the_mirror_matches_the_exact_reflection_on_seeded_hits` |
+| OPTICS-TP-104 | Normal incidence | OPTICS-REQ-054 | On the seeded hits of a fresh seed, a ray along `-n`: the throughput equals the seeded base reflectance bit for bit, on at least 1 000 normals. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_104_at_normal_incidence_the_throughput_is_the_base_reflectance` |
+| OPTICS-TP-105 | Arriving below | OPTICS-REQ-055 | On the ground hit, rays straight up, along the plane (`d . N = 0`) and up at a slant are refused with `ArrivesBelowSurface` naming the direction, and `None`; one raw unit downward is not refused for that reason. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_105_a_ray_arriving_below_the_surface_is_refused` |
+| OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
+| OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
+| OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1458,6 +1497,87 @@ test = "crates/bunny-optics/tests/smooth_normal_tests.rs::optics_tp_099_a_shared
 oracle = "`smooth_normal` returns the shared normal `(2^32 + 1, 92 681, 0)` unchanged; exact big-integer comparison shows it within 2 and not within 1 raw unit of the exact unit vector along it (1.999 98 by 60-digit decimals), and one more in `y` is not a `FixedUnitVec3`."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-100"
+requirements = ["OPTICS-REQ-052", "OPTICS-REQ-053", "OPTICS-REQ-054"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_100_hand_derived_mirrors_reflect_about_the_normal"
+oracle = "Straight down onto the ground: direction (0, 1, 0), origin the start point, throughput F0 exactly; at 45 degrees (1, -1, 0) reflects to (1, 1, 0) / sqrt(2), raw 3 037 000 500 each, and F0 = 0.04 gives raw 180 686 152 (model; exact 180 686 151.93); a back-face hit reflects downward."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-101"
+requirements = ["OPTICS-REQ-053", "OPTICS-REQ-054"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_101_schlick_is_pinned_at_its_ends_and_rounding_boundaries"
+oracle = "f0 exactly at cosine 1.0 and 1.0 at cosine 0 for six f0; cosine 0.5 gives 2^31 + 2^26; with F0 = 0.5 two final-rounding ties (model), one to the upper and one to the lower even neighbour; an exact and an inexact weight (model); both inputs clamped."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-102"
+requirements = ["OPTICS-REQ-053"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_102_schlick_is_within_one_raw_unit_of_the_exact_formula"
+oracle = "4 000 seeded (f0, cosine), a third within 64 raw units of an end: each result in 0..=1.0 and within one raw unit of the exact big-integer f0 2^160 + (2^32 - f0)(2^32 - cosine)^5; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-103"
+requirements = ["OPTICS-REQ-052", "OPTICS-REQ-053", "OPTICS-REQ-055"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_103_the_mirror_matches_the_exact_reflection_on_seeded_hits"
+oracle = "3 000 seeded triangles and rays aimed inside them (the trace kernel's hits): the Option and Result forms agree; each sample starts at the start point, its direction is within one raw unit plus 2^-27 of the unit vector along the exact big-integer reflection about n, and each throughput channel is within one raw unit of the exact Schlick value at some cosine within three raw units of the exact -(d . n) / |d| (bracketed by exact squares); no other refusal than a grazing one; at least 1 000 accepted (2 952 on the committed seed); the seed and counts are printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-104"
+requirements = ["OPTICS-REQ-054"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_104_at_normal_incidence_the_throughput_is_the_base_reflectance"
+oracle = "On the seeded hits of a fresh seed, a ray along -n: the throughput equals the seeded base reflectance bit for bit, on at least 1 000 normals."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-105"
+requirements = ["OPTICS-REQ-055"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_105_a_ray_arriving_below_the_surface_is_refused"
+oracle = "On the ground hit, rays straight up, along the plane (d . N = 0) and up at a slant are refused with ArrivesBelowSurface naming the direction, and None; one raw unit downward is not refused for that reason."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-106"
+requirements = ["OPTICS-REQ-055"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused"
+oracle = "On 2 000 seeded kernel hits, the reversed incoming ray is refused with ArrivesBelowSurface naming its direction."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-107"
+requirements = ["OPTICS-REQ-055"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused"
+oracle = "A kernel hit found by search where d . N < 0 but d . n > 0, both asserted exactly: refused with ReflectionBelowSurface naming the direction, whose exact r' . N <= 0 is asserted; None from the fast path."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-108"
+requirements = ["OPTICS-REQ-052", "OPTICS-REQ-053", "OPTICS-REQ-055"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#specular-reflection-mutation-checks"
+oracle = "Eight rules of specular.rs broken on purpose, each mutant's tests under timeout 120; each fails at least one case."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1747,6 +1867,25 @@ cosine when there is no shadow ray) passed every case and is equivalent:
 `LightSample::radiance` is zero without a shadow ray, so it cannot be
 observed.
 
+## Specular-Reflection Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/specular.rs`, and the tests were run with
+`timeout 120 cargo test --locked -p bunny-optics --no-fail-fast --test
+specular_reflection_tests` per mutation. Every mutation made at least one
+case fail; the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| The final Fresnel rounding floors | Round to nearest | OPTICS-TP-101, OPTICS-TP-102, OPTICS-TP-103 |
+| The final Fresnel rounding ties upward | Ties to even | OPTICS-TP-101 |
+| The weight `(1 - c)^5` floored | The weight rounds to nearest | OPTICS-TP-102, OPTICS-TP-103 |
+| The reflection `d (n . n) - (d . n) n` | The factor 2 of the mirror | OPTICS-TP-100, OPTICS-TP-103, OPTICS-TP-104 |
+| The arrival test `d . N > 0` | A ray along the plane is refused | OPTICS-TP-105 |
+| The leaving test removed | A grazing reflection is refused | OPTICS-TP-107 |
+| The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
+| `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
+
 ## Timing
 
 `pixel/resolve_srgb_rgba8` in `crates/bunny-perf` (feature group `pixel`)
@@ -1919,5 +2058,6 @@ case with a stable test name.
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
 | An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |
 | Shrinking for `OPTICS-TP-062` and `OPTICS-TP-064`: a failure reports its seed, case and variant, not a reduced input. | None; a property-testing harness or a hand-written reducer. |
+| A case that produces `SecondaryRayError::BounceRayRefused` from `try_specular_reflection`: no input is known to reach it (the start point is inside the domain and the clamped unit direction is a valid trace direction). | None; a constructed case if one is found. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |
