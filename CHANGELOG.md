@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-query`: `TraceBox` and `TraceRay::hit_box`, the trace-domain ray-box
+  kernel under the contract `bunny-ray-box/1` (work in progress). Closes
+  flyingrobots/bunny#359.
+
 * `bunny-query`: `TraceSphere` and `TraceRay::hit_sphere`, the trace-domain
   ray-sphere kernel under the contract `bunny-ray-sphere/1`. A hit has the
   form of `TriangleHit` (a distance in multiples of the ray direction, rounded
