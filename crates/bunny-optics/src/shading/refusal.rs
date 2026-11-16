@@ -1,16 +1,18 @@
-//! Why a surface hit, a bounce direction or a bounce ray could not be built.
+//! Why a surface hit, a bounce direction, a bounce ray or a mirror reflection could not be
+//! built.
 
 use core::fmt;
 
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
-/// Why [`super::SurfaceHit::try_new`], [`super::SurfaceHit::try_bounce_ray`] or
+/// Why [`super::SurfaceHit::try_new`], [`super::SurfaceHit::try_bounce_ray`],
+/// [`super::SurfaceHit::try_specular_reflection`] or
 /// [`super::ShadingFrame::try_cosine_direction`] refused its input. Each variant carries the
 /// values the check saw.
 ///
 /// The `Option` forms ([`super::SurfaceHit::new`], [`super::SurfaceHit::bounce_ray`],
-/// [`super::ShadingFrame::cosine_direction`]) return `None` exactly when these return an error.
+/// [`super::SurfaceHit::specular_reflection`], [`super::ShadingFrame::cosine_direction`]) return `None` exactly when these return an error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SecondaryRayError {
@@ -49,13 +51,27 @@ pub enum SecondaryRayError {
         /// The sample `[u, v]`, as given.
         sample: [FixedQ32_32; 2],
     },
-    /// `TraceRay::new` refused the bounce ray. This is a defensive refusal: the start point of
-    /// a [`super::SurfaceHit`] is inside the trace domain and every bounce direction is nonzero
-    /// with components in `-1.0..=1.0`, so no input is known to reach it.
+    /// `TraceRay::new` refused the bounce ray or the reflected ray. This is a defensive
+    /// refusal: the start point of a [`super::SurfaceHit`] is inside the trace domain and every
+    /// bounce and reflected direction is nonzero with components in `-1.0..=1.0`, so no input
+    /// is known to reach it.
     BounceRayRefused {
         /// The ray's origin, the hit's start point.
         origin: FixedVec3,
-        /// The cosine-weighted bounce direction.
+        /// The cosine-weighted bounce direction or the reflected direction.
+        direction: FixedVec3,
+    },
+    /// The incoming direction `d` is not strictly against the face the hit faces: `d . N >= 0`,
+    /// exact, with `N` the exact normal of the face the ray arrived on. The ray arrives from
+    /// below the surface (or along it), so it is not the ray the hit was built from.
+    ArrivesBelowSurface {
+        /// The incoming direction, as given.
+        direction: FixedVec3,
+    },
+    /// The reflected direction is along or below the exact plane (`r . N <= 0`, exact): a
+    /// grazing ray whose reflection about the rounded unit normal does not leave the surface.
+    ReflectionBelowSurface {
+        /// The normalized reflected direction.
         direction: FixedVec3,
     },
 }
@@ -83,6 +99,16 @@ impl fmt::Display for SecondaryRayError {
             }
             Self::StartOutsideTraceDomain { start } => {
                 write!(f, "start point raw {} is outside the trace domain", Raw(*start))
+            }
+            Self::ArrivesBelowSurface { direction } => {
+                write!(
+                    f,
+                    "incoming direction raw {} arrives from below the surface",
+                    Raw(*direction)
+                )
+            }
+            Self::ReflectionBelowSurface { direction } => {
+                write!(f, "reflected direction raw {} does not leave the surface", Raw(*direction))
             }
         }
     }
