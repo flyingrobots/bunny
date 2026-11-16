@@ -145,6 +145,7 @@ the geometric predicate.
 | `FixedAngle` arithmetic, conversions and `sin_cos` | Proven-infallible | Every `u64` is an angle and arithmetic wraps at a full turn; `from_degrees` and `from_radians` round half up on the magnitude (`docs/topics/angle-trigonometry/`). |
 | `bunny-query` ray/sphere and ray/triangle intersections | Checked predicate math | Return `None` when intermediate ray math overflows. |
 | `bunny-query::ray_intersects_aabb` | Checked, then exact | A slab distance that overflows saturates by sign; on that path the hit is decided with exact `i128` rationals, so saturation never creates a hit. Hits without overflow are bit-identical to the checked-only version (flyingrobots/bunny#211). |
+| `bunny-query::ShapeFrame::to_object` / `to_world` | Checked | Exact `i128` dot products (a lengthened direction divided by `2^k` first) rounded once, ties to even; `ObjectRay::world_distance` floors exactly, `object_distance` saturates; a result outside the trace domain or Q32.32 is a typed `ShapeFrameError` (`docs/topics/shape-frame/`). |
 | `bunny-query` closest-point helpers | Saturating today | Open audit path: these APIs return values, not `Result`/`Option`, so overflow cannot yet be reported distinctly. |
 | `bunny-mesh` quantization | Proven-infallible within `i128` intermediates | Uses wide ratio math; outside points clamp to quantized endpoints. |
 | `bunny-mesh` dequantization | Proven-infallible with endpoint clamps | Uses wide ratio math and clamps final raw reconstruction into `i64`. |
