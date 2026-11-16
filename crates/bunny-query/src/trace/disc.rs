@@ -119,8 +119,9 @@ impl TraceRay {
         t_min: FixedQ32_32,
         t_max: FixedQ32_32,
     ) -> Option<DiscHit> {
-        let dz = i128::from(self.direction[2]);
-        let f = i128::from(self.origin[2]) - i128::from(disc.height);
+        let [_, _, dz] = wide3(self.direction);
+        let [_, _, oz] = wide3(self.origin);
+        let f = oz - i128::from(disc.height);
         let t = plane_distance(f, dz)?;
         if !(i128::from(t_min.raw())..=i128::from(t_max.raw())).contains(&t) {
             return None;
