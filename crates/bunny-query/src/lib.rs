@@ -32,6 +32,6 @@ pub use ray::{
 };
 pub use trace::{
     CylinderHit, SphereHit, TraceCylinder, TraceCylinderError, TraceRay, TraceSphere,
-    TraceSphereError, TraceTriangle, TriangleHit, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
-    TRACE_UNIT_DIRECTION_LIMIT_RAW,
+    TraceSphereError, TraceTriangle, TriangleHit, RAY_CYLINDER_ID, TRACE_COORD_LIMIT_RAW,
+    TRACE_DIRECTION_LIMIT_RAW, TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };

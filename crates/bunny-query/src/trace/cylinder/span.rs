@@ -4,7 +4,7 @@ use super::super::sphere::roots;
 use super::super::wide::U256;
 use super::super::{vec3, TraceRay};
 use super::TraceCylinder;
-use bunny_linalg::FixedVec3;
+use bunny_linalg::FixedUnitVec3;
 use bunny_num::FixedQ32_32;
 use std::cmp::Ordering;
 
@@ -53,6 +53,8 @@ pub(super) struct Line {
     a: i128,
     b: i128,
     q: i128,
+    /// `o_x d_z - o_z d_x`.
+    cross: i128,
     /// `q^2 D`; the line misses the infinite cylinder when `D` is negative.
     scaled_discriminant: U256,
     /// `D == 0`: the two side roots coincide.
@@ -71,7 +73,7 @@ impl Line {
         let scaled_discriminant =
             product(a * q, q * r * r).checked_sub(product(q * cross, q * cross))?;
         let (origin, direction, cylinder) = (ray.origin, ray.direction, *cylinder);
-        Some(Self { origin, direction, cylinder, a, b, q, scaled_discriminant, tangent })
+        Some(Self { origin, direction, cylinder, a, b, q, cross, scaled_discriminant, tangent })
     }
 
     /// The entry and exit of the line through the solid cylinder, or `None` when it misses.
@@ -157,6 +159,40 @@ impl Line {
         }
     }
 
+    /// The outward unit normal of a crossing; see `CylinderHit::normal`.
+    pub(super) fn normal(&self, crossing: &Crossing) -> Option<FixedUnitVec3> {
+        match (crossing.surface, crossing.time) {
+            (Surface::Bottom, _) => Some(FixedUnitVec3::NEG_UNIT_Y),
+            (Surface::Top, _) => Some(FixedUnitVec3::UNIT_Y),
+            (Surface::Side, Time::Side(far)) => self.side_normal(far),
+            // Side crossings are built with side times only.
+            (Surface::Side, Time::Cap(_)) => None,
+        }
+    }
+
+    /// The side's normal at the exact root, by the unit-vector rule.
+    ///
+    /// At the root `t = (-b -+ sqrt(D)) / a` the hit's `(x, z)` times `a` is
+    /// `cross (d_z, -d_x) -+ sqrt(D) (d_x, d_z)`, of length `a r`. Scaled by `2^s`, with `s`
+    /// the largest shift up to 64 that keeps `a r 2^s < 2^125`, each term is below `2^125`;
+    /// `sqrt(D 2^2s)` is floored, an error of at most `|d|` in a vector of length `a r 2^s`.
+    /// The vector is shifted down to below `2^62` and normalized by `FixedUnitVec3::new`.
+    fn side_normal(&self, far: bool) -> Option<FixedUnitVec3> {
+        let ([dx, _, dz], r) = (self.direction.map(i128::from), i128::from(self.cylinder.radius));
+        let size = self.a * r;
+        let shift = (125 - (128 - size.leading_zeros())).min(64);
+        let (scaled_r, scaled_cross) = (r << shift, self.cross << shift);
+        let scaled =
+            product(size << shift, scaled_r).checked_sub(product(scaled_cross, scaled_cross))?;
+        let root = i128::try_from(scaled.isqrt()).ok()?;
+        let root = if far { root } else { -root };
+        let (x, z) = (scaled_cross * dz + root * dx, root * dz - scaled_cross * dx);
+        let widest = x.unsigned_abs().max(z.unsigned_abs());
+        let excess = (128 - widest.leading_zeros()).saturating_sub(62);
+        let narrow = |v: i128| i64::try_from(v >> excess).ok();
+        FixedUnitVec3::new(vec3([narrow(x)?, 0, narrow(z)?]))
+    }
+
     /// The order of the cap time `n / q` against the side root `(-b -+ sqrt(D)) / a`.
     ///
     /// Multiplied by `a q > 0` this is `x = a n + q b` against `-+ sqrt(q^2 D)`, with
@@ -173,25 +209,6 @@ impl Line {
             (false, true) => root_squared.cmp(&x_squared),
         }
     }
-}
-
-/// The outward normal at raw distance `t` on `surface`; see `CylinderHit::normal`.
-///
-/// `|o * 2^32| < 2^72` and `|d t| < 2^96` fit `i128`; a side hit lies within a few raw units
-/// of the side, so each quotient is below `2^34` in magnitude and fits `i64`.
-pub(super) fn normal(ray: &TraceRay, radius: i64, surface: Surface, t: i64) -> Option<FixedVec3> {
-    let one = FixedQ32_32::ONE.raw();
-    let ([ox, _, oz], [dx, _, dz]) = (ray.origin, ray.direction);
-    let component = |o: i64, d: i64| {
-        let numerator =
-            (i128::from(o) << FixedQ32_32::FRACTIONAL_BITS) + i128::from(d) * i128::from(t);
-        i64::try_from(numerator.div_euclid(i128::from(radius))).ok()
-    };
-    Some(vec3(match surface {
-        Surface::Bottom => [0, -one, 0],
-        Surface::Top => [0, one, 0],
-        Surface::Side => [component(ox, dx)?, 0, component(oz, dz)?],
-    }))
 }
 
 /// The exact product of two `i128` magnitudes.

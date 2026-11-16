@@ -37,8 +37,9 @@ as:
   in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
 - `TraceCylinder` (`new`, `radius`, `bottom`, `top`, `bounds`),
   `TraceCylinderError`, `CylinderHit` (`distance`, `front_face`, `normal`) and
-  `TraceRay::hit_cylinder`, in `crates/bunny-query/src/trace/cylinder.rs` and
-  `cylinder/span.rs` (see [Ray-Cylinder](#ray-cylinder));
+  `TraceRay::hit_cylinder`, with the identity constant `RAY_CYLINDER_ID`, in
+  `crates/bunny-query/src/trace/cylinder.rs` and `cylinder/span.rs` (see
+  [Ray-Cylinder](#ray-cylinder));
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
 - `TRACE_COORD_LIMIT_RAW`, `TRACE_DIRECTION_LIMIT_RAW` and
@@ -334,7 +335,7 @@ spare.
 
 `TraceRay::hit_cylinder(cylinder, t_min, t_max)` is the exact test of a ray
 against a capped cylinder. Its contract identity is
-**`bunny-ray-cylinder/1`**.
+**`bunny-ray-cylinder/1`**, published as `RAY_CYLINDER_ID`.
 
 **The cylinder** is in object space: its axis is the `+Y` axis (the up axis of
 the [coordinate law](../coordinate-law/README.md)), so the solid is
@@ -348,13 +349,14 @@ typed `TraceCylinderError`, checked in this order: `RadiusNotPositive`,
 Nothing wraps, saturates or panics. `TraceCylinder::bounds` is the box
 `(-r, bottom, -r)` to `(r, top, r)`.
 
-**The hit** has the form of `SphereHit`:
+**The hit** has the form of `SphereHit`, except that its normal is a unit vector:
 
 - `CylinderHit::distance` is in multiples of the ray direction, rounded down;
 - `CylinderHit::front_face` is `true` at the entry (the ray arrives from
   outside, or only touches the cylinder) and `false` at the exit (the ray
   leaves from inside);
-- `CylinderHit::normal` is the outward normal of the surface hit.
+- `CylinderHit::normal` is the outward unit normal of the surface hit, a
+  `FixedUnitVec3`.
 
 **The arithmetic.** With `o` the origin and `d` the direction, raw, the line
 is inside the slab `bottom <= y <= top` between its two cap crossings, at
@@ -385,9 +387,19 @@ side's roots have the widths of the sphere test's.
   entry is reported when `t_min <= entry <= t_max`; otherwise the exit when
   `t_min <= exit <= t_max`; otherwise there is no hit.
 - On a cap the normal is exactly `(0, -1, 0)` (bottom) or `(0, 1, 0)` (top),
-  raw `2^32`. On the side it is `floor((o * 2^32 + d * distance) / r)` in `x`
-  and `z` at the rounded distance and `0` in `y`; its length is within a few
-  raw units of 1.0, not exactly 1.0.
+  raw `2^32`. On the side it is taken at the exact root, not at the rounded
+  distance: there `a (x, z) = cross (d_z, -d_x) -+ sqrt(D) (d_x, d_z)`, with
+  `cross = o_x d_z - o_z d_x`, a vector of length `a r`. Both terms are scaled
+  by `2^s`, `s` the largest shift up to 64 that keeps `a r 2^s < 2^125`, with
+  `sqrt(D 2^2s)` floored; the result is shifted down below `2^62` and
+  normalized by `FixedUnitVec3::new`, with `y = 0`. The normal is a unit vector
+  by Bunny's unit-vector rule for every admitted radius, including one raw unit.
+- **Bound on the side normal**, derived before it was measured: the floored
+  square root moves the vector by at most `abs(d)` against a length of at least
+  `2^64 abs(d)` (below `2^-32` raw once normalized); the shift and the floored
+  length each add below `2^-28` raw; the rounded division of
+  `FixedVec3::normalize` adds at most half a raw unit. Each component is
+  therefore within one raw unit of the exact unit normal.
 
 **Tie rule at the rim.** Where the side meets a cap, when the side's root and
 the cap's crossing are the same exact distance, the cap is reported, with the

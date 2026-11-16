@@ -14,7 +14,9 @@
 
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
-use bunny_query::{TraceCylinder, TraceCylinderError, TraceRay, TRACE_COORD_LIMIT_RAW};
+use bunny_query::{
+    TraceCylinder, TraceCylinderError, TraceRay, RAY_CYLINDER_ID, TRACE_COORD_LIMIT_RAW,
+};
 use std::cmp::Ordering;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -275,9 +277,12 @@ fn crossings(case: &Case, quad: &Quadratic) -> Vec<(Time, Surface)> {
     out
 }
 
+/// What the oracle decides: raw distance, front face, and the surface and exact time hit.
+type Decided = Option<(i64, bool, Surface, Time)>;
+
 /// The exact oracle for `bunny-ray-cylinder/1`: the earliest and latest crossings, a cap
 /// winning a tie with the side, then the range rule on their floors.
-fn oracle(case: Case) -> Expected {
+fn oracle(case: Case) -> Decided {
     let quad = Quadratic::new(&case);
     let all = crossings(&case, &quad);
     let pick = |want: Ordering| {
@@ -301,23 +306,58 @@ fn oracle(case: Case) -> Expected {
         return None;
     };
     let t = i64::try_from(floor(chosen)).expect("within an i64 range");
-    Some((t, front, oracle_normal(&case, chosen.1, t)))
+    Some((t, front, chosen.1, chosen.0))
 }
 
-fn oracle_normal(case: &Case, surface: Surface, t: i64) -> Raw3 {
-    let component = |o: i64, d: i64| {
-        let numerator = (i128::from(o) << 32) + i128::from(d) * i128::from(t);
-        i64::try_from(numerator.div_euclid(i128::from(case.radius))).expect("normal fits")
+/// The bound, in raw units, on each component of a side normal against the exact unit
+/// normal, stated before measuring: the kernel's floored square root moves the vector by at
+/// most `|d|` against a length of at least `2^64` times `|d|` (below `2^-32` raw once
+/// normalized), the shift to 62 bits and the floored length each add below `2^-28` raw,
+/// and the rounded division of `FixedVec3::normalize` adds at most half a raw unit. The sum
+/// is below one raw unit.
+const SIDE_NORMAL_BOUND_RAW: i128 = 1;
+
+/// The kernel's result for `case`, after checking it against the oracle: the distance and
+/// face equal; a cap's normal is the exact axis; a side's normal has `y = 0`, each other
+/// component within [`SIDE_NORMAL_BOUND_RAW`] of the exact unit normal, and a positive dot
+/// product with the exact offset of the hit from the axis. The exact normal is built from
+/// the oracle's own root, `a (o + d t) = a o - b d + s d sqrt(disc)`, not the kernel's form.
+fn checked(case: Case, got: Expected, context: &str) -> Expected {
+    let decided = oracle(case);
+    assert_eq!(got.map(|g| (g.0, g.1)), decided.map(|d| (d.0, d.1)), "{context}");
+    let (Some((_, _, normal)), Some((_, _, surface, time))) = (got, decided) else {
+        return got;
     };
-    match surface {
-        Surface::Bottom => [0, -ONE, 0],
-        Surface::Top => [0, ONE, 0],
-        Surface::Side => [
-            component(case.origin[0], case.direction[0]),
-            0,
-            component(case.origin[2], case.direction[2]),
-        ],
+    match (surface, time) {
+        (Surface::Bottom, _) => assert_eq!(normal, [0, -ONE, 0], "{context}"),
+        (Surface::Top, _) => assert_eq!(normal, [0, ONE, 0], "{context}"),
+        (Surface::Side, Time::Root(s)) => check_side_normal(&case, s, normal, context),
+        (Surface::Side, Time::Ratio(..)) => panic!("a side crossing has a root time"),
     }
+    got
+}
+
+fn check_side_normal(case: &Case, sign: i32, normal: Raw3, context: &str) {
+    assert_eq!(normal[1], 0, "{context}");
+    let quad = Quadratic::new(case);
+    let wide = |v: i64| big(i128::from(v));
+    let size = quad.a.mul(&wide(case.radius));
+    let scale = big(1 << 32);
+    let mut dot = (big(0), big(0));
+    for axis in [0, 2] {
+        let origin = wide(case.origin[axis]);
+        let (dir, n) = (wide(case.direction[axis]), wide(normal[axis]));
+        // a P = rational + s d sqrt(disc); the exact unit normal is a P / (a r).
+        let rational = quad.a.mul(&origin).sub(&quad.b.mul(&dir));
+        let lead = n.mul(&size).sub(&scale.mul(&rational));
+        let irrational = big(-i128::from(sign)).mul(&scale).mul(&dir);
+        let slack = size.mul(&big(SIDE_NORMAL_BOUND_RAW));
+        let high = sign_with_root(&lead.sub(&slack), &irrational, &quad.disc);
+        let low = sign_with_root(&lead.add(&slack), &irrational, &quad.disc);
+        assert!(high <= 0 && low >= 0, "axis {axis} beyond the bound: {context}");
+        dot = (dot.0.add(&n.mul(&rational)), dot.1.add(&big(i128::from(sign)).mul(&n).mul(&dir)));
+    }
+    assert!(sign_with_root(&dot.0, &dot.1, &quad.disc) > 0, "not outward: {context}");
 }
 
 fn vec(raw: Raw3) -> FixedVec3 {
@@ -340,7 +380,7 @@ fn kernel(case: Case) -> Expected {
     let cylinder = cylinder(radius, caps).expect("cylinder in the trace domain");
     let (t_min, t_max) = (FixedQ32_32::from_raw(range.0), FixedQ32_32::from_raw(range.1));
     ray.hit_cylinder(&cylinder, t_min, t_max)
-        .map(|hit| (hit.distance.raw(), hit.front_face, raw(hit.normal())))
+        .map(|hit| (hit.distance.raw(), hit.front_face, raw(hit.normal().into_inner())))
 }
 
 struct Seeds(u64);
@@ -446,8 +486,7 @@ fn trace_tp_540_hits_match_an_exact_rational_oracle_on_generated_rays() {
     for index in 0..CYLINDER_ORACLE_CASES {
         let case = generate(&mut seeds);
         let context = format!("seed={CYLINDER_ORACLE_SEED:#018x} case={index} {case:?}");
-        let expected = oracle(case);
-        assert_eq!(kernel(case), expected, "{context}");
+        let expected = checked(case, kernel(case), &context);
         reached[match expected {
             None => 0,
             Some((_, true, [_, 0, _])) => 1,
@@ -477,7 +516,7 @@ fn trace_tp_541_a_grazing_ray_touches_the_side_once_and_one_raw_unit_out_misses(
     assert_eq!(kernel(unit([-4 * ONE, 0, ONE + 1], [ONE, 0, 0])), None);
     // One raw unit inside: a chord of half-length sqrt(2^33 - 1) raw, about 92682 raw units.
     let inside = unit([-4 * ONE, 0, ONE - 1], [ONE, 0, 0]);
-    assert_eq!(kernel(inside), oracle(inside));
+    checked(inside, kernel(inside), "inside");
     let (distance, front, _) = kernel(inside).expect("the ray crosses the side");
     assert!(front && distance < 4 * ONE && distance > 4 * ONE - 92_683, "{distance}");
     // A ray just above the top cap, aimed across it, misses; at the cap's height it grazes
@@ -495,7 +534,7 @@ fn trace_tp_542_an_origin_inside_hits_the_exit_from_inside() {
     // Off-centre, half-length direction: the side exit at x = sqrt(1 - 0.25) = 0.866.. is at
     // distance 1.732.. in direction multiples.
     let off = unit([0, 0, ONE / 2], [ONE / 2, 0, 0]);
-    assert_eq!(kernel(off), oracle(off));
+    checked(off, kernel(off), "off");
     let (distance, front, _) = kernel(off).expect("an inside origin always hits");
     assert!(!front && distance / (ONE / 1000) == 1732, "{distance}");
     // With t_min past the exit nothing is left.
@@ -534,7 +573,7 @@ fn trace_tp_544_at_the_rim_the_cap_wins_the_tie() {
     assert_eq!((above.1, above.2), (true, [0, ONE, 0]));
     let below = kernel(unit([-2 * ONE, 2 * ONE - 1, 0], [ONE, -ONE, 0])).expect("hit");
     assert_eq!((below.1, below.2[1]), (true, 0));
-    assert_eq!(Some(below), oracle(unit([-2 * ONE, 2 * ONE - 1, 0], [ONE, -ONE, 0])));
+    checked(unit([-2 * ONE, 2 * ONE - 1, 0], [ONE, -ONE, 0]), Some(below), "below");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -611,7 +650,7 @@ fn trace_tp_548_the_widest_inputs_match_the_oracle_without_overflow() {
             {
                 let context = format!("origin={origin:?} direction={direction:?} radius={radius}");
                 let widest = case(origin, direction, radius, caps);
-                assert_eq!(kernel(widest), oracle(widest), "{context}");
+                checked(widest, kernel(widest), &context);
             }
         }
     }
@@ -622,6 +661,41 @@ fn trace_tp_548_the_widest_inputs_match_the_oracle_without_overflow() {
     .expect("unit-direction ray");
     let wide = cylinder(DOMAIN, (-DOMAIN, DOMAIN)).expect("cylinder");
     let hit = ray.hit_cylinder(&wide, FixedQ32_32::ZERO, FixedQ32_32::from_raw(i64::MAX));
-    let expected = oracle(case([-DOMAIN, 0, 0], [ONE + 1, 0, 0], DOMAIN, (-DOMAIN, DOMAIN)));
-    assert_eq!(hit.map(|h| (h.distance.raw(), h.front_face, raw(h.normal()))), expected);
+    let got = hit.map(|h| (h.distance.raw(), h.front_face, raw(h.normal().into_inner())));
+    let unit_case = case([-DOMAIN, 0, 0], [ONE + 1, 0, 0], DOMAIN, (-DOMAIN, DOMAIN));
+    assert_eq!(checked(unit_case, got, "unit direction"), Some((0, true, [-ONE, 0, 0])));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_550_the_distance_limits_are_inclusive_at_both_ends() {
+    // From (-4, 0, 0) along +x the unit cylinder's side is entered at exactly 3.0 and left
+    // at exactly 5.0.
+    let ray = unit([-4 * ONE, 0, 0], [ONE, 0, 0]);
+    let at = |low: i64, high: i64| kernel(Case { range: (low, high), ..ray });
+    let entry = Some((3 * ONE, true, [-ONE, 0, 0]));
+    let exit = Some((5 * ONE, false, [ONE, 0, 0]));
+    assert_eq!(at(3 * ONE, 3 * ONE), entry, "entry exactly on t_min and t_max");
+    assert_eq!(at(0, 3 * ONE), entry, "entry exactly on t_max");
+    assert_eq!(at(0, 3 * ONE - 1), None, "entry one raw unit past t_max");
+    assert_eq!(at(3 * ONE + 1, 5 * ONE), exit, "exit exactly on t_max");
+    assert_eq!(at(5 * ONE, i64::MAX), exit, "exit exactly on t_min");
+    assert_eq!(at(3 * ONE + 1, 5 * ONE - 1), None, "exit one raw unit past t_max");
+    assert_eq!(at(5 * ONE + 1, i64::MAX), None, "exit one raw unit before t_min");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_551_the_contract_identity_is_published() {
+    assert_eq!(RAY_CYLINDER_ID, "bunny-ray-cylinder/1");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_552_side_normals_of_the_smallest_cylinder_are_unit_and_outward() {
+    // Radius one raw unit: the offset at the rounded distance is meaningless at this size,
+    // so the normal must come from the exact root. Directions at every octant.
+    for (dx, dz) in [(ONE, ONE), (ONE, -ONE / 3), (-ONE / 7, ONE), (-ONE, -1), (3, -5)] {
+        let thin = case([-dx * 8, 0, -dz * 8], [dx, 0, dz], 1, (-ONE, ONE));
+        let context = format!("direction=({dx}, {dz})");
+        let hit = checked(thin, kernel(thin), &context).expect("aimed at the axis");
+        assert!(hit.1 && hit.2[1] == 0, "{context}");
+    }
 }

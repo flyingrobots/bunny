@@ -37,7 +37,7 @@ mod cylinder;
 mod sphere;
 mod wide;
 
-pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError};
+pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError, RAY_CYLINDER_ID};
 pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
 
 type Wide3 = [i128; 3];

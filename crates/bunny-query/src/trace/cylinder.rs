@@ -8,11 +8,14 @@
 //! of the two ends; every comparison is exact. See
 //! `docs/topics/ray-tracing/README.md#ray-cylinder`.
 
+/// The contract identity of [`TraceRay::hit_cylinder`].
+pub const RAY_CYLINDER_ID: &str = "bunny-ray-cylinder/1";
+
 use super::{in_trace_domain, vec3, TraceRay};
 use bunny_geom::FixedAabb3;
-use bunny_linalg::FixedVec3;
+use bunny_linalg::FixedUnitVec3;
 use bunny_num::FixedQ32_32;
-use span::{normal, Line};
+use span::Line;
 use std::fmt;
 
 mod span;
@@ -117,16 +120,17 @@ pub struct CylinderHit {
     /// Whether the ray hit the outside of the cylinder: true at the entry (the ray arrives
     /// from outside, or touches the surface), false at the exit (the ray leaves from inside).
     pub front_face: bool,
-    normal: FixedVec3,
+    normal: FixedUnitVec3,
 }
 
 impl CylinderHit {
-    /// The outward normal at the hit. On a cap it is exactly `(0, -1, 0)` (bottom) or
+    /// The outward unit normal at the hit. On a cap it is exactly `(0, -1, 0)` (bottom) or
     /// `(0, 1, 0)` (top), and a cap wins a tie with the side at the rim. On the side it is
-    /// `(x, 0, z) / radius` at the rounded distance, each component rounded down; its length
-    /// is within a few raw units of 1.0, not exactly 1.0.
+    /// the normal `(x, 0, z) / radius` at the exact hit point (not the rounded distance),
+    /// normalized by `FixedUnitVec3::new`; each component is within one raw unit of the
+    /// exact unit normal (`docs/topics/ray-tracing/README.md#ray-cylinder`).
     #[must_use]
-    pub const fn normal(&self) -> FixedVec3 {
+    pub const fn normal(&self) -> FixedUnitVec3 {
         self.normal
     }
 }
@@ -145,7 +149,8 @@ impl TraceRay {
         t_min: FixedQ32_32,
         t_max: FixedQ32_32,
     ) -> Option<CylinderHit> {
-        let (entry, exit) = Line::new(self, cylinder)?.span()?;
+        let line = Line::new(self, cylinder)?;
+        let (entry, exit) = line.span()?;
         let range = i128::from(t_min.raw())..=i128::from(t_max.raw());
         let (crossing, front_face) = if range.contains(&entry.distance) {
             (entry, true)
@@ -155,7 +160,7 @@ impl TraceRay {
             return None;
         };
         let distance = i64::try_from(crossing.distance).ok()?;
-        let normal = normal(self, cylinder.radius, crossing.surface, distance)?;
+        let normal = line.normal(&crossing)?;
         Some(CylinderHit { distance: FixedQ32_32::from_raw(distance), front_face, normal })
     }
 }
