@@ -55,33 +55,57 @@ pub fn interpolate_uv(uvs: [FixedVec2; 3], weights: BarycentricNumerators) -> Fi
 fn convex_round(values: [i64; 3], weights: [u128; 3], det: u128) -> FixedQ32_32 {
     // Shift each value to `0..2^64`; the weights sum to `det`, so the quotient shifts the same.
     let biased = values.map(|t| (i128::from(t) + BIAS).unsigned_abs());
-    let (mut quotient, mut remainder) = (0_u128, 0_u128);
+    let mut division = LongDivision { quotient: 0, remainder: 0, det };
     for bit in (0..64).rev() {
-        // Double: remainder < det <= 2^127, so 2 * remainder fits.
-        quotient <<= 1;
-        remainder <<= 1;
-        if remainder >= det {
-            remainder -= det;
-            quotient += 1;
-        }
+        division.double();
         for (value, weight) in biased.iter().zip(weights) {
-            if (value >> bit) & 1 == 1 {
-                // remainder < det and weight <= det, so the sum is below 2^128.
-                remainder += weight;
-                if remainder >= det {
-                    remainder -= det;
-                    quotient += 1;
-                }
-            }
+            division.add(weight * ((value >> bit) & 1));
         }
-    }
-    let half = remainder.cmp(&(det - remainder));
-    if half.is_gt() || (half.is_eq() && quotient & 1 == 1) {
-        quotient += 1;
     }
     // The rounded quotient lies between the smallest and largest biased value.
-    let raw = i128::try_from(quotient).unwrap_or(BIAS) - BIAS;
+    let raw = i128::try_from(division.rounded()).unwrap_or(BIAS) - BIAS;
     FixedQ32_32::from_raw(i64::try_from(raw).unwrap_or(0))
+}
+
+/// `sum / det` as a quotient and a remainder below `det`, built one term at a time.
+struct LongDivision {
+    quotient: u128,
+    remainder: u128,
+    det: u128,
+}
+
+impl LongDivision {
+    /// Doubles the sum. `remainder < det <= 2^127`, so twice it fits.
+    const fn double(&mut self) {
+        self.quotient <<= 1;
+        self.remainder <<= 1;
+        self.reduce();
+    }
+
+    /// Adds `term`, at most `det`. `remainder + term < 2 det <= 2^128`, so it fits.
+    const fn add(&mut self, term: u128) {
+        self.remainder += term;
+        self.reduce();
+    }
+
+    /// Brings the remainder below `det`; it is below `2 det` here.
+    const fn reduce(&mut self) {
+        if self.remainder >= self.det {
+            self.remainder -= self.det;
+            self.quotient += 1;
+        }
+    }
+
+    /// The quotient rounded to nearest, ties to even.
+    const fn rounded(&self) -> u128 {
+        // Compare the remainder with `det / 2` as `remainder` against `det - remainder`.
+        let (below, above) = (self.remainder, self.det - self.remainder);
+        if below > above || (below == above && self.quotient & 1 == 1) {
+            self.quotient + 1
+        } else {
+            self.quotient
+        }
+    }
 }
 
 /// How a texel index outside the texture is brought back into it.
