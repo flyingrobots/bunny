@@ -43,7 +43,8 @@ cargo fmt, clippy -D warnings; code-dojo --all steps at the final commit (see th
 Known risks:
 Row 0 is at v = 0 (no flip); a caller with top-row-first images must orient them itself. Under a
 non-power-of-two size a texel's centre is not a raw value, and the texel can be the second tap;
-callers wanting the nearest texel take the largest weight. interpolate_uv is bit-serial, about
+rounded weights can also tie for texels at different distances, so the nearest texel comes
+from the coordinate. interpolate_uv is bit-serial, about
 1.2 us per call in the container (about 11 times smooth_normal). The issue sketched a five-
 argument `bilinear`; the workspace's four-argument clippy limit made it `bilinear(uv, [width,
 height], [wrap_u, wrap_v])`. Test-plan IDs OPTICS-REQ-056.. and OPTICS-TP-110.. did not collide

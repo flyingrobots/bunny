@@ -100,7 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `(i + 1/2) / size`, `TextureWrap::Repeat` or `Clamp` per axis, two corner
   weights rounded once and the other two their exact complements; at a texel
   centre that is exactly a raw value that texel is the first tap with weight
-  1.0 (elsewhere the largest weight names the nearest texel). Closes flyingrobots/bunny#367.
+  1.0 (elsewhere neither the first tap nor the largest weight is
+  sure to be the nearest texel). Closes flyingrobots/bunny#367.
 
 * `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
   `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed

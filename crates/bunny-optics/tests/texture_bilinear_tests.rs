@@ -351,12 +351,15 @@ fn optics_tp_117_a_rounded_centre_can_make_the_texel_the_second_tap() {
         bilinear(uv(3_579_139_413, ONE / 2), [3, 1], [TextureWrap::Clamp; 2]).expect("nonempty");
     assert_eq!(taps.texels(), [[1, 0], [2, 0], [1, 0], [2, 0]]);
     assert_eq!(taps.weights().map(FixedQ32_32::raw), [1, ONE - 1, 0, 0]);
-    // The largest weight names the nearest texel.
-    let nearest = (0..4).max_by_key(|&k| taps.weights()[k]).map(|k| taps.texels()[k]);
-    assert_eq!(nearest, Some([2, 0]));
     // One raw unit higher, 3 579 139 414, is above the centre: the texel is the first tap.
     let above =
         bilinear(uv(3_579_139_414, ONE / 2), [3, 1], [TextureWrap::Clamp; 2]).expect("nonempty");
     assert_eq!(above.texels()[0], [2, 0]);
     assert_eq!(above.weights().map(FixedQ32_32::raw), [ONE - 2, 2, 0, 0]);
+    // Rounded weights can tie for texels at different distances: u = 1 431 655 765 on 3 wide
+    // gives x = 2^31 - 1 raw (column 0 is nearer) and v = 0 on 2 rows gives fy = 1/2, so
+    // w11 = w10 = (2^31 - 1) / 2 raw, ties to even 2^30, and the complements are 2^30 too.
+    let tied = bilinear(uv(1_431_655_765, 0), [3, 2], [TextureWrap::Repeat; 2]).expect("nonempty");
+    assert_eq!(tied.texels(), [[0, 1], [1, 1], [0, 0], [1, 0]]);
+    assert_eq!(tied.weights().map(FixedQ32_32::raw), [ONE / 4; 4]);
 }

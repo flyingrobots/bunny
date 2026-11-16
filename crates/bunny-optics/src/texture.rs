@@ -173,8 +173,11 @@ impl BilinearTaps {
 /// centres are rounded when written as raw values, and the nearest raw value can fall just
 /// below the centre: in a texture 3 wide, texel 2's centre `5/6` is nearest raw
 /// `3 579 139 413`, which gives columns `[1, 2]` with weights `(2^-32, 1 - 2^-32)` along `u`,
-/// so the texel is the second tap. A caller that wants the nearest texel takes the tap with
-/// the largest weight, not the first.
+/// so the texel is the second tap. The largest weight is not a sure guide either: rounded
+/// weights can tie for texels at different distances. At raw `uv = (1 431 655 765, 0)` in a
+/// 3 by 2 texture, column 0 is nearer (`x = 1/2 - 2^-32`) but all four weights round to
+/// `2^30`. A caller that needs the nearest texel computes it from the coordinate, as column
+/// `floor(u width)` and row `floor(v height)`, wrapped; it is not part of this identity.
 /// Proven infallible: `|u width|` is below `2^95`.
 ///
 /// # Examples

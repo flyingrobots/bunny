@@ -1317,9 +1317,9 @@ are not part of this identity; the caller reads the texels and sums
 
 **Interpolation.** `uvs` are the vertex coordinates of `v0`, `v1`, `v2` (each
 a `FixedVec2`, `x` is `u` and `y` is `v`) and `weights` the hit's
-`BarycentricNumerators` `(u, v, det)`, the exact weights
-`w = (det - u - v, u, v) / det`. Each component is
-`(w0 t0 + w1 t1 + w2 t2) / det`, computed exactly and rounded once to nearest
+`BarycentricNumerators` `(u, v, det)`, whose numerators
+`n = (det - u - v, u, v)` give the exact weights `n / det`. Each component is
+`(n0 t0 + n1 t1 + n2 t2) / det`, computed exactly and rounded once to nearest
 raw unit, ties to even. The weights are nonnegative and sum to one, so the
 result lies between the smallest and largest vertex component and is always
 representable, for every accepted `BarycentricNumerators` (any `det` up to
@@ -1364,8 +1364,12 @@ values, and the nearest raw value can fall just below the centre. In a
 texture 3 wide, texel 2's centre `5/6` is `3 579 139 413.33` raw; at the
 nearest raw `u = 3 579 139 413`, `x = 2 - 2^-32`, so the columns are `[1, 2]`
 with weights `(2^-32, 1 - 2^-32)` along `u` and the texel is the second tap.
-A caller that wants the nearest texel takes the tap with the largest weight,
-not the first.
+The largest weight is not a sure guide either: rounded weights can tie for
+texels at different distances. At raw `uv = (1 431 655 765, 0)` in a 3 by 2
+texture, column 0 is nearer (`x = 1/2 - 2^-32`), but all four weights round
+to `2^30`. A caller that needs the nearest texel computes it from the
+coordinate, as column `floor(u width)` and row `floor(v height)`, wrapped; that
+is not part of this identity.
 
 **Refusals.** `bilinear` returns `None` when `width` or `height` is zero.
 Any `uv`, negative or far outside `[0, 1)`, is accepted.
