@@ -106,6 +106,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ReflectionBelowSurface`. No existing output changes. Closes
   flyingrobots/bunny#370.
 
+* `bunny-optics`: the smooth dielectric, `bunny-dielectric/1`: the reflected
+  or refracted continuation ray at a boundary between two refractive indices
+  (in progress). Closes flyingrobots/bunny#372.
+
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and
   `compact_any_hit` together with a `TraversalCounts` record of the search's
