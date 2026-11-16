@@ -64,6 +64,10 @@ and `point_at`:
   hand-derived mirrors, Schlick's term at its ends and rounding boundaries,
   exact big-integer oracles for the term and the reflected direction on
   seeded inputs, normal incidence and the two refusals.
+- texture coordinates and bilinear weights `bunny-texture-bilinear/1`
+  (`interpolate_uv`, `bilinear`, `TextureWrap`, `BilinearTaps`,
+  `TEXTURE_BILINEAR_ID`): hand-derived cases, exact rational oracles on
+  seeded triangles, hits and coordinates, the wrap rules and texel centres.
 
 Projection matrices (flyingrobots/bunny#201, #202), and rough reflection,
 refraction and other material helpers (#160) are out of scope.
@@ -148,6 +152,10 @@ formatting.
 | OPTICS-REQ-053 | `schlick_fresnel(f0, cosine)` clamps both inputs to `0..=1.0`, rounds the exact `(1 - cosine)^5` once to nearest and `f0 + (1 - f0) w` once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is `schlick_fresnel(F0_c, c)` per channel with `c` the incidence cosine rounded once, within three raw units of the exact `-(d . n) / |d|`. | `README.md#specular-reflection` |
 | OPTICS-REQ-054 | At normal incidence (`d` along `-n`) the throughput is the base reflectance exactly; at `cosine = 1.0` `schlick_fresnel` is `f0` exactly and at `cosine = 0` it is 1.0. | `README.md#specular-reflection` |
 | OPTICS-REQ-055 | `try_specular_reflection` refuses, in this order, a ray with `d . N >= 0` against the exact facing normal (`SecondaryRayError::ArrivesBelowSurface`) and a reflected direction with `r' . N <= 0` (`SecondaryRayError::ReflectionBelowSurface`), each carrying the direction it saw. | `README.md#specular-reflection` |
+| OPTICS-REQ-056 | `interpolate_uv` (`bunny-texture-bilinear/1`) returns each component of `(w0 t0 + w1 t1 + w2 t2) / det`, with `w = (det - u - v, u, v)`, rounded once to nearest raw unit with ties to even, for every accepted `BarycentricNumerators` and every vertex coordinate; a corner gives its vertex exactly. | `README.md#texture-coordinates` |
+| OPTICS-REQ-057 | `bilinear(uv, [width, height], wrap)` returns, for any `uv`, the texels `(x0, y0)`, `(x0 + 1, y0)`, `(x0, y0 + 1)`, `(x0 + 1, y0 + 1)` with `x0 = floor(u width - 1/2)` and `y0 = floor(v height - 1/2)`, each index wrapped by `Repeat` (Euclidean remainder) or `Clamp` and in range, and `None` when a size is zero. | `README.md#texture-coordinates` |
+| OPTICS-REQ-058 | The weights of `bilinear` are in `0..=1.0`, sum to exactly 1.0, `w11` and `w10` are the exact products rounded once to nearest with ties to even, `w01` and `w00` their exact complements, and each is within half a raw unit of its exact product. | `README.md#texture-coordinates` |
+| OPTICS-REQ-059 | At a texel centre `u = (i + 1/2) / width`, `v = (j + 1/2) / height` the first tap is texel `(i, j)` with weight exactly 1.0 and the others have weight zero, under both wrap rules and, for repeat, shifted by whole tiles. | `README.md#texture-coordinates` |
 
 ```toml
 [[requirement]]
@@ -404,6 +412,26 @@ status = "active"
 id = "OPTICS-REQ-055"
 summary = "try_specular_reflection refuses, in this order, a ray with d . N >= 0 against the exact facing normal (SecondaryRayError::ArrivesBelowSurface) and a reflected direction with r' . N <= 0 (SecondaryRayError::ReflectionBelowSurface), each carrying the direction it saw."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-056"
+summary = "interpolate_uv (bunny-texture-bilinear/1) returns each component of (w0 t0 + w1 t1 + w2 t2) / det, with w = (det - u - v, u, v), rounded once to nearest raw unit with ties to even, for every accepted BarycentricNumerators and every vertex coordinate; a corner gives its vertex exactly."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-057"
+summary = "bilinear(uv, [width, height], wrap) returns, for any uv, the texels (x0, y0), (x0 + 1, y0), (x0, y0 + 1), (x0 + 1, y0 + 1) with x0 = floor(u width - 1/2) and y0 = floor(v height - 1/2), each index wrapped by Repeat (Euclidean remainder) or Clamp and in range, and None when a size is zero."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-058"
+summary = "The weights of bilinear are in 0..=1.0, sum to exactly 1.0, w11 and w10 are the exact products rounded once to nearest with ties to even, w01 and w00 their exact complements, and each is within half a raw unit of its exact product."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-059"
+summary = "At a texel centre u = (i + 1/2) / width, v = (j + 1/2) / height the first tap is texel (i, j) with weight exactly 1.0 and the others have weight zero, under both wrap rules and, for repeat, shifted by whole tiles."
+status = "active"
 ```
 
 ## Fixtures
@@ -650,6 +678,12 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
 | OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
 | OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
+| OPTICS-TP-110 | Hand-derived coordinates | OPTICS-REQ-056 | Corners exactly; the centroid 1 431 655 765 and two thirds 2 863 311 531 raw (hand: 2^32 / 3 and 2^33 / 3); ties of 1.5 and 2.5 raw to 2, -1.5 to -2 and -0.5 to 0; the extremes of i64 with det = i128::MAX - 1. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_110_hand_derived_coordinates_interpolate_exactly` |
+| OPTICS-TP-111 | Seeded coordinates against the exact rational | OPTICS-REQ-056 | 20 000 seeded triangles and hits (det up to 2^127, coordinates over the full raw range and near zero): each component r satisfies (2r - 1) det <= 2 sum w_i t_i <= (2r + 1) det in exact big integers, an end only for even r; the seed is printed. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_111_interpolated_coordinates_match_the_exact_rational_oracle` |
+| OPTICS-TP-112 | Hand-derived lookups | OPTICS-REQ-057, OPTICS-REQ-058 | The middle of a 2 by 2 texture: four quarters; u = v = 0 on 4 by 4 wraps to the last texel under repeat and clamps to texel 0; a texel centre along one axis only; the corner-weight roundings (2^30 + 1 + 2^-32 to 2^30 + 1, 2^30 - 2^-32 to 2^30) and two ties to even (1/2 raw to 0, 2^31 - 1/2 to 2^31), all by hand; zero sizes refused. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_112_hand_derived_lookups` |
+| OPTICS-TP-113 | Seeded lookups against the exact oracle | OPTICS-REQ-057, OPTICS-REQ-058 | 20 000 seeded coordinates (full raw range, negative and far outside [0, 1)) and sizes (1 to 2^32 - 1), both wrap rules, plus the ends of the raw range and of the size: the indices equal an independent floor and wrap of the exact 2 t size - 2^32 over 2^33 and are in range, each weight is in 0..=1.0 and within half a raw unit of the exact product, and they sum to exactly 1.0; the seed is printed. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_113_seeded_lookups_match_the_exact_oracle` |
+| OPTICS-TP-114 | Texel centres | OPTICS-REQ-059 | 5 000 seeded texels of power-of-two textures up to 2^20 (every centre exact in raw units), clamp at the centre and repeat shifted by -1 000 to 1 000 tiles: the first tap is the texel with weights (1.0, 0, 0, 0); the seed is printed. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_114_a_texel_centre_returns_that_texel_with_weight_one` |
+| OPTICS-TP-115 | Texture mutations | OPTICS-REQ-056, OPTICS-REQ-057, OPTICS-REQ-058 | Each rule broken on purpose fails at least one case above. | [Texture-bilinear mutation checks](#texture-bilinear-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1578,6 +1612,60 @@ artifact = "docs/topics/optics/test-plan.md#specular-reflection-mutation-checks"
 oracle = "Eight rules of specular.rs broken on purpose, each mutant's tests under timeout 120; each fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-110"
+requirements = ["OPTICS-REQ-056"]
+evidence = "test"
+test = "crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_110_hand_derived_coordinates_interpolate_exactly"
+oracle = "Corners exactly; the centroid 1 431 655 765 and two thirds 2 863 311 531 raw (hand: 2^32 / 3 and 2^33 / 3); ties of 1.5 and 2.5 raw to 2, -1.5 to -2 and -0.5 to 0; the extremes of i64 with det = i128::MAX - 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-111"
+requirements = ["OPTICS-REQ-056"]
+evidence = "property"
+test = "crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_111_interpolated_coordinates_match_the_exact_rational_oracle"
+oracle = "20 000 seeded triangles and hits (det up to 2^127, coordinates over the full raw range and near zero): each component r satisfies (2r - 1) det <= 2 sum w_i t_i <= (2r + 1) det in exact big integers, an end only for even r; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-112"
+requirements = ["OPTICS-REQ-057", "OPTICS-REQ-058"]
+evidence = "test"
+test = "crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_112_hand_derived_lookups"
+oracle = "The middle of a 2 by 2 texture: four quarters; u = v = 0 on 4 by 4 wraps to the last texel under repeat and clamps to texel 0; a texel centre along one axis only; the corner-weight roundings (2^30 + 1 + 2^-32 to 2^30 + 1, 2^30 - 2^-32 to 2^30) and two ties to even (1/2 raw to 0, 2^31 - 1/2 to 2^31), all by hand; zero sizes refused."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-113"
+requirements = ["OPTICS-REQ-057", "OPTICS-REQ-058"]
+evidence = "property"
+test = "crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_113_seeded_lookups_match_the_exact_oracle"
+oracle = "20 000 seeded coordinates (full raw range, negative and far outside [0, 1)) and sizes (1 to 2^32 - 1), both wrap rules, plus the ends of the raw range and of the size: the indices equal an independent floor and wrap of the exact 2 t size - 2^32 over 2^33 and are in range, each weight is in 0..=1.0 and within half a raw unit of the exact product, and they sum to exactly 1.0; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-114"
+requirements = ["OPTICS-REQ-059"]
+evidence = "property"
+test = "crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_114_a_texel_centre_returns_that_texel_with_weight_one"
+oracle = "5 000 seeded texels of power-of-two textures up to 2^20 (every centre exact in raw units), clamp at the centre and repeat shifted by -1 000 to 1 000 tiles: the first tap is the texel with weights (1.0, 0, 0, 0); the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-115"
+requirements = ["OPTICS-REQ-056", "OPTICS-REQ-057", "OPTICS-REQ-058"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#texture-bilinear-mutation-checks"
+oracle = "Nine rules of texture.rs broken on purpose, each mutant's tests under timeout 300; each fails at least one case."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1885,6 +1973,26 @@ case fail; the restored source passed every case.
 | The leaving test removed | A grazing reflection is refused | OPTICS-TP-107 |
 | The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
 | `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
+
+## Texture-Bilinear Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/texture.rs`, and the tests were run with
+`timeout 300 cargo test --locked -q -p bunny-optics --no-fail-fast --test
+texture_bilinear_tests` per mutation. Every mutation made at least one case
+fail; the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| The interpolation's ties round up | Ties to even | OPTICS-TP-110, OPTICS-TP-111 |
+| The interpolation floors | Round to nearest | OPTICS-TP-110, OPTICS-TP-111 |
+| The weight of `v0` taken as `det - u` | The exact barycentric weights | OPTICS-TP-110, OPTICS-TP-111 |
+| No half-texel offset in the position | The texel-centre convention | OPTICS-TP-112, OPTICS-TP-113, OPTICS-TP-114 |
+| The corner weights floor | Round to nearest | OPTICS-TP-112, OPTICS-TP-113 |
+| The corner weights' ties round up | Ties to even | OPTICS-TP-112 |
+| Repeat clamps | The repeat rule | OPTICS-TP-112, OPTICS-TP-113, OPTICS-TP-114 |
+| Clamp repeats | The clamp rule | OPTICS-TP-112, OPTICS-TP-113 |
+| `w00` rounded from its own product, not the complement | Weights sum to exactly 1.0 | OPTICS-TP-112, OPTICS-TP-113 |
 
 ## Timing
 

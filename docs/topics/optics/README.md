@@ -58,7 +58,11 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `try_specular_reflection`), `SpecularSample` (`ray`, `throughput`),
   `schlick_fresnel` and `SPECULAR_REFLECTION_ID`, with the
   `SecondaryRayError` variants `ArrivesBelowSurface` and
-  `ReflectionBelowSurface`.
+  `ReflectionBelowSurface`;
+- for [texture coordinates and bilinear weights](#texture-coordinates)
+  (`bunny-texture-bilinear/1`): `interpolate_uv`, `bilinear`, `TextureWrap`
+  (`Repeat`, `Clamp`), `BilinearTaps` (`texels`, `weights`) and
+  `TEXTURE_BILINEAR_ID`, with `bunny_query::BarycentricNumerators`.
 
 Evidence is listed in the [test plan](test-plan.md). Rough reflection,
 refraction, attenuation and materials other than diffuse and the perfect
@@ -1295,6 +1299,60 @@ input is known to reach. `specular_reflection` returns `None` exactly when
 **The normal.** The reflection is about the frame normal of the
 `SurfaceHit`, the geometric normal. Reflection about a smooth-shading normal
 is not part of this identity.
+
+## Texture Coordinates
+
+`interpolate_uv(uvs, weights)` gives a triangle's texture coordinates at a
+hit and `bilinear(uv, [width, height], wrap)` the four texels and weights of
+a bilinear lookup there. Their identity is `bunny-texture-bilinear/1`
+(`TEXTURE_BILINEAR_ID`). Texel storage, mip maps and anisotropic filtering
+are not part of this identity; the caller reads the texels and sums
+`weight * texel`.
+
+**Interpolation.** `uvs` are the vertex coordinates of `v0`, `v1`, `v2` (each
+a `FixedVec2`, `x` is `u` and `y` is `v`) and `weights` the hit's
+`BarycentricNumerators` `(u, v, det)`, the exact weights
+`w = (det - u - v, u, v) / det`. Each component is
+`(w0 t0 + w1 t1 + w2 t2) / det`, computed exactly and rounded once to nearest
+raw unit, ties to even. The weights are nonnegative and sum to one, so the
+result lies between the smallest and largest vertex component and is always
+representable, for every accepted `BarycentricNumerators` (any `det` up to
+`i128::MAX`). A corner gives its vertex's coordinates exactly. It never
+fails.
+
+**Texel centres.** Column `i` of a texture `width` texels wide covers
+`u` in `[i / width, (i + 1) / width)`, and its centre is
+`u = (i + 1/2) / width`; rows are the same along `v` with `height`. Row 0 is
+at `v = 0`: Bunny does not flip `v`, and a caller whose images store the top
+row first decides the orientation when it loads them.
+
+**Lookup.** Each step and its rounding:
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Position | `x = u width - 1/2`, `y = v height - 1/2` | exact (`i128`; `\|u width\|` below `2^95`) |
+| Split | `x0 = floor(x)`, `fx = x - x0` in `[0, 1)`; the same for `y` | exact |
+| Wrap | columns `x0`, `x0 + 1` and rows `y0`, `y0 + 1`, each wrapped by `wrap` | exact |
+| Corner weights | `w11 = fx fy`, `w10 = fx (1 - fy)` | each once, to nearest raw unit, ties to even |
+| Complements | `w01 = fy - w11`, `w00 = (1 - fy) - w10` | exact |
+
+The four weights are in `0..=1.0`, each within half a raw unit of its exact
+product, and sum to exactly 1.0. `BilinearTaps::texels()` gives them as
+`[column, row]` in the order `(x0, y0)`, `(x1, y0)`, `(x0, y1)`, `(x1, y1)`,
+and `weights()` in the same order.
+
+**Wrap rules.** `TextureWrap::Repeat` takes each index modulo the size,
+Euclidean, so index `-1` is the last texel and the texture tiles in both
+directions. `TextureWrap::Clamp` clamps each index to `0..=size - 1`, so the
+edge texels extend outward; the weights are the same as for repeat, so two
+taps can name one texel. Each index is wrapped on its own, after the split:
+under repeat `x0 + 1` past the last column is column 0.
+
+**At a texel centre** `fx = fy = 0`: the first tap is that texel with weight
+exactly 1.0 and the other three have weight zero, under both wrap rules.
+
+**Refusals.** `bilinear` returns `None` when `width` or `height` is zero.
+Any `uv`, negative or far outside `[0, 1)`, is accepted.
 
 ## Pixel Values
 

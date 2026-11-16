@@ -75,6 +75,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`: texture coordinates at a hit and bilinear texel weights,
+  `bunny-texture-bilinear/1` (`TEXTURE_BILINEAR_ID`). `interpolate_uv`
+  interpolates a triangle's vertex coordinates at a hit's
+  `BarycentricNumerators`, each component rounded once to nearest with ties
+  to even (exact for every accepted weight). `bilinear(uv, [width, height],
+  wrap)` returns a `BilinearTaps`: four texels `[column, row]` and Q32.32
+  weights that sum to exactly 1.0, with texel `i`'s centre at
+  `(i + 1/2) / size`, `TextureWrap::Repeat` or `Clamp` per index, two corner
+  weights rounded once and the other two their exact complements; at a texel
+  centre that texel has weight 1.0. Closes flyingrobots/bunny#367.
+
 * `bunny-optics`: the perfect mirror, `bunny-specular-reflection/1`
   (`SPECULAR_REFLECTION_ID`). `SurfaceHit::specular_reflection` and
   `try_specular_reflection` give the continuation ray from the hit's start
