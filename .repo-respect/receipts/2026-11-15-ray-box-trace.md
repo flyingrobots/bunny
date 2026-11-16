@@ -16,16 +16,24 @@ crates/bunny-query/src/lib.rs
 crates/bunny-query/src/trace.rs
 crates/bunny-query/src/trace/sphere.rs
 crates/bunny-query/tests/trace_sphere_tests.rs
+crates/bunny-query/README.md
 crates/bunny-geom/src/lib.rs
 
 Files edited:
+crates/bunny-query/src/lib.rs
+crates/bunny-query/src/trace.rs
+crates/bunny-query/src/trace/box_hit.rs
+crates/bunny-query/tests/trace_box_tests.rs
+crates/bunny-query/README.md
+docs/topics/ray-tracing/README.md
+docs/topics/ray-tracing/test-plan.md
 CHANGELOG.md
 .repo-respect/receipts/2026-11-15-ray-box-trace.md
 
 Topic docs:
-`docs/topics/ray-tracing/`: the README will state the box kernel, its domain, its typed
+`docs/topics/ray-tracing/`: the README states the box kernel, its domain, its typed
 error, its tie rule, the parallel-ray rule and the contract `bunny-ray-box/1` with its
-rounding rule; the test plan will record the requirements, cases, oracle and evidence.
+rounding rule; the test plan records the requirements, cases, oracle and evidence.
 
 Generated artifacts:
 None.

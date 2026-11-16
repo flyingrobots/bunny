@@ -75,8 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* `bunny-query`: `TraceBox` and `TraceRay::hit_box`, the trace-domain ray-box
-  kernel under the contract `bunny-ray-box/1` (work in progress). Closes
+* `bunny-query`: `TraceBox`, `TraceBoxError`, `BoxHit` and `TraceRay::hit_box`,
+  the trace-domain ray-box kernel for an axis-aligned box under the contract
+  `bunny-ray-box/1`. A hit has the form of `SphereHit`: a distance in multiples
+  of the ray direction, rounded down, `front_face` (true at the entry, false at
+  the exit from an inside origin) and the outward face normal, a unit vector
+  along one axis. Crossings are exact fractions; contact is inclusive; an edge or
+  corner hit reports the lowest axis (x, y, z); a ray parallel to a slab is
+  decided by its origin lying in the closed slab. `TraceBox::new` refuses a
+  corner outside the trace domain or a minimum above a maximum with
+  `TraceBoxError`. `ray_intersects_aabb` and `box_entry` are unchanged. Closes
   flyingrobots/bunny#359.
 
 * `bunny-query`: `TraceSphere` and `TraceRay::hit_sphere`, the trace-domain
