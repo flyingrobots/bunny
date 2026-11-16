@@ -18,6 +18,8 @@ mod barycentric;
 #[allow(clippy::module_name_repetitions)]
 mod closest;
 #[allow(clippy::module_name_repetitions)]
+mod frame;
+#[allow(clippy::module_name_repetitions)]
 mod ray;
 #[allow(clippy::module_name_repetitions)]
 mod trace;
@@ -26,11 +28,15 @@ pub use barycentric::BarycentricNumerators;
 pub use closest::{
     aabb_intersects_sphere, closest_point_aabb, closest_point_triangle, closest_points_segments,
 };
+pub use frame::{
+    ObjectRay, ShapeFrame, ShapeFrameError, SHAPE_FRAME_AXIS_DOT_LIMIT_RAW, SHAPE_FRAME_ID,
+    SHAPE_FRAME_MAX_DIRECTION_SHIFT,
+};
 pub use ray::{
     ray_intersects_aabb, ray_intersects_aabb_prepared, ray_intersects_sphere,
     ray_intersects_triangle, PreparedRay3,
 };
 pub use trace::{
-    TraceRay, TraceTriangle, TriangleHit, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
-    TRACE_UNIT_DIRECTION_LIMIT_RAW,
+    SphereHit, TraceRay, TraceSphere, TraceSphereError, TraceTriangle, TriangleHit,
+    TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW, TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };

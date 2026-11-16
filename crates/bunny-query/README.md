@@ -27,9 +27,19 @@ targets.
 * Ray-tracing kernels (`TraceRay`, `TraceTriangle`): a division-free
   conservative ray-box test and an exact integer ray-triangle test with
   inclusive edges; see `docs/topics/ray-tracing/`.
+* `TraceSphere` and `TraceRay::hit_sphere` (contract `bunny-ray-sphere/1`): the
+  exact ray-sphere test, returning the rounded-down distance, facing and outward
+  normal in the form of `TriangleHit`; inputs outside the trace domain are refused
+  with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
 * `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
   triangle test decided a hit with, as a `BarycentricNumerators` (also
   buildable from any point on a triangle with `BarycentricNumerators::new`).
+* `ShapeFrame` (`bunny-shape-frame/1`): a rigid frame (orthogonal unit axes
+  and an origin) that maps a `TraceRay` into a shape's object space and a
+  normal back to world space, each component one exact dot product rounded
+  once, ties to even, with typed refusals. A direction lengthened by the
+  rotation is halved and the `ObjectRay` maps hit distances back to the
+  world ray; see `docs/topics/shape-frame/`.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License

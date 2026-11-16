@@ -33,7 +33,9 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `LinearClampV1`; `identity`, `apply`, `encode_8`, `encode_16`),
   `quantize_8`, `quantize_16`, `write_rgba8`, `PixelError`,
   `MAX_SAMPLE_RADIANCE_RAW`, `MAX_SAMPLES_PER_PIXEL`, `UNORM8_IDENTITY`,
-  `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`;
+  `UNORM16_IDENTITY` and `RGBA8_OPAQUE_IDENTITY`; and, for
+  [decoding sRGB codes](#decoding-srgb-codes), `srgb8_to_linear` and
+  `SRGB8_DECODE_IDENTITY`;
 - for [diffuse shading](#diffuse-shading) (`bunny-diffuse-shading/1`):
   `TriangleSurface` (`new`, `frame`, `facing_frame`), `ShadingFrame` (`new`,
   `flipped`, `tangent`, `bitangent`, `normal`, `cosine_direction`,
@@ -1518,6 +1520,35 @@ A curve whose 8-bit codes are exactly the correctly rounded ones is possible
 (a table of the 255 input thresholds and a binary search), but it would not be
 the composition of a tone curve and `quantize_8`; it would be a new identity.
 
+### Decoding sRGB Codes
+
+`srgb8_to_linear(code: u8) -> FixedQ32_32` (`bunny-srgb8-decode/1`,
+`SRGB8_DECODE_IDENTITY`) gives the linear light of an 8-bit sRGB channel from
+a fixed 256-entry table in `crates/bunny-optics/src/pixel/srgb8_table.rs`. Code
+0 gives 0 and code 255 gives 1.0 exactly; every other entry is in between.
+There is no arithmetic at run time: a lookup.
+
+**The generator's rule.** Entry `c` is the exact sRGB decode (IEC 61966-2-1
+constants) rounded to nearest to a raw Q32.32 unit:
+
+- for `c <= 10` (`c / 255 <= 0.04045`): `c / (255 * 12.92)`;
+- for `c >= 11`: `((c / 255 + 0.055) / 1.055)^2.4`.
+
+The table was generated once with 80-digit decimal arithmetic, rounding
+`x * 2^32` half up, and committed; the generator is not part of the build. No
+entry is within `0.002` of a rounding tie (entries 0 and 255 are exact
+integers), so the rounding mode never decided one. The power is irrational, so
+"rounded to nearest" is decided for each entry by exact comparison, not by a
+float: `n` is correct when `n - 1/2 < x < n + 1/2` for `x = 2^32 * u^(12/5)`,
+`u = (1000 c + 14 025) / 269 025`, and raising to the fifth power makes each
+bound an integer inequality, `2^165 * N^12` against `h^5 * D^12`, for the odd
+`h = 2n +- 1`. The test plan's OPTICS-TP-120 evaluates it with big integers.
+
+**Round trip.** `ToneCurve::SrgbV1.encode_8` of each decoded entry returns the
+original code, for all 256 codes (OPTICS-TP-121).
+
+Changing any entry is a new version with a new identity.
+
 ### Versioned Identities
 
 These names are contracts. Each one names exact output bits for every input,
@@ -1528,6 +1559,7 @@ name, and the old one keeps its bits.
 | --- | --- |
 | `bunny-tone-srgb/1` | `ToneCurve::SrgbV1`, as defined above, including the knot table, the floor and the hold. |
 | `bunny-tone-linear-clamp/1` | `ToneCurve::LinearClampV1`. |
+| `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`) | `srgb8_to_linear`, as defined above, including the table. |
 | `bunny-unorm8/1` (`UNORM8_IDENTITY`) | `quantize_8`. |
 | `bunny-unorm16/1` (`UNORM16_IDENTITY`) | `quantize_16`. |
 | `bunny-rgba8-opaque/1` (`RGBA8_OPAQUE_IDENTITY`) | `write_rgba8`'s bytes: red, green, blue `bunny-unorm8/1` codes of the toned channels, then alpha 255. |
