@@ -105,10 +105,9 @@ pub(crate) fn heitz(input: &ModelInput) -> ModelSample {
     let ne = normalize([mul(alpha, nh[0]), mul(alpha, nh[1]), nh[2].max(0)]);
     let facet_cosine = dot(ve, ne);
     let local = [0, 1, 2].map(|i| 2 * mul(facet_cosine, ne[i]) - ve[i]);
-    let direction =
-        [0, 1, 2].map(|i| {
-            mul(local[0], tangent[i]) + mul(local[1], bitangent[i]) + mul(local[2], normal[i])
-        });
+    let direction = [0, 1, 2].map(|i| {
+        mul(local[0], tangent[i]) + mul(local[1], bitangent[i]) + mul(local[2], normal[i])
+    });
     ModelSample { direction, cosine: local[2], facet_cosine }
 }
 

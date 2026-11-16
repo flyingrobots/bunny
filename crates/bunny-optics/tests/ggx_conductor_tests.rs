@@ -220,7 +220,10 @@ fn optics_tp_143_a_direction_that_does_not_leave_the_surface_is_absorbed() {
     let sample = [3 * (ONE / 4), ONE / 4].map(fixed);
     let result = hit.try_ggx_reflection(&down, &conductor(ONE, GOLD), sample);
     assert_eq!(result, Ok(GgxScatter::Absorbed));
-    assert_eq!(hit.ggx_reflection(&down, &conductor(ONE, GOLD), sample), Some(GgxScatter::Absorbed));
+    assert_eq!(
+        hit.ggx_reflection(&down, &conductor(ONE, GOLD), sample),
+        Some(GgxScatter::Absorbed)
+    );
     // A view below the rounded normal's horizon: no facet is visible, for any sample.
     let d = [ONE, 441_121_301, 1_116_683_283];
     let grazing = ray([-4_867_775_887, -4_958_630_880, 511_999_321], d);
@@ -371,14 +374,15 @@ fn seeded_case(seeds: &mut Seeds) -> Option<(SurfaceHit, TraceRay, Wide3)> {
         [usize::try_from(seeds.range(0, 3)).expect("a shape")];
     let d = seeded_direction(seeds, shape, sub(v[1], v[0]), plane);
     let reach = seeds.range(1, 1 << (bits + 2).min(38));
-    let origin: Raw3 = [0, 1, 2].map(|i| {
-        let back = (scaled_to_one(d.map(i128::from))[i] * i128::from(reach)) >> 32;
-        i64::try_from(i128::from(target[i]) - back).ok()
-    })
-    .into_iter()
-    .collect::<Option<Vec<i64>>>()?
-    .try_into()
-    .ok()?;
+    let origin: Raw3 = [0, 1, 2]
+        .map(|i| {
+            let back = (scaled_to_one(d.map(i128::from))[i] * i128::from(reach)) >> 32;
+            i64::try_from(i128::from(target[i]) - back).ok()
+        })
+        .into_iter()
+        .collect::<Option<Vec<i64>>>()?
+        .try_into()
+        .ok()?;
     let ray = TraceRay::new(vec3(origin), vec3(d))?;
     let hit = hit_of(v, &ray)?;
     // The exact normal of the face the ray arrived on.
@@ -589,7 +593,12 @@ fn optics_tp_145_the_weight_is_fresnel_times_the_smith_ratio() {
 }
 
 /// The model's input for one kernel call.
-fn model_input(hit: &SurfaceHit, incoming: &TraceRay, roughness: i64, sample: [i64; 2]) -> ModelInput {
+fn model_input(
+    hit: &SurfaceHit,
+    incoming: &TraceRay,
+    roughness: i64,
+    sample: [i64; 2],
+) -> ModelInput {
     let (sin, cos) = FixedAngle::from_turns(fixed(sample[1])).sin_cos();
     let (normal, d) = (wide(hit.frame().normal()), wide(incoming.direction()));
     ModelInput {
@@ -625,7 +634,8 @@ fn optics_tp_146_the_direction_follows_heitz_listing_at_60_bits() {
         let sample = [seeds.unit_raw(), seeds.range(0, ONE - 1)];
         reach.note(&hit, &incoming, (roughness, sample[0]));
         let model = heitz(&model_input(&hit, &incoming, roughness, sample));
-        let context = format!("seed {seed:#x} case {case}: roughness {roughness} sample {sample:?}");
+        let context =
+            format!("seed {seed:#x} case {case}: roughness {roughness} sample {sample:?}");
         let rim = sample[0] > MODEL_RIM;
         let Some((direction, _)) = scatter(&hit, &incoming, &conductor(roughness, GOLD), sample)
         else {
@@ -679,7 +689,9 @@ fn optics_tp_147_at_the_minimum_roughness_the_sample_approaches_the_mirror() {
         let Some((hit, incoming, _)) = seeded_case(&mut seeds) else { continue };
         let metal = conductor(MIN_GGX_ROUGHNESS_RAW, [0; 3].map(|_| seeds.reflectance()));
         let sample = [seeds.range(0, ONE / 2), seeds.range(0, ONE - 1)];
-        let Some(mirror) = hit.specular_reflection(&incoming, &metal.reflectance()) else { continue };
+        let Some(mirror) = hit.specular_reflection(&incoming, &metal.reflectance()) else {
+            continue;
+        };
         reach.note(&hit, &incoming, (MIN_GGX_ROUGHNESS_RAW, sample[0]));
         let mirror_direction = raw3(mirror.ray().direction());
         let cosine = round_raw(dot(mirror_direction.map(i128::from), wide(hit.frame().normal())));
@@ -701,7 +713,10 @@ fn optics_tp_147_at_the_minimum_roughness_the_sample_approaches_the_mirror() {
         }
         for (weight, mirrored) in throughput.into_iter().zip(mirror.throughput()) {
             let difference = (weight - mirrored.raw()).abs();
-            assert!(difference <= MIRROR_WEIGHT_BOUND, "{context}: a channel differs by {difference}");
+            assert!(
+                difference <= MIRROR_WEIGHT_BOUND,
+                "{context}: a channel differs by {difference}"
+            );
             worst_weight = worst_weight.max(difference);
         }
         weighed += 1;
