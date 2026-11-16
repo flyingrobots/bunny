@@ -1535,7 +1535,7 @@ run. The restored source passes.
 ### Box Mutation Checks
 
 Each rule below was broken in a copy of `trace/box_hit.rs` (flyingrobots/bunny#359) in the
-container and `cargo test --locked -q -p bunny-query --test trace_box_tests` run. The restored
+container, on the final source, and `cargo test --locked -q -p bunny-query --test trace_box_tests` run. The restored
 source passes all nine tests.
 
 | Mutation | Rule broken | Failing cases |
