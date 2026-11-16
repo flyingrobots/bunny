@@ -75,6 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-query`: `TraceSphere` and `TraceRay::hit_sphere`, the trace-domain
+  ray-sphere kernel under the contract `bunny-ray-sphere/1`. A hit has the
+  form of `TriangleHit` (a distance in multiples of the ray direction, rounded
+  down, and `front_face`, true when the ray enters from outside) plus the
+  outward normal. The discriminant is exact in 256-bit integers and its square
+  root is the exact floor, so the distance is the floor of the true distance.
+  `TraceSphere::new` refuses a centre or radius outside the trace domain, or a
+  radius that is not positive, with `TraceSphereError`. `ray_intersects_sphere`
+  is unchanged. Closes flyingrobots/bunny#358.
+
 * `bunny-optics`: the perfect mirror, `bunny-specular-reflection/1`
   (`SPECULAR_REFLECTION_ID`). `SurfaceHit::specular_reflection` and
   `try_specular_reflection` give the continuation ray from the hit's start
