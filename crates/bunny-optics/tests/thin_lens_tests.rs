@@ -214,7 +214,7 @@ fn optics_tp_132_disc_points_lie_inside_the_unit_disc_at_their_radius_and_angle(
         let angle_octant = u32::try_from(v >> 29).expect("below 8");
         // Within 2^-24 turn of an octant boundary the rounding may cross it.
         let into_octant = v & ((1 << 29) - 1);
-        let near_boundary = into_octant < 1 << 8 || into_octant > (1 << 29) - (1 << 8);
+        let near_boundary = !((1 << 8)..=(1 << 29) - (1 << 8)).contains(&into_octant);
         if squared > 0 && !near_boundary {
             assert_eq!(octant([x, y]), angle_octant, "u {u}, v {v}: ({x}, {y})");
         }
