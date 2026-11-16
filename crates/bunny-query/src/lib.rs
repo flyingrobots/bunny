@@ -38,6 +38,6 @@ pub use ray::{
 };
 pub use trace::{
     BoxHit, SphereHit, TraceBox, TraceBoxError, TraceRay, TraceSphere, TraceSphereError,
-    TraceTriangle, TriangleHit, RAY_BOX_ID, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
+    TraceTriangle, TriangleHit, RAY_BOX_ID, RAY_SPHERE_ID, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
     TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };

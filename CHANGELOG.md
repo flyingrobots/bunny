@@ -26,6 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-query`: the sphere kernel's normal is corrected under the same
+  identity, `bunny-ray-sphere/1`, now public as `RAY_SPHERE_ID`.
+  `SphereHit::normal` returns a `FixedUnitVec3`: the outward unit normal at
+  the exact (unrounded) root, normalized by Bunny's unit-vector rule (the
+  prescale to `[2^61, 2^62)` and `FixedUnitVec3::new` that triangle surfaces
+  use). Each component is within `1/2 + 2^-24` raw units of the exact unit
+  normal, for every admitted radius, and it is never zero. The rule it
+  replaces (the offset at the floored distance over the radius, floored) was
+  documented as "within a few raw units of 1.0", which was never true: at a
+  radius of 0.01 its length was `2^32 + 56` raw units and at a radius of 1 raw
+  unit it could be the zero vector. The identity is kept because the contract
+  merged on 2026-11-15 (flyingrobots/bunny#375), is in no release and has no
+  caller. Distances and facing are unchanged. Closes flyingrobots/bunny#422.
+
 * Code Dojo's dependency check holds every crate a deterministic crate
   depends on (normal and build edges, workspace and all features) to the
   scanned set: another deterministic crate at its own directory, or a

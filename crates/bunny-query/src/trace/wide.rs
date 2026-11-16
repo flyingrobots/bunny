@@ -45,12 +45,23 @@ impl U256 {
         Some(Self { hi, lo })
     }
 
-    /// `self * 2^64`, or `None` when the result is not below `2^256`.
-    pub(super) const fn checked_shl64(self) -> Option<Self> {
-        if self.hi >> 64 != 0 {
+    /// `self * 2^n` for `n < 256`, or `None` when the result is not below `2^256`.
+    pub(super) const fn checked_shl(self, n: u32) -> Option<Self> {
+        if n == 0 {
+            return Some(self);
+        }
+        if n >= 256 {
             return None;
         }
-        Some(Self { hi: (self.hi << 64) | (self.lo >> 64), lo: self.lo << 64 })
+        if n >= 128 {
+            let s = n - 128;
+            let fits = self.hi == 0 && (s == 0 || self.lo >> (128 - s) == 0);
+            return if fits { Some(Self { hi: self.lo << s, lo: 0 }) } else { None };
+        }
+        if self.hi >> (128 - n) != 0 {
+            return None;
+        }
+        Some(Self { hi: (self.hi << n) | (self.lo >> (128 - n)), lo: self.lo << n })
     }
 
     /// The floor of the square root, exactly.
@@ -116,12 +127,27 @@ mod tests {
             U256 { hi: 1, lo: 0 }.checked_sub(ONE),
             ONE.checked_sub(LOW_MAX),
             top.checked_add(ONE),
-            LOW_MAX.checked_shl64(),
-            U256 { hi: 1 << 64, lo: 0 }.checked_shl64(),
+            LOW_MAX.checked_shl(64),
+            U256 { hi: 1 << 64, lo: 0 }.checked_shl(64),
+            ONE.checked_shl(255),
+            U256 { hi: 0, lo: 2 }.checked_shl(255),
+            LOW_MAX.checked_shl(128),
+            U256 { hi: 0, lo: 3 }.checked_shl(200),
         ];
         let shifted = U256 { hi: u128::MAX >> 64, lo: u128::MAX << 64 };
         let expected =
-            [Some(U256 { hi: 1, lo: 0 }), Some(LOW_MAX), None, None, Some(shifted), None];
+            [
+            Some(U256 { hi: 1, lo: 0 }),
+            Some(LOW_MAX),
+            None,
+            None,
+            Some(shifted),
+            None,
+            Some(U256 { hi: 1 << 127, lo: 0 }),
+            None,
+            Some(U256 { hi: u128::MAX, lo: 0 }),
+            Some(U256 { hi: 3 << 72, lo: 0 }),
+        ];
         // dojo: allow panic-path -- test assertion against hand-computed values
         assert_eq!(got, expected);
     }
