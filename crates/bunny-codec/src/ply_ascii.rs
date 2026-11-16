@@ -7,7 +7,7 @@ mod error;
 mod header;
 mod limits;
 
-use body::{read_triangle, read_vertex, trim_blank, Lines};
+use body::{read_texture_coordinate, read_triangle, read_vertex, trim_blank, Lines};
 pub use decimal::{
     parse_decimal_q32_32, DecimalError, DECIMAL_Q32_32_ID, MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
 };
@@ -30,6 +30,17 @@ pub struct AsciiPlyVertex {
     pub y: FixedQ32_32,
     /// Z coordinate.
     pub z: FixedQ32_32,
+}
+
+/// A PLY texture coordinate in Q32.32, converted exactly from decimal text.
+///
+/// `u` is read from the vertex property `s` or `u`, and `v` from `t` or `v`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AsciiPlyTextureCoordinate {
+    /// First texture coordinate (`s` or `u`).
+    pub u: FixedQ32_32,
+    /// Second texture coordinate (`t` or `v`).
+    pub v: FixedQ32_32,
 }
 
 /// A borrowed, fully validated ASCII PLY triangle mesh.
@@ -69,6 +80,30 @@ impl<'a> AsciiPlyMesh<'a> {
         }
     }
 
+    /// Returns whether the vertex element declares texture coordinates (`s` and `t`,
+    /// or `u` and `v`).
+    #[must_use]
+    pub const fn has_texture_coordinates(&self) -> bool {
+        self.spec.texture_slots.is_some()
+    }
+
+    /// Returns a forward iterator over the per-vertex texture coordinates, in vertex
+    /// order, or `None` when the file declares none.
+    ///
+    /// The iterator does not allocate. Each item is `Ok` because the mesh was
+    /// validated when it was parsed.
+    #[must_use]
+    pub const fn texture_coordinates(&self) -> Option<AsciiPlyTextureCoordinates<'a>> {
+        if self.spec.texture_slots.is_none() {
+            return None;
+        }
+        Some(AsciiPlyTextureCoordinates {
+            lines: self.vertex_lines,
+            spec: self.spec,
+            remaining: self.spec.vertex_count,
+        })
+    }
+
     /// Returns a forward iterator over the triangles.
     ///
     /// The iterator does not allocate. Each item is `Ok` because the mesh was
@@ -104,6 +139,27 @@ impl Iterator for AsciiPlyVertices<'_> {
     }
 }
 
+/// Forward iterator over the texture coordinates of an [`AsciiPlyMesh`].
+#[derive(Clone, Debug)]
+pub struct AsciiPlyTextureCoordinates<'a> {
+    lines: Lines<'a>,
+    spec: HeaderSpec,
+    remaining: usize,
+}
+
+impl Iterator for AsciiPlyTextureCoordinates<'_> {
+    type Item = Result<AsciiPlyTextureCoordinate, AsciiPlyError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let (number, line) = self.lines.next_record()?;
+        read_texture_coordinate(line, number, &self.spec).transpose()
+    }
+}
+
 /// Forward iterator over the triangles of an [`AsciiPlyMesh`].
 #[derive(Clone, Debug)]
 pub struct AsciiPlyTriangles<'a> {
@@ -127,7 +183,8 @@ impl Iterator for AsciiPlyTriangles<'_> {
 
 /// Parses an ASCII PLY triangle mesh (`bunny-ascii-ply-triangle-mesh/1`).
 ///
-/// Coordinates are converted from decimal text to Q32.32 with the exact rule
+/// Coordinates, and texture coordinates when the vertex element declares `s` and `t`
+/// or `u` and `v`, are converted from decimal text to Q32.32 with the exact rule
 /// `bunny-decimal-q32-32/1` (see [`parse_decimal_q32_32`]). The profile, the
 /// line, whitespace and comment rules, and the error contract are in
 /// `docs/topics/ascii-ply/README.md`.

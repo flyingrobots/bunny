@@ -7,6 +7,8 @@ pub(super) struct HeaderSpec {
     pub(super) face_count: usize,
     pub(super) vertex_properties: usize,
     pub(super) coordinate_slots: [usize; 3],
+    /// Slots of the texture coordinates, `s` and `t` or `u` and `v`, when declared.
+    pub(super) texture_slots: Option<[usize; 2]>,
     /// 1-based line of `element vertex` and `element face`, for the limits entry point.
     pub(super) vertex_line: usize,
     pub(super) face_line: usize,
@@ -29,11 +31,17 @@ struct State {
     face_count: Option<usize>,
     vertex_properties: usize,
     slots: [Option<usize>; 3],
+    /// Slot and declaring line of `s`, `t`, `u` and `v`, in that order.
+    texture: [Option<(usize, usize)>; 4],
     face_property_seen: bool,
     vertex_line: usize,
     face_line: usize,
+    /// 1-based number of the header line being parsed.
+    line: usize,
 }
 
+/// Texture coordinate names: `s`, `t` and `u`, `v` are the two accepted pairs.
+const TEXTURE_NAMES: [&str; 4] = ["s", "t", "u", "v"];
 const COORDINATE_TYPES: [&str; 4] = ["float", "float32", "double", "float64"];
 const SCALAR_TYPES: [&str; 16] = [
     "char", "uchar", "short", "ushort", "int", "uint", "float", "double", "int8", "uint8", "int16",
@@ -52,6 +60,7 @@ pub(super) fn parse_header(header: &str, end_line: usize) -> Result<HeaderSpec, 
     let mut state = State::default();
     for (index, line) in lines.enumerate() {
         let (had_vertex, had_face) = (state.vertex_count.is_some(), state.face_count.is_some());
+        state.line = index + 2;
         parse_line(line, &mut state).map_err(|kind| AsciiPlyError::new(kind, index + 2))?;
         if !had_vertex && state.vertex_count.is_some() {
             state.vertex_line = index + 2;
@@ -60,10 +69,28 @@ pub(super) fn parse_header(header: &str, end_line: usize) -> Result<HeaderSpec, 
             state.face_line = index + 2;
         }
     }
-    state.finish().map_err(|kind| AsciiPlyError::new(kind, end_line))
+    let texture_slots = state.texture_slots();
+    let mut spec = state.finish().map_err(|kind| AsciiPlyError::new(kind, end_line))?;
+    spec.texture_slots = texture_slots?;
+    Ok(spec)
 }
 
 impl State {
+    /// Pairs the declared texture names. Anything but exactly one complete pair, or
+    /// none, is `UnsupportedProperty` at the line of the last texture name declared.
+    fn texture_slots(&self) -> Result<Option<[usize; 2]>, AsciiPlyError> {
+        match self.texture {
+            [None, None, None, None] => Ok(None),
+            [Some((s, _)), Some((t, _)), None, None] | [None, None, Some((s, _)), Some((t, _))] => {
+                Ok(Some([s, t]))
+            }
+            declared => {
+                let line = declared.into_iter().flatten().map(|(_, line)| line).max();
+                Err(AsciiPlyError::new(Kind::UnsupportedProperty, line.unwrap_or_default()))
+            }
+        }
+    }
+
     fn finish(self) -> Result<HeaderSpec, Kind> {
         if !self.format_seen {
             return Err(Kind::UnsupportedFormat);
@@ -79,6 +106,7 @@ impl State {
             face_count: self.face_count.ok_or(Kind::MissingFaceElement)?,
             vertex_properties: self.vertex_properties,
             coordinate_slots: [x, y, z],
+            texture_slots: None,
             vertex_line: self.vertex_line,
             face_line: self.face_line,
         })
@@ -191,6 +219,13 @@ fn parse_vertex_property<'a>(
             return Err(Kind::UnsupportedProperty);
         }
         *slot = Some(state.vertex_properties);
+    }
+    if let Some(index) = TEXTURE_NAMES.iter().position(|texture| *texture == name) {
+        let slot = state.texture.get_mut(index).ok_or(Kind::UnsupportedProperty)?;
+        if slot.is_some() || !COORDINATE_TYPES.contains(&kind) {
+            return Err(Kind::UnsupportedProperty);
+        }
+        *slot = Some((state.vertex_properties, state.line));
     }
     state.vertex_properties += 1;
     Ok(())
