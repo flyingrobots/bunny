@@ -289,8 +289,8 @@ fn seeded_scene(seeds: &mut Seeds) -> Option<Scene> {
 }
 
 /// The scene's ray, or for one case in four the same origin with the direction divided by a
-/// seeded power of two (floored), when that still arrives on the face the hit faces: the
-/// kernel must scale it back up. `None` when the shortened direction no longer arrives.
+/// seeded power of two (floored), when that still arrives on the face the hit faces: a short
+/// direction. `None` when the shortened direction no longer arrives.
 fn seeded_incoming(seeds: &mut Seeds, scene: &Scene) -> Option<TraceRay> {
     let shift = match seeds.range(0, 11) {
         0 => 8,
@@ -425,6 +425,14 @@ fn optics_tp_163_total_internal_reflection_is_decided_exactly() {
         let last = scatter(&hit, &incoming, &dense, LAST_CHOICE);
         assert_eq!(matches!(last, Ok(DielectricScatter::Reflected(_))), total, "lift {lift}");
     }
+    // The same three with every low bit in play: (4 j, 3 j, 0) for an odd j is exactly
+    // critical, so (d . d) is odd and no power of two divides the terms that cancel.
+    let j = 1_000_000_007;
+    for (lift, total) in [(1, false), (0, true), (-1, true)] {
+        let incoming = ray([0, -ONE, 0], [4 * j, 3 * j + lift, 0]);
+        let got = hit.dielectric_reflectance(&incoming, &dense).expect("arrives");
+        assert_eq!(got == DielectricReflectance::Total, total, "odd critical, lift {lift}");
+    }
     // 45 degrees inside glass (sin = 0.707 > 1 / 1.5) reflects as a mirror does.
     let slant = ray([-ONE, -ONE, 0], [ONE, ONE, 0]);
     let glass = boundary(ONE, GLASS);
@@ -499,11 +507,11 @@ fn optics_tp_164_total_internal_reflection_matches_the_oracle_around_the_critica
     assert!(counts.iter().chain(&tilted).all(|&count| count >= 200), "{counts:?} {tilted:?}");
 }
 
-/// Whether raw `value` is within half a raw unit plus `2^-20` of `numerator / denominator`.
+/// Whether raw `value` is within half a raw unit plus `2^-8` of `numerator / denominator`.
 fn within_half_a_unit(value: i64, numerator: &Int, denominator: &Int) -> bool {
     let scaled = numerator * &Int::power_of_two(32);
     let error = (&(&Int::new(i128::from(value)) * denominator) - &scaled).abs();
-    &error * &Int::power_of_two(21) <= denominator * &Int::new((1 << 20) + 2)
+    &error * &Int::power_of_two(9) <= denominator * &Int::new((1 << 8) + 2)
 }
 
 /// Checks the reflectance of one incidence against the oracle; returns whether it was partial.

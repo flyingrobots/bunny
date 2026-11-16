@@ -9,8 +9,6 @@ use bunny_num::FixedQ32_32;
 use super::wide::{dot, narrow, pick, round_shift, wide, Wide, ONE};
 use super::wide256::U256;
 
-/// The bit a direction's largest component magnitude is scaled up to.
-const DIRECTION_BIT: u32 = 31;
 /// The bit a refracted vector's largest component magnitude is scaled down to before it is
 /// normalized, as `wide::unit` does.
 const PRESCALE_BIT: u32 = 61;
@@ -20,10 +18,8 @@ const RATIO_BITS: u32 = 62;
 /// A direction `d` arriving at a surface with unit normal `n`, from the medium of index `a`
 /// into the medium of index `b`, with `m = -(d . n) > 0`.
 ///
-/// `d` is the incoming direction scaled by the power of two that puts its largest component
-/// magnitude in `[2^31, 2^32]`, which is exact. Bounds: `|d_i| <= 2^32`, `|n_i| <= 2^32 + 1`,
-/// so `d . d` and `n . n` are below `2^66`, `m` is below `2^67`, and `a`, `b` are in
-/// `2^32..=2^35`.
+/// Bounds: `|d_i|` and `|n_i|` are at most `2^32 + 1`, so `d . d` and `n . n` are below
+/// `2^66` and `m` is below `2^67`; `a` and `b` are in `2^32..=2^35`.
 #[derive(Clone, Copy)]
 pub struct Incidence {
     a: u128,
@@ -39,13 +35,10 @@ impl Incidence {
     /// The incidence of `direction` on `normal`, or `None` when `direction . normal >= 0`:
     /// the direction does not arrive against the normal.
     pub fn new(direction: Wide, normal: Wide, indices: [i64; 2]) -> Option<Self> {
-        let top = direction.map(i128::unsigned_abs).into_iter().max()?;
-        let shift = DIRECTION_BIT.saturating_sub(top.checked_ilog2()?);
-        let d = direction.map(|c| c << shift);
-        let m = u128::try_from(-dot(d, normal)).ok().filter(|&m| m > 0)?;
+        let m = u128::try_from(-dot(direction, normal)).ok().filter(|&m| m > 0)?;
         let [a, b] = indices.map(|index| u128::from(index.unsigned_abs()));
-        let (dd, nn) = (dot(d, d).unsigned_abs(), dot(normal, normal).unsigned_abs());
-        Some(Self { a, b, d, n: normal, dd, nn, m })
+        let dd = dot(direction, direction).unsigned_abs();
+        Some(Self { a, b, d: direction, n: normal, dd, nn: dot(normal, normal).unsigned_abs(), m })
     }
 
     /// `floor(sqrt(K))` with `K = b^2 (d.d)(n.n) - a^2 ((d.d)(n.n) - (d.n)^2)`, or `None`
@@ -79,7 +72,7 @@ impl Incidence {
     /// The unit vector along `T = a (d (n.n) - (d.n) n) - q n` for the root `q` of
     /// [`Self::root`], clamped to `-1.0..=1.0` per component: the refracted direction.
     ///
-    /// `T` is exact in 256 bits. Its length is `b (n.n) |d|`, at least `2^126`, so it is always
+    /// `T` is exact in 256 bits. Its length is `b (n.n) |d|`, at least `2^95`, so it is always
     /// scaled down: each component magnitude is divided by the power of two that puts the
     /// largest in `[2^61, 2^62)`, truncated toward zero, and the result is normalized by
     /// `FixedUnitVec3::new`. Zero if that refuses, which no input is known to reach.

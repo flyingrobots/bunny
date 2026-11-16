@@ -106,9 +106,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ReflectionBelowSurface`. No existing output changes. Closes
   flyingrobots/bunny#370.
 
-* `bunny-optics`: the smooth dielectric, `bunny-dielectric/1`: the reflected
-  or refracted continuation ray at a boundary between two refractive indices
-  (in progress). Closes flyingrobots/bunny#372.
+* `bunny-optics`: the smooth dielectric, `bunny-dielectric/1`
+  (`DIELECTRIC_ID`). `SurfaceHit::dielectric_scatter` and
+  `try_dielectric_scatter` give the reflected or the refracted continuation
+  ray at a boundary between two refractive indices, chosen by one sampler
+  value, as a `DielectricScatter` (`Reflected` or `Refracted`, each a
+  `SpecularSample`). A `DielectricBoundary` holds the index outside the
+  triangle's front face and the index behind it, each in `1.0..=8.0`
+  (`MAX_REFRACTIVE_INDEX_RAW`, else `RefractiveIndexError`); the hit's facing,
+  now public as `SurfaceHit::front_face`, decides which the ray arrives
+  through. Total internal reflection is decided by one exact 256-bit integer
+  comparison. `dielectric_reflectance` gives a `DielectricReflectance`:
+  `Total`, or `Partial` with the exact unpolarized Fresnel formula rounded
+  once, within one raw unit; it is the probability of reflection, so each
+  branch's throughput is exactly 1.0. The refracted direction is within one
+  raw unit of Snell's law about the frame normal, and its ray starts at the
+  nearest point strictly on the far side of the exact plane, at most five
+  raw-unit steps from the hit's start point. A slab with parallel faces
+  returns the original direction within `1 + 6 h / c` raw units (index ratio
+  `h`, rarer-side cosine `c`). Two new `SecondaryRayError` variants,
+  `ChoiceOutsideUnitInterval` and `RefractionAboveSurface`. Radiance scaling
+  on entering a medium, rough transmission, dispersion and absorption are not
+  modelled. No existing output changes. Closes flyingrobots/bunny#372.
 
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and

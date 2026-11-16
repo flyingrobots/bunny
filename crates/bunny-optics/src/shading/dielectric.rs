@@ -141,10 +141,9 @@ impl DielectricScatter {
 impl SurfaceHit {
     /// The reflectance of `boundary` at this hit for the ray `incoming` that reached it.
     ///
-    /// With `d` the incoming direction scaled by a power of two until its largest component
-    /// magnitude is in `0.5..=1.0` (exact), `n` the facing frame normal ([`Self::frame`]),
-    /// `a` the index of the medium the ray arrives through and `b` the other
-    /// ([`DielectricBoundary`], by [`Self::front_face`]), all as raw integers:
+    /// With `d` the incoming direction, `n` the facing frame normal ([`Self::frame`]), `a` the
+    /// index of the medium the ray arrives through and `b` the other ([`DielectricBoundary`],
+    /// by [`Self::front_face`]), all as raw integers:
     ///
     /// 1. **Grazing.** When `m = -(d . n) <= 0` the ray arrives along or behind the plane of
     ///    the rounded normal: `Partial(1.0)`.
@@ -155,8 +154,8 @@ impl SurfaceHit {
     /// 3. **Reflectance.** With `q = floor(sqrt(K))`, the exact unpolarized Fresnel formula
     ///    `(r_s^2 + r_p^2) / 2`, `r_s = (a m - q) / (a m + q)` and
     ///    `r_p = (b^2 m - a q) / (b^2 m + a q)`. Each ratio is held to 62 fraction bits and the
-    ///    result rounded once to nearest, ties to even: within one raw unit (half a unit plus
-    ///    `2^-27`) of the exact formula. Equal indices give exactly zero.
+    ///    result rounded once to nearest, ties to even: within one raw unit of the exact
+    ///    formula (half a unit plus at most `2^-8`). Equal indices give exactly zero.
     ///
     /// # Errors
     ///

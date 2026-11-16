@@ -77,6 +77,16 @@ every buffer.
   reflectance exactly at normal incidence), as a `SpecularSample`; a ray from
   below the face and a grazing reflection under the plane are refused with a
   `SecondaryRayError`.
+* `SurfaceHit::dielectric_scatter` (`bunny-dielectric/1`): the reflected or
+  refracted continuation ray at a smooth boundary between two refractive
+  indices (`DielectricBoundary`, each in `1.0..=8.0`, ordered by the hit's
+  facing), chosen by one sampler value. Total internal reflection is one exact
+  256-bit integer comparison; the reflectance is the exact unpolarized Fresnel
+  formula rounded once (within one raw unit) and is the probability of
+  reflection, so each branch's throughput is exactly 1.0; the refracted
+  direction is within one raw unit of Snell's law about the frame normal, and
+  its ray starts at the nearest point strictly on the far side of the exact
+  plane. The result is a `DielectricScatter` holding a `SpecularSample`.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
