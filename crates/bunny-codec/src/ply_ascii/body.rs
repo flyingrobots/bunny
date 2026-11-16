@@ -3,7 +3,7 @@ use bunny_num::FixedQ32_32;
 
 use super::decimal::parse_decimal_q32_32;
 use super::header::HeaderSpec;
-use super::{AsciiPlyError, AsciiPlyErrorKind as Kind, AsciiPlyVertex};
+use super::{AsciiPlyError, AsciiPlyErrorKind as Kind, AsciiPlyTextureCoordinate, AsciiPlyVertex};
 
 /// Cursor over the lines of the input. A line ends at `\n`, and one `\r` directly
 /// before it belongs to the terminator. The last line may lack a terminator.
@@ -89,7 +89,27 @@ pub(super) fn read_vertex(
         parse_decimal_q32_32(token).map_err(|error| fail(error.into()))
     };
     let [x, y, z] = spec.coordinate_slots;
-    Ok(AsciiPlyVertex { x: coordinate(x)?, y: coordinate(y)?, z: coordinate(z)? })
+    let vertex = AsciiPlyVertex { x: coordinate(x)?, y: coordinate(y)?, z: coordinate(z)? };
+    read_texture_coordinate(line, number, spec)?;
+    Ok(vertex)
+}
+
+/// Reads the texture coordinate of a vertex line that [`read_vertex`] accepted.
+/// Returns `Ok(None)` when the header declares no texture coordinates.
+pub(super) fn read_texture_coordinate(
+    line: &[u8],
+    number: usize,
+    spec: &HeaderSpec,
+) -> Result<Option<AsciiPlyTextureCoordinate>, AsciiPlyError> {
+    let Some([u, v]) = spec.texture_slots else {
+        return Ok(None);
+    };
+    let fail = |kind: Kind| AsciiPlyError::new(kind, number);
+    let coordinate = |slot: usize| -> Result<FixedQ32_32, AsciiPlyError> {
+        let token = tokens(line).nth(slot).ok_or_else(|| fail(Kind::VertexFieldCount))?;
+        parse_decimal_q32_32(token).map_err(|error| fail(error.into()))
+    };
+    Ok(Some(AsciiPlyTextureCoordinate { u: coordinate(u)?, v: coordinate(v)? }))
 }
 
 pub(super) fn read_triangle(
