@@ -12,6 +12,9 @@
 //! each vertex of an indexed mesh the area-weighted unit normal of the faces around it, and
 //! [`smooth_normal`] (`bunny-smooth-normal/1`) interpolates three of them at a point of a
 //! triangle; [`SmoothHit`] (`bunny-smooth-shading/1`) shades a hit with it.
+//!
+//! [`SurfaceHit::specular_reflection`] (`bunny-specular-reflection/1`) gives the continuation
+//! ray of a perfect mirror and its [`schlick_fresnel`] throughput as a [`SpecularSample`].
 
 mod frame;
 mod hit;
@@ -19,6 +22,7 @@ mod light;
 mod refusal;
 mod smooth_hit;
 mod smooth_normal;
+mod specular;
 mod surface;
 mod vertex_normals;
 mod wide;
@@ -29,6 +33,7 @@ pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;
 pub use smooth_hit::{SmoothBounce, SmoothHit, SMOOTH_SHADING_ID};
 pub use smooth_normal::{smooth_normal, SMOOTH_NORMAL_ID};
+pub use specular::{schlick_fresnel, SpecularSample, SPECULAR_REFLECTION_ID};
 pub use surface::TriangleSurface;
 pub use vertex_normals::{
     VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTEX_NORMALS_ID,
