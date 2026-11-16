@@ -336,7 +336,10 @@ fn trace_tp_560_hits_match_an_exact_rational_oracle_on_generated_rays() {
     }
     // Each floor is about 75 % of what the fixed seed reaches (counts in the test plan).
     let [misses, front, back] = reached;
-    let context = format!("seed={DISC_ORACLE_SEED:#018x} reached={reached:?} behind={behind} discriminating={discriminating}");
+    let context = format!(
+        "seed={DISC_ORACLE_SEED:#018x} reached={reached:?} behind={behind} \
+         discriminating={discriminating}"
+    );
     assert!(misses >= MISS_FLOOR && front >= FRONT_FLOOR && back >= BACK_FLOOR, "{context}");
     assert!(behind >= BEHIND_FLOOR && discriminating >= DISCRIMINATING_FLOOR, "{context}");
 }
