@@ -77,6 +77,11 @@ every buffer.
   reflectance exactly at normal incidence), as a `SpecularSample`; a ray from
   below the face and a grazing reflection under the plane are refused with a
   `SecondaryRayError`.
+* `interpolate_uv` and `bilinear` (`bunny-texture-bilinear/1`): a
+  triangle's texture coordinates at a hit, rounded once from the exact
+  barycentric interpolation, and the four texels and weights of a bilinear
+  lookup (texel centres at `(i + 1/2) / size`, `TextureWrap::Repeat` or
+  `Clamp` per axis, weights summing to exactly 1.0), as a `BilinearTaps`.
 * `SurfaceHit::ggx_reflection` (`bunny-ggx-conductor/1`): one sample of a
   rough metal. A GGX microfacet normal visible from the incoming ray (Heitz
   2018) from one sampler pair, the reflection about it (`reflect`, shared with
@@ -91,6 +96,9 @@ every buffer.
 * `ToneCurve`: `SrgbV1` (`bunny-tone-srgb/1`, the sRGB transfer function from a
   1 153-knot table, within `1.49 * 10^-6` of the exact curve and monotone) and
   `LinearClampV1` (`bunny-tone-linear-clamp/1`).
+* `srgb8_to_linear` (`bunny-srgb8-decode/1`): the linear light of an 8-bit
+  sRGB code from a 256-entry table, each entry the exact decode rounded to
+  nearest; `bunny-tone-srgb/1` encodes each back to its code.
 * `quantize_8`, `quantize_16` (`bunny-unorm8/1`, `bunny-unorm16/1`): codes
   rounded to nearest with ties to even; `write_rgba8` writes one opaque RGBA8
   pixel (`bunny-rgba8-opaque/1`) into a caller-provided four-byte slice.

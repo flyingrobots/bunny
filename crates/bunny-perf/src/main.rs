@@ -38,6 +38,8 @@ mod scene;
 mod shade;
 #[cfg(feature = "smooth")]
 mod smooth;
+#[cfg(feature = "texture")]
+mod texture;
 mod timing;
 
 use std::error::Error;

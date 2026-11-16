@@ -38,6 +38,10 @@
 //! throughput, and [`SurfaceHit::ggx_reflection`] (`bunny-ggx-conductor/1`) samples a rough
 //! conductor's GGX lobe and weights it.
 //!
+//! [`interpolate_uv`] gives a triangle's texture coordinates at a hit from its barycentric
+//! numerators, and [`bilinear`] the four texels and weights of a bilinear lookup, with
+//! [`TextureWrap`] repeat or clamp (`bunny-texture-bilinear/1`).
+//!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
 //! maps linear radiance to a display value, and [`quantize_8`], [`quantize_16`] and
@@ -67,6 +71,7 @@ mod point;
 mod sampler;
 #[allow(unreachable_pub)]
 mod shading;
+mod texture;
 mod xoroshiro;
 
 pub use camera::{
@@ -75,9 +80,9 @@ pub use camera::{
 pub use error::CameraError;
 pub use hash::{fraction_from_bits, PixelStream, SAMPLE_HASH_ID};
 pub use pixel::{
-    quantize_16, quantize_8, write_rgba8, PixelAccumulator, PixelError, ToneCurve,
-    MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW, RGBA8_OPAQUE_IDENTITY, UNORM16_IDENTITY,
-    UNORM8_IDENTITY,
+    quantize_16, quantize_8, srgb8_to_linear, write_rgba8, PixelAccumulator, PixelError, ToneCurve,
+    MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW, RGBA8_OPAQUE_IDENTITY, SRGB8_DECODE_IDENTITY,
+    UNORM16_IDENTITY, UNORM8_IDENTITY,
 };
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
@@ -89,4 +94,5 @@ pub use shading::{
     MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, MIN_GGX_ROUGHNESS_RAW, PI, SHADING_ID,
     SHADOW_T_MAX, SMOOTH_NORMAL_ID, SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
+pub use texture::{bilinear, interpolate_uv, BilinearTaps, TextureWrap, TEXTURE_BILINEAR_ID};
 pub use xoroshiro::Xoroshiro128Plus;

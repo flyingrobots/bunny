@@ -3,7 +3,7 @@
 use std::fmt;
 
 use super::body::{is_blank, read_triangle, read_vertex, Lines};
-use super::header::parse_header;
+use super::header::{parse_header, Profile};
 use super::{split_header, AsciiPlyError, AsciiPlyErrorKind, AsciiPlyMesh};
 
 /// Which limit of [`AsciiPlyLimits`] an input went past.
@@ -187,10 +187,35 @@ pub fn parse_ascii_ply_with_limits<'a>(
     input: &'a [u8],
     limits: &AsciiPlyLimits,
 ) -> Result<AsciiPlyMesh<'a>, AsciiPlyLimitedError> {
+    parse_limited(input, limits, Profile::V1)
+}
+
+/// Parses an ASCII PLY triangle mesh with texture coordinates
+/// (`bunny-ascii-ply-triangle-mesh/2`) within `limits`.
+///
+/// It is [`parse_ascii_ply_with_limits`] under the profile of
+/// [`parse_ascii_ply_v2`](super::parse_ascii_ply_v2): the same limits, checked in the same
+/// order.
+///
+/// # Errors
+/// Returns [`AsciiPlyLimitedError::Limit`] when a limit is exceeded and
+/// [`AsciiPlyLimitedError::Format`] when the input does not match the profile.
+pub fn parse_ascii_ply_v2_with_limits<'a>(
+    input: &'a [u8],
+    limits: &AsciiPlyLimits,
+) -> Result<AsciiPlyMesh<'a>, AsciiPlyLimitedError> {
+    parse_limited(input, limits, Profile::V2)
+}
+
+fn parse_limited<'a>(
+    input: &'a [u8],
+    limits: &AsciiPlyLimits,
+    profile: Profile,
+) -> Result<AsciiPlyMesh<'a>, AsciiPlyLimitedError> {
     let (header, end_line, body_start) = split_header(input)?;
     let mut header_lines = Lines::new(input.get(..body_start).unwrap_or_default(), 1);
     while next_checked(&mut header_lines, limits.max_line_bytes, false)?.is_some() {}
-    let spec = parse_header(header, end_line)?;
+    let spec = parse_header(header, end_line, profile)?;
     count_within(
         AsciiPlyLimit::Vertices,
         spec.vertex_count,
