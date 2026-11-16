@@ -15,19 +15,29 @@
 //!
 //! [`SurfaceHit::specular_reflection`] (`bunny-specular-reflection/1`) gives the continuation
 //! ray of a perfect mirror and its [`schlick_fresnel`] throughput as a [`SpecularSample`].
+//!
+//! [`SurfaceHit::ggx_reflection`] (`bunny-ggx-conductor/1`) samples a rough conductor: a GGX
+//! microfacet normal visible from the incoming ray, the mirror about it, and the weight
+//! `F G2 / G1`, as a [`GgxScatter`].
 
 mod frame;
+mod ggx;
 mod hit;
 mod light;
 mod refusal;
+mod smith;
 mod smooth_hit;
 mod smooth_normal;
 mod specular;
 mod surface;
 mod vertex_normals;
+mod visible_normal;
 mod wide;
 
 pub use frame::ShadingFrame;
+pub use ggx::{
+    GgxConductor, GgxRoughnessError, GgxScatter, GGX_CONDUCTOR_ID, MIN_GGX_ROUGHNESS_RAW,
+};
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;

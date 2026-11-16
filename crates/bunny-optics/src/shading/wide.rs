@@ -54,7 +54,7 @@ pub const fn cross(a: Wide, b: Wide) -> Wide {
 pub const fn div_round(numerator: i128, denominator: i128) -> i128 {
     let (n, d) = (numerator.unsigned_abs(), denominator.unsigned_abs());
     let (quotient, remainder) = (n / d, n % d);
-    // remainder < d <= 2^64 in every caller, so doubling it cannot overflow.
+    // remainder < d < 2^126 in every caller, so doubling it cannot overflow.
     let twice = remainder * 2;
     let magnitude =
         if twice > d || (twice == d && quotient & 1 == 1) { quotient + 1 } else { quotient };
