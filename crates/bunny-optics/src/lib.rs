@@ -81,10 +81,11 @@ pub use pixel::{
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
-    schlick_fresnel, smooth_normal, Albedo, DirectionalLight, LightSample, SecondaryRayError,
-    ShadingError, ShadingFrame, SkyLight, SmoothBounce, SmoothHit, SpecularSample, SurfaceHit,
-    TriangleSurface, VertexNormalError, VertexNormals, FRAC_1_PI, MAX_LIGHT_RAW,
-    MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX, SMOOTH_NORMAL_ID,
-    SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
+    schlick_fresnel, smooth_normal, Albedo, DirectionalLight, LightSample, PointLight,
+    PointLightError, SecondaryRayError, ShadingError, ShadingFrame, SkyLight, SmoothBounce,
+    SmoothHit, SpecularSample, SurfaceHit, TriangleSurface, VertexNormalError, VertexNormals,
+    FRAC_1_PI, MAX_LIGHT_RAW, MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, MIN_LIGHT_DISTANCE_RAW,
+    PI, POINT_LIGHT_ID, SHADING_ID, SHADOW_T_MAX, SMOOTH_NORMAL_ID, SMOOTH_SHADING_ID,
+    SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
 pub use xoroshiro::Xoroshiro128Plus;

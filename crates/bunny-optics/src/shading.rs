@@ -15,10 +15,14 @@
 //!
 //! [`SurfaceHit::specular_reflection`] (`bunny-specular-reflection/1`) gives the continuation
 //! ray of a perfect mirror and its [`schlick_fresnel`] throughput as a [`SpecularSample`].
+//!
+//! [`SurfaceHit::point_light_sample`] (`bunny-point-light/1`) gives a [`PointLight`]'s term,
+//! with inverse-square falloff, and a shadow ray that ends at the light.
 
 mod frame;
 mod hit;
 mod light;
+mod point_light;
 mod refusal;
 mod smooth_hit;
 mod smooth_normal;
@@ -30,6 +34,7 @@ mod wide;
 pub use frame::ShadingFrame;
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
+pub use point_light::{PointLight, PointLightError, MIN_LIGHT_DISTANCE_RAW, POINT_LIGHT_ID};
 pub use refusal::SecondaryRayError;
 pub use smooth_hit::{SmoothBounce, SmoothHit, SMOOTH_SHADING_ID};
 pub use smooth_normal::{smooth_normal, SMOOTH_NORMAL_ID};

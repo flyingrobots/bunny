@@ -75,6 +75,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`: the point light, `bunny-point-light/1` (`POINT_LIGHT_ID`).
+  `PointLight::new(position, intensity)` takes a position in the trace domain
+  and a radiant intensity per channel; `PointLight::irradiance` gives
+  `intensity * cos / d^2` with the cosine normalized once and the division by
+  the exact squared distance and the product each rounded once to nearest,
+  ties to even. `SurfaceHit::point_light_sample` returns a `LightSample` whose
+  shadow ray runs toward the light with its largest component exactly 1.0 and
+  whose new `shadow_t_max` is one raw unit short of the light, so an occluder
+  counts exactly when it is nearer than the light; a directional light's
+  sample reports `SHADOW_T_MAX`, so a renderer queries both alike. A point at
+  most 1/128 unit (`MIN_LIGHT_DISTANCE_RAW`, raw `2^25`) from the light is
+  refused with `PointLightError::TooNear`, not divided by zero. No existing
+  output changes. Closes flyingrobots/bunny#365.
+
 * `bunny-optics`: the perfect mirror, `bunny-specular-reflection/1`
   (`SPECULAR_REFLECTION_ID`). `SurfaceHit::specular_reflection` and
   `try_specular_reflection` give the continuation ray from the hit's start
