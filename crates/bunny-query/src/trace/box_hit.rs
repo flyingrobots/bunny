@@ -113,7 +113,7 @@ impl Crossing {
         (self.numerator * other.denominator).cmp(&(other.numerator * self.denominator))
     }
 
-    fn floor(&self) -> i128 {
+    const fn floor(&self) -> i128 {
         self.numerator.div_euclid(self.denominator)
     }
 }
