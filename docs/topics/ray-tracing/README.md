@@ -35,6 +35,9 @@ as:
 - `TraceSphere` (`new`, `center`, `radius`, `bounds`), `TraceSphereError`,
   `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
   in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
+- `TraceDisc` (`new`, `height`, `radius`, `bounds`), `TraceDiscError`,
+  `DiscHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_disc`, in
+  `crates/bunny-query/src/trace/disc.rs` (see [Ray-Disc](#ray-disc));
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
 - `TRACE_COORD_LIMIT_RAW`, `TRACE_DIRECTION_LIMIT_RAW` and
@@ -325,6 +328,70 @@ spare.
   root is reported, with `front_face == false`.
 - **Behind the origin.** When both rounded roots are below `t_min` there is no
   hit; a negative `t_min` lets a caller see them.
+
+## Ray-Disc
+
+`TraceRay::hit_disc(disc, t_min, t_max)` is the exact ray-disc test. Its
+contract identity is **`bunny-ray-disc/1`**.
+
+**The disc.** `TraceDisc::new(height, radius)` is the disc of the given radius
+about the point `(0, 0, height)` in the plane `z = height`: a disc in the
+`xy` plane, centred on the `z` axis, in object space. A disc elsewhere or
+tilted is traced through the shape frame (flyingrobots/bunny#374): the caller
+maps the ray into the disc's object space and the hit back. The height and
+the radius must be inside the trace domain (`abs(raw) < 2^40`) and the radius
+must be positive. Any other input is refused with a typed `TraceDiscError`:
+`HeightOutsideTraceDomain`, `RadiusNotPositive` or `RadiusOutsideTraceDomain`.
+Nothing wraps, saturates or panics. `TraceDisc::bounds` is the flat box
+`[-r, r] x [-r, r] x [height, height]`.
+
+**The hit** is a `DiscHit`:
+
+- `DiscHit::distance` is in multiples of the ray direction, as for triangles
+  and spheres;
+- `DiscHit::front_face` is `true` when the ray arrives at the `+z` side (its
+  direction has a negative `z`) and `false` when it arrives at the `-z` side.
+  The disc is two-sided: both sides are hit;
+- `DiscHit::normal` is `(0, 0, 1)`, the normal of the `+z` side, on both sides;
+  `front_face` says which side was hit.
+
+**The arithmetic.** With `f = origin.z - height` and `d` the direction, all
+raw, a ray with `d.z != 0` meets the plane at `t = -f / d.z` direction
+lengths. The hit point is inside the disc when `x^2 + y^2 <= r^2` for
+`x = origin.x + d.x t` and `y = origin.y + d.y t`. Multiplied through by
+`d.z^2` this is
+
+```text
+(origin.x d.z - d.x f)^2 + (origin.y d.z - d.y f)^2 <= r^2 d.z^2
+```
+
+which is decided exactly by integer comparison in 256-bit unsigned integers
+(`crates/bunny-query/src/trace/wide.rs`), on the exact hit point and never on
+the rounded one. Widths in the trace domain: `abs(f) < 2^41` and
+`abs(d) <= 2^32 + 1` per component, so each numerator is below `2^75`, a
+square below `2^150`, the sum of two below `2^151` and `r^2 d.z^2` below
+`2^146`; `f 2^32` is below `2^73`. Every value fits its type.
+
+**Rounding rule of `bunny-ray-disc/1`.**
+
+- The distance is the floor of the true distance in raw units,
+  `floor(-f 2^32 / d.z)`, rounded toward negative infinity when it is
+  negative. This is the rule of `TriangleHit::distance`.
+- The radius test uses the exact meeting point, so a ray whose rounded hit
+  point is on or inside the rim but whose exact point is outside misses.
+- The distance limits are inclusive and apply to the rounded distance: the
+  disc is hit when `t_min <= distance <= t_max`, else there is no hit.
+
+**Cases.**
+
+- **Rim.** A hit point exactly at distance `r` from the axis is inside.
+- **Parallel and in the plane.** A ray with `d.z == 0` misses, including a
+  ray that lies in the plane of the disc, through the disc. A ray that lies
+  in the plane has no single hit distance, so Bunny reports none.
+- **Origin on the disc.** The distance is 0 (a hit when `t_min <= 0`), front
+  face when the direction has a negative `z`.
+- **Behind the origin.** When the rounded distance is below `t_min` there is no
+  hit; a negative `t_min` lets a caller see it.
 
 ## General-Purpose Ray-AABB Solver
 

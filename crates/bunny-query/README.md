@@ -31,6 +31,12 @@ targets.
   exact ray-sphere test, returning the rounded-down distance, facing and outward
   normal in the form of `TriangleHit`; inputs outside the trace domain are refused
   with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
+* `TraceDisc` and `TraceRay::hit_disc` (contract `bunny-ray-disc/1`): the exact
+  ray-disc test for a disc in the plane `z = height` about the `z` axis,
+  returning the rounded-down distance and facing in a `DiscHit`; the rim is
+  inside, a ray parallel to the plane misses, and inputs outside the trace
+  domain are refused with `TraceDiscError`. See
+  `docs/topics/ray-tracing/README.md#ray-disc`.
 * `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
   triangle test decided a hit with, as a `BarycentricNumerators` (also
   buildable from any point on a triangle with `BarycentricNumerators::new`).

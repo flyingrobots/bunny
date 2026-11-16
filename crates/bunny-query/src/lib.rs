@@ -31,6 +31,7 @@ pub use ray::{
     ray_intersects_triangle, PreparedRay3,
 };
 pub use trace::{
-    SphereHit, TraceRay, TraceSphere, TraceSphereError, TraceTriangle, TriangleHit,
-    TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW, TRACE_UNIT_DIRECTION_LIMIT_RAW,
+    DiscHit, SphereHit, TraceDisc, TraceDiscError, TraceRay, TraceSphere, TraceSphereError,
+    TraceTriangle, TriangleHit, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
+    TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };

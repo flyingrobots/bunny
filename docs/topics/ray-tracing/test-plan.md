@@ -19,6 +19,8 @@ This plan covers `TraceRay`, `TraceTriangle` and `TriangleHit` in
 - overflow freedom at the edges of the domain;
 - the exact `hit_sphere` test of `TraceSphere` (contract `bunny-ray-sphere/1`), its
   rounding rule, its facing and normal, and its typed refusals;
+- the exact `hit_disc` test of `TraceDisc` (contract `bunny-ray-disc/1`), its exact radius test,
+  its rounding rule, its facing and its typed refusals;
 - the overflow behaviour of the general-purpose `ray_intersects_aabb` and its
   effect on `bunny_broadphase::intersect_ray` (flyingrobots/bunny#211).
 
@@ -91,6 +93,10 @@ formatting.
 | TRACE-REQ-041 | TraceRay::hit_sphere (contract bunny-ray-sphere/1) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None. | `README.md#ray-sphere` |
 | TRACE-REQ-042 | SphereHit::normal is floor((f * 2^32 + d * distance) / r) per component, with f = origin - center, at the rounded distance. | `README.md#ray-sphere` |
 | TRACE-REQ-043 | A tangent ray hits at its one root with front_face true; an origin inside the sphere hits the far root from inside; a sphere whose roots are both below t_min is not hit. | `README.md#ray-sphere` |
+| TRACE-REQ-060 | TraceDisc::new accepts a height and a positive radius inside the trace domain and refuses any other with a typed TraceDiscError (HeightOutsideTraceDomain, RadiusNotPositive, RadiusOutsideTraceDomain); no input to TraceDisc::new or TraceRay::hit_disc wraps or panics. | `README.md#ray-disc` |
+| TRACE-REQ-061 | TraceRay::hit_disc (contract bunny-ray-disc/1) returns, for every ray and disc in the trace domain with a nonzero direction z, the floor in raw units of the true distance to the plane z = height when that rounded distance is in t_min..=t_max and the exact point where the ray meets the plane is at most the radius from the axis (the rim is inside), else None; the radius test is decided on the exact meeting point, not the rounded one. | `README.md#ray-disc` |
+| TRACE-REQ-062 | A ray whose direction has z = 0 misses every disc, including a ray that lies in the plane of the disc. | `README.md#ray-disc` |
+| TRACE-REQ-063 | DiscHit::front_face is true exactly when the direction has a negative z; DiscHit::normal is (0, 0, 1) on both sides; a ray whose origin is on the disc has distance 0; a disc whose rounded distance is below t_min is not hit. | `README.md#ray-disc` |
 
 ```toml
 [[requirement]]
@@ -257,6 +263,26 @@ status = "active"
 id = "TRACE-REQ-043"
 summary = "A tangent ray hits at its one root with front_face true; an origin inside the sphere hits the far root from inside; a sphere whose roots are both below t_min is not hit."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-060"
+summary = "TraceDisc::new accepts a height and a positive radius inside the trace domain and refuses any other with a typed TraceDiscError (HeightOutsideTraceDomain, RadiusNotPositive, RadiusOutsideTraceDomain); no input to TraceDisc::new or TraceRay::hit_disc wraps or panics."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-061"
+summary = "TraceRay::hit_disc (contract bunny-ray-disc/1) returns, for every ray and disc in the trace domain with a nonzero direction z, the floor in raw units of the true distance to the plane z = height when that rounded distance is in t_min..=t_max and the exact point where the ray meets the plane is at most the radius from the axis (the rim is inside), else None; the radius test is decided on the exact meeting point, not the rounded one."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-062"
+summary = "A ray whose direction has z = 0 misses every disc, including a ray that lies in the plane of the disc."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-063"
+summary = "DiscHit::front_face is true exactly when the direction has a negative z; DiscHit::normal is (0, 0, 1) on both sides; a ray whose origin is on the disc has distance 0; a disc whose rounded distance is below t_min is not hit."
+status = "active"
 ```
 
 ## Fixtures
@@ -408,6 +434,15 @@ Regenerating them is a contract change.
 | TRACE-TP-506 | Widest inputs | TRACE-REQ-040, TRACE-REQ-041 | The exact oracle of TRACE-TP-501 on every domain corner against the largest spheres, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_506_the_widest_inputs_match_the_oracle_without_overflow` |
 | TRACE-TP-507 | 256-bit helper | TRACE-REQ-041 | Hand-computed: products of the largest values, carries across limbs, refused overflow, and isqrt of k^2 - 1, k^2 and k^2 + 1 up to k = 2^128 - 1. | `crates/bunny-query/src/trace/wide.rs::tests::isqrt_is_the_floor_root_around_squares` |
 | TRACE-TP-508 | Deliberate mutations of the sphere test | TRACE-REQ-040, TRACE-REQ-041 | Each rule broken on purpose makes a case above fail. | [Sphere mutation checks](#sphere-mutation-checks) |
+| TRACE-TP-560 | Generated exact oracle | TRACE-REQ-061, TRACE-REQ-062, TRACE-REQ-063 | Exact rational oracle in independent arbitrary-precision integers: the meeting point kept as the fraction tn / td, each hit coordinate as (o td + d tn) / td, the squared lengths compared exactly, the distance rounded by truncating division with a remainder correction; 6 000 cases from seed 0x5EED_D15C_0363_0001, half aimed at the disc and half built to meet the plane on the Pythagorean rim point (3k, 4k) of radius 5k moved by -1, 0 or +1 raw unit (3 542 misses, 1 244 front hits, 1 214 back hits; floors 2 650, 930, 910), the seed and case printed on failure. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_560_hits_match_an_exact_rational_oracle_on_generated_rays` |
+| TRACE-TP-561 | Rim | TRACE-REQ-061 | Constructed: a ray falling onto (3, 4, 0) of a radius-5 disc, and onto (-5, 0, 0), hits at 2.0, front face; one raw unit beyond the rim misses and one inside hits; a slanted ray with exact meeting point (3, 4, 0) hits at 4.0 and one raw unit off misses. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_561_the_rim_is_inside_and_one_raw_unit_beyond_it_is_outside` |
+| TRACE-TP-562 | Grazing rays | TRACE-REQ-061 | Constructed: with d.z = -1 raw the meeting point 3.0 away is on the rim of radius 3.0 and outside radius 3.0 minus one raw unit; with d.z = -3 raw the exact meeting point 2863311530.67 raw is outside radius 2863311530 raw (whose rounded hit point is on the rim) and inside radius 2863311531; the shortest and barely tilted directions equal the oracle. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_562_grazing_rays_decide_on_the_exact_hit_not_the_rounded_one` |
+| TRACE-TP-563 | Parallel and in-plane rays | TRACE-REQ-062 | Constructed: rays in the plane through the centre and the rim, from the centre, and rays one raw unit above and below the plane all miss, with any distance range; one raw unit of tilt makes the ray a hit at 1.0. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_563_a_ray_parallel_to_the_plane_misses_even_in_the_plane` |
+| TRACE-TP-564 | Origin on the disc | TRACE-REQ-063 | Constructed: an origin on the disc, on its rim or above its centre hits at 0, 0 and 3.0 with the front face when the direction points to -z; one raw unit past the rim misses; from below the hit is a back face at 6.0 for a half-length direction. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_564_an_origin_on_or_over_the_disc_hits_it_from_the_right_side` |
+| TRACE-TP-565 | Disc behind the origin | TRACE-REQ-061 | Constructed: a disc at z = -4 behind a ray toward +z misses with t_min = 0 and hits at -4.0, back face, with t_min = -8; a distance of -1 raw misses at t_min = 0 and hits with t_min = -1; -1/3 of a direction length is -1431655766 raw (floor, not truncation); a ray pointing away misses. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_565_a_disc_behind_the_origin_is_not_hit` |
+| TRACE-TP-566 | Typed refusals | TRACE-REQ-060 | Constructed: each bound one raw unit past, and i64 extremes, give the stated error variant; the largest accepted disc round-trips its height and radius and its flat bounds are hand-computed. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_566_discs_outside_the_trace_domain_are_refused_with_a_typed_error` |
+| TRACE-TP-567 | Widest inputs | TRACE-REQ-060, TRACE-REQ-061 | The exact oracle of TRACE-TP-560 on every domain corner against the largest discs at the extreme heights, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_567_the_widest_inputs_match_the_oracle_without_overflow` |
+| TRACE-TP-568 | Deliberate mutations of the disc test | TRACE-REQ-060, TRACE-REQ-061, TRACE-REQ-062, TRACE-REQ-063 | Each rule broken on purpose makes a case above fail. | [Disc mutation checks](#disc-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1192,6 +1227,87 @@ artifact = "docs/topics/ray-tracing/test-plan.md#sphere-mutation-checks"
 oracle = "Each rule broken on purpose makes a case above fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-560"
+requirements = ["TRACE-REQ-061", "TRACE-REQ-062", "TRACE-REQ-063"]
+evidence = "property"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_560_hits_match_an_exact_rational_oracle_on_generated_rays"
+oracle = "Exact rational oracle in independent arbitrary-precision integers: the meeting point kept as the fraction tn / td, each hit coordinate as (o td + d tn) / td, the squared lengths compared exactly, the distance rounded by truncating division with a remainder correction; 6 000 cases from seed 0x5EED_D15C_0363_0001, half aimed at the disc and half built to meet the plane on the Pythagorean rim point (3k, 4k) of radius 5k moved by -1, 0 or +1 raw unit (3 542 misses, 1 244 front hits, 1 214 back hits; floors 2 650, 930, 910), the seed and case printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-561"
+requirements = ["TRACE-REQ-061"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_561_the_rim_is_inside_and_one_raw_unit_beyond_it_is_outside"
+oracle = "Constructed: a ray falling onto (3, 4, 0) of a radius-5 disc, and onto (-5, 0, 0), hits at 2.0, front face; one raw unit beyond the rim misses and one inside hits; a slanted ray with exact meeting point (3, 4, 0) hits at 4.0 and one raw unit off misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-562"
+requirements = ["TRACE-REQ-061"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_562_grazing_rays_decide_on_the_exact_hit_not_the_rounded_one"
+oracle = "Constructed: with d.z = -1 raw the meeting point 3.0 away is on the rim of radius 3.0 and outside radius 3.0 minus one raw unit; with d.z = -3 raw the exact meeting point 2863311530.67 raw is outside radius 2863311530 raw (whose rounded hit point is on the rim) and inside radius 2863311531; the shortest and barely tilted directions equal the oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-563"
+requirements = ["TRACE-REQ-062"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_563_a_ray_parallel_to_the_plane_misses_even_in_the_plane"
+oracle = "Constructed: rays in the plane through the centre and the rim, from the centre, and rays one raw unit above and below the plane all miss, with any distance range; one raw unit of tilt makes the ray a hit at 1.0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-564"
+requirements = ["TRACE-REQ-063"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_564_an_origin_on_or_over_the_disc_hits_it_from_the_right_side"
+oracle = "Constructed: an origin on the disc, on its rim or above its centre hits at 0, 0 and 3.0 with the front face when the direction points to -z; one raw unit past the rim misses; from below the hit is a back face at 6.0 for a half-length direction."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-565"
+requirements = ["TRACE-REQ-061"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_565_a_disc_behind_the_origin_is_not_hit"
+oracle = "Constructed: a disc at z = -4 behind a ray toward +z misses with t_min = 0 and hits at -4.0, back face, with t_min = -8; a distance of -1 raw misses at t_min = 0 and hits with t_min = -1; -1/3 of a direction length is -1431655766 raw (floor, not truncation); a ray pointing away misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-566"
+requirements = ["TRACE-REQ-060"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_566_discs_outside_the_trace_domain_are_refused_with_a_typed_error"
+oracle = "Constructed: each bound one raw unit past, and i64 extremes, give the stated error variant; the largest accepted disc round-trips its height and radius and its flat bounds are hand-computed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-567"
+requirements = ["TRACE-REQ-060", "TRACE-REQ-061"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_567_the_widest_inputs_match_the_oracle_without_overflow"
+oracle = "The exact oracle of TRACE-TP-560 on every domain corner against the largest discs at the extreme heights, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-568"
+requirements = ["TRACE-REQ-060", "TRACE-REQ-061", "TRACE-REQ-062", "TRACE-REQ-063"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#disc-mutation-checks"
+oracle = "Each rule broken on purpose makes a case above fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -1404,6 +1520,23 @@ run. The restored source passes.
 | `front_face` true at the near root made false | Facing | TRACE-TP-501 to 504 |
 | `radius <= 0` made `radius < 0` | A zero radius is refused | TRACE-TP-505 |
 | `isqrt` starts its low bits at bit 62 instead of 63 | The square root is exact above `2^128` | two cases, TRACE-TP-501 among them |
+
+### Disc Mutation Checks
+
+Each rule below was broken in a container copy of `trace/disc.rs` (flyingrobots/bunny#363) and
+`cargo test --locked -q -p bunny-query --test trace_disc_tests` run. The restored source passes
+all eight tests.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `dz == 0` made `dz == 7` | A ray parallel to the plane misses | TRACE-TP-560, 563 |
+| `outside > reach` made `outside >= reach` | The rim is inside | TRACE-TP-560 to 562, 564 |
+| `front_face: dz < 0` made `dz > 0` | Facing | TRACE-TP-560 to 565, 567 |
+| `div_euclid` made truncating division | The distance is the floor | TRACE-TP-565 only (the generated cases do not reach a negative inexact distance inside the disc, a known gap of TRACE-TP-560) |
+| `o * dz - d * f` made `o * dz + d * f` | The hit point is the exact meeting point | TRACE-TP-560, 561, 567 |
+| `r * dz` made `r * 2^32` | The radius test is scaled by the same `d.z` | TRACE-TP-560 to 562, 567 |
+| `radius <= 0` made `radius < 0` | A zero radius is refused | TRACE-TP-566 |
+| `t_min` made exclusive | The limits are inclusive | TRACE-TP-560, 564, 565 |
 
 ## Determinism Obligations And Evidence
 
