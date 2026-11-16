@@ -1,12 +1,14 @@
-//! Per-vertex texture coordinates of the ASCII PLY reader (flyingrobots/bunny#369): the
-//! pairs `s`, `t` and `u`, `v`, their exact conversion, the refusal of a lone or mixed
-//! pair, and a file without them read as before.
+//! Per-vertex texture coordinates of the ASCII PLY profile `bunny-ascii-ply-triangle-mesh/2`
+//! (flyingrobots/bunny#369): the pairs `s`, `t` and `u`, `v`, their exact conversion, the
+//! refusal of a lone or mixed pair, a file without them read as under `/1`, and `/1` itself
+//! unchanged.
 //!
 //! Every generated case prints its seed and index on failure.
 
 use bunny_codec::{
-    parse_ascii_ply, parse_ascii_ply_with_limits, parse_decimal_q32_32, AsciiPlyErrorKind as Kind,
-    AsciiPlyLimitedError, AsciiPlyLimits, AsciiPlyMesh,
+    parse_ascii_ply, parse_ascii_ply_v2, parse_ascii_ply_v2_with_limits, parse_decimal_q32_32,
+    AsciiPlyErrorKind as Kind, AsciiPlyLimitedError, AsciiPlyLimits, AsciiPlyMesh,
+    ASCII_PLY_PROFILE_ID, ASCII_PLY_PROFILE_V2_ID,
 };
 use std::fmt::Write as _;
 
@@ -64,7 +66,7 @@ fn uv_raw(mesh: &AsciiPlyMesh<'_>) -> Vec<(i64, i64)> {
 }
 
 fn refusal(text: &str) -> (Kind, usize) {
-    let error = parse_ascii_ply(text.as_bytes()).expect_err("input should be refused");
+    let error = parse_ascii_ply_v2(text.as_bytes()).expect_err("input should be refused");
     (error.kind(), error.line())
 }
 
@@ -99,8 +101,9 @@ fn aply_tp_066_both_pairs_return_exact_texture_coordinates_for_generated_decimal
         }
         let text = mesh(layout, &rows);
         let context = format!("seed {seed:#x}, case {case}:\n{text}");
-        let plain = parse_ascii_ply(text.as_bytes()).unwrap_or_else(|e| panic!("{context}\n{e}"));
-        let limited = parse_ascii_ply_with_limits(text.as_bytes(), &AsciiPlyLimits::DEFAULT)
+        let plain =
+            parse_ascii_ply_v2(text.as_bytes()).unwrap_or_else(|e| panic!("{context}\n{e}"));
+        let limited = parse_ascii_ply_v2_with_limits(text.as_bytes(), &AsciiPlyLimits::DEFAULT)
             .unwrap_or_else(|e| panic!("{context}\n{e}"));
         for mesh in [plain, limited] {
             assert!(mesh.has_texture_coordinates(), "{context}");
@@ -125,7 +128,7 @@ fn aply_tp_067_texture_coordinates_follow_the_decimal_rule() {
     let layout = [("float", "x"), ("float", "y"), ("float", "z"), ("float", "s"), ("float", "t")];
     let row = |s: &str, t: &str| vec!["0".into(), "0".into(), "0".into(), s.into(), t.into()];
     let hand = mesh(&layout, &[row("0.5", "1"), row("-0.125", "0.25"), row("1e-1", ".75")]);
-    let parsed = parse_ascii_ply(hand.as_bytes()).expect("hand mesh");
+    let parsed = parse_ascii_ply_v2(hand.as_bytes()).expect("hand mesh");
     // 0.5 = 2^31; 1 = 2^32; -0.125 = -2^29; 0.25 = 2^30; 0.75 = 3 * 2^30;
     // 0.1 * 2^32 = 429496729.6, which rounds to 429496730.
     let wanted = vec![(1 << 31, 1 << 32), (-(1 << 29), 1 << 30), (429_496_730, 3 << 30)];
@@ -153,10 +156,10 @@ fn aply_tp_067_texture_coordinates_follow_the_decimal_rule() {
         let context = format!("seed {seed:#x}, case {case}: s = {s}, t = {t}");
         match (convert(&s), convert(&t)) {
             (Ok(s), Ok(t)) => {
-                let parsed = parse_ascii_ply(text.as_bytes()).expect(&context);
+                let parsed = parse_ascii_ply_v2(text.as_bytes()).expect(&context);
                 assert_eq!(uv_raw(&parsed), vec![(s, t)], "{context}");
             }
-            _ => assert!(parse_ascii_ply(text.as_bytes()).is_err(), "{context}"),
+            _ => assert!(parse_ascii_ply_v2(text.as_bytes()).is_err(), "{context}"),
         }
     }
 }
@@ -183,7 +186,7 @@ fn aply_tp_068_an_incomplete_or_ambiguous_pair_is_refused_at_its_line() {
         let row = vec!["0".to_string(); properties.len()];
         let text = mesh(&properties, &[row]);
         assert_eq!(refusal(&text), (Kind::UnsupportedProperty, line), "{text}");
-        let limited = parse_ascii_ply_with_limits(text.as_bytes(), &AsciiPlyLimits::DEFAULT);
+        let limited = parse_ascii_ply_v2_with_limits(text.as_bytes(), &AsciiPlyLimits::DEFAULT);
         let Err(AsciiPlyLimitedError::Format(error)) = limited else {
             panic!("expected a format error: {text}");
         };
@@ -207,40 +210,78 @@ fn aply_tp_069_a_bad_texture_coordinate_is_refused_at_its_body_line() {
     }
 }
 
-/// A file without texture coordinates reads as before: the committed Stanford fixture has
-/// none, and its positions and triangles hash to the digest taken with the reader at
-/// `origin/main` 4a3957b, before this change (FNV-1a 64 over the little-endian raw x, y, z
-/// of each vertex, then v0, v1, v2 of each triangle). A file whose skipped columns have
-/// other names, such as `nx` or `confidence`, keeps them skipped.
-#[wasm_bindgen_test(unsupported = test)]
-fn aply_tp_070_a_file_without_texture_coordinates_reads_as_before() {
+/// FNV-1a 64 over the little-endian raw x, y, z of each vertex, then v0, v1, v2 of each
+/// triangle.
+fn digest(mesh: &AsciiPlyMesh<'_>) -> u64 {
     fn fnv(state: &mut u64, bytes: &[u8]) {
         for byte in bytes {
             *state ^= u64::from(*byte);
             *state = state.wrapping_mul(0x0100_0000_01b3);
         }
     }
-    let stanford = parse_ascii_ply(STANFORD).expect("fixture");
-    assert!(!stanford.has_texture_coordinates());
-    assert!(stanford.texture_coordinates().is_none());
     let mut digest = 0xcbf2_9ce4_8422_2325_u64;
-    for vertex in stanford.vertices() {
+    for vertex in mesh.vertices() {
         let vertex = vertex.expect("validated");
         for raw in [vertex.x.raw(), vertex.y.raw(), vertex.z.raw()] {
             fnv(&mut digest, &raw.to_le_bytes());
         }
     }
-    for triangle in stanford.triangles() {
+    for triangle in mesh.triangles() {
         let triangle = triangle.expect("validated");
         for index in [triangle.v0, triangle.v1, triangle.v2] {
             fnv(&mut digest, &index.to_le_bytes());
         }
     }
-    assert_eq!((stanford.vertex_count(), stanford.face_count()), (1889, 3851));
-    assert_eq!(digest, 0x5342_2bbd_42c5_ab62);
+    digest
+}
+
+/// A file without texture coordinates reads under `/2` to the mesh `/1` gives: the committed
+/// Stanford fixture has none, and under both profiles its positions and triangles hash to the
+/// digest taken with the reader at `origin/main` 4a3957b, before this change. A skipped `nx`
+/// column stays skipped under `/2`.
+#[wasm_bindgen_test(unsupported = test)]
+fn aply_tp_070_a_file_without_texture_coordinates_reads_as_under_v1() {
+    assert_eq!(ASCII_PLY_PROFILE_ID, "bunny-ascii-ply-triangle-mesh/1");
+    assert_eq!(ASCII_PLY_PROFILE_V2_ID, "bunny-ascii-ply-triangle-mesh/2");
+    for stanford in [parse_ascii_ply(STANFORD), parse_ascii_ply_v2(STANFORD)] {
+        let stanford = stanford.expect("fixture");
+        assert!(!stanford.has_texture_coordinates());
+        assert!(stanford.texture_coordinates().is_none());
+        assert_eq!((stanford.vertex_count(), stanford.face_count()), (1889, 3851));
+        assert_eq!(digest(&stanford), 0x5342_2bbd_42c5_ab62);
+    }
 
     let layout = [("float", "x"), ("float", "y"), ("float", "z"), ("uchar", "nx")];
     let text = mesh(&layout, &[vec!["1".into(), "2".into(), "3".into(), "not-a-number".into()]]);
-    let parsed = parse_ascii_ply(text.as_bytes()).expect("skipped column");
+    let parsed = parse_ascii_ply_v2(text.as_bytes()).expect("skipped column");
     assert!(parsed.texture_coordinates().is_none());
+}
+
+/// `/1` is unchanged: it skips `s`, `t`, `u` and `v` by declaration without checking them.
+/// Every header `/2` refuses in APLY-TP-068, with a non-decimal value in each texture
+/// column, reads under `/1` with no texture coordinates and the positions written; so does a
+/// complete `s`, `t` pair.
+#[wasm_bindgen_test(unsupported = test)]
+fn aply_tp_071_v1_still_skips_texture_names_unchecked() {
+    let xyz = [("float", "x"), ("float", "y"), ("float", "z")];
+    let extras: [&[(&str, &str)]; 6] = [
+        &[("float", "s")],
+        &[("float", "s"), ("float", "v")],
+        &[("float", "s"), ("float", "t"), ("float", "u"), ("float", "v")],
+        &[("float", "s"), ("float", "s"), ("float", "t")],
+        &[("float", "s"), ("uchar", "t")],
+        &[("float", "s"), ("float", "t")],
+    ];
+    for extra in extras {
+        let properties: Vec<(&str, &str)> = xyz.iter().chain(extra).copied().collect();
+        let mut row: Vec<String> = ["0.5", "-2", "0.25"].map(String::from).to_vec();
+        row.extend(extra.iter().map(|_| "nan".to_string()));
+        let text = mesh(&properties, &[row]);
+        let parsed = parse_ascii_ply(text.as_bytes()).expect(&text);
+        assert!(!parsed.has_texture_coordinates(), "{text}");
+        assert!(parsed.texture_coordinates().is_none(), "{text}");
+        let vertex = parsed.vertices().next().expect("one vertex").expect("validated");
+        assert_eq!([vertex.x.raw(), vertex.y.raw(), vertex.z.raw()], [1 << 31, -2 << 32, 1 << 30]);
+        assert!(parse_ascii_ply_v2(text.as_bytes()).is_err(), "{text}");
+    }
 }

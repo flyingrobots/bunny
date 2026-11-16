@@ -23,8 +23,18 @@ enum Section {
     IgnoredEmpty,
 }
 
+/// The profile a header is read under. `V1` skips every vertex property but `x`, `y` and
+/// `z`; `V2` also reads one texture coordinate pair.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Profile {
+    #[default]
+    V1,
+    V2,
+}
+
 #[derive(Default)]
 struct State {
+    profile: Profile,
     format_seen: bool,
     section: Section,
     vertex_count: Option<usize>,
@@ -52,12 +62,16 @@ const INDEX_TYPES: [&str; 4] = ["int", "uint", "int32", "uint32"];
 
 /// Parses the header text, which ends before the `end_header` line. `end_line` is the
 /// 1-based number of that line and carries the whole-header errors.
-pub(super) fn parse_header(header: &str, end_line: usize) -> Result<HeaderSpec, AsciiPlyError> {
+pub(super) fn parse_header(
+    header: &str,
+    end_line: usize,
+    profile: Profile,
+) -> Result<HeaderSpec, AsciiPlyError> {
     let mut lines = header.split('\n').map(|line| line.strip_suffix('\r').unwrap_or(line));
     if lines.next().map(|line| line.trim_end_matches([' ', '\t'])) != Some("ply") {
         return Err(AsciiPlyError::new(Kind::InvalidMagic, 1));
     }
-    let mut state = State::default();
+    let mut state = State { profile, ..State::default() };
     for (index, line) in lines.enumerate() {
         let (had_vertex, had_face) = (state.vertex_count.is_some(), state.face_count.is_some());
         state.line = index + 2;
@@ -220,7 +234,8 @@ fn parse_vertex_property<'a>(
         }
         *slot = Some(state.vertex_properties);
     }
-    if let Some(index) = TEXTURE_NAMES.iter().position(|texture| *texture == name) {
+    let texture = TEXTURE_NAMES.iter().position(|texture| *texture == name);
+    if let Some(index) = texture.filter(|_| state.profile == Profile::V2) {
         let slot = state.texture.get_mut(index).ok_or(Kind::UnsupportedProperty)?;
         if slot.is_some() || !COORDINATE_TYPES.contains(&kind) {
             return Err(Kind::UnsupportedProperty);

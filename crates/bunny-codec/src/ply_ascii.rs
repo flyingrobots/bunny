@@ -12,14 +12,18 @@ pub use decimal::{
     parse_decimal_q32_32, DecimalError, DECIMAL_Q32_32_ID, MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
 };
 pub use error::{AsciiPlyError, AsciiPlyErrorKind};
-use header::{parse_header, HeaderSpec};
+use header::{parse_header, HeaderSpec, Profile};
 pub use limits::{
-    parse_ascii_ply_with_limits, AsciiPlyLimit, AsciiPlyLimitExceeded, AsciiPlyLimitedError,
-    AsciiPlyLimits,
+    parse_ascii_ply_v2_with_limits, parse_ascii_ply_with_limits, AsciiPlyLimit,
+    AsciiPlyLimitExceeded, AsciiPlyLimitedError, AsciiPlyLimits,
 };
 
 /// Stable identity of the ASCII PLY triangle-mesh profile read by [`parse_ascii_ply`].
 pub const ASCII_PLY_PROFILE_ID: &str = "bunny-ascii-ply-triangle-mesh/1";
+
+/// Stable identity of the ASCII PLY triangle-mesh profile with texture coordinates read
+/// by [`parse_ascii_ply_v2`].
+pub const ASCII_PLY_PROFILE_V2_ID: &str = "bunny-ascii-ply-triangle-mesh/2";
 
 /// A PLY vertex position in Q32.32, converted exactly from decimal text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,8 +84,9 @@ impl<'a> AsciiPlyMesh<'a> {
         }
     }
 
-    /// Returns whether the vertex element declares texture coordinates (`s` and `t`,
-    /// or `u` and `v`).
+    /// Returns whether the mesh has texture coordinates: read by [`parse_ascii_ply_v2`]
+    /// from a vertex element that declares `s` and `t`, or `u` and `v`. Always false
+    /// under [`parse_ascii_ply`].
     #[must_use]
     pub const fn has_texture_coordinates(&self) -> bool {
         self.spec.texture_slots.is_some()
@@ -183,8 +188,7 @@ impl Iterator for AsciiPlyTriangles<'_> {
 
 /// Parses an ASCII PLY triangle mesh (`bunny-ascii-ply-triangle-mesh/1`).
 ///
-/// Coordinates, and texture coordinates when the vertex element declares `s` and `t`
-/// or `u` and `v`, are converted from decimal text to Q32.32 with the exact rule
+/// Coordinates are converted from decimal text to Q32.32 with the exact rule
 /// `bunny-decimal-q32-32/1` (see [`parse_decimal_q32_32`]). The profile, the
 /// line, whitespace and comment rules, and the error contract are in
 /// `docs/topics/ascii-ply/README.md`.
@@ -193,8 +197,29 @@ impl Iterator for AsciiPlyTriangles<'_> {
 /// Returns an [`AsciiPlyError`], with the line number, when the header or body
 /// does not match the profile.
 pub fn parse_ascii_ply(input: &[u8]) -> Result<AsciiPlyMesh<'_>, AsciiPlyError> {
+    parse_with(input, Profile::V1)
+}
+
+/// Parses an ASCII PLY triangle mesh with texture coordinates
+/// (`bunny-ascii-ply-triangle-mesh/2`).
+///
+/// The profile is that of [`parse_ascii_ply`], except that a vertex element may declare
+/// one pair of texture coordinates, `s` and `t` or `u` and `v`, of a float type. They are
+/// converted by `bunny-decimal-q32-32/1` and returned by
+/// [`AsciiPlyMesh::texture_coordinates`]. A file with none of the four names reads to the
+/// same mesh as under [`parse_ascii_ply`].
+///
+/// # Errors
+/// Returns what [`parse_ascii_ply`] returns, and [`AsciiPlyErrorKind::UnsupportedProperty`]
+/// at the line of the last texture name declared for a lone name of a pair, names from
+/// both pairs, a repeated name or a non-float type.
+pub fn parse_ascii_ply_v2(input: &[u8]) -> Result<AsciiPlyMesh<'_>, AsciiPlyError> {
+    parse_with(input, Profile::V2)
+}
+
+fn parse_with(input: &[u8], profile: Profile) -> Result<AsciiPlyMesh<'_>, AsciiPlyError> {
     let (header, end_line, body_start) = split_header(input)?;
-    let spec = parse_header(header, end_line)?;
+    let spec = parse_header(header, end_line, profile)?;
     let mut lines = Lines::new(input.get(body_start..).unwrap_or_default(), end_line + 1);
     let vertex_lines = lines;
     for _ in 0..spec.vertex_count {

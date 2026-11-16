@@ -75,15 +75,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* The ASCII PLY reader returns per-vertex texture coordinates: a vertex
-  element that declares `s` and `t`, or `u` and `v`, with a float type has
-  them converted by `bunny-decimal-q32-32/1` and returned by
+* The ASCII PLY profile `bunny-ascii-ply-triangle-mesh/2`
+  (`parse_ascii_ply_v2`, `parse_ascii_ply_v2_with_limits`,
+  `ASCII_PLY_PROFILE_V2_ID`) returns per-vertex texture coordinates: a
+  vertex element that declares `s` and `t`, or `u` and `v`, with a float
+  type has them converted by `bunny-decimal-q32-32/1` and returned by
   `AsciiPlyMesh::texture_coordinates` as `AsciiPlyTextureCoordinate { u, v }`
   (`has_texture_coordinates` says whether they are there). A lone name of a
   pair, names from both pairs, a repeated name or an integer type is
-  `UnsupportedProperty` at the last texture name's line; before, those
-  columns were skipped unread. A file that declares none of the four names
-  reads exactly as before. Closes flyingrobots/bunny#369.
+  `UnsupportedProperty` at the last texture name's line. A file without the
+  four names reads to the same mesh as under `/1`. `/1` (`parse_ascii_ply`)
+  is unchanged and not deprecated: it still skips those columns unchecked.
+  Closes flyingrobots/bunny#369.
 
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and
