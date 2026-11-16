@@ -12,7 +12,8 @@ use bunny_num::FixedQ32_32;
 /// values the check saw.
 ///
 /// The `Option` forms ([`super::SurfaceHit::new`], [`super::SurfaceHit::bounce_ray`],
-/// [`super::SurfaceHit::specular_reflection`], [`super::ShadingFrame::cosine_direction`]) return `None` exactly when these return an error.
+/// [`super::SurfaceHit::specular_reflection`], [`super::ShadingFrame::cosine_direction`])
+/// return `None` exactly when these return an error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SecondaryRayError {
@@ -90,26 +91,35 @@ impl fmt::Display for SecondaryRayError {
                 let (origin, direction) = (Raw(*origin), Raw(*direction));
                 write!(f, "bounce ray from raw {origin} along raw {direction} is not a trace ray")
             }
-            Self::HitPointOutsideTraceDomain { point } => {
-                write!(f, "hit point raw {} is outside the trace domain", Raw(*point))
+            Self::HitPointOutsideTraceDomain { point: v }
+            | Self::NotOnArrivalSide { point: v }
+            | Self::StartOutsideTraceDomain { start: v }
+            | Self::ArrivesBelowSurface { direction: v }
+            | Self::ReflectionBelowSurface { direction: v } => {
+                let (subject, reason) = self.vector_message();
+                write!(f, "{subject} raw {} {reason}", Raw(*v))
             }
-            Self::NotOnArrivalSide { point } => {
-                let point = Raw(*point);
-                write!(f, "hit point raw {point} is not within two steps of the arrival side")
+        }
+    }
+}
+
+impl SecondaryRayError {
+    /// The subject and the reason of a refusal that carries one vector; empty for the others,
+    /// whose messages [`fmt::Display`] writes itself.
+    const fn vector_message(&self) -> (&'static str, &'static str) {
+        match self {
+            Self::HitPointOutsideTraceDomain { .. } => ("hit point", "is outside the trace domain"),
+            Self::NotOnArrivalSide { .. } => {
+                ("hit point", "is not within two steps of the arrival side")
             }
-            Self::StartOutsideTraceDomain { start } => {
-                write!(f, "start point raw {} is outside the trace domain", Raw(*start))
+            Self::StartOutsideTraceDomain { .. } => ("start point", "is outside the trace domain"),
+            Self::ArrivesBelowSurface { .. } => {
+                ("incoming direction", "arrives from below the surface")
             }
-            Self::ArrivesBelowSurface { direction } => {
-                write!(
-                    f,
-                    "incoming direction raw {} arrives from below the surface",
-                    Raw(*direction)
-                )
+            Self::ReflectionBelowSurface { .. } => {
+                ("reflected direction", "does not leave the surface")
             }
-            Self::ReflectionBelowSurface { direction } => {
-                write!(f, "reflected direction raw {} does not leave the surface", Raw(*direction))
-            }
+            _ => ("", ""),
         }
     }
 }
