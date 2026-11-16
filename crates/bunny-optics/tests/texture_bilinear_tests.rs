@@ -17,6 +17,13 @@ use bunny_query::BarycentricNumerators;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const ONE: i64 = ONE_RAW;
+/// Every pairing of a wrap along `u` with a wrap along `v`.
+const WRAPS: [[TextureWrap; 2]; 4] = [
+    [TextureWrap::Repeat, TextureWrap::Repeat],
+    [TextureWrap::Repeat, TextureWrap::Clamp],
+    [TextureWrap::Clamp, TextureWrap::Repeat],
+    [TextureWrap::Clamp, TextureWrap::Clamp],
+];
 const TEXTURE_TEST_SEED: u64 = 0xB002_0367_7E70_0001;
 
 /// The `SplitMix64` generator.
@@ -197,14 +204,14 @@ fn axis_oracle(t: i64, size: u32) -> (i128, i128) {
 fn check_lookup(
     [u, v]: [i64; 2],
     [width, height]: [u32; 2],
-    wrap: TextureWrap,
+    [wrap_u, wrap_v]: [TextureWrap; 2],
     taps: BilinearTaps,
 ) {
     let (x0, fx) = axis_oracle(u, width);
     let (y0, fy) = axis_oracle(v, height);
-    let (c0, c1) = (wrap_oracle(x0, width, wrap), wrap_oracle(x0 + 1, width, wrap));
-    let (r0, r1) = (wrap_oracle(y0, height, wrap), wrap_oracle(y0 + 1, height, wrap));
-    let context = format!("u {u} v {v} size {width}x{height} {wrap:?}");
+    let (c0, c1) = (wrap_oracle(x0, width, wrap_u), wrap_oracle(x0 + 1, width, wrap_u));
+    let (r0, r1) = (wrap_oracle(y0, height, wrap_v), wrap_oracle(y0 + 1, height, wrap_v));
+    let context = format!("u {u} v {v} size {width}x{height} {wrap_u:?} {wrap_v:?}");
     assert_eq!(taps.texels(), [[c0, r0], [c1, r0], [c0, r1], [c1, r1]], "{context}");
     for [c, r] in taps.texels() {
         assert!(c < width && r < height, "{context}");
@@ -224,35 +231,37 @@ fn check_lookup(
 fn optics_tp_112_hand_derived_lookups() {
     let half = ONE / 2;
     // A 2 by 2 texture at its middle: texels 0 and 1 each way, weights a quarter each.
-    let taps = bilinear(uv(half, half), [2, 2], TextureWrap::Repeat).expect("a nonempty texture");
+    let taps =
+        bilinear(uv(half, half), [2, 2], [TextureWrap::Repeat; 2]).expect("a nonempty texture");
     assert_eq!(taps.texels(), [[0, 0], [1, 0], [0, 1], [1, 1]]);
     assert_eq!(taps.weights().map(FixedQ32_32::raw), [ONE / 4; 4]);
     // u = v = 0 on a 4 by 4 texture: halfway between the last and first texels.
     let zero = FixedQ32_32::ZERO;
     let repeat =
-        bilinear(FixedVec2::new(zero, zero), [4, 4], TextureWrap::Repeat).expect("nonempty");
+        bilinear(FixedVec2::new(zero, zero), [4, 4], [TextureWrap::Repeat; 2]).expect("nonempty");
     assert_eq!(repeat.texels(), [[3, 3], [0, 3], [3, 0], [0, 0]]);
-    let clamp = bilinear(FixedVec2::new(zero, zero), [4, 4], TextureWrap::Clamp).expect("nonempty");
+    let clamp =
+        bilinear(FixedVec2::new(zero, zero), [4, 4], [TextureWrap::Clamp; 2]).expect("nonempty");
     assert_eq!(clamp.texels(), [[0, 0]; 4]);
     assert_eq!(clamp.weights().map(FixedQ32_32::raw), [ONE / 4; 4]);
     // A 3-wide texture at u = 0.5: x = 1, a centre along u; v = 1/4 on 1 row: y = -1/4.
-    let taps = bilinear(uv(half, ONE / 4), [3, 1], TextureWrap::Clamp).expect("nonempty");
+    let taps = bilinear(uv(half, ONE / 4), [3, 1], [TextureWrap::Clamp; 2]).expect("nonempty");
     assert_eq!(taps.texels(), [[1, 0], [2, 0], [1, 0], [2, 0]]);
     assert_eq!(taps.weights().map(FixedQ32_32::raw), [ONE / 4, 0, 3 * ONE / 4, 0]);
     // u = v = 1.0 + 1 raw on 1 by 1: fx = fy = 2^31 + 1, and
     // fx fy = (2^31 + 1)^2 / 2^32 = 2^30 + 1 + 2^-32 rounds to 2^30 + 1;
     // w10 = (2^31 + 1)(2^31 - 1) / 2^32 = 2^30 - 2^-32 rounds to 2^30.
     let t = FixedQ32_32::from_raw(ONE + 1);
-    let taps = bilinear(FixedVec2::new(t, t), [1, 1], TextureWrap::Repeat).expect("nonempty");
+    let taps = bilinear(FixedVec2::new(t, t), [1, 1], [TextureWrap::Repeat; 2]).expect("nonempty");
     let q = ONE / 4;
     assert_eq!(taps.weights().map(FixedQ32_32::raw), [q - 1, q, q, q + 1]);
     // A tie to even: fx = 2^31, fy = 1 raw: fx fy = 2^-1 raw ties to 0; fx (1 - fy) =
     // 2^31 - 1/2 ties to 2^31 (even).
-    let taps = bilinear(uv(ONE, ONE / 2 + 1), [1, 1], TextureWrap::Repeat).expect("nonempty");
+    let taps = bilinear(uv(ONE, ONE / 2 + 1), [1, 1], [TextureWrap::Repeat; 2]).expect("nonempty");
     assert_eq!(taps.weights().map(FixedQ32_32::raw), [half - 1, half, 1, 0]);
     // Empty textures are refused.
-    assert_eq!(bilinear(FixedVec2::new(zero, zero), [0, 4], TextureWrap::Repeat), None);
-    assert_eq!(bilinear(FixedVec2::new(zero, zero), [4, 0], TextureWrap::Clamp), None);
+    assert_eq!(bilinear(FixedVec2::new(zero, zero), [0, 4], [TextureWrap::Repeat; 2]), None);
+    assert_eq!(bilinear(FixedVec2::new(zero, zero), [4, 0], [TextureWrap::Clamp; 2]), None);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -268,14 +277,14 @@ fn optics_tp_113_seeded_lookups_match_the_exact_oracle() {
         };
         let (width, height) = (size(&mut seeds), size(&mut seeds));
         let (u, v) = (seeds.coordinate(), seeds.coordinate());
-        let wrap = if case % 2 == 0 { TextureWrap::Repeat } else { TextureWrap::Clamp };
+        let wrap = WRAPS[case % 4];
         let taps = bilinear(uv(u, v), [width, height], wrap).expect("a nonempty texture");
         check_lookup([u, v], [width, height], wrap, taps);
     }
     // The ends of the raw range and of the size.
     for u in [i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX] {
         for size in [1, 2, 3, u32::MAX] {
-            for wrap in [TextureWrap::Repeat, TextureWrap::Clamp] {
+            for wrap in WRAPS {
                 let taps = bilinear(uv(u, u.wrapping_neg()), [size, size], wrap).expect("nonempty");
                 check_lookup([u, u.wrapping_neg()], [size, size], wrap, taps);
             }
@@ -297,12 +306,57 @@ fn optics_tp_114_a_texel_centre_returns_that_texel_with_weight_one() {
         let tiles = (seeds.next() % 2001) as i64 - 1000;
         let centre = |k: u32, b: u32| (2 * i64::from(k) + 1) << (31 - b);
         let (u, v) = (centre(i, wb), centre(j, hb));
-        for (wrap, shift) in [(TextureWrap::Clamp, 0), (TextureWrap::Repeat, tiles * ONE)] {
-            let taps = bilinear(uv(u + shift, v - shift), [width, height], wrap).expect("nonempty");
+        let (clamp, repeat) = (TextureWrap::Clamp, TextureWrap::Repeat);
+        let runs = [([clamp; 2], 0, 0), ([repeat; 2], tiles, -tiles), ([repeat, clamp], tiles, 0)];
+        for (wrap, shift_u, shift_v) in runs {
+            let at = uv(u + shift_u * ONE, v + shift_v * ONE);
+            let taps = bilinear(at, [width, height], wrap).expect("nonempty");
             let context =
                 format!("seed {seed:#x} case {case}: texel ({i}, {j}) of {width}x{height}");
             assert_eq!(taps.texels()[0], [i, j], "{context}");
             assert_eq!(taps.weights().map(FixedQ32_32::raw), [ONE, 0, 0, 0], "{context}");
         }
     }
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_116_each_axis_has_its_own_wrap() {
+    let zero = FixedQ32_32::ZERO;
+    let (repeat, clamp) = (TextureWrap::Repeat, TextureWrap::Clamp);
+    // u = v = 0 on 4 by 4: columns -1 and 0, rows -1 and 0 before wrapping.
+    let mixed = bilinear(FixedVec2::new(zero, zero), [4, 4], [repeat, clamp]).expect("nonempty");
+    assert_eq!(mixed.texels(), [[3, 0], [0, 0], [3, 0], [0, 0]]);
+    let swapped = bilinear(FixedVec2::new(zero, zero), [4, 4], [clamp, repeat]).expect("nonempty");
+    assert_eq!(swapped.texels(), [[0, 3], [0, 3], [0, 0], [0, 0]]);
+    assert_eq!(mixed.weights(), swapped.weights());
+    // Seeded mixed lookups against the per-axis oracle (OPTICS-TP-113 also mixes them).
+    let seed = TEXTURE_TEST_SEED ^ 0x0116;
+    println!("OPTICS-TP-116 seed {seed:#x}");
+    let mut seeds = Seeds(seed);
+    for case in 0..4_000 {
+        let (width, height) = (1 + (seeds.next() % 64) as u32, 1 + (seeds.next() % 64) as u32);
+        let (u, v) = (seeds.coordinate(), seeds.coordinate());
+        let wrap = [[repeat, clamp], [clamp, repeat]][case % 2];
+        let taps = bilinear(uv(u, v), [width, height], wrap).expect("a nonempty texture");
+        check_lookup([u, v], [width, height], wrap, taps);
+    }
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_117_a_rounded_centre_can_make_the_texel_the_second_tap() {
+    // Width 3, texel 2: the centre 5/6 is 3 579 139 413.33 raw, nearest 3 579 139 413, so
+    // x = 3u - 2^31 = 2^33 - 1 raw: x0 = 1 and fx = 1 - 2^-32 (by hand). v is row 0's exact
+    // centre of a 1-row texture.
+    let taps =
+        bilinear(uv(3_579_139_413, ONE / 2), [3, 1], [TextureWrap::Clamp; 2]).expect("nonempty");
+    assert_eq!(taps.texels(), [[1, 0], [2, 0], [1, 0], [2, 0]]);
+    assert_eq!(taps.weights().map(FixedQ32_32::raw), [1, ONE - 1, 0, 0]);
+    // The largest weight names the nearest texel.
+    let nearest = (0..4).max_by_key(|&k| taps.weights()[k]).map(|k| taps.texels()[k]);
+    assert_eq!(nearest, Some([2, 0]));
+    // One raw unit higher, 3 579 139 414, is above the centre: the texel is the first tap.
+    let above =
+        bilinear(uv(3_579_139_414, ONE / 2), [3, 1], [TextureWrap::Clamp; 2]).expect("nonempty");
+    assert_eq!(above.texels()[0], [2, 0]);
+    assert_eq!(above.weights().map(FixedQ32_32::raw), [ONE - 2, 2, 0, 0]);
 }

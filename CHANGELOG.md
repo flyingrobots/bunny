@@ -95,11 +95,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interpolates a triangle's vertex coordinates at a hit's
   `BarycentricNumerators`, each component rounded once to nearest with ties
   to even (exact for every accepted weight). `bilinear(uv, [width, height],
-  wrap)` returns a `BilinearTaps`: four texels `[column, row]` and Q32.32
+  [wrap_u, wrap_v])` returns a `BilinearTaps`: four texels `[column, row]` and Q32.32
   weights that sum to exactly 1.0, with texel `i`'s centre at
-  `(i + 1/2) / size`, `TextureWrap::Repeat` or `Clamp` per index, two corner
+  `(i + 1/2) / size`, `TextureWrap::Repeat` or `Clamp` per axis, two corner
   weights rounded once and the other two their exact complements; at a texel
-  centre that texel has weight 1.0. Closes flyingrobots/bunny#367.
+  centre that is exactly a raw value that texel is the first tap with weight
+  1.0 (elsewhere the largest weight names the nearest texel). Closes flyingrobots/bunny#367.
 
 * `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
   `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed

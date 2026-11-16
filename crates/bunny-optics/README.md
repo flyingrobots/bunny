@@ -81,7 +81,7 @@ every buffer.
   triangle's texture coordinates at a hit, rounded once from the exact
   barycentric interpolation, and the four texels and weights of a bilinear
   lookup (texel centres at `(i + 1/2) / size`, `TextureWrap::Repeat` or
-  `Clamp`, weights summing to exactly 1.0), as a `BilinearTaps`.
+  `Clamp` per axis, weights summing to exactly 1.0), as a `BilinearTaps`.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.

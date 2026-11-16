@@ -5,7 +5,8 @@ flyingrobots/bunny#367: `bunny-texture-bilinear/1`, the texture coordinates at a
 interpolated from the hit's barycentric numerators, and the four texels and weights of a
 bilinear lookup with repeat and clamp wrapping. `interpolate_uv` rounds each component of the
 exact convex combination once (exact u128 long division); `bilinear(uv, [width, height], wrap)`
-returns a `BilinearTaps` whose weights sum to exactly 1.0. No existing output changes.
+returns a `BilinearTaps` whose weights sum to exactly 1.0; the wrap rule is per axis.
+The `texture` group of `bunny-perf` times both. No existing output changes.
 
 Files read:
 CONTRIBUTING.md, CODE_STANDARDS.md, docs/NUMERIC_CONSTITUTION.md
@@ -18,8 +19,10 @@ Files edited:
 crates/bunny-optics/src/texture.rs (new), crates/bunny-optics/src/lib.rs
 crates/bunny-optics/tests/texture_bilinear_tests.rs (new)
 crates/bunny-optics/README.md
+crates/bunny-perf/src/texture.rs (new), cases.rs, main.rs, Cargo.toml
+docs/topics/performance/README.md (the texture group)
 docs/topics/optics/README.md (Status, Texture Coordinates)
-docs/topics/optics/test-plan.md (Scope; OPTICS-REQ-056 to -059; OPTICS-TP-110 to -115;
+docs/topics/optics/test-plan.md (Scope; OPTICS-REQ-056 to -059; OPTICS-TP-110 to -117;
 mutation checks)
 CHANGELOG.md (Unreleased)
 .repo-respect/receipts/2026-11-15-optics-texture-bilinear.md
@@ -32,16 +35,19 @@ None.
 
 Checks run:
 All inside the rust-dev container through devrun; nothing on the host.
-cargo test -p bunny-optics --test texture_bilinear_tests: 5 cases pass; doctests pass.
-Mutations (test plan, Texture-Bilinear Mutation Checks): nine, each fails at least one case;
+cargo test -p bunny-optics --test texture_bilinear_tests: 7 cases pass; doctests pass.
+Mutations (test plan, Texture-Bilinear Mutation Checks): ten, each fails at least one case;
 the restored source passes.
 cargo fmt, clippy -D warnings; code-dojo --all steps at the final commit (see the PR).
 
 Known risks:
-Row 0 is at v = 0 (no flip); a caller with top-row-first images must orient them itself. The
-issue sketched a five-argument `bilinear`; the workspace's four-argument clippy limit made it
-`bilinear(uv, [width, height], wrap)`. Test-plan IDs OPTICS-REQ-056.. and OPTICS-TP-110.. may
-collide with parallel optics work.
+Row 0 is at v = 0 (no flip); a caller with top-row-first images must orient them itself. Under a
+non-power-of-two size a texel's centre is not a raw value, and the texel can be the second tap;
+callers wanting the nearest texel take the largest weight. interpolate_uv is bit-serial, about
+1.2 us per call in the container (about 11 times smooth_normal). The issue sketched a five-
+argument `bilinear`; the workspace's four-argument clippy limit made it `bilinear(uv, [width,
+height], [wrap_u, wrap_v])`. Test-plan IDs OPTICS-REQ-056.. and OPTICS-TP-110.. did not collide
+with the parallel optics work merged from main (OPTICS-REQ-066, OPTICS-TP-120 to -123).
 
 Human reviewer:
 James Ross (maintainer); review pending.

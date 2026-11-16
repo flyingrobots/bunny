@@ -70,6 +70,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::normals::normal_cases());
     #[cfg(feature = "smooth")]
     cases.extend(crate::smooth::smooth_cases());
+    #[cfg(feature = "texture")]
+    cases.extend(crate::texture::texture_cases());
     cases
 }
 
@@ -87,7 +89,8 @@ pub(crate) fn all() -> Vec<Case> {
     feature = "trace_counted",
     feature = "build",
     feature = "sah",
-    feature = "shade"
+    feature = "shade",
+    feature = "texture"
 ))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }

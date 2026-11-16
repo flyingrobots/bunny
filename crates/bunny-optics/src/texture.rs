@@ -154,20 +154,27 @@ impl BilinearTaps {
 }
 
 /// The texels and weights of a bilinear lookup at texture coordinates `uv = (u, v)` in a texture
-/// of `[width, height]` texels (columns, rows), or `None` when either size is zero.
+/// of `[width, height]` texels (columns, rows), with `[wrap_u, wrap_v]` the wrap rule of each
+/// axis, or `None` when either size is zero.
 ///
 /// **Texel centres.** Column `i` covers `u` in `[i / width, (i + 1) / width)` and its centre is
 /// at `u = (i + 1/2) / width`; rows are the same along `v`, with row 0 at `v = 0` (no flip).
 ///
 /// 1. **Position.** `x = u width - 1/2` and `y = v height - 1/2`, exact (`i128`).
 /// 2. **Split.** `x0 = floor(x)` and `fx = x - x0` in `[0, 1)`, exact raw units; the same for `y`.
-/// 3. **Wrap.** Columns `x0` and `x0 + 1` and rows `y0` and `y0 + 1` are each wrapped by
-///    `wrap`, independently.
+/// 3. **Wrap.** Columns `x0` and `x0 + 1` are each wrapped by `wrap_u`, and rows `y0` and
+///    `y0 + 1` by `wrap_v`, independently.
 /// 4. **Weights.** `w11 = fx fy` and `w10 = fx (1 - fy)`, each rounded once to nearest raw
 ///    unit, ties to even; `w01 = fy - w11` and `w00 = (1 - fy) - w10`, exact. Each is within
 ///    half a raw unit of the exact product, and the four sum to exactly 1.0.
 ///
-/// At a texel centre `fx = fy = 0`: the first texel is that texel, with weight exactly 1.0.
+/// At a texel centre that is exactly a raw value (every centre when the size is a power of two
+/// up to `2^31`) `fx = fy = 0`: the first texel is that texel, with weight exactly 1.0. Other
+/// centres are rounded when written as raw values, and the nearest raw value can fall just
+/// below the centre: in a texture 3 wide, texel 2's centre `5/6` is nearest raw
+/// `3 579 139 413`, which gives columns `[1, 2]` with weights `(2^-32, 1 - 2^-32)` along `u`,
+/// so the texel is the second tap. A caller that wants the nearest texel takes the tap with
+/// the largest weight, not the first.
 /// Proven infallible: `|u width|` is below `2^95`.
 ///
 /// # Examples
@@ -180,7 +187,7 @@ impl BilinearTaps {
 /// let one = 1_i64 << 32;
 /// // The centre of texel (1, 0) of a 4 by 2 texture: u = 1.5 / 4, v = 0.5 / 2.
 /// let (u, v) = (FixedQ32_32::from_raw(3 * one / 8), FixedQ32_32::from_raw(one / 4));
-/// let taps = bilinear(FixedVec2::new(u, v), [4, 2], TextureWrap::Repeat).expect("nonempty");
+/// let taps = bilinear(FixedVec2::new(u, v), [4, 2], [TextureWrap::Repeat; 2]).expect("nonempty");
 /// assert_eq!(taps.texels()[0], [1, 0]);
 /// assert_eq!(taps.weights()[0], FixedQ32_32::ONE);
 /// ```
@@ -188,7 +195,7 @@ impl BilinearTaps {
 pub fn bilinear(
     uv: FixedVec2,
     [width, height]: [u32; 2],
-    wrap: TextureWrap,
+    [wrap_u, wrap_v]: [TextureWrap; 2],
 ) -> Option<BilinearTaps> {
     let (u, v) = (uv.x, uv.y);
     if width == 0 || height == 0 {
@@ -196,8 +203,8 @@ pub fn bilinear(
     }
     let (x0, fx) = split(u, width);
     let (y0, fy) = split(v, height);
-    let (c0, c1) = (wrap.apply(x0, width), wrap.apply(x0 + 1, width));
-    let (r0, r1) = (wrap.apply(y0, height), wrap.apply(y0 + 1, height));
+    let (c0, c1) = (wrap_u.apply(x0, width), wrap_u.apply(x0 + 1, width));
+    let (r0, r1) = (wrap_v.apply(y0, height), wrap_v.apply(y0 + 1, height));
     let w11 = round_unit(fx * fy);
     let w10 = round_unit(fx * (ONE - fy));
     let weights = [ONE - fy - w10, w10, fy - w11, w11]

@@ -550,11 +550,15 @@ reference order in which they combine. **What the renderer owns.** Scene
 loading and vertex transforms, the acceleration structure and the
 closest-hit and any-hit queries (`bunny-broadphase`), which sampler pair each
 decision uses, the loop over pixels and samples, and the pixel value
-([Pixel Values](#pixel-values)). Materials other than diffuse, other lights,
-textures, reflection and refraction are not defined here. Per-vertex normals
-for a mesh are ([Vertex Normals](#vertex-normals)), and so is their
-interpolation at a hit ([Smooth Normal](#smooth-normal)) and a hit shaded with
-it ([Smooth Shading](#smooth-shading)), including its bounce.
+([Pixel Values](#pixel-values)). Materials other than diffuse, other lights
+and refraction are not defined by this identity. Other sections of this
+chapter define per-vertex normals for a mesh
+([Vertex Normals](#vertex-normals)), their interpolation at a hit
+([Smooth Normal](#smooth-normal)), a hit shaded with it
+([Smooth Shading](#smooth-shading)) including its bounce, the perfect mirror
+([Specular Reflection](#specular-reflection)), and texture coordinates and
+bilinear lookups ([Texture Coordinates](#texture-coordinates)); the texel
+values and how they become an albedo are the renderer's.
 
 ### Shading Identity
 
@@ -1305,8 +1309,8 @@ is not part of this identity.
 ## Texture Coordinates
 
 `interpolate_uv(uvs, weights)` gives a triangle's texture coordinates at a
-hit and `bilinear(uv, [width, height], wrap)` the four texels and weights of
-a bilinear lookup there. Their identity is `bunny-texture-bilinear/1`
+hit and `bilinear(uv, [width, height], [wrap_u, wrap_v])` the four texels and
+weights of a bilinear lookup there. Their identity is `bunny-texture-bilinear/1`
 (`TEXTURE_BILINEAR_ID`). Texel storage, mip maps and anisotropic filtering
 are not part of this identity; the caller reads the texels and sums
 `weight * texel`.
@@ -1334,7 +1338,7 @@ row first decides the orientation when it loads them.
 | --- | --- | --- |
 | Position | `x = u width - 1/2`, `y = v height - 1/2` | exact (`i128`; `\|u width\|` below `2^95`) |
 | Split | `x0 = floor(x)`, `fx = x - x0` in `[0, 1)`; the same for `y` | exact |
-| Wrap | columns `x0`, `x0 + 1` and rows `y0`, `y0 + 1`, each wrapped by `wrap` | exact |
+| Wrap | columns `x0`, `x0 + 1` by `wrap_u`; rows `y0`, `y0 + 1` by `wrap_v`; each on its own | exact |
 | Corner weights | `w11 = fx fy`, `w10 = fx (1 - fy)` | each once, to nearest raw unit, ties to even |
 | Complements | `w01 = fy - w11`, `w00 = (1 - fy) - w10` | exact |
 
@@ -1343,15 +1347,25 @@ product, and sum to exactly 1.0. `BilinearTaps::texels()` gives them as
 `[column, row]` in the order `(x0, y0)`, `(x1, y0)`, `(x0, y1)`, `(x1, y1)`,
 and `weights()` in the same order.
 
-**Wrap rules.** `TextureWrap::Repeat` takes each index modulo the size,
+**Wrap rules.** Each axis has its own rule: `wrap_u` for the columns and
+`wrap_v` for the rows, so a texture can repeat along `u` and clamp along `v`.
+`TextureWrap::Repeat` takes each index modulo the size,
 Euclidean, so index `-1` is the last texel and the texture tiles in both
 directions. `TextureWrap::Clamp` clamps each index to `0..=size - 1`, so the
 edge texels extend outward; the weights are the same as for repeat, so two
 taps can name one texel. Each index is wrapped on its own, after the split:
 under repeat `x0 + 1` past the last column is column 0.
 
-**At a texel centre** `fx = fy = 0`: the first tap is that texel with weight
-exactly 1.0 and the other three have weight zero, under both wrap rules.
+**At a texel centre** that is exactly a raw value, `fx = fy = 0`: the first
+tap is that texel with weight exactly 1.0 and the other three have weight
+zero, under both wrap rules. Every centre is a raw value when the size is a
+power of two up to `2^31`; other centres are rounded when written as raw
+values, and the nearest raw value can fall just below the centre. In a
+texture 3 wide, texel 2's centre `5/6` is `3 579 139 413.33` raw; at the
+nearest raw `u = 3 579 139 413`, `x = 2 - 2^-32`, so the columns are `[1, 2]`
+with weights `(2^-32, 1 - 2^-32)` along `u` and the texel is the second tap.
+A caller that wants the nearest texel takes the tap with the largest weight,
+not the first.
 
 **Refusals.** `bilinear` returns `None` when `width` or `height` is zero.
 Any `uv`, negative or far outside `[0, 1)`, is accepted.
