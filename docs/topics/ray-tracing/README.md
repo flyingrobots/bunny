@@ -36,7 +36,8 @@ as:
   `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
   in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
 - `TraceDisc` (`new`, `height`, `radius`, `bounds`), `TraceDiscError`,
-  `DiscHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_disc`, in
+  `DiscHit` (`distance`, `front_face`, `normal`), `TraceRay::hit_disc` and
+  `RAY_DISC_ID`, in
   `crates/bunny-query/src/trace/disc.rs` (see [Ray-Disc](#ray-disc));
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
@@ -332,7 +333,7 @@ spare.
 ## Ray-Disc
 
 `TraceRay::hit_disc(disc, t_min, t_max)` is the exact ray-disc test. Its
-contract identity is **`bunny-ray-disc/1`**.
+contract identity is **`bunny-ray-disc/1`**, public as `RAY_DISC_ID`.
 
 **The disc.** `TraceDisc::new(height, radius)` is the disc of the given radius
 about the point `(0, 0, height)` in the plane `z = height`: a disc in the
@@ -352,8 +353,9 @@ Nothing wraps, saturates or panics. `TraceDisc::bounds` is the flat box
 - `DiscHit::front_face` is `true` when the ray arrives at the `+z` side (its
   direction has a negative `z`) and `false` when it arrives at the `-z` side.
   The disc is two-sided: both sides are hit;
-- `DiscHit::normal` is `(0, 0, 1)`, the normal of the `+z` side, on both sides;
-  `front_face` says which side was hit.
+- `DiscHit::normal` is the `FixedUnitVec3` `(0, 0, 1)` (`UNIT_Z`), the exact
+  axis of the disc and the normal of the `+z` side, on both sides; it is never
+  derived from the rounded hit point, and `front_face` says which side was hit.
 
 **The arithmetic.** With `f = origin.z - height` and `d` the direction, all
 raw, a ray with `d.z != 0` meets the plane at `t = -f / d.z` direction

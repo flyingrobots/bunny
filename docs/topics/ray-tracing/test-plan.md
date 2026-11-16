@@ -442,6 +442,8 @@ Regenerating them is a contract change.
 | TRACE-TP-565 | Disc behind the origin | TRACE-REQ-061 | Constructed: a disc at z = -4 behind a ray toward +z misses with t_min = 0 and hits at -4.0, back face, with t_min = -8; a distance of -1 raw misses at t_min = 0 and hits with t_min = -1; -1/3 of a direction length is -1431655766 raw (floor, not truncation); a ray pointing away misses. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_565_a_disc_behind_the_origin_is_not_hit` |
 | TRACE-TP-566 | Typed refusals | TRACE-REQ-060 | Constructed: each bound one raw unit past, and i64 extremes, give the stated error variant; the largest accepted disc round-trips its height and radius and its flat bounds are hand-computed. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_566_discs_outside_the_trace_domain_are_refused_with_a_typed_error` |
 | TRACE-TP-567 | Widest inputs | TRACE-REQ-060, TRACE-REQ-061 | The exact oracle of TRACE-TP-560 on every domain corner against the largest discs at the extreme heights, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_567_the_widest_inputs_match_the_oracle_without_overflow` |
+| TRACE-TP-569 | Distance limits | TRACE-REQ-061 | Constructed: a ray falling 2.0 onto the disc hits at exactly 2 * 2^32 raw; a range with t_min equal to it, t_max equal to it, both equal to it, hits; t_min one raw unit above or t_max one raw unit below misses. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_569_the_distance_limits_are_inclusive_at_both_ends` |
+| TRACE-TP-570 | Contract identity | TRACE-REQ-061 | The public constant RAY_DISC_ID is the string bunny-ray-disc/1. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_570_the_contract_identity_is_public` |
 | TRACE-TP-568 | Deliberate mutations of the disc test | TRACE-REQ-060, TRACE-REQ-061, TRACE-REQ-062, TRACE-REQ-063 | Each rule broken on purpose makes a case above fail. | [Disc mutation checks](#disc-mutation-checks) |
 
 ```toml
@@ -1301,6 +1303,24 @@ tier = "fast"
 status = "implemented"
 
 [[case]]
+id = "TRACE-TP-569"
+requirements = ["TRACE-REQ-061"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_569_the_distance_limits_are_inclusive_at_both_ends"
+oracle = "Constructed: a ray falling 2.0 onto the disc hits at exactly 2 * 2^32 raw; a range with t_min equal to it, t_max equal to it, both equal to it, hits; t_min one raw unit above or t_max one raw unit below misses."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-570"
+requirements = ["TRACE-REQ-061"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_570_the_contract_identity_is_public"
+oracle = "The public constant RAY_DISC_ID is the string bunny-ray-disc/1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "TRACE-TP-568"
 requirements = ["TRACE-REQ-060", "TRACE-REQ-061", "TRACE-REQ-062", "TRACE-REQ-063"]
 evidence = "manual-audit"
@@ -1525,18 +1545,19 @@ run. The restored source passes.
 
 Each rule below was broken in a container copy of `trace/disc.rs` (flyingrobots/bunny#363) and
 `cargo test --locked -q -p bunny-query --test trace_disc_tests` run. The restored source passes
-all eight tests.
+all ten tests.
 
 | Mutation | Rule broken | Failing cases |
 | --- | --- | --- |
 | `dz == 0` made `dz == 7` | A ray parallel to the plane misses | TRACE-TP-560, 563 |
 | `outside <= reach` made `outside < reach` | The rim is inside | TRACE-TP-560 to 562, 564 |
-| `front_face: dz < 0` made `dz > 0` | Facing | TRACE-TP-560 to 565, 567 |
+| `front_face: dz < 0` made `dz > 0` | Facing | TRACE-TP-560 to 565, 567, 569 |
 | `div_euclid` made truncating division | The distance is the floor | TRACE-TP-565 only (the generated cases do not reach a negative inexact distance inside the disc, a known gap of TRACE-TP-560) |
 | `o * dz - d * f` made `o * dz + d * f` | The hit point is the exact meeting point | TRACE-TP-560, 561, 567 |
 | `r * dz` made `r * 2^32` | The radius test is scaled by the same `d.z` | TRACE-TP-560 to 562, 567 |
 | `radius <= 0` made `radius < 0` | A zero radius is refused | TRACE-TP-566 |
-| `t_min` made exclusive | The limits are inclusive | TRACE-TP-560, 564, 565 |
+| `t_min` made exclusive | The limits are inclusive | TRACE-TP-560, 564, 565, 569 |
+| `t_max` made exclusive (`..=` made `..`) | The upper limit is inclusive | TRACE-TP-569 only (generated ranges never end exactly on a hit) |
 
 ## Determinism Obligations And Evidence
 

@@ -10,9 +10,12 @@
 use super::wide::U256;
 use super::{in_trace_domain, vec3, wide3, TraceRay};
 use bunny_geom::FixedAabb3;
-use bunny_linalg::FixedVec3;
+use bunny_linalg::FixedUnitVec3;
 use bunny_num::FixedQ32_32;
 use std::fmt;
+
+/// The identity of the exact ray-disc contract, including its rounding rule.
+pub const RAY_DISC_ID: &str = "bunny-ray-disc/1";
 
 /// A disc prepared for [`TraceRay::hit_disc`]: the circle of a positive radius about the
 /// point `(0, 0, height)` in the plane `z = height`, both in the trace domain.
@@ -97,11 +100,12 @@ pub struct DiscHit {
 }
 
 impl DiscHit {
-    /// The normal of the `+z` side, `(0, 0, 1)`, whichever side was hit; `front_face` says
+    /// The normal of the `+z` side, the unit vector `(0, 0, 1)` (exact, not derived from the hit
+    /// point), whichever side was hit; `front_face` says
     /// which side that was.
     #[must_use]
-    pub const fn normal(&self) -> FixedVec3 {
-        vec3([0, 0, 1 << FixedQ32_32::FRACTIONAL_BITS])
+    pub const fn normal(&self) -> FixedUnitVec3 {
+        FixedUnitVec3::UNIT_Z
     }
 }
 

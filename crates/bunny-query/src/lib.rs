@@ -32,6 +32,6 @@ pub use ray::{
 };
 pub use trace::{
     DiscHit, SphereHit, TraceDisc, TraceDiscError, TraceRay, TraceSphere, TraceSphereError,
-    TraceTriangle, TriangleHit, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
+    TraceTriangle, TriangleHit, RAY_DISC_ID, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
     TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };

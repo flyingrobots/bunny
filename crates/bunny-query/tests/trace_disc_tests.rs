@@ -11,7 +11,7 @@
 
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
-use bunny_query::{TraceDisc, TraceDiscError, TraceRay, TRACE_COORD_LIMIT_RAW};
+use bunny_query::{TraceDisc, TraceDiscError, TraceRay, RAY_DISC_ID, TRACE_COORD_LIMIT_RAW};
 use std::cmp::Ordering;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -146,7 +146,7 @@ fn kernel(case: Case) -> Expected {
         TraceDisc::new(FixedQ32_32::from_raw(height), FixedQ32_32::from_raw(radius)).expect("disc");
     let (t_min, t_max) = (FixedQ32_32::from_raw(range.0), FixedQ32_32::from_raw(range.1));
     ray.hit_disc(&disc, t_min, t_max).map(|hit| {
-        assert_eq!(hit.normal(), vec([0, 0, ONE]));
+        assert_eq!(hit.normal().into_inner(), vec([0, 0, ONE]));
         (hit.distance.raw(), hit.front_face)
     })
 }
@@ -422,4 +422,22 @@ fn trace_tp_567_the_widest_inputs_match_the_oracle_without_overflow() {
     let hit = ray.hit_disc(&disc, FixedQ32_32::ZERO, FixedQ32_32::from_raw(i64::MAX));
     let expected = oracle(case([-DOMAIN, DOMAIN, DOMAIN], [0, 0, -ONE - 1], -DOMAIN, DOMAIN));
     assert_eq!(hit.map(|h| (h.distance.raw(), h.front_face)), expected);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_569_the_distance_limits_are_inclusive_at_both_ends() {
+    // A ray falling 2.0 onto the disc: the hit distance is exactly 2 * 2^32 raw.
+    let hit = case([0, 0, 2 * ONE], [0, 0, -ONE], 0, ONE);
+    let at = |low: i64, high: i64| kernel(Case { range: (low, high), ..hit });
+    let expected = Some((2 * ONE, true));
+    assert_eq!(at(2 * ONE, 3 * ONE), expected, "distance exactly on t_min");
+    assert_eq!(at(ONE, 2 * ONE), expected, "distance exactly on t_max");
+    assert_eq!(at(2 * ONE, 2 * ONE), expected, "t_min == t_max == distance");
+    assert_eq!(at(2 * ONE + 1, 3 * ONE), None, "one raw unit below t_min");
+    assert_eq!(at(ONE, 2 * ONE - 1), None, "one raw unit past t_max");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_570_the_contract_identity_is_public() {
+    assert_eq!(RAY_DISC_ID, "bunny-ray-disc/1");
 }

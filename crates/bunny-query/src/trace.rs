@@ -37,7 +37,7 @@ mod disc;
 mod sphere;
 mod wide;
 
-pub use disc::{DiscHit, TraceDisc, TraceDiscError};
+pub use disc::{DiscHit, TraceDisc, TraceDiscError, RAY_DISC_ID};
 pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
 
 type Wide3 = [i128; 3];

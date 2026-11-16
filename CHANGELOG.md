@@ -82,7 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw units, then the exact hit point is tested against the radius by exact
   integer comparison (the rim is inside). A ray parallel to the plane misses,
   including one lying in it. The disc is two-sided: `DiscHit::front_face` is
-  true on the `+z` side. `TraceDisc::new` refuses a height or radius outside
+  true on the `+z` side, and `DiscHit::normal` is the exact unit axis
+  `FixedUnitVec3::UNIT_Z`. The identity is public as `RAY_DISC_ID`.
+  `TraceDisc::new` refuses a height or radius outside
   the trace domain, or a radius that is not positive, with `TraceDiscError`.
   Closes flyingrobots/bunny#363.
 
