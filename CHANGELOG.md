@@ -76,8 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * `bunny-query`: `TraceCylinder` and `TraceRay::hit_cylinder`, the
-  trace-domain ray-cylinder kernel under the contract `bunny-ray-cylinder/1`
-  (in progress). Closes flyingrobots/bunny#360.
+  trace-domain ray-cylinder kernel under the contract `bunny-ray-cylinder/1`.
+  The cylinder is in object space, about the `+Y` axis, with a radius and two
+  cap heights. A hit has the form of `SphereHit` (a distance in multiples of
+  the ray direction, rounded down, `front_face`, and the outward normal): the
+  nearest of the side and the two cap discs, or from an origin inside the
+  exit. Every comparison between a cap crossing and a side root is exact in
+  256-bit integers. Where the side meets a cap at the same exact distance the
+  cap is reported, with its normal. `TraceCylinder::new` refuses a radius that
+  is not positive, a radius or cap outside the trace domain, or a bottom cap
+  not below the top cap, with `TraceCylinderError`. Closes
+  flyingrobots/bunny#360.
 
 * `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
   `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed

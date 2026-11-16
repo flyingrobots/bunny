@@ -31,6 +31,12 @@ targets.
   exact ray-sphere test, returning the rounded-down distance, facing and outward
   normal in the form of `TriangleHit`; inputs outside the trace domain are refused
   with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
+* `TraceCylinder` and `TraceRay::hit_cylinder` (contract `bunny-ray-cylinder/1`):
+  the exact test of a capped cylinder about the object-space `+Y` axis, returning
+  the rounded-down distance, facing and outward normal in the form of
+  `SphereHit`, a cap winning a tie with the side at the rim; inputs outside the
+  trace domain are refused with `TraceCylinderError`. See
+  `docs/topics/ray-tracing/README.md#ray-cylinder`.
 * `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
   triangle test decided a hit with, as a `BarycentricNumerators` (also
   buildable from any point on a triangle with `BarycentricNumerators::new`).
