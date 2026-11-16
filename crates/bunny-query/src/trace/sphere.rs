@@ -144,7 +144,7 @@ impl TraceRay {
 /// `a < 2^66`, `|b| < 2^75`, each `|f x d|` component is below `2^75`, `a r^2 < 2^146`, the
 /// scaled discriminant `E` is below `2^210` and its root `g` below `2^105`. `2^32 b` and
 /// `2^32 b +- g` are below `2^108`; all fit `i128`.
-fn roots(offset: Wide3, direction: Wide3, radius: i64) -> Option<(i128, i128)> {
+pub(super) fn roots(offset: Wide3, direction: Wide3, radius: i64) -> Option<(i128, i128)> {
     let a = dot(direction, direction);
     let b = dot(offset, direction);
     let perpendicular = cross(offset, direction)

@@ -34,10 +34,12 @@ const RECIPROCAL_BITS: u32 = 63;
 const RECIPROCAL_SHIFT: u32 = RECIPROCAL_BITS - FixedQ32_32::FRACTIONAL_BITS;
 
 mod box_hit;
+mod cylinder;
 mod sphere;
 mod wide;
 
 pub use box_hit::{BoxHit, TraceBox, TraceBoxError, RAY_BOX_ID};
+pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError, RAY_CYLINDER_ID};
 pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
 
 type Wide3 = [i128; 3];

@@ -31,6 +31,13 @@ targets.
   exact ray-sphere test, returning the rounded-down distance, facing and outward
   normal in the form of `TriangleHit`; inputs outside the trace domain are refused
   with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
+* `TraceCylinder` and `TraceRay::hit_cylinder` (contract `bunny-ray-cylinder/1`,
+  `RAY_CYLINDER_ID`):
+  the exact test of a capped cylinder about the object-space `+Y` axis, returning
+  the rounded-down distance, facing and outward unit normal in the form of
+  `SphereHit`, a cap winning a tie with the side at the rim; inputs outside the
+  trace domain are refused with `TraceCylinderError`. See
+  `docs/topics/ray-tracing/README.md#ray-cylinder`.
 * `TraceBox` and `TraceRay::hit_box` (contract `bunny-ray-box/1`): the exact ray-box
   test for an axis-aligned box, returning the rounded-down distance, facing and
   face normal (the lowest axis wins an edge or corner tie); inputs outside the trace
