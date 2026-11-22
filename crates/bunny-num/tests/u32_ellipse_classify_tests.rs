@@ -129,10 +129,10 @@ fn uec_tp_004_seeded_property_sweep_matches_u128_oracle() {
     for _ in 0..50_000 {
         let r1 = next_seed(&mut state);
         let r2 = next_seed(&mut state);
-        let dx = (r1 % span) as u32;
-        let dy = ((r1 >> 32) % span) as u32;
-        let a = (r2 % span) as u32;
-        let b = ((r2 >> 32) % span) as u32;
+        let dx = u32::try_from(r1 % span).expect("bounded by span");
+        let dy = u32::try_from((r1 >> 32) % span).expect("bounded by span");
+        let a = u32::try_from(r2 % span).expect("bounded by span");
+        let b = u32::try_from((r2 >> 32) % span).expect("bounded by span");
         assert_eq!(
             classify_ellipse_u32_words(dx, dy, a, b),
             u128_oracle_words(dx, dy, a, b),
