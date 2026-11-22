@@ -113,6 +113,8 @@ fn uec_tp_003_out_of_domain_returns_canonical_error() {
         (0, over, 10, 10),
         (0, 0, over, 10),
         (0, 0, 10, over),
+        (over, 0, 0, 5),
+        (0, 0, 0, over),
         (u32::MAX, u32::MAX, u32::MAX, u32::MAX),
     ];
     for (dx, dy, a, b) in bad_inputs {
