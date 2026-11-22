@@ -349,6 +349,18 @@ type Second {
     }
 
     #[test]
+    fn wesley_core_version_witness_matches_the_resolved_lockfile_version() {
+        let lock = include_str!("../../../Cargo.lock");
+        let resolved = lock
+            .split("[[package]]")
+            .find(|package| package.lines().any(|line| line == "name = \"wesley-core\""))
+            .and_then(|package| package.lines().find_map(|line| line.strip_prefix("version = ")))
+            .map(|version| version.trim_matches('"'))
+            .unwrap();
+        assert_eq!(WESLEY_CORE_VERSION, resolved);
+    }
+
+    #[test]
     fn test_directive_scalar_mapping() {
         let schema = r#"
             directive @bunnyScalarProfile(name: String!) on SCALAR

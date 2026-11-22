@@ -1,4 +1,4 @@
-//! Build script for exposing the pinned `wesley-core` version to generated DTOs.
+//! Build script for exposing the exactly pinned `wesley-core` version to generated DTOs.
 
 use std::fs;
 
@@ -19,6 +19,13 @@ fn main() {
             _ => None,
         })
         .expect("Failed to find wesley-core version in [dependencies]");
+
+    // The manifest pins `wesley-core` exactly (`=x.y.z`), so the requirement names the one
+    // version Cargo can resolve. Emit it without the comparison operator.
+    let version = version
+        .strip_prefix('=')
+        .expect("wesley-core must be pinned exactly (`=x.y.z`) so the version witness is exact")
+        .trim();
 
     println!("cargo:rustc-env=WESLEY_CORE_VERSION={version}");
 }
