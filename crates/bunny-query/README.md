@@ -35,6 +35,12 @@ targets.
   test for an axis-aligned box, returning the rounded-down distance, facing and
   face normal (the lowest axis wins an edge or corner tie); inputs outside the trace
   domain are refused with `TraceBoxError`; identity constant `RAY_BOX_ID`. See `docs/topics/ray-tracing/README.md#ray-box`.
+* `TraceDisc` and `TraceRay::hit_disc` (contract `bunny-ray-disc/1`, `RAY_DISC_ID`): the exact
+  ray-disc test for a disc in the plane `z = height` about the `z` axis,
+  returning the rounded-down distance and facing in a `DiscHit`; the rim is
+  inside, a ray parallel to the plane misses, and inputs outside the trace
+  domain are refused with `TraceDiscError`. See
+  `docs/topics/ray-tracing/README.md#ray-disc`.
 * `TriangleHit::barycentric_numerators`: the exact `u`, `v` and `det` the
   triangle test decided a hit with, as a `BarycentricNumerators` (also
   buildable from any point on a triangle with `BarycentricNumerators::new`).
