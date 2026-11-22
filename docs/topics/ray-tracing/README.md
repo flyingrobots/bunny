@@ -35,6 +35,11 @@ as:
 - `TraceSphere` (`new`, `center`, `radius`, `bounds`), `TraceSphereError`,
   `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
   in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
+- `TraceCylinder` (`new`, `radius`, `bottom`, `top`, `bounds`),
+  `TraceCylinderError`, `CylinderHit` (`distance`, `front_face`, `normal`) and
+  `TraceRay::hit_cylinder`, with the identity constant `RAY_CYLINDER_ID`, in
+  `crates/bunny-query/src/trace/cylinder.rs` and `cylinder/span.rs` (see
+  [Ray-Cylinder](#ray-cylinder));
 - `TraceBox` (`new`, `min`, `max`, `bounds`), `TraceBoxError`, `BoxHit`
   (`distance`, `front_face`, `normal`) and `TraceRay::hit_box`, in
   `crates/bunny-query/src/trace/box_hit.rs` (see [Ray-Box](#ray-box));
@@ -332,6 +337,101 @@ spare.
   root is reported, with `front_face == false`.
 - **Behind the origin.** When both rounded roots are below `t_min` there is no
   hit; a negative `t_min` lets a caller see them.
+
+## Ray-Cylinder
+
+`TraceRay::hit_cylinder(cylinder, t_min, t_max)` is the exact test of a ray
+against a capped cylinder. Its contract identity is
+**`bunny-ray-cylinder/1`**, published as `RAY_CYLINDER_ID`.
+
+**The cylinder** is in object space: its axis is the `+Y` axis (the up axis of
+the [coordinate law](../coordinate-law/README.md)), so the solid is
+`x^2 + z^2 <= r^2` with `bottom <= y <= top`. A cylinder that is moved or
+tilted is traced by a caller that first carries the ray into the cylinder's
+object space. `TraceCylinder::new(radius, bottom, top)` requires a positive
+radius, the radius and both cap heights inside the trace domain
+(`abs(raw) < 2^40`), and `bottom < top`. Any other input is refused with a
+typed `TraceCylinderError`, checked in this order: `RadiusNotPositive`,
+`RadiusOutsideTraceDomain`, `CapOutsideTraceDomain`, `CapsNotOrdered`.
+Nothing wraps, saturates or panics. `TraceCylinder::bounds` is the box
+`(-r, bottom, -r)` to `(r, top, r)`.
+
+**The hit** has the form of `SphereHit`, except that its normal is a unit vector:
+
+- `CylinderHit::distance` is in multiples of the ray direction, rounded down;
+- `CylinderHit::front_face` is `true` at the entry (the ray arrives from
+  outside, or only touches the cylinder) and `false` at the exit (the ray
+  leaves from inside);
+- `CylinderHit::normal` is the outward unit normal of the surface hit, a
+  `FixedUnitVec3`.
+
+**The arithmetic.** With `o` the origin and `d` the direction, raw, the line
+is inside the slab `bottom <= y <= top` between its two cap crossings, at
+`(height - o_y) / d_y` direction multiples, and inside the infinite cylinder
+between the two roots of the side's quadratic
+`a t^2 + 2 b t + (o_x^2 + o_z^2 - r^2) = 0`, with `a = d_x^2 + d_z^2` and
+`b = o_x d_x + o_z d_z`. Those roots are the sphere test's with the `y`
+components set to zero: the quarter discriminant `D = a r^2 - (o_x d_z - o_z d_x)^2`
+is exact in 256-bit integers and a negative `D` is a miss. The entry is the
+later of the two starts and the exit the earlier of the two ends; the line
+misses when the entry is after the exit. No rounded value is compared: a cap
+crossing `n / q` (with `q = abs(d_y)` and `n = (height - o_y) * sign(d_y)`)
+against a side root `(-b -+ sqrt(D)) / a` is the sign of `a n + q b` against
+`-+ sqrt(q^2 D)`, decided by squaring.
+
+Widths in the trace domain: `abs(o) < 2^40` and `abs(d) <= 2^32 + 1` per
+component, so `a < 2^66`, `abs(b) < 2^74`, `q < 2^33`, `abs(n) < 2^41`,
+`abs(a n + q b) < 2^108` and its square and `q^2 D` are below `2^216`. The
+side's roots have the widths of the sphere test's.
+
+**Rounding rule of `bunny-ray-cylinder/1`.**
+
+- A cap distance is `floor(n * 2^32 / q)` raw; a side distance is the floor
+  of the true root, by the rule of `bunny-ray-sphere/1`. The floor is
+  monotone, so the floor of the entry is the largest of the floors of the
+  starts, and likewise for the exit.
+- The distance limits are inclusive and apply to the rounded distance. The
+  entry is reported when `t_min <= entry <= t_max`; otherwise the exit when
+  `t_min <= exit <= t_max`; otherwise there is no hit.
+- On a cap the normal is exactly `(0, -1, 0)` (bottom) or `(0, 1, 0)` (top),
+  raw `2^32`. On the side it is taken at the exact root, not at the rounded
+  distance: there `a (x, z) = cross (d_z, -d_x) -+ sqrt(D) (d_x, d_z)`, with
+  `cross = o_x d_z - o_z d_x`, a vector of length `a r`. Both terms are scaled
+  by `2^s`, `s` the largest shift up to 64 that keeps `a r 2^s < 2^125`, with
+  `sqrt(D 2^2s)` floored; the result is shifted down below `2^62` and
+  normalized by `FixedUnitVec3::new`, with `y = 0`. The normal is a unit vector
+  by Bunny's unit-vector rule for every admitted radius, including one raw unit.
+- **Bound on the side normal**, derived before it was measured: the floored
+  square root moves the vector by at most `abs(d)` against a length of at least
+  `2^64 abs(d)` (below `2^-32` raw once normalized); the shift and the floored
+  length each add below `2^-28` raw; the rounded division of
+  `FixedVec3::normalize` adds at most half a raw unit. Each component is
+  therefore within one raw unit of the exact unit normal.
+
+**Tie rule at the rim.** Where the side meets a cap, when the side's root and
+the cap's crossing are the same exact distance, the cap is reported, with the
+cap's normal. This holds at the entry, at the exit, and for a line that only
+touches the cylinder at a rim point (the side's entry and the cap's exit
+coincide). Equal rounded distances are not a tie: only exact equality is.
+
+**Cases.**
+
+- **Grazing rays.** A line tangent to the side, with its contact between the
+  caps, hits at that one point, front face, with the side's normal; contact is
+  inclusive.
+- **A ray parallel to the axis** (`d_x = d_z = 0`) makes the side's quadratic
+  degenerate (`a = 0`). The side then constrains nothing when
+  `o_x^2 + o_z^2 <= r^2` and rules the cylinder out otherwise, so the hit is
+  on a cap. A ray running along the side itself enters at the rim, where the
+  cap wins.
+- **A ray in a cap's plane** (`d_y = 0` and `o_y` equal to a cap height) is
+  inside the closed slab, so the slab constrains nothing and the hit is on
+  the side, with the side's normal; one raw unit outside the plane misses.
+  Any ray with `d_y = 0` and `o_y` outside `bottom..=top` misses.
+- **Origin inside.** The entry is negative, so with `t_min >= 0` the exit is
+  reported, through the side or a cap, with `front_face == false`.
+- **Behind the origin.** When both rounded distances are below `t_min` there
+  is no hit; a negative `t_min` lets a caller see them.
 
 ## Ray-Box
 
