@@ -27,14 +27,25 @@ impl Display for DivisionByZero {
 
 impl core::error::Error for DivisionByZero {}
 
-/// Divides `n` by `d`, rounding to the nearest `u32` with exact halves rounded
-/// to the even integer (`bunny-u32-div-round-even/1`).
+/// Divides `numerator` by `denominator`, rounding to the nearest `u32` with exact
+/// halves rounded to the even integer (`bunny-u32-div-round-even/1`).
 ///
 /// # Errors
 ///
-/// Returns [`DivisionByZero`] when `d == 0`, including when `n == 0`.
-pub const fn div_round_even_u32(_n: u32, _d: u32) -> Result<u32, DivisionByZero> {
-    Err(DivisionByZero)
+/// Returns [`DivisionByZero`] when `denominator == 0`, including when `numerator == 0`.
+pub const fn div_round_even_u32(numerator: u32, denominator: u32) -> Result<u32, DivisionByZero> {
+    if denominator == 0 {
+        return Err(DivisionByZero);
+    }
+    let quotient = numerator / denominator;
+    let remainder = numerator % denominator;
+    let complement = denominator - remainder;
+    let increment = remainder > complement || (remainder == complement && (quotient & 1) != 0);
+    if increment {
+        Ok(quotient + 1)
+    } else {
+        Ok(quotient)
+    }
 }
 
 /// Canonical two-word interchange adapter `[value, status]` for
