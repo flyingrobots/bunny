@@ -23,7 +23,7 @@ pub enum Outcome {
 pub enum ExecutionClass {
     /// Pure Rust CPU reference implementation (`bunny-num`).
     Cpu,
-    /// Software GPU implementation (e.g., Mesa lavapipe, WARP, SwiftShader).
+    /// Software GPU implementation (e.g., Mesa lavapipe, WARP, `SwiftShader`).
     SoftwareGpu,
     /// Dedicated or integrated hardware GPU (e.g., Apple Metal, Vulkan, DX12).
     HardwareGpu,

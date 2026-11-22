@@ -189,34 +189,55 @@ fn classify_device_type(device_type: wgpu::DeviceType) -> ExecutionClass {
     }
 }
 
-fn unavailable_receipt(
+struct RunContext {
     manifest_sha: String,
     shader_sha: String,
     vectors_sha: String,
     expected_sha: String,
     vector_count: usize,
-    detail: String,
-) -> KernelConformanceReceipt {
-    KernelConformanceReceipt {
-        receipt_version: RECEIPT_VERSION.to_owned(),
-        contract_id: U32_DIV_ROUND_EVEN_CONTRACT_ID.to_owned(),
-        implementation_manifest_sha256: manifest_sha,
-        execution_artifact_sha256: shader_sha,
-        vectors_sha256: vectors_sha,
-        expected_results_sha256: expected_sha,
-        actual_results_sha256: None,
-        vector_count,
-        outcome: Outcome::Unavailable,
-        execution_class: ExecutionClass::Unknown,
-        environment: ExecutionEnvironment {
-            os: std::env::consts::OS.to_owned(),
-            arch: std::env::consts::ARCH.to_owned(),
-            backend: "unavailable".to_owned(),
-            adapter_name: None,
-            driver: None,
-            driver_info: None,
-        },
-        detail: Some(detail),
+}
+
+struct TargetOutcome {
+    actual_results_sha256: Option<String>,
+    outcome: Outcome,
+    execution_class: ExecutionClass,
+    environment: ExecutionEnvironment,
+    detail: Option<String>,
+}
+
+impl RunContext {
+    fn receipt(&self, result: TargetOutcome) -> KernelConformanceReceipt {
+        KernelConformanceReceipt {
+            receipt_version: RECEIPT_VERSION.to_owned(),
+            contract_id: U32_DIV_ROUND_EVEN_CONTRACT_ID.to_owned(),
+            implementation_manifest_sha256: self.manifest_sha.clone(),
+            execution_artifact_sha256: self.shader_sha.clone(),
+            vectors_sha256: self.vectors_sha.clone(),
+            expected_results_sha256: self.expected_sha.clone(),
+            actual_results_sha256: result.actual_results_sha256,
+            vector_count: self.vector_count,
+            outcome: result.outcome,
+            execution_class: result.execution_class,
+            environment: result.environment,
+            detail: result.detail,
+        }
+    }
+
+    fn unavailable(&self, detail: String) -> KernelConformanceReceipt {
+        self.receipt(TargetOutcome {
+            actual_results_sha256: None,
+            outcome: Outcome::Unavailable,
+            execution_class: ExecutionClass::Unknown,
+            environment: ExecutionEnvironment {
+                os: std::env::consts::OS.to_owned(),
+                arch: std::env::consts::ARCH.to_owned(),
+                backend: "unavailable".to_owned(),
+                adapter_name: None,
+                driver: None,
+                driver_info: None,
+            },
+            detail: Some(detail),
+        })
     }
 }
 
@@ -243,88 +264,24 @@ fn first_mismatch_detail(vectors: &[DivVector], expected: &[u8], actual: &[u8]) 
     None
 }
 
-/// Executes the assembled WGSL compute shader for `bunny-u32-div-round-even/1`
-/// on `wgpu` over `vectors`, compares canonical little-endian output bytes
-/// bit-for-bit against `bunny-num`, and returns a structured receipt.
-#[must_use]
-pub fn run_u32_div_round_even_gpu(
-    vectors: &[DivVector],
-    adapter_policy: AdapterPolicy,
-) -> KernelConformanceReceipt {
-    let manifest = u32_div_round_even_manifest();
-    let manifest_sha = manifest.digest_sha256().unwrap_or_default();
-    let shader_source = assembled_u32_div_round_even_compute_wgsl();
-    let shader_sha = sha256_hex(shader_source.as_bytes());
-    let input_bytes = serialize_inputs(vectors);
-    let expected_bytes = compute_cpu_expected_bytes(vectors);
-    let vectors_sha = sha256_hex(&input_bytes);
-    let expected_sha = sha256_hex(&expected_bytes);
+fn dispatch_compute_shader(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    shader_source: &str,
+    input_bytes: &[u8],
+) -> Result<Vec<u8>, String> {
+    let byte_len = u64::try_from(input_bytes.len())
+        .map_err(|_| "buffer byte length exceeds u64".to_owned())?;
+    let count_u32 =
+        u32::try_from(input_bytes.len() / 8).map_err(|_| "vector count exceeds u32".to_owned())?;
 
-    if vectors.is_empty() {
-        return unavailable_receipt(
-            manifest_sha,
-            shader_sha,
-            vectors_sha,
-            expected_sha,
-            0,
-            "vector list is empty".to_owned(),
-        );
-    }
-
-    let instance = wgpu::Instance::default();
-    let force_fallback = matches!(adapter_policy, AdapterPolicy::SoftwareFallbackOnly);
-    let adapter = match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: None,
-        force_fallback_adapter: force_fallback,
-    })) {
-        Ok(adapter) => adapter,
-        Err(err) => {
-            return unavailable_receipt(
-                manifest_sha,
-                shader_sha,
-                vectors_sha,
-                expected_sha,
-                vectors.len(),
-                format!("no compatible wgpu adapter: {err}"),
-            );
-        }
-    };
-
-    let info = adapter.get_info();
-    let exec_class = classify_device_type(info.device_type);
-    let environment = ExecutionEnvironment {
-        os: std::env::consts::OS.to_owned(),
-        arch: std::env::consts::ARCH.to_owned(),
-        backend: format!("{:?}", info.backend),
-        adapter_name: Some(info.name),
-        driver: Some(info.driver),
-        driver_info: Some(info.driver_info),
-    };
-
-    let (device, queue) =
-        match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) {
-            Ok(pair) => pair,
-            Err(err) => {
-                return unavailable_receipt(
-                    manifest_sha,
-                    shader_sha,
-                    vectors_sha,
-                    expected_sha,
-                    vectors.len(),
-                    format!("failed to open wgpu device: {err}"),
-                );
-            }
-        };
-
-    let byte_len = u64::try_from(input_bytes.len()).expect("buffer byte length fits u64");
     let input_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("bunny-div-inputs"),
         size: byte_len,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&input_buf, 0, &input_bytes);
+    queue.write_buffer(&input_buf, 0, input_bytes);
 
     let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("bunny-div-outputs"),
@@ -352,10 +309,9 @@ pub fn run_u32_div_round_even_gpu(
         cache: None,
     });
 
-    let bind_group_layout = pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bunny-div-bind-group"),
-        layout: &bind_group_layout,
+        layout: &pipeline.get_bind_group_layout(0),
         entries: &[
             wgpu::BindGroupEntry { binding: 0, resource: input_buf.as_entire_binding() },
             wgpu::BindGroupEntry { binding: 1, resource: output_buf.as_entire_binding() },
@@ -372,9 +328,7 @@ pub fn run_u32_div_round_even_gpu(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let count_u32 = u32::try_from(vectors.len()).expect("vector count fits u32");
-        let workgroups = count_u32.div_ceil(WORKGROUP_SIZE);
-        pass.dispatch_workgroups(workgroups, 1, 1);
+        pass.dispatch_workgroups(count_u32.div_ceil(WORKGROUP_SIZE), 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output_buf, 0, &staging_buf, 0, byte_len);
     queue.submit(Some(encoder.finish()));
@@ -385,43 +339,86 @@ pub fn run_u32_div_round_even_gpu(
         let _ = tx.send(res);
     });
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
-    let map_result = rx.recv().map_err(|err| format!("map channel closed: {err}"));
-    if let Err(err) = map_result.and_then(|inner| inner.map_err(|e| format!("map failed: {e}"))) {
-        return KernelConformanceReceipt {
-            receipt_version: RECEIPT_VERSION.to_owned(),
-            contract_id: U32_DIV_ROUND_EVEN_CONTRACT_ID.to_owned(),
-            implementation_manifest_sha256: manifest_sha,
-            execution_artifact_sha256: shader_sha,
-            vectors_sha256: vectors_sha,
-            expected_results_sha256: expected_sha,
+    rx.recv()
+        .map_err(|err| format!("map channel closed: {err}"))?
+        .map_err(|err| format!("staging map failed: {err}"))?;
+
+    let actual_bytes = slice.get_mapped_range().to_vec();
+    staging_buf.unmap();
+    Ok(actual_bytes)
+}
+
+/// Executes the assembled WGSL compute shader for `bunny-u32-div-round-even/1`
+/// on `wgpu` over `vectors`, compares canonical little-endian output bytes
+/// bit-for-bit against `bunny-num`, and returns a structured receipt.
+#[must_use]
+pub fn run_u32_div_round_even_gpu(
+    vectors: &[DivVector],
+    adapter_policy: AdapterPolicy,
+) -> KernelConformanceReceipt {
+    let manifest = u32_div_round_even_manifest();
+    let shader_source = assembled_u32_div_round_even_compute_wgsl();
+    let input_bytes = serialize_inputs(vectors);
+    let expected_bytes = compute_cpu_expected_bytes(vectors);
+    let ctx = RunContext {
+        manifest_sha: manifest.digest_sha256().unwrap_or_default(),
+        shader_sha: sha256_hex(shader_source.as_bytes()),
+        vectors_sha: sha256_hex(&input_bytes),
+        expected_sha: sha256_hex(&expected_bytes),
+        vector_count: vectors.len(),
+    };
+
+    if vectors.is_empty() {
+        return ctx.unavailable("vector list is empty".to_owned());
+    }
+
+    let instance = wgpu::Instance::default();
+    let force_fallback = matches!(adapter_policy, AdapterPolicy::SoftwareFallbackOnly);
+    let adapter = match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: None,
+        force_fallback_adapter: force_fallback,
+    })) {
+        Ok(adapter) => adapter,
+        Err(err) => return ctx.unavailable(format!("no compatible wgpu adapter: {err}")),
+    };
+
+    let info = adapter.get_info();
+    let exec_class = classify_device_type(info.device_type);
+    let environment = ExecutionEnvironment {
+        os: std::env::consts::OS.to_owned(),
+        arch: std::env::consts::ARCH.to_owned(),
+        backend: format!("{:?}", info.backend),
+        adapter_name: Some(info.name),
+        driver: Some(info.driver),
+        driver_info: Some(info.driver_info),
+    };
+
+    let (device, queue) =
+        match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) {
+            Ok(pair) => pair,
+            Err(err) => return ctx.unavailable(format!("failed to open wgpu device: {err}")),
+        };
+
+    match dispatch_compute_shader(&device, &queue, &shader_source, &input_bytes) {
+        Ok(actual_bytes) => {
+            let actual_sha = sha256_hex(&actual_bytes);
+            let detail = first_mismatch_detail(vectors, &expected_bytes, &actual_bytes);
+            let outcome = if detail.is_none() { Outcome::Pass } else { Outcome::Fail };
+            ctx.receipt(TargetOutcome {
+                actual_results_sha256: Some(actual_sha),
+                outcome,
+                execution_class: exec_class,
+                environment,
+                detail,
+            })
+        }
+        Err(err) => ctx.receipt(TargetOutcome {
             actual_results_sha256: None,
-            vector_count: vectors.len(),
             outcome: Outcome::Fail,
             execution_class: exec_class,
             environment,
             detail: Some(err),
-        };
-    }
-
-    let actual_bytes: Vec<u8> = slice.get_mapped_range().to_vec();
-    staging_buf.unmap();
-
-    let actual_sha = sha256_hex(&actual_bytes);
-    let detail = first_mismatch_detail(vectors, &expected_bytes, &actual_bytes);
-    let outcome = if detail.is_none() { Outcome::Pass } else { Outcome::Fail };
-
-    KernelConformanceReceipt {
-        receipt_version: RECEIPT_VERSION.to_owned(),
-        contract_id: U32_DIV_ROUND_EVEN_CONTRACT_ID.to_owned(),
-        implementation_manifest_sha256: manifest_sha,
-        execution_artifact_sha256: shader_sha,
-        vectors_sha256: vectors_sha,
-        expected_results_sha256: expected_sha,
-        actual_results_sha256: Some(actual_sha),
-        vector_count: vectors.len(),
-        outcome,
-        execution_class: exec_class,
-        environment,
-        detail,
+        }),
     }
 }
