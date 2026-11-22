@@ -9,6 +9,7 @@ and unused async resilience dependencies not needed by the synchronous `bunny-we
 Files read:
 Cargo.toml
 Cargo.lock
+deny.toml
 crates/bunny-wesley/Cargo.toml
 crates/bunny-wesley/src/main.rs
 crates/bunny-wesley/src/profile.rs
@@ -23,9 +24,28 @@ generated/bunny-graphics.manifest.json
 generated/typescript/bunny-graphics.ts
 .repo-respect/receipts/2026-11-22-bump-wesley-core.md
 
-Verification:
-- `rg 'name = "chrono"' Cargo.lock` returns zero matches
-- `cargo test --locked -p bunny-wesley` passes
-- `cargo run --locked -p xtask -- code-dojo-generated` passes
-- `cargo run --locked -p xtask -- code-dojo-rust --all` passes
-- `cargo run --locked -p xtask -- repo-respect check --branch` passes
+Topic docs:
+None changed; `docs/topics/contract-generation/` behavior is unchanged aside from bumping the
+pinned `wesley-core` crate version witness from `0.0.5` to `0.3.0-alpha.4`.
+
+Generated artifacts:
+Regenerated `crates/bunny-contract/src/generated/graphics.rs`,
+`generated/typescript/bunny-graphics.ts`, and `generated/bunny-graphics.manifest.json` via
+`cargo run --locked -p xtask -- generate` (only the `wesleyCore` / `BUNNY_WESLEY_CORE_VERSION`
+witness changed from `0.0.5` to `0.3.0-alpha.4`).
+
+Checks run:
+- `rg 'name = "chrono"' Cargo.lock` -> 0 matches
+- `cargo test --locked --workspace --all-targets --all-features` -> pass
+- `cargo run --locked -p xtask -- code-dojo-generated` -> clean
+- `cargo run --locked -p xtask -- code-dojo-rust --all` -> clean
+- `cargo run --locked -p xtask -- code-dojo-determinism --enforce` -> clean
+- `cargo run --locked -p xtask -- repo-respect check --branch` -> clean
+
+Known risks:
+`wesley-core 0.3.0-alpha.4` is a pre-release version already published on crates.io and
+consumes `foldhash v0.2.0` under the permissive `Zlib` license (added to `deny.toml`
+`[licenses].allow`).
+
+Human reviewer:
+@flyingrobots
