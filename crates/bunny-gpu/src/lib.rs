@@ -15,7 +15,8 @@ pub use receipt::{
 };
 pub use u32_div_round_even::{
     assembled_u32_div_round_even_compute_wgsl, load_u32_div_round_even_fixture,
-    run_u32_div_round_even_cpu, run_u32_div_round_even_gpu, u32_div_round_even_manifest,
-    DivRoundEvenFixture, DivVector, U32_DIV_ROUND_EVEN_COMPUTE_WRAPPER_WGSL,
-    U32_DIV_ROUND_EVEN_VECTORS_JSON, U32_DIV_ROUND_EVEN_WGSL,
+    run_u32_div_round_even_cpu, run_u32_div_round_even_gpu, run_u32_div_round_even_gpu_with_shader,
+    u32_div_round_even_manifest, DivRoundEvenFixture, DivVector,
+    U32_DIV_ROUND_EVEN_COMPUTE_WRAPPER_WGSL, U32_DIV_ROUND_EVEN_VECTORS_JSON,
+    U32_DIV_ROUND_EVEN_WGSL,
 };

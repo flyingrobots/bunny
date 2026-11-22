@@ -2,9 +2,28 @@
 
 use bunny_gpu::{
     load_u32_div_round_even_fixture, run_u32_div_round_even_cpu, run_u32_div_round_even_gpu,
-    u32_div_round_even_manifest, AdapterPolicy, ExecutionClass, Outcome,
+    run_u32_div_round_even_gpu_with_shader, u32_div_round_even_manifest, AdapterPolicy, DivVector,
+    ExecutionClass, Outcome,
 };
-use bunny_num::{div_round_even_u32_words, U32_DIV_ROUND_EVEN_CONTRACT_ID};
+use bunny_num::{div_round_even_u32_words, CRATE_VERSION, U32_DIV_ROUND_EVEN_CONTRACT_ID};
+
+const EXPECTED_CORE_15: &[(u32, u32, u32, u32)] = &[
+    (0, 1, 0, 0),
+    (u32::MAX, 1, u32::MAX, 0),
+    (u32::MAX, u32::MAX, 1, 0),
+    (1, 4, 0, 0),
+    (3, 4, 1, 0),
+    (1, 2, 0, 0),
+    (3, 2, 2, 0),
+    (5, 2, 2, 0),
+    (7, 2, 4, 0),
+    (u32::MAX, 2, 2_147_483_648, 0),
+    (3_000_000_000, 4_000_000_000, 1, 0),
+    (2_147_483_647, u32::MAX, 0, 0),
+    (2_147_483_648, u32::MAX, 1, 0),
+    (0, 0, 0, 1),
+    (u32::MAX, 0, 0, 1),
+];
 
 #[test]
 fn udre_gpu_001_fixture_matches_cpu_reference_and_15_core_vectors() {
@@ -13,18 +32,15 @@ fn udre_gpu_001_fixture_matches_cpu_reference_and_15_core_vectors() {
     assert_eq!(fixture.core_count, 15);
     assert!(fixture.vectors.len() >= 1_500, "fixture should include core + boundary + seeded tail");
 
-    // Verify key adversarial golden vectors at their pinned core indices
-    let overflow_vec = fixture.vectors[10];
-    assert_eq!(
-        (
-            overflow_vec.numerator,
-            overflow_vec.denominator,
-            overflow_vec.expected_value,
-            overflow_vec.expected_status,
-        ),
-        (3_000_000_000, 4_000_000_000, 1, 0),
-        "core vector 10 must be the 2*r overflow counterexample",
-    );
+    // Verify all 15 core golden vectors at their pinned indices 0..15
+    for (idx, &(n, d, exp_val, exp_st)) in EXPECTED_CORE_15.iter().enumerate() {
+        let vec = fixture.vectors[idx];
+        assert_eq!(
+            (vec.numerator, vec.denominator, vec.expected_value, vec.expected_status),
+            (n, d, exp_val, exp_st),
+            "core vector[{idx}] mismatch",
+        );
+    }
 
     for vec in &fixture.vectors {
         assert_eq!(
@@ -40,6 +56,14 @@ fn udre_gpu_001_fixture_matches_cpu_reference_and_15_core_vectors() {
         cpu_receipt.actual_results_sha256.as_deref(),
         Some(cpu_receipt.expected_results_sha256.as_str()),
     );
+    assert!(cpu_receipt.detail.is_none());
+
+    // CPU failure receipt must populate diagnostic detail on mismatch
+    let bad_vec =
+        [DivVector { numerator: 3, denominator: 4, expected_value: 99, expected_status: 0 }];
+    let bad_cpu = run_u32_div_round_even_cpu(&bad_vec);
+    assert_eq!(bad_cpu.outcome, Outcome::Fail);
+    assert!(bad_cpu.detail.is_some());
 }
 
 #[test]
@@ -87,4 +111,44 @@ fn udre_gpu_003_manifest_and_receipt_identities_are_deterministic() {
     assert_eq!(m1.helper_wgsl_sha256.len(), 64);
     assert_eq!(m1.assembled_compute_wgsl_sha256.len(), 64);
     assert_eq!(m1.vectors_fixture_sha256.len(), 64);
+    assert_eq!(m1.bunny_num_version, CRATE_VERSION);
+}
+
+#[test]
+fn udre_gpu_004_empty_vectors_return_not_run() {
+    let cpu = run_u32_div_round_even_cpu(&[]);
+    assert_eq!(cpu.outcome, Outcome::NotRun);
+    assert_eq!(cpu.vector_count, 0);
+    assert!(cpu.actual_results_sha256.is_none());
+    assert!(cpu.detail.is_some());
+
+    let gpu = run_u32_div_round_even_gpu(&[], AdapterPolicy::HardwarePreferred);
+    assert_eq!(gpu.outcome, Outcome::NotRun);
+    assert_eq!(gpu.vector_count, 0);
+    assert_eq!(gpu.environment.backend, "not-run");
+    assert!(gpu.actual_results_sha256.is_none());
+    assert!(gpu.detail.is_some());
+}
+
+#[test]
+fn udre_gpu_005_invalid_wgsl_returns_fail_without_panicking() {
+    let sample =
+        [DivVector { numerator: 3, denominator: 4, expected_value: 1, expected_status: 0 }];
+    let receipt = run_u32_div_round_even_gpu_with_shader(
+        &sample,
+        "this is not valid wgsl !!!",
+        AdapterPolicy::HardwarePreferred,
+    );
+    match receipt.outcome {
+        Outcome::Fail => {
+            assert!(receipt.actual_results_sha256.is_none());
+            assert!(receipt.detail.is_some());
+        }
+        Outcome::Unavailable => {
+            assert!(receipt.actual_results_sha256.is_none());
+            #[cfg(target_os = "macos")]
+            panic!("expected Metal GPU adapter on macOS to compile-fail, got Unavailable");
+        }
+        other => panic!("invalid WGSL must return Outcome::Fail (or Unavailable), got {other:?}"),
+    }
 }

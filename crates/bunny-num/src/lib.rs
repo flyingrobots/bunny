@@ -14,6 +14,10 @@
 
 //! Deterministic numeric profiles for Bunny graphics primitives.
 
+/// Semantic version of `bunny-num` compiled from `Cargo.toml`.
+// dojo: allow std-env -- Cargo sets CARGO_PKG_VERSION from the workspace manifest, not the host
+pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod fixed_angle;
 pub mod fixed_divisor;
 pub mod fixed_q32_32;

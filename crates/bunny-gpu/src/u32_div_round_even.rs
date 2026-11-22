@@ -356,8 +356,19 @@ pub fn run_u32_div_round_even_gpu(
     vectors: &[DivVector],
     adapter_policy: AdapterPolicy,
 ) -> KernelConformanceReceipt {
-    let manifest = u32_div_round_even_manifest();
     let shader_source = assembled_u32_div_round_even_compute_wgsl();
+    run_u32_div_round_even_gpu_with_shader(vectors, &shader_source, adapter_policy)
+}
+
+/// Executes an explicit WGSL compute shader source over `vectors` and compares
+/// canonical output bytes bit-for-bit against `bunny-num`.
+#[must_use]
+pub fn run_u32_div_round_even_gpu_with_shader(
+    vectors: &[DivVector],
+    shader_source: &str,
+    adapter_policy: AdapterPolicy,
+) -> KernelConformanceReceipt {
+    let manifest = u32_div_round_even_manifest();
     let input_bytes = serialize_inputs(vectors);
     let expected_bytes = compute_cpu_expected_bytes(vectors);
     let ctx = RunContext {
@@ -400,7 +411,7 @@ pub fn run_u32_div_round_even_gpu(
             Err(err) => return ctx.unavailable(format!("failed to open wgpu device: {err}")),
         };
 
-    match dispatch_compute_shader(&device, &queue, &shader_source, &input_bytes) {
+    match dispatch_compute_shader(&device, &queue, shader_source, &input_bytes) {
         Ok(actual_bytes) => {
             let actual_sha = sha256_hex(&actual_bytes);
             let detail = first_mismatch_detail(vectors, &expected_bytes, &actual_bytes);
