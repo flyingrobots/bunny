@@ -3,7 +3,7 @@
 
 use std::sync::mpsc;
 
-use bunny_num::{div_round_even_u32_bytes, U32_DIV_ROUND_EVEN_CONTRACT_ID};
+use bunny_num::{div_round_even_u32_bytes, CRATE_VERSION, U32_DIV_ROUND_EVEN_CONTRACT_ID};
 use serde::Deserialize;
 
 use crate::manifest::{sha256_hex, ImplementationManifest};
@@ -80,7 +80,7 @@ pub fn u32_div_round_even_manifest() -> ImplementationManifest {
         manifest_version: MANIFEST_VERSION.to_owned(),
         contract_id: U32_DIV_ROUND_EVEN_CONTRACT_ID.to_owned(),
         bunny_gpu_version: env!("CARGO_PKG_VERSION").to_owned(),
-        bunny_num_version: "0.7.1".to_owned(),
+        bunny_num_version: CRATE_VERSION.to_owned(),
         helper_wgsl_sha256: sha256_hex(U32_DIV_ROUND_EVEN_WGSL.as_bytes()),
         compute_wrapper_wgsl_sha256: sha256_hex(U32_DIV_ROUND_EVEN_COMPUTE_WRAPPER_WGSL.as_bytes()),
         assembled_compute_wgsl_sha256: sha256_hex(assembled.as_bytes()),
@@ -153,8 +153,34 @@ pub fn run_u32_div_round_even_cpu(vectors: &[DivVector]) -> KernelConformanceRec
         fixture_bytes.extend_from_slice(&vec.expected_status.to_le_bytes());
     }
     let expected_sha = sha256_hex(&fixture_bytes);
+    let env = ExecutionEnvironment {
+        os: std::env::consts::OS.to_owned(),
+        arch: std::env::consts::ARCH.to_owned(),
+        backend: "cpu-rust".to_owned(),
+        adapter_name: None,
+        driver: None,
+        driver_info: None,
+    };
+    if vectors.is_empty() {
+        return KernelConformanceReceipt {
+            receipt_version: RECEIPT_VERSION.to_owned(),
+            contract_id: U32_DIV_ROUND_EVEN_CONTRACT_ID.to_owned(),
+            implementation_manifest_sha256: manifest_sha,
+            execution_artifact_sha256: sha256_hex(b"bunny-num::div_round_even_u32_bytes"),
+            vectors_sha256: sha256_hex(&input_bytes),
+            expected_results_sha256: expected_sha,
+            actual_results_sha256: None,
+            vector_count: 0,
+            outcome: Outcome::NotRun,
+            execution_class: ExecutionClass::Cpu,
+            environment: env,
+            detail: Some("vector list is empty".to_owned()),
+        };
+    }
+
     let actual_sha = sha256_hex(&cpu_bytes);
-    let outcome = if cpu_bytes == fixture_bytes { Outcome::Pass } else { Outcome::Fail };
+    let detail = first_mismatch_detail(vectors, &fixture_bytes, &cpu_bytes);
+    let outcome = if detail.is_none() { Outcome::Pass } else { Outcome::Fail };
 
     KernelConformanceReceipt {
         receipt_version: RECEIPT_VERSION.to_owned(),
@@ -167,15 +193,8 @@ pub fn run_u32_div_round_even_cpu(vectors: &[DivVector]) -> KernelConformanceRec
         vector_count: vectors.len(),
         outcome,
         execution_class: ExecutionClass::Cpu,
-        environment: ExecutionEnvironment {
-            os: std::env::consts::OS.to_owned(),
-            arch: std::env::consts::ARCH.to_owned(),
-            backend: "cpu-rust".to_owned(),
-            adapter_name: None,
-            driver: None,
-            driver_info: None,
-        },
-        detail: None,
+        environment: env,
+        detail,
     }
 }
 
@@ -239,6 +258,48 @@ impl RunContext {
             detail: Some(detail),
         })
     }
+
+    fn not_run(&self, detail: String) -> KernelConformanceReceipt {
+        self.receipt(TargetOutcome {
+            actual_results_sha256: None,
+            outcome: Outcome::NotRun,
+            execution_class: ExecutionClass::Unknown,
+            environment: ExecutionEnvironment {
+                os: std::env::consts::OS.to_owned(),
+                arch: std::env::consts::ARCH.to_owned(),
+                backend: "not-run".to_owned(),
+                adapter_name: None,
+                driver: None,
+                driver_info: None,
+            },
+            detail: Some(detail),
+        })
+    }
+}
+
+struct ErrorScopes {
+    internal: wgpu::ErrorScopeGuard,
+    oom: wgpu::ErrorScopeGuard,
+    validation: wgpu::ErrorScopeGuard,
+}
+
+impl ErrorScopes {
+    fn push(device: &wgpu::Device) -> Self {
+        let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
+        let oom = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        Self { internal, oom, validation }
+    }
+
+    fn pop(self) -> Result<(), String> {
+        let val = pollster::block_on(self.validation.pop());
+        let oom = pollster::block_on(self.oom.pop());
+        let internal = pollster::block_on(self.internal.pop());
+        if let Some(err) = val.or(oom).or(internal) {
+            return Err(err.to_string());
+        }
+        Ok(())
+    }
 }
 
 fn first_mismatch_detail(vectors: &[DivVector], expected: &[u8], actual: &[u8]) -> Option<String> {
@@ -274,6 +335,13 @@ fn dispatch_compute_shader(
         .map_err(|_| "buffer byte length exceeds u64".to_owned())?;
     let count_u32 =
         u32::try_from(input_bytes.len() / 8).map_err(|_| "vector count exceeds u32".to_owned())?;
+    let workgroups = count_u32.div_ceil(WORKGROUP_SIZE);
+    let max_wg = device.limits().max_compute_workgroups_per_dimension;
+    if workgroups > max_wg {
+        return Err(format!("dispatch workgroups ({workgroups}) exceeds device limit ({max_wg})"));
+    }
+
+    let scopes = ErrorScopes::push(device);
 
     let input_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("bunny-div-inputs"),
@@ -328,17 +396,21 @@ fn dispatch_compute_shader(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(count_u32.div_ceil(WORKGROUP_SIZE), 1, 1);
+        pass.dispatch_workgroups(workgroups, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output_buf, 0, &staging_buf, 0, byte_len);
     queue.submit(Some(encoder.finish()));
+
+    scopes.pop()?;
 
     let slice = staging_buf.slice(..);
     let (tx, rx) = mpsc::channel();
     slice.map_async(wgpu::MapMode::Read, move |res| {
         let _ = tx.send(res);
     });
-    let _ = device.poll(wgpu::PollType::wait_indefinitely());
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|err| format!("device poll failed: {err}"))?;
     rx.recv()
         .map_err(|err| format!("map channel closed: {err}"))?
         .map_err(|err| format!("staging map failed: {err}"))?;
@@ -380,7 +452,7 @@ pub fn run_u32_div_round_even_gpu_with_shader(
     };
 
     if vectors.is_empty() {
-        return ctx.unavailable("vector list is empty".to_owned());
+        return ctx.not_run("vector list is empty".to_owned());
     }
 
     let instance = wgpu::Instance::default();
