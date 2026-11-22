@@ -12,10 +12,16 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-geom = { path = "../bunny-geom", version = "0.6.0" }
-bunny-linalg = { path = "../bunny-linalg", version = "0.6.0" }
-bunny-num = { path = "../bunny-num", version = "0.6.0" }
-sha2 = { version = "0.10.9", default-features = false }
+bunny-geom = { path = "../bunny-geom", version = "0.7.1" }
+bunny-linalg = { path = "../bunny-linalg", version = "0.7.1" }
+bunny-num = { path = "../bunny-num", version = "0.7.1" }
+sha2 = { version = "0.10.9", default-features = false, optional = true }
+
+[features]
+default = ["mesh-hash"]
+# `compute_mesh_hash`, the SHA-256 mesh verification hash. It is the only item that
+# needs `sha2`; without it the crate has no crates.io dependency.
+mesh-hash = ["dep:sha2"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

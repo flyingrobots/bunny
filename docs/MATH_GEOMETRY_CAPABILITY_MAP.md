@@ -96,7 +96,7 @@ policy from their consumers.
 | Collision and contact | Ray and closest queries | Narrowphase coverage |
 | Acceleration | BVH, sweep-and-prune | Dynamic structures |
 | Mesh and codecs | Quantized mesh, PLY/OBJ, decoder | Topology and encoder |
-| Visibility and optics | Ray and BVH ingredients | Camera and visibility math |
+| Visibility and optics | Trace kernels, pinhole camera, sampling, diffuse shading, pixel values | Projection and visibility math |
 | SIMD and performance | Scalar reference | Parity and benchmarks |
 | Consumer confidence | Docs, witnesses, gates | Examples and fixtures |
 
@@ -161,6 +161,8 @@ Current surface:
 - `FixedRay3`
 - `FixedAabb3`
 - `FixedSphere3`
+- `FixedPlane3` and `FixedSegment3` with checked segment clipping and
+  `clip_polygon` for convex polygons
 - validated fixed/float boundary conversions
 - ray and closest-point query inputs
 
@@ -261,6 +263,20 @@ Current surface:
 - ray primitives
 - ray intersection queries
 - BVH traversal ingredients
+- ray-tracing kernels (`TraceRay`, `TraceTriangle`)
+- `bunny-optics` pinhole camera: deterministic per-pixel trace-ray generation
+  (`docs/topics/optics/`)
+- `bunny-optics` sampling: a counter-based sample hash (`bunny-sample-hash/1`)
+  and an Owen-scrambled Sobol pixel sampler (`bunny-sobol-owen/1`) whose values
+  depend only on (seed, pixel, sample, dimension)
+- `bunny-optics` pixel values: exact sample accumulation, sRGB and linear tone
+  curves, 8-bit and 16-bit codes over caller-provided slices
+  (`docs/topics/optics/`)
+- `bunny-optics` diffuse shading (`bunny-diffuse-shading/1`): triangle unit
+  normals and frames, the facing rule, an exact start rule for secondary rays,
+  cosine-weighted bounce directions, a directional light's term and shadow
+  ray, a uniform sky and the diffuse reflection, with a reference order of
+  operations (`docs/topics/optics/`)
 - coordinate law reservations for future projection work
 
 Open work:
@@ -269,8 +285,8 @@ Open work:
 | --- | --- |
 | Occlusion and visibility queries | #158 |
 | Ray tracing hit suites | #159 |
-| Camera and ray generation | #138 |
-| Lighting and BRDF inputs | #160 |
+| Projection matrices; camera models beyond the pinhole | #138, #201, #202 |
+| Reflection, refraction, attenuation and BRDFs beyond diffuse | #160 |
 
 ### SIMD and Performance
 

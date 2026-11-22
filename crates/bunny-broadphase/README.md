@@ -9,8 +9,22 @@ buffer is large enough for the requested operation.
 
 ## Features
 
-* Flat array-backed BVH construction into caller-owned buffers.
+* Flat array-backed BVH construction into caller-owned buffers, with two
+  builders that write the same format: `build_bvh` (quartile splits) and
+  `build_bvh_sah` (binned surface area heuristic, integer costs, stated tie
+  rules, a depth cap and no recursion). See `docs/topics/bvh-construction/` in
+  the repository.
 * Stack-bounded BVH traversal for AABB and ray queries.
+* Front-to-back closest-hit and any-hit ray traversal (`closest_hit`,
+  `any_hit`) over the same trees, with a caller-supplied primitive test.
+  Ties go to the lowest primitive index, and the answer does not depend on
+  the tree's shape; see `docs/topics/ray-tracing/` in the repository.
+* A compact copy of a built tree for ray traversal (`compact_bvh`), whose
+  nodes hold both children's boxes, searched by `compact_closest_hit` and
+  `compact_any_hit` with the same calls and answers as the searches above.
+* Counted forms of the compact searches (`compact_closest_hit_counted`,
+  `compact_any_hit_counted`) that also return a `TraversalCounts` record of
+  the box tests, visits and primitive tests one search made.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 

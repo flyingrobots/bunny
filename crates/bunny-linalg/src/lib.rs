@@ -1,11 +1,20 @@
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
-#![deny(clippy::nursery)]
+// `clippy::nursery` is cherry-picked, not denied as a group (CODE_STANDARDS.md, Rule 10):
+// - `missing_const_for_fn` keeps every function that can be `const` usable in constant
+//   expressions, as the crate's value constructors and accessors are;
+// - `redundant_pub_crate` keeps crate-private items `pub` inside private modules, so the
+//   module's own visibility is the one boundary to read;
+// - `use_self` keeps `Self` in impls, so a renamed type changes one line.
+#![deny(clippy::missing_const_for_fn)]
+#![deny(clippy::redundant_pub_crate)]
+#![deny(clippy::use_self)]
 #![deny(missing_docs)]
 
 //! Linear algebra primitives for Bunny graphics contracts.
 
+// dojo: allow float-boundary -- imports the f32 DTO alias for Vec2 and Vec3 below
 use bunny_num::{FixedQ32_32, Scalar};
 
 mod fixed_affine2;
@@ -14,22 +23,29 @@ mod fixed_mat2;
 mod fixed_mat3;
 mod fixed_mat4;
 mod fixed_mat4_inverse;
+mod fixed_mat4_look_at;
+mod fixed_mat4_projection;
 mod fixed_vec2;
 mod fixed_vec3;
 pub(crate) mod matrix_common;
+mod viewport;
 
 pub use fixed_affine2::FixedAffine2;
 pub use fixed_affine3::FixedAffine3;
 pub use fixed_mat2::FixedMat2;
 pub use fixed_mat3::FixedMat3;
 pub use fixed_mat4::FixedMat4;
+pub use fixed_mat4_look_at::LookAtError;
+pub use fixed_mat4_projection::ProjectionError;
 pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
 pub use matrix_common::FixedMat4Row;
+pub use viewport::{Viewport, ViewportError};
 
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
 const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
 
+// dojo: allow float-boundary -- f32 DTO vector; converted to FixedVec2 at the boundary
 /// Two-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 {
@@ -39,6 +55,7 @@ pub struct Vec2 {
     pub y: Scalar,
 }
 
+// dojo: allow float-boundary -- constructor of the f32 DTO vector
 impl Vec2 {
     /// Creates a new vector from components.
     #[must_use]
@@ -47,6 +64,7 @@ impl Vec2 {
     }
 }
 
+// dojo: allow float-boundary -- f32 DTO vector; converted to FixedVec3 at the boundary
 /// Three-dimensional vector using floating-point coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec3 {
@@ -58,6 +76,7 @@ pub struct Vec3 {
     pub z: Scalar,
 }
 
+// dojo: allow float-boundary -- constructor of the f32 DTO vector
 impl Vec3 {
     /// Creates a new vector from components.
     #[must_use]

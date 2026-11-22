@@ -7,15 +7,24 @@ edition.workspace = true
 keywords = ["bunny", "mesh", "codec", "ply", "obj"]
 license.workspace = true
 readme = "README.md"
+# The 143 KB Stanford asset and the only test that reads it stay out of the package
+# together; `scripts/publish-crates.sh packaged-tests` builds the packaged tests.
+exclude = ["tests/fixtures/stanford-bunny-ascii/", "tests/ply_ascii_stanford_tests.rs"]
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-geom = { path = "../bunny-geom", version = "0.6.0" }
-bunny-linalg = { path = "../bunny-linalg", version = "0.6.0" }
-bunny-mesh = { path = "../bunny-mesh", version = "0.6.0" }
-bunny-num = { path = "../bunny-num", version = "0.6.0" }
+bunny-geom = { path = "../bunny-geom", version = "0.7.1" }
+bunny-linalg = { path = "../bunny-linalg", version = "0.7.1" }
+bunny-mesh = { path = "../bunny-mesh", version = "0.7.1", default-features = false }
+bunny-num = { path = "../bunny-num", version = "0.7.1" }
+
+[features]
+default = ["mesh-hash"]
+# Turns on `bunny-mesh/mesh-hash` (`bunny_mesh::compute_mesh_hash` and `sha2`). No
+# `bunny-codec` item depends on it; without it the crate has no crates.io dependency.
+mesh-hash = ["bunny-mesh/mesh-hash"]
 
 [lib]
 path = "src/lib.rs"

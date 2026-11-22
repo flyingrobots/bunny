@@ -2,8 +2,11 @@
 
 use bunny_contract::generated::graphics::{BUNNY_GRAPHICS_SCALAR_PROFILES, BUNNY_WESLEY_GENERATOR};
 
+// dojo: allow std-env -- Cargo sets CARGO_PKG_VERSION from the workspace manifest, not the host
 const EXPECTED_GENERATOR: &str = concat!("bunny-wesley/", env!("CARGO_PKG_VERSION"));
+// dojo: allow include-data -- reads the committed generator outputs, kept outside the crate
 const GENERATED_TYPESCRIPT: &str = include_str!("../../../generated/typescript/bunny-graphics.ts");
+// dojo: allow include-data -- reads the committed generator outputs, kept outside the crate
 const GENERATED_MANIFEST: &str = include_str!("../../../generated/bunny-graphics.manifest.json");
 
 #[test]

@@ -150,18 +150,79 @@ No matrix inverse API panics for singular input.
 claim camera transform, projection matrix, normal matrix, or bounds propagation
 semantics.
 
-`FixedMat4` is still only a matrix type. It does not yet claim to be an affine
-transform, camera transform, projection matrix, normal matrix, or bounds
+`FixedMat4` is a matrix type. Apart from the projection and look-at builders below, it does
+not claim to be an affine transform, camera transform, normal matrix, or bounds
 propagation API.
 
 Future transform-specific APIs must name the semantic kind they transform:
 
 - normals may need inverse-transpose handling;
 - bounds require explicit propagation rules;
-- projection and viewport conversion require their own depth and origin
-  conventions.
+- viewport conversion requires its own origin convention.
 
 Those semantics are reserved for later roadmap slices.
+
+## Projection Matrices
+
+`FixedMat4::try_orthographic(half_width, half_height, near, far)` and
+`FixedMat4::try_perspective(tan_half_fov_y, aspect, near, far)` build
+`clip_from_view` matrices with checked Q32.32 arithmetic. The perspective
+builder takes the tangent of half the vertical field of view, so no
+trigonometry is involved. Both return `Result<FixedMat4, ProjectionError>`.
+
+The matrices, the `-Z` camera, and the NDC depth range `[0, 1]` (near to `0`,
+far to `1`) are defined in the
+[coordinate law](../coordinate-law/README.md#projection-and-ndc), which also
+lists the `ProjectionError` variants. Entries are rounded to nearest Q32.32,
+so the matrices are exact when the parameters give representable entries;
+golden tests use power-of-two parameters. There is no vector-transform,
+unprojection or ray API for these matrices yet; multiply with
+`checked_mul_mat4` or apply the rows directly. The NDC result converts to
+pixels with `Viewport`, defined in the
+[coordinate law](../coordinate-law/README.md#viewport-conversion).
+
+## Look-At View Matrix
+
+`FixedMat4::try_look_at(eye, target, up)` builds a `view_from_world` matrix
+(`p_view = view_from_world * p_world`) in the right-handed frame of the
+[coordinate law](../coordinate-law/README.md#projection-and-ndc): the camera
+looks down `-Z`, `+X` is right, `+Y` is up. With `forward = normalize(target -
+eye)`, `right = normalize(forward x up)` and `true_up = right x forward`, the
+rows are `right`, `true_up` and `-forward`, each followed by the translation
+`-(row . eye)`; the last row is `(0, 0, 0, 1)`. Feed the result to a projection
+builder with `checked_mul_mat4`.
+
+Normalization works on exact `i128` raw vectors and rounds each component to
+nearest, so every basis component is within 1 raw unit of the ideal direction,
+whatever the input magnitude. The basis is therefore orthonormal only within
+rounding. The guaranteed bounds are: each basis vector's length is within 2 raw
+units of one, and each pairwise dot product is within 2 raw units of zero
+(`dot / 2^32`, raw). The bound does not depend on how close `up` is to the view
+direction, because each cross product is exact and so exactly perpendicular to
+its inputs before normalization. Axis-aligned cameras are exact.
+
+`LookAtError` names the failures; the function never panics:
+
+- `CoincidentEyeTarget`: `target == eye`.
+- `ParallelUp`: `up` is zero, or exactly parallel or antiparallel to `target -
+  eye`. This is decided before any rounding, from the exact integer
+  cross product of the two raw vectors (computed with 256-bit products, since a
+  raw difference needs 65 bits), so it does not depend on the rounded view
+  direction. Only exact parallelism is refused. A nearly parallel `up` is
+  accepted: the bounds hold, but the camera roll is dominated by rounding noise.
+  Inputs so close to parallel that the rounded basis still collapses also return
+  `ParallelUp`.
+- `Overflow`: a finished translation entry `-(row . eye)` is outside the Q32.32
+  range. Each entry is summed from its three rounded products in a wider
+  integer and only the finished entry is checked, so an intermediate term or
+  sum that is out of range does not cause a refusal when the entry fits (for
+  example `eye.x = i64::MIN` raw looking at the origin gives the entry
+  `i64::MIN`).
+
+Compared with the 0.7.0 release, this changes two input classes: exactly
+parallel inputs went from `Ok` to `ParallelUp`, and inputs whose finished
+translation fits went from `Overflow` to `Ok`. Every other `Ok` result keeps all
+its bits; the fidelity test compares against the retained 0.7.0 code.
 
 ## Required Tests
 
@@ -178,4 +239,11 @@ The current repository must keep tests for:
 - affine point transforms including translation;
 - affine vector transforms excluding translation;
 - right-to-left affine composition;
-- affine inverse round trips and singular inverse rejection.
+- affine inverse round trips and singular inverse rejection;
+- exact golden rows and frustum-corner NDC values for both projection
+  builders, typed errors for invalid parameters, and seeded properties;
+- exact axis-aligned and pinned diagonal look-at rows, a look-at composed with a
+  projection, typed look-at errors (exactly parallel up, a representable
+  translation near the range limit), a seeded property for the orthonormality
+  bound over its full stated range, and a differential test against the 0.7.0
+  implementation.

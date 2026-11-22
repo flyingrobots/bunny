@@ -195,6 +195,10 @@ while preparing a PR. It passes Cargo's `--allow-dirty` flag to packaging
 commands and prints a warning that the mode is local-only. `publish` mode
 unconditionally refuses dirty worktrees, even when `ALLOW_DIRTY=1` is set.
 
+`verify` also runs `scripts/publish-crates.sh packaged-tests`, which builds the
+tests of every crate from its unpacked archive (see
+[`topics/release-packaging`](topics/release-packaging/README.md)).
+
 For the first crates.io publication of a Bunny version, `verify` fully packages
 the independent root crates and checks the package file lists for crates whose
 internal Bunny dependencies are not visible in the crates.io index yet. The

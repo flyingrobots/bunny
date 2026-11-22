@@ -12,7 +12,10 @@ const STACK_CAPACITY: usize = 64;
 pub enum TraversalError {
     /// The traversal stack capacity (64) was exceeded.
     StackOverflow,
-    /// A node references a child index that is outside the node slice.
+    /// A node references a child index that is outside the node slice, or the search made
+    /// more interior visits than a tree of the slice's length has interior nodes
+    /// (`nodes.len() / 2`), which only a node reached twice (a cycle or a shared subtree) can
+    /// cause.
     InvalidNodeIndex,
     /// A leaf node references primitives outside the primitive-index slice.
     InvalidPrimitiveRange,
@@ -28,9 +31,12 @@ fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32]
 /// Traverses the BVH to find primitives that overlap with a query AABB.
 ///
 /// # Errors
-/// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
+/// Returns `TraversalError::StackOverflow` if the search needs more than its 64 stack
+/// entries, which a tree of depth at most 63 (the root at depth 0) never does.
 /// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
-/// if the provided BVH buffers are structurally malformed.
+/// if the provided BVH buffers are structurally malformed. A buffer that is not a tree (a
+/// child index naming an ancestor, or a subtree reached twice) is `InvalidNodeIndex` once
+/// the search has made more than `nodes.len() / 2` interior visits, so it cannot loop.
 pub fn intersect_aabb<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
@@ -46,9 +52,12 @@ where
 /// Traverses the BVH to find primitives intersected by a ray.
 ///
 /// # Errors
-/// Returns `TraversalError::StackOverflow` if the stack size exceeds 64.
+/// Returns `TraversalError::StackOverflow` if the search needs more than its 64 stack
+/// entries, which a tree of depth at most 63 (the root at depth 0) never does.
 /// Returns `TraversalError::InvalidNodeIndex` or `TraversalError::InvalidPrimitiveRange`
-/// if the provided BVH buffers are structurally malformed.
+/// if the provided BVH buffers are structurally malformed. A buffer that is not a tree (a
+/// child index naming an ancestor, or a subtree reached twice) is `InvalidNodeIndex` once
+/// the search has made more than `nodes.len() / 2` interior visits, so it cannot loop.
 pub fn intersect_ray<F>(
     nodes: &[BvhNode],
     prim_indices: &[u32],
@@ -77,10 +86,18 @@ where
     Visit: FnMut(u32),
 {
     let mut stack = TraversalStack::new(nodes)?;
+    // A tree of `n` nodes has at most `n / 2` interior nodes and visits each once, so running
+    // out proves a node was reached twice. Spent after the visit's pushes, so a full stack
+    // still reports `StackOverflow` first.
+    let mut interior_visits_left = nodes.len() / 2;
     while let Some(node_idx) = stack.pop() {
         let node = nodes.get(node_idx as usize).ok_or(TraversalError::InvalidNodeIndex)?;
         if matches_node(node) {
             visit_matching_node(node, prim_indices, &mut stack, &mut visit_leaf)?;
+            if node.prim_count == 0 {
+                interior_visits_left =
+                    interior_visits_left.checked_sub(1).ok_or(TraversalError::InvalidNodeIndex)?;
+            }
         }
     }
     Ok(())

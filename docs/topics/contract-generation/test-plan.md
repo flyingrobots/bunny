@@ -51,6 +51,7 @@ formatting.
 | CG-REQ-008 | Unsupported or missing custom scalar profiles fail generation. | `README.md#scalar-profiles` |
 | CG-REQ-009 | Schema type names that collide with generated helper type names fail generation. | `README.md#dto-shape` |
 | CG-REQ-010 | Field-level scalar-profile directives fail generation until field override semantics exist. | `README.md#scalar-profiles` |
+| CG-REQ-011 | The committed generated artifacts are exactly what `bunny-wesley` writes from the committed schema: Code Dojo's full gate and pre-commit gate regenerate them in a scratch directory and fail on any difference, naming each differing or missing file, its first differing line and the command that regenerates it. | `README.md#regeneration-check` |
 
 ```toml
 [[requirement]]
@@ -102,6 +103,11 @@ status = "active"
 id = "CG-REQ-010"
 summary = "Field-level scalar-profile directives fail generation until field override semantics exist."
 status = "active"
+
+[[requirement]]
+id = "CG-REQ-011"
+summary = "The committed generated artifacts are exactly what bunny-wesley writes from the committed schema: Code Dojo's full gate and pre-commit gate regenerate them in a scratch directory and fail on any difference, naming each differing or missing file, its first differing line and the command that regenerates it."
+status = "active"
 ```
 
 ## Fixtures
@@ -136,6 +142,11 @@ cargo run --locked -p xtask -- generate
 | CG-TP-011 | Profile witness rendering | CG-REQ-004, CG-REQ-007 | Exact rendered Rust, TypeScript, and manifest witness substrings for an envelope-shaped schema. | `crates/bunny-wesley/src/profile.rs::tests::deterministic_contract_profiles_render_for_wire_envelopes` |
 | CG-TP-012 | Generated version witnesses | CG-REQ-001, CG-REQ-006 | Checked-in Rust, TypeScript, and manifest artifacts name the released generator version. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_witnesses_match_the_released_generator_version` |
 | CG-TP-013 | Generated scalar-profile witnesses | CG-REQ-004, CG-REQ-007 | Checked-in Rust, TypeScript, and manifest artifacts expose matching scalar-profile witnesses. | `crates/bunny-contract/tests/generated_version_tests.rs::generated_scalar_profile_witnesses_cover_checked_in_artifacts` |
+| CG-TP-014 | Drift comparison | CG-REQ-011 | Constructed committed and regenerated texts: identical texts are no drift; a changed byte is drift at its line (first, middle and last line, and a change in line endings); a missing final newline, an extra line and a missing committed file are drift at the stated line. | `xtask/src/generated_check/tests.rs::cg_tp_014_drift_is_reported_at_the_first_differing_line` |
+| CG-TP-015 | One argument list | CG-REQ-011 | `cargo run -p xtask -- generate` and the check pass the generator the same schema and the same three output paths, in the same order. | `xtask/src/generated_check/tests.rs::cg_tp_015_the_check_regenerates_what_generate_writes` |
+| CG-TP-016 | Seeded drift fails the gate | CG-REQ-011 | In a container copy, a one-byte change to each committed artifact in turn, and the schema changed without regenerating, each fail the check with the file named; the repository passes. | [Regeneration check evidence](#regeneration-check-evidence) |
+| CG-TP-017 | Pre-commit reads the index | CG-REQ-011 | A temporary repository whose staged artifacts match a hand-written regeneration while a working-tree artifact is stale, and the reverse (a stale staged artifact with a fresh file on disk, and an artifact removed from the index): the index snapshot reports exactly the staged drift and the missing file, the working-tree snapshot exactly the on-disk drift, and the generator's schema is the staged one. | `xtask/src/generated_check/tests.rs::cg_tp_017_the_pre_commit_check_judges_the_staged_artifacts` |
+| CG-TP-018 | Overlapping runs | CG-REQ-011 | A second run started inside the first gets its own scratch directory, leaves the first run's file in place and removes only its own directory; the first removes its own when it ends. | `xtask/src/generated_check/tests.rs::cg_tp_018_overlapping_runs_keep_their_own_scratch_files` |
 
 ```toml
 [[case]]
@@ -254,7 +265,72 @@ test = "crates/bunny-contract/tests/generated_version_tests.rs::generated_scalar
 oracle = "Checked-in Rust, TypeScript, and manifest artifacts expose matching scalar-profile witnesses."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "CG-TP-014"
+requirements = ["CG-REQ-011"]
+evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_014_drift_is_reported_at_the_first_differing_line"
+oracle = "Constructed text pairs whose first differing line is known."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-015"
+requirements = ["CG-REQ-011"]
+evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_015_the_check_regenerates_what_generate_writes"
+oracle = "The argument list generate used before this change, written out in the test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-017"
+requirements = ["CG-REQ-011"]
+evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_017_the_pre_commit_check_judges_the_staged_artifacts"
+oracle = "Constructed index and working-tree contents whose drifts are known."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-018"
+requirements = ["CG-REQ-011"]
+evidence = "test"
+test = "xtask/src/generated_check/tests.rs::cg_tp_018_overlapping_runs_keep_their_own_scratch_files"
+oracle = "Nested runs with distinct run ids; the files each run wrote and the directories that remain are known."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "CG-TP-016"
+requirements = ["CG-REQ-011"]
+evidence = "manual-audit"
+artifact = "docs/topics/contract-generation/test-plan.md#regeneration-check-evidence"
+oracle = "The check's output on each seeded copy and on the repository."
+tier = "manual"
+status = "implemented"
 ```
+
+## Regeneration Check Evidence
+
+CG-TP-016 was run in a container copy of the repository, one seed at a time,
+with `cargo run --locked -q -p xtask -- code-dojo-generated`, checking that
+each seed changed its file:
+
+| Seed | Result |
+| --- | --- |
+| None (the repository) | Passes |
+| `hash` to `hasH` on line 4 of `crates/bunny-contract/src/generated/graphics.rs` | Fails: `graphics.rs:4` |
+| `generated` to `generateD` on line 1 of `generated/typescript/bunny-graphics.ts` | Fails: `bunny-graphics.ts:1` |
+| The first digit of `schemaSha256` in `generated/bunny-graphics.manifest.json` | Fails: `bunny-graphics.manifest.json:5` |
+| `generated/typescript/bunny-graphics.ts` deleted | Fails: missing |
+| A comment line appended to the schema, nothing regenerated | Fails: `graphics.rs:6`, `bunny-graphics.ts:4`, `bunny-graphics.manifest.json:5` (the schema hash) |
+| Every seed restored | Passes |
+
+Before the step, the first two seeds together passed `cargo test -p
+bunny-contract -p bunny-wesley`: the witness tests (CG-TP-012, CG-TP-013) read
+only the version and scalar-profile strings.
 
 ## Determinism Obligations And Evidence
 

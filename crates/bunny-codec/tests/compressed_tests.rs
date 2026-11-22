@@ -30,7 +30,12 @@ fn canonical_triangle16() -> Vec<u8> {
 fn parse_hex(input: &str) -> Vec<u8> {
     let nybbles: Vec<_> = input.bytes().filter(|byte| !byte.is_ascii_whitespace()).collect();
     assert_eq!(nybbles.len() % 2, 0, "hex fixture must contain byte pairs");
-    nybbles.chunks_exact(2).map(|pair| (hex_value(pair[0]) << 4) | hex_value(pair[1])).collect()
+    nybbles
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|[high, low]| (hex_value(*high) << 4) | hex_value(*low))
+        .collect()
 }
 
 fn hex_value(byte: u8) -> u8 {

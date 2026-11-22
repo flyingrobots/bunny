@@ -258,3 +258,33 @@ fn test_traversal_rejects_malformed_bvh_without_panic() {
         Err(TraversalError::InvalidPrimitiveRange)
     );
 }
+
+/// Regression for flyingrobots/bunny#211 through the broadphase: a near-axis ray whose slab
+/// distance does not fit Q32.32 used to make `ray_intersects_aabb` report `None`, so a one-leaf
+/// BVH skipped a primitive the ray passes through. The leaf must be visited.
+#[wasm_bindgen_test(unsupported = test)]
+fn issue_211_intersect_ray_visits_a_leaf_a_near_axis_ray_passes_through() {
+    use bunny_linalg::FixedUnitVec3;
+
+    let one = FixedQ32_32::from_raw(bunny_num::fixed_q32_32::ONE_RAW);
+    let neg_one = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
+    let zero = FixedQ32_32::from_raw(0);
+    let prims =
+        [FixedAabb3::new(FixedVec3::new(neg_one, neg_one, neg_one), FixedVec3::new(one, one, one))];
+    let mut nodes = [BvhNode {
+        bounds: FixedAabb3::new(FixedVec3::new(zero, zero, zero), FixedVec3::new(zero, zero, zero)),
+        first_child_or_prim_idx: 0,
+        prim_count: 0,
+    }; 1];
+    let mut prim_indices = [0_u32; 1];
+    assert_eq!(build_bvh(&mut nodes, &mut prim_indices, &prims), Some(1));
+
+    let direction = FixedVec3::new(one, FixedQ32_32::from_raw(1), zero);
+    let ray = FixedRay3::new(
+        FixedVec3::new(FixedQ32_32::from_raw(-5 * bunny_num::fixed_q32_32::ONE_RAW), zero, zero),
+        FixedUnitVec3::try_from_unit(direction).expect("within tolerance"),
+    );
+    let mut visited = Vec::new();
+    intersect_ray(&nodes[..1], &prim_indices, &ray, |idx| visited.push(idx)).expect("traversal");
+    assert_eq!(visited, vec![0]);
+}

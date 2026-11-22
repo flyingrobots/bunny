@@ -55,7 +55,9 @@ Release candidates must also verify every crates.io archive before tagging:
 scripts/publish-crates.sh verify
 ```
 
-Set `RELEASE_TAG=v<version>` when verifying a specific release tag.
+Set `RELEASE_TAG=v<version>` when verifying a specific release tag. `verify`
+includes `scripts/publish-crates.sh packaged-tests`, which compiles each crate's
+tests from its unpacked archive; it can be run alone.
 
 ## WebAssembly Gates
 
@@ -69,6 +71,7 @@ RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-contract --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-query --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-broadphase --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-mesh --locked
+RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-optics --locked
 RUSTUP_TOOLCHAIN=1.96.0 wasm-pack test --node crates/bunny-codec --locked
 ```
 
@@ -104,6 +107,15 @@ configuration. The initial property suites cover:
 * `bunny-query`: segment closest-point symmetry and AABB closest-point bounds.
 * `bunny-mesh`: quantization monotonicity and representative quantized-code
   round trips.
+* `bunny-optics`: generated camera rays against an exact integer image-plane
+  oracle, and basis orthogonality and handedness; exact stratification of
+  every power-of-two block of sampler points, and evaluation-order
+  independence of the sample hash and the sampler; pixel accumulation order
+  independence and the mean's rounding over seeded samples, and the sRGB tone
+  curve against an `f64` reference oracle over dense deterministic inputs;
+  triangle normals, bounce directions and light cosines against `f64` oracles,
+  exact frame orthonormality, a cosine-distribution guard over stratified
+  sampler points, and the self-intersection rule on constructed scenes.
 
 Each generated assertion should include enough seed and case metadata to replay
 the failure. A property test discovers classes of defects; a minimized

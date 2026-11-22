@@ -18,7 +18,7 @@ pub(super) fn build_bvh(
     BvhBuilder::new(nodes, prim_indices, primitives).finish(range)
 }
 
-fn validated_range(
+pub(super) fn validated_range(
     nodes: &[BvhNode],
     prim_indices: &[u32],
     primitives: &[FixedAabb3],
@@ -45,7 +45,7 @@ fn buffers_fit(
     Some(required <= nodes_len && indices_len >= count && count <= max && required <= max)
 }
 
-fn init_prim_indices(prim_indices: &mut [u32], count: usize) -> Option<()> {
+pub(super) fn init_prim_indices(prim_indices: &mut [u32], count: usize) -> Option<()> {
     for (i, idx) in prim_indices.iter_mut().take(count).enumerate() {
         *idx = u32::try_from(i).ok()?;
     }
@@ -75,11 +75,11 @@ impl PrimRange {
         self.first.checked_add(offset)
     }
 
-    const fn end(self) -> Option<usize> {
+    pub(super) const fn end(self) -> Option<usize> {
         self.first.checked_add(self.count)
     }
 
-    fn split(self, left_count: usize) -> Option<(Self, Self)> {
+    pub(super) fn split(self, left_count: usize) -> Option<(Self, Self)> {
         let right_first = self.first.checked_add(left_count)?;
         let right_count = self.count.checked_sub(left_count)?;
         Some((Self::new(self.first, left_count), Self::new(right_first, right_count)))

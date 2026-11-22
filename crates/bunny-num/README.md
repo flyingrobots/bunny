@@ -22,8 +22,13 @@ ecosystem to guarantee bit-level CPU determinism.
 * **Checked Arithmetic**: `checked_add`, `checked_sub`, `checked_neg`,
   `checked_mul`, and `checked_div` return `None` when overflow or division by
   zero would make the result invalid for geometry code.
-* **Deterministic Square Root**: Integer square root (`sqrt()`) implemented via
-  digit-by-digit calculations on wide integers.
+* **Deterministic Square Root**: Exact integer square root (`sqrt()`) on wide
+  integers, with the same bits on every target (the implementation uses core's
+  `isqrt`; the older digit-by-digit loop is kept as a test oracle).
+* **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
+  arithmetic, exact or symmetric-rounding conversions from turns, degrees and
+  radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
+  unit of the exact value.
 * **Zero Dependency & No-Unsafe**: Compiled under `#![deny(unsafe_code)]` with
   zero external runtime dependencies.
 

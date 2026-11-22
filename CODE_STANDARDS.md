@@ -138,6 +138,11 @@ Examples:
 - in-memory adapter instead of filesystem access.
 - passed configuration struct instead of `std::env::var()`.
 
+Code Dojo enforces this rule with the `time-system`, `time-instant`, `thread-sleep`,
+`host-parallelism`, `random`, `host-callback`, `network`, `std-env`, `std-fs`, `std-process`,
+`host-input` and `include-data` rules, in library code, tests and doc tests; see
+[`docs/CODE_DOJO.md`](docs/CODE_DOJO.md#nondeterminism-rules).
+
 **Sensei's Wisdom™**: Ambient state is global mutable state wearing a fake mustache.
 
 ## Rule 5: Deterministic Collections and Ordering
@@ -223,6 +228,7 @@ Applies to:
 - `bunny-query`
 - `bunny-broadphase`
 - `bunny-mesh`
+- `bunny-optics`
 
 Targets:
 
@@ -279,6 +285,11 @@ Recommended stance:
 ```
 
 `clippy::nursery` must be cherry-picked. Blanket-denying nursery is banned because nursery lints are not mature enough to be a repository constitution.
+Each core crate names the nursery lints it denies in its `src/lib.rs`, with a reason for each.
+Code Dojo's `blanket-nursery` check fails the gate on a `deny`, `warn` or `forbid` of the whole
+group at any scope in a core crate's Rust files, its manifest, the workspace manifest or a
+repository Cargo configuration's `rustflags`; see
+[`docs/topics/lint-policy/`](docs/topics/lint-policy/README.md).
 
 Clippy suggestions may be rejected when they reduce determinism, local reasoning, or API clarity.
 Rejected suggestions require a local allow comment with a reason.

@@ -150,6 +150,25 @@ fn test_ray_triangle_intersection() {
     assert!(ray_intersects_triangle(&ray2, v0, v1, v2).is_none());
 }
 
+/// This case was part of `ray_queries_return_none_when_checked_arithmetic_overflows` and expected
+/// `None` until flyingrobots/bunny#211. The origin lies on the box's +x face, so the ray touches
+/// the box at t = 0: a hit. The entry distance (min - max) / 1 is about -2^32 and saturates to the
+/// minimum; the exit is exactly 0.
+#[wasm_bindgen_test(unsupported = test)]
+fn ray_aabb_saturates_an_overflowing_slab_distance_instead_of_missing() {
+    let min = FixedQ32_32::from_raw(i64::MIN);
+    let max = FixedQ32_32::from_raw(i64::MAX);
+    let zero = FixedQ32_32::ZERO;
+    let one = FixedQ32_32::ONE;
+
+    let aabb_overflow_ray = FixedRay3::new(FixedVec3::new(max, zero, zero), FixedUnitVec3::UNIT_X);
+    let aabb = FixedAabb3::new(
+        FixedVec3::new(min, FixedQ32_32::from_raw(-ONE_RAW), FixedQ32_32::from_raw(-ONE_RAW)),
+        FixedVec3::new(max, one, one),
+    );
+    assert_eq!(ray_intersects_aabb(&aabb_overflow_ray, &aabb), Some((min, zero)));
+}
+
 #[wasm_bindgen_test(unsupported = test)]
 fn ray_queries_return_none_when_checked_arithmetic_overflows() {
     let min = FixedQ32_32::from_raw(i64::MIN);
@@ -161,13 +180,6 @@ fn ray_queries_return_none_when_checked_arithmetic_overflows() {
         FixedRay3::new(FixedVec3::new(min, zero, zero), FixedUnitVec3::UNIT_X);
     let sphere = FixedSphere3::new(FixedVec3::new(max, zero, zero), one);
     assert_eq!(ray_intersects_sphere(&sphere_overflow_ray, &sphere), None);
-
-    let aabb_overflow_ray = FixedRay3::new(FixedVec3::new(max, zero, zero), FixedUnitVec3::UNIT_X);
-    let aabb = FixedAabb3::new(
-        FixedVec3::new(min, FixedQ32_32::from_raw(-ONE_RAW), FixedQ32_32::from_raw(-ONE_RAW)),
-        FixedVec3::new(max, one, one),
-    );
-    assert_eq!(ray_intersects_aabb(&aabb_overflow_ray, &aabb), None);
 
     let triangle_overflow_ray =
         FixedRay3::new(FixedVec3::new(zero, zero, zero), FixedUnitVec3::UNIT_Z);

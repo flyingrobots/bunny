@@ -1,7 +1,15 @@
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
-#![deny(clippy::nursery)]
+// `clippy::nursery` is cherry-picked, not denied as a group (CODE_STANDARDS.md, Rule 10):
+// - `missing_const_for_fn` keeps every function that can be `const` usable in constant
+//   expressions, as the crate's value constructors and accessors are;
+// - `redundant_pub_crate` keeps crate-private items `pub` inside private modules, so the
+//   module's own visibility is the one boundary to read;
+// - `use_self` keeps `Self` in impls, so a renamed type changes one line.
+#![deny(clippy::missing_const_for_fn)]
+#![deny(clippy::redundant_pub_crate)]
+#![deny(clippy::use_self)]
 #![deny(missing_docs)]
 
 //! Geometry primitives for Bunny graphics contracts.
@@ -9,9 +17,15 @@
 use core::fmt;
 
 use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
+// dojo: allow float-boundary -- imports the f32 DTO alias for Sphere3
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
 mod conversions;
+mod plane;
+
+pub use plane::{
+    FixedPlane3, FixedSegment3, PlaneSide, PolygonClip, PolygonClipError, SegmentClip,
+};
 
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,6 +82,7 @@ pub struct Aabb3 {
     pub max: Vec3,
 }
 
+// dojo: allow float-boundary -- f32 DTO sphere; converted to FixedSphere3 at the boundary
 /// A 3D sphere.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sphere3 {

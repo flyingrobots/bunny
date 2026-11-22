@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display, Formatter};
@@ -9,18 +10,42 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, BinOp, Block, ExprForLoop, ExprIf, ExprIndex, ExprLit, ExprLoop, ExprMacro,
-    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, Lit, Macro,
-    Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath,
+    ExprMatch, ExprMethodCall, ExprPath, ExprWhile, File, ImplItemFn, Item, ItemFn, ItemUse, Lit,
+    Macro, Path as SynPath, Signature, Stmt, StmtMacro, TraitItemFn, TypePath, UseTree,
 };
 
+use crate::generated_check::Snapshot;
 use crate::git_helpers::git_command;
+use crate::module_tree::ModuleTree;
+use crate::waivers::{manifest_waives, Waivers};
 
 type DynError = Box<dyn Error>;
 
-const CORE_CRATES: &[&str] =
-    &["bunny-num", "bunny-linalg", "bunny-geom", "bunny-query", "bunny-broadphase", "bunny-mesh"];
+const CORE_CRATES: &[&str] = &[
+    "bunny-num",
+    "bunny-linalg",
+    "bunny-geom",
+    "bunny-query",
+    "bunny-broadphase",
+    "bunny-mesh",
+    "bunny-optics",
+];
+/// Crates whose output must not depend on the host: the core crates plus the mesh codecs
+/// and the generated contract DTOs, which are WASM libraries producing canonical data.
+/// The nondeterminism rules cover every file in them, tests included.
+const NONDETERMINISM_CRATES: &[&str] = &[
+    "bunny-num",
+    "bunny-linalg",
+    "bunny-geom",
+    "bunny-query",
+    "bunny-broadphase",
+    "bunny-mesh",
+    "bunny-optics",
+    "bunny-codec",
+    "bunny-contract",
+];
 const GENERATOR_CRATES: &[&str] = &["bunny-wesley"];
-const TOOLING_CRATES: &[&str] = &["xtask"];
+const TOOLING_CRATES: &[&str] = &["xtask", "bunny-perf", "bunny-gpu"];
 const STRICT_CLIPPY_PACKAGES: &[&str] = &[
     "bunny-num",
     "bunny-linalg",
@@ -28,6 +53,7 @@ const STRICT_CLIPPY_PACKAGES: &[&str] = &[
     "bunny-query",
     "bunny-broadphase",
     "bunny-mesh",
+    "bunny-optics",
     "bunny-codec",
     "bunny-contract",
 ];
@@ -39,6 +65,7 @@ const WASM_PACKAGES: &[&str] = &[
     "bunny-query",
     "bunny-broadphase",
     "bunny-mesh",
+    "bunny-optics",
     "bunny-codec",
 ];
 const GOLDEN_TEST_NAMES: &[&str] =
@@ -154,10 +181,10 @@ impl Display for DojoError {
 
 impl Error for DojoError {}
 
-struct Violation {
-    path: PathBuf,
-    line: usize,
-    rule: &'static str,
+pub(super) struct Violation {
+    pub(super) path: PathBuf,
+    pub(super) line: usize,
+    pub(super) rule: &'static str,
     message: String,
 }
 
@@ -165,8 +192,9 @@ struct FileContext<'a> {
     path: PathBuf,
     category: Category,
     limits: Limits,
-    source: &'a str,
     lines: &'a [String],
+    waivers: &'a Waivers,
+    workspace_floats: &'a BTreeSet<String>,
 }
 
 struct RustSource {
@@ -207,11 +235,18 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     }
 
     check_rust(Mode::All)?;
+    check_lint_policy()?;
     crate::topic_docs::check()?;
     crate::repo_respect::check_branch()?;
     check_determinism_receipts(true)?;
     ensure_cargo_manifest("full gate")?;
+    check_dependency_rules()?;
+    crate::feature_configs::check_trees(&git_root()?)?;
+    crate::generated_check::check(&git_root()?, Snapshot::WorkTree)?;
     run_quality_commands(true)?;
+    for command in crate::feature_configs::commands() {
+        run_command_strings(&command)?;
+    }
     println!("Code Dojo: full gate clean");
     Ok(())
 }
@@ -219,11 +254,18 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
 pub(super) fn handle_pre_commit() -> Result<(), DynError> {
     println!("Code Dojo: checking staged Rust changes");
     check_rust(Mode::Staged)?;
+    check_lint_policy()?;
     crate::topic_docs::check_staged()?;
     crate::repo_respect::check_staged()?;
     ensure_cargo_manifest("pre-commit gate")?;
+    crate::generated_check::check(&git_root()?, Snapshot::Index)?;
     run_quality_commands(false)?;
     Ok(())
+}
+
+/// The regeneration check of the full and pre-commit gates, on its own.
+pub(super) fn handle_generated() -> Result<(), DynError> {
+    crate::generated_check::check(&git_root()?, Snapshot::WorkTree)
 }
 
 pub(super) fn handle_rust(args: impl IntoIterator<Item = String>) -> Result<(), DynError> {
@@ -244,21 +286,19 @@ pub(super) fn handle_commit_msg(args: impl IntoIterator<Item = String>) -> Resul
 fn check_rust(mode: Mode) -> Result<(), DynError> {
     let root = git_root()?;
     let mut violations = Vec::new();
+    let listing = rust_files(&root, Mode::All)?;
+    let read = |path: &Path| read_rust_source(&root, mode, path).ok();
+    let tree = ModuleTree::new(&listing, &read);
+    let core_files = listing
+        .iter()
+        .filter(|path| crate_category(path, false) == Category::Core)
+        .filter_map(|path| syn::parse_file(&read(path)?).ok())
+        .collect::<Vec<_>>();
+    let floats = crate::float_aliases::workspace_aliases(&core_files);
 
     for file in rust_sources(&root, mode)? {
-        let source = file.source;
-        let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
-        let category = crate_category(&file.path);
-        let context = FileContext {
-            path: file.path,
-            category,
-            limits: category.limits(),
-            source: &source,
-            lines: &lines,
-        };
-
-        check_textual_limits(&mut violations, &context);
-        check_ast(&mut violations, &context);
+        let category = file_category(&file.path, &tree);
+        violations.extend(policy_violations(file.path, category, &file.source, &floats));
     }
 
     if violations.is_empty() {
@@ -271,6 +311,258 @@ fn check_rust(mode: Mode) -> Result<(), DynError> {
         eprintln!("  {violation}");
     }
     Err(DojoError::new("Code Dojo Rust AST policy violations found").into())
+}
+
+/// Applies every per-file Rust policy rule to one source file at a repository-relative path,
+/// as a file of no module tree: test code when it is under its crate's `tests/` directory.
+#[cfg(test)]
+pub(super) fn file_violations(path: PathBuf, source: &str) -> Vec<Violation> {
+    let category = crate_category(&path, false);
+    policy_violations(path, category, source, &BTreeSet::new())
+}
+
+/// Applies every per-file rule to a set of sources (repository-relative paths and texts),
+/// deciding test code by their module tree as the gate does.
+#[cfg(test)]
+pub(super) fn tree_violations(files: &[(PathBuf, String)]) -> Vec<Violation> {
+    let paths = files.iter().map(|(path, _)| path.clone()).collect::<Vec<_>>();
+    let tree = ModuleTree::new(&paths, &|path| {
+        files.iter().find(|(known, _)| known == path).map(|(_, text)| text.clone())
+    });
+    let core_files = files
+        .iter()
+        .filter(|(path, _)| crate_category(path, false) == Category::Core)
+        .filter_map(|(_, text)| syn::parse_file(text).ok())
+        .collect::<Vec<_>>();
+    let floats = crate::float_aliases::workspace_aliases(&core_files);
+    files
+        .iter()
+        .flat_map(|(path, text)| {
+            policy_violations(path.clone(), file_category(path, &tree), text, &floats)
+        })
+        .collect()
+}
+
+/// The Rust files the gate lists in the repository at `root`.
+#[cfg(test)]
+pub(super) fn listed_rust_files(root: &Path) -> Vec<PathBuf> {
+    rust_files(root, Mode::All).unwrap_or_default()
+}
+
+fn file_category(path: &Path, tree: &ModuleTree) -> Category {
+    crate_category(path, tree.is_test(path))
+}
+
+/// The per-file rules for one file, with the float aliases the core crates declare.
+fn policy_violations(
+    path: PathBuf,
+    category: Category,
+    source: &str,
+    workspace_floats: &BTreeSet<String>,
+) -> Vec<Violation> {
+    let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
+    let parsed = syn::parse_file(source);
+    let waivers = Waivers::parse(source, parsed.as_ref().ok());
+    let context = FileContext {
+        path,
+        category,
+        limits: category.limits(),
+        lines: &lines,
+        waivers: &waivers,
+        workspace_floats,
+    };
+    let mut violations = Vec::new();
+    check_textual_limits(&mut violations, &context);
+    check_ast(&mut violations, &context, parsed);
+    violations
+}
+
+/// Applies the dependency-level nondeterminism rules to `cargo tree` output.
+///
+/// `manifest` returns the text of a deterministic crate's `Cargo.toml`; a whole-line
+/// comment `# dojo: allow <rule> -- <reason>` anywhere in it waives that rule for that crate.
+pub(super) fn dependency_violations(
+    tree: &str,
+    manifest: &dyn Fn(&str) -> String,
+) -> Vec<Violation> {
+    crate::nondeterminism::dependency_findings(tree, NONDETERMINISM_CRATES)
+        .into_iter()
+        .filter(|finding| {
+            crate::nondeterminism::UNWAIVABLE_DEPENDENCY_RULES.contains(&finding.rule)
+                || !manifest_waives(&manifest(&finding.root), finding.rule)
+        })
+        .map(|finding| {
+            Violation::new(
+                PathBuf::from("crates").join(&finding.root).join("Cargo.toml"),
+                0,
+                finding.rule,
+                dependency_message(finding.rule, &finding.dependency),
+            )
+        })
+        .collect()
+}
+
+fn dependency_message(rule: &str, dependency: &str) -> String {
+    match rule {
+        "unscanned-dependency" => format!(
+            "dependency graph reaches `{dependency}`, a path crate outside the deterministic \
+             crates, whose code the gate does not scan; add it to NONDETERMINISM_CRATES or drop it"
+        ),
+        "unlisted-dependency" => format!(
+            "dependency graph reaches `{dependency}`, which is not a crates.io crate on \
+             ALLOWED_REGISTRY_CRATES; review it and add it to the list, or drop it"
+        ),
+        _ => format!(
+            "dependency graph reaches `{dependency}`, which deterministic crates must not use"
+        ),
+    }
+}
+
+/// Rule 10 of `CODE_STANDARDS.md` over the core crates (`docs/topics/lint-policy/`).
+fn check_lint_policy() -> Result<(), DynError> {
+    let violations = lint_policy_violations(&git_root()?);
+    if violations.is_empty() {
+        println!("Code Dojo: core crates name their clippy::nursery lints");
+        return Ok(());
+    }
+    print_violations("Code Dojo: blanket clippy::nursery levels in core crates", &violations);
+    Err(DojoError::new("lint policy violations found").into())
+}
+
+/// The `blanket-nursery` findings for the core crates of the repository at `root`.
+pub(super) fn lint_policy_violations(root: &Path) -> Vec<Violation> {
+    crate::lint_policy::findings(root, CORE_CRATES)
+        .into_iter()
+        .map(|found| {
+            Violation::new(found.path, found.line, crate::lint_policy::RULE, found.message)
+        })
+        .collect()
+}
+
+fn check_dependency_rules() -> Result<(), DynError> {
+    let violations = dependency_rule_violations(&git_root()?, &|| Command::new("cargo"))?;
+    if violations.is_empty() {
+        println!("Code Dojo: deterministic dependency graph clean");
+        return Ok(());
+    }
+    print_violations("Code Dojo: banned dependencies in deterministic crates", &violations);
+    Err(DojoError::new("deterministic dependency policy violations found").into())
+}
+
+/// The feature sets the dependency graph is listed with: what the workspace enables, and
+/// every feature, so a banned crate behind an optional dependency that no workspace crate
+/// turns on is still found (a downstream crate can turn it on).
+const DEPENDENCY_FEATURE_SETS: &[(&str, &[&str])] =
+    &[("default", &[]), ("all", &["--all-features"])];
+
+/// Lists the dependency graph of the deterministic crates of the workspace at `root` with
+/// `cargo tree`, over normal and build edges and once per feature set, and applies the
+/// dependency rules to it. `cargo` makes the `cargo` command. A finding reported under
+/// both feature sets is listed once, under the first.
+pub(super) fn dependency_rule_violations(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+) -> Result<Vec<Violation>, DynError> {
+    let manifest = |crate_name: &str| {
+        std::fs::read_to_string(root.join("crates").join(crate_name).join("Cargo.toml"))
+            .unwrap_or_default()
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    let mut violations = Vec::new();
+    for (label, features) in DEPENDENCY_FEATURE_SETS {
+        let tree = dependency_tree(root, cargo, features)?;
+        for violation in dependency_violations(&tree, &manifest) {
+            let key = (violation.path.clone(), violation.rule, violation.message.clone());
+            if seen.insert(key) {
+                let message = format!("{} ({label} features)", violation.message);
+                violations.push(Violation { message, ..violation });
+            }
+        }
+    }
+    violations.extend(manifest_rule_violations(root));
+    violations.sort_by(|left, right| (&left.path, left.rule).cmp(&(&right.path, right.rule)));
+    Ok(violations)
+}
+
+/// The manifest rules of `xtask/src/crate_manifests.rs`: no build script and no target
+/// outside the crate for a deterministic crate, and every workspace member classified.
+fn manifest_rule_violations(root: &Path) -> Vec<Violation> {
+    let read = |path: &Path| std::fs::read_to_string(root.join(path)).ok();
+    let mut violations = Vec::new();
+    for name in NONDETERMINISM_CRATES {
+        let manifest = PathBuf::from("crates").join(name).join("Cargo.toml");
+        let build_rs = root.join("crates").join(name).join("build.rs").is_file();
+        let text = read(&manifest).unwrap_or_default();
+        violations.extend(manifest_findings(
+            &manifest,
+            crate::crate_manifests::deterministic_manifest(&text, build_rs),
+        ));
+    }
+    let classified = [NONDETERMINISM_CRATES, GENERATOR_CRATES, TOOLING_CRATES].concat();
+    let list_dirs = |parent: &Path| {
+        let mut dirs = std::fs::read_dir(root.join(parent))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .map(|entry| parent.join(entry.file_name()))
+            .collect::<Vec<_>>();
+        dirs.sort();
+        dirs
+    };
+    let members = crate::crate_manifests::unclassified_members(
+        &read(Path::new("Cargo.toml")).unwrap_or_default(),
+        &classified,
+        &read,
+        &list_dirs,
+    );
+    violations.extend(manifest_findings(Path::new("Cargo.toml"), members));
+    violations
+}
+
+fn manifest_findings(
+    path: &Path,
+    found: Result<Vec<crate::crate_manifests::Finding>, String>,
+) -> Vec<Violation> {
+    match found {
+        Ok(found) => found
+            .into_iter()
+            .map(|finding| {
+                Violation::new(path.to_path_buf(), finding.line, finding.rule, finding.message)
+            })
+            .collect(),
+        Err(message) => vec![Violation::new(path.to_path_buf(), 0, "manifest-parse", message)],
+    }
+}
+
+fn dependency_tree(
+    root: &Path,
+    cargo: &dyn Fn() -> Command,
+    features: &[&str],
+) -> Result<String, DynError> {
+    let mut args = [
+        "tree",
+        "--locked",
+        "--edges",
+        "normal,build",
+        "--target",
+        "all",
+        "--no-dedupe",
+        "--prefix",
+        "depth",
+        "--format",
+        "{p}",
+    ]
+    .into_iter()
+    .chain(features.iter().copied())
+    .map(str::to_owned)
+    .collect::<Vec<_>>();
+    args.extend(package_args(NONDETERMINISM_CRATES));
+    let output = cargo().args(&args).current_dir(root).output()?;
+    if !output.status.success() {
+        return Err(command_error("cargo tree", &output.stderr).into());
+    }
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 fn parse_full_gate_args(args: impl IntoIterator<Item = String>) -> Result<FullGateArgs, DynError> {
@@ -715,7 +1007,9 @@ fn command_error(command: &str, stderr: &[u8]) -> DojoError {
     DojoError::new(format!("{command} failed: {}", detail.trim()))
 }
 
-fn is_rust_source(path: &Path) -> bool {
+/// Whether the gate lists `path` as a Rust source: a `.rs` file outside `target`, `.git`,
+/// `vendor` and `third_party`.
+pub(super) fn is_rust_source(path: &Path) -> bool {
     if path.extension() != Some(OsStr::new("rs")) {
         return false;
     }
@@ -729,8 +1023,16 @@ fn is_rust_source(path: &Path) -> bool {
     })
 }
 
-fn crate_category(path: &Path) -> Category {
-    if path.iter().any(|part| part == OsStr::new("tests")) {
+/// The category of a file: test code when `in_tree_tests` (the module tree says so) or when
+/// it is under its crate's top-level `tests/` directory, else its crate's category. A
+/// directory named `tests` elsewhere decides nothing (flyingrobots/bunny#348).
+fn crate_category(path: &Path, in_tree_tests: bool) -> Category {
+    let mut parts = path.iter();
+    let under_tests = matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(first), Some(_), Some(dir)) if first == OsStr::new("crates") && dir == OsStr::new("tests")
+    );
+    if in_tree_tests || under_tests {
         return Category::Tests;
     }
 
@@ -773,7 +1075,7 @@ fn check_textual_limits(violations: &mut Vec<Violation>, context: &FileContext<'
             if line.len() <= limit || line.contains("http://") || line.contains("https://") {
                 continue;
             }
-            if has_waiver(context.lines, index, "line-length") {
+            if context.waivers.covers(index + 1, "line-length") {
                 continue;
             }
             violations.push(Violation::new(
@@ -795,8 +1097,12 @@ fn source_line_count<'a>(lines: impl Iterator<Item = &'a str>) -> usize {
         .count()
 }
 
-fn check_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>) {
-    match syn::parse_file(context.source) {
+fn check_ast(
+    violations: &mut Vec<Violation>,
+    context: &FileContext<'_>,
+    parsed: syn::Result<File>,
+) {
+    match parsed {
         Ok(file) => visit_file_ast(violations, context, &file),
         Err(error) => violations.push(Violation::new(
             context.path.clone(),
@@ -808,12 +1114,29 @@ fn check_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>) {
 }
 
 fn visit_file_ast(violations: &mut Vec<Violation>, context: &FileContext<'_>, file: &File) {
+    if in_nondeterminism_scope(&context.path) {
+        let findings = crate::nondeterminism::source_findings(&context.path, file)
+            .into_iter()
+            .chain(crate::nondeterminism::text_findings(context.lines));
+        for finding in findings {
+            if !context.waivers.covers(finding.line, finding.rule) {
+                violations.push(Violation::new(
+                    context.path.clone(),
+                    finding.line,
+                    finding.rule,
+                    finding.message,
+                ));
+            }
+        }
+    }
     let mut visitor = PolicyVisitor {
         violations,
         path: context.path.clone(),
         category: context.category,
         limits: context.limits,
         lines: context.lines,
+        waivers: context.waivers,
+        float_aliases: crate::float_aliases::file_aliases(file, context.workspace_floats),
     };
     visitor.visit_file(file);
 }
@@ -824,15 +1147,25 @@ struct PolicyVisitor<'a> {
     category: Category,
     limits: Limits,
     lines: &'a [String],
+    waivers: &'a Waivers,
+    float_aliases: std::collections::BTreeSet<String>,
 }
 
 impl PolicyVisitor<'_> {
+    /// Whether a path names a float type, a float-suffixed name or one of the file's
+    /// float aliases (`xtask/src/float_aliases.rs`).
+    fn names_float(&self, segments: &[String]) -> bool {
+        segments.iter().any(|segment| {
+            crate::float_aliases::is_float_name(segment) || self.float_aliases.contains(segment)
+        })
+    }
+
     fn violation(&mut self, line: usize, rule: &'static str, message: impl Into<String>) {
         self.violations.push(Violation::new(self.path.clone(), line, rule, message));
     }
 
     fn waived(&self, line: usize, rule: &str) -> bool {
-        has_waiver(self.lines, line.saturating_sub(1), rule)
+        self.waivers.covers(line, rule)
     }
 
     fn check_function(&mut self, span: Span, signature: &Signature, body: Option<&Block>) {
@@ -899,48 +1232,95 @@ impl PolicyVisitor<'_> {
         }
     }
 
-    fn check_path_call(&mut self, line: usize, path: &SynPath) {
+    /// Expression paths such as `f32::NAN`, `f64::from_bits` or `core::f64::consts::PI`
+    /// bring floats into core without naming a float type.
+    fn check_expr_path_floats(&mut self, line: usize, path: &SynPath) {
         if self.category != Category::Core {
             return;
         }
 
-        let segments = path_segments(path);
-        let banned = if has_suffix(&segments, &["SystemTime", "now"])
-            || has_suffix(&segments, &["Instant", "now"])
-        {
-            Some(("ambient-state", "ambient clock access is banned; inject a deterministic clock"))
-        } else if is_single_segment(&segments, "thread_rng")
-            || has_suffix(&segments, &["rand", "thread_rng"])
-        {
-            Some(("ambient-state", "thread_rng is banned; inject a seeded generator"))
-        } else if has_suffix(&segments, &["rand", "random"]) {
-            Some(("ambient-state", "rand::random is banned; inject a seeded generator"))
-        } else if has_suffix(&segments, &["std", "env", "args"])
-            || has_suffix(&segments, &["std", "env", "var"])
-        {
-            Some((
-                "ambient-state",
-                "ambient environment/process access is banned in deterministic core crates",
-            ))
-        } else if is_filesystem_path(&segments) {
-            Some(("ambient-state", "filesystem access is banned in deterministic core crates"))
-        } else if is_nondeterministic_map_constructor(&segments) {
-            Some((
-                "nondeterministic-map",
-                "HashMap/HashSet constructors are banned in canonical core output paths",
-            ))
-        } else if has_suffix(&segments, &["TcpStream", "connect"])
-            || has_suffix(&segments, &["UdpSocket", "bind"])
-        {
-            Some(("ambient-state", "network access is banned in deterministic core crates"))
-        } else {
-            None
-        };
+        if self.names_float(&path_segments(path)) && !self.waived(line, "float-boundary") {
+            self.violation(
+                line,
+                "float-boundary",
+                "float constants and functions in core require a boundary/proof waiver",
+            );
+        }
+    }
 
-        if let Some((rule, message)) = banned {
-            if !self.waived(line, rule) {
-                self.violation(line, rule, message);
+    /// Macro bodies are token streams `syn` does not parse, so float literals and float
+    /// paths inside them are found from the tokens.
+    fn check_macro_floats(&mut self, mac: &Macro) {
+        if self.category != Category::Core {
+            return;
+        }
+
+        let path_lines = crate::nondeterminism::token_paths(&mac.tokens)
+            .into_iter()
+            .filter(|path| self.names_float(&path.segments))
+            .map(|path| path.line);
+        let literal_lines = crate::nondeterminism::token_float_literal_lines(&mac.tokens);
+        let lines = path_lines.chain(literal_lines).collect::<std::collections::BTreeSet<_>>();
+        for line in lines {
+            if !self.waived(line, "float-boundary") {
+                self.violation(
+                    line,
+                    "float-boundary",
+                    "floats inside a macro in core require a boundary/proof waiver",
+                );
             }
+        }
+    }
+
+    /// A method such as `d.mul_f64(..)` or `d.as_secs_f64()` is float arithmetic even when
+    /// no float type is written.
+    fn check_float_method(&mut self, line: usize, method: &str) {
+        if self.category == Category::Core
+            && crate::float_aliases::is_float_name(method)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                format!(
+                    "`{method}` takes or returns a float; core requires a boundary/proof waiver"
+                ),
+            );
+        }
+    }
+
+    /// A `use` leaf naming a float (`use core::f64::consts::PI as P`, a renamed `to_f32`)
+    /// is reported where it is imported, since the name it binds hides the float.
+    fn check_use_floats(&mut self, tree: &UseTree, prefix: &mut Vec<String>) {
+        let leaf = match tree {
+            UseTree::Path(path) => {
+                prefix.push(crate::nondeterminism::ident_name(&path.ident));
+                self.check_use_floats(&path.tree, prefix);
+                prefix.pop();
+                return;
+            }
+            UseTree::Group(group) => {
+                for item in &group.items {
+                    self.check_use_floats(item, prefix);
+                }
+                return;
+            }
+            UseTree::Name(name) => Some(&name.ident),
+            UseTree::Rename(rename) => Some(&rename.ident),
+            UseTree::Glob(_) => None,
+        };
+        let mut path = prefix.clone();
+        path.extend(leaf.map(crate::nondeterminism::ident_name));
+        let line = line_of(tree.span());
+        if self.category == Category::Core
+            && self.names_float(&path)
+            && !self.waived(line, "float-boundary")
+        {
+            self.violation(
+                line,
+                "float-boundary",
+                "importing a float name in core requires a boundary/proof waiver",
+            );
         }
     }
 
@@ -950,19 +1330,7 @@ impl PolicyVisitor<'_> {
         }
 
         let segments = path_segments(path);
-        if segments.iter().any(|segment| segment == "HashMap" || segment == "HashSet")
-            && !self.waived(line, "nondeterministic-map")
-        {
-            self.violation(
-                line,
-                "nondeterministic-map",
-                "HashMap/HashSet are banned in canonical core output paths; use BTree* or sorted Vec",
-            );
-        }
-
-        if segments.iter().any(|segment| segment == "f32" || segment == "f64")
-            && !self.waived(line, "float-boundary")
-        {
+        if self.names_float(&segments) && !self.waived(line, "float-boundary") {
             self.violation(
                 line,
                 "float-boundary",
@@ -1042,7 +1410,8 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let line = line_of(node.span());
-        let method = node.method.to_string();
+        let method = crate::nondeterminism::ident_name(&node.method);
+        self.check_float_method(line_of(node.method.span()), &method);
         if !self.limits.panics_allowed
             && (method == "unwrap" || method == "expect")
             && !self.waived(line, "panic-path")
@@ -1067,8 +1436,18 @@ impl<'ast> Visit<'ast> for PolicyVisitor<'_> {
     }
 
     fn visit_expr_path(&mut self, node: &'ast ExprPath) {
-        self.check_path_call(line_of(node.span()), &node.path);
+        self.check_expr_path_floats(line_of(node.span()), &node.path);
         visit::visit_expr_path(self, node);
+    }
+
+    fn visit_macro(&mut self, node: &'ast Macro) {
+        self.check_macro_floats(node);
+        visit::visit_macro(self, node);
+    }
+
+    fn visit_item_use(&mut self, node: &'ast ItemUse) {
+        self.check_use_floats(&node.tree, &mut Vec::new());
+        visit::visit_item_use(self, node);
     }
 
     fn visit_type_path(&mut self, node: &'ast TypePath) {
@@ -1187,48 +1566,12 @@ trait Pipe: Sized {
 
 impl<T> Pipe for T {}
 
-fn has_waiver(lines: &[String], index: usize, rule: &str) -> bool {
-    let needle = format!("dojo: allow {rule}");
-    let start = index.saturating_sub(2);
-    for line_index in start..=index {
-        let Some(text) = lines.get(line_index) else {
-            continue;
-        };
-        if !text.contains(&needle) {
-            continue;
-        }
-        if let Some((_, reason)) = text.split_once("--") {
-            return reason.trim().len() >= 8;
-        }
-    }
-    false
+fn in_nondeterminism_scope(path: &Path) -> bool {
+    crate_name(path).is_some_and(|name| NONDETERMINISM_CRATES.contains(&name))
 }
 
 fn path_segments(path: &SynPath) -> Vec<String> {
-    path.segments.iter().map(|segment| segment.ident.to_string()).collect()
-}
-
-fn has_suffix(path: &[String], suffix: &[&str]) -> bool {
-    path.len() >= suffix.len()
-        && path.iter().rev().zip(suffix.iter().rev()).all(|(left, right)| left.as_str() == *right)
-}
-
-fn has_prefix(path: &[String], prefix: &[&str]) -> bool {
-    path.len() >= prefix.len()
-        && path.iter().zip(prefix.iter()).all(|(left, right)| left.as_str() == *right)
-}
-
-fn is_filesystem_path(path: &[String]) -> bool {
-    has_suffix(path, &["File", "open"])
-        || has_prefix(path, &["std", "fs"])
-        || has_prefix(path, &["fs"])
-}
-
-fn is_nondeterministic_map_constructor(path: &[String]) -> bool {
-    let [.., collection, constructor] = path else {
-        return false;
-    };
-    constructor == "new" && matches!(collection.as_str(), "HashMap" | "HashSet")
+    path.segments.iter().map(|segment| crate::nondeterminism::ident_name(&segment.ident)).collect()
 }
 
 fn is_panicking_macro(name: &str) -> bool {
@@ -1245,10 +1588,6 @@ fn is_panicking_macro(name: &str) -> bool {
             | "unimplemented"
             | "unreachable"
     )
-}
-
-fn is_single_segment(path: &[String], segment: &str) -> bool {
-    path.len() == 1 && path.first().is_some_and(|value| value == segment)
 }
 
 fn line_of(span: Span) -> usize {
@@ -1300,15 +1639,12 @@ mod tests {
     }
 
     fn core_policy_violations(source: &str) -> Vec<Violation> {
-        let lines = source.lines().map(str::to_owned).collect::<Vec<_>>();
-        let path = PathBuf::from("crates/bunny-num/src/lib.rs");
-        let category = Category::Core;
-        let context =
-            FileContext { path, category, limits: category.limits(), source, lines: &lines };
-        let mut violations = Vec::new();
-        check_textual_limits(&mut violations, &context);
-        check_ast(&mut violations, &context);
-        violations
+        policy_violations(
+            PathBuf::from("crates/bunny-num/src/lib.rs"),
+            Category::Core,
+            source,
+            &BTreeSet::new(),
+        )
     }
 
     fn has_rule(violations: &[Violation], rule: &str) -> bool {
@@ -1352,7 +1688,7 @@ pub fn read_path(path: &std::path::Path) {
 
         let violations = core_policy_violations(source);
 
-        assert!(has_rule(&violations, "ambient-state"));
+        assert!(has_rule(&violations, "std-fs"));
     }
 
     #[test]
@@ -1370,7 +1706,8 @@ pub fn build() {
 
         let violations = core_policy_violations(source);
 
-        assert_eq!(rule_count(&violations, "nondeterministic-map"), 2);
+        // One finding for the `use` group line and one for each constructor line.
+        assert_eq!(rule_count(&violations, "unordered-container"), 3);
     }
 
     #[test]

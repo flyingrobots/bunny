@@ -11,3 +11,5 @@ workspace = true
 [dependencies]
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "2.0", features = ["full", "visit"] }
+# Already in the lock through bunny-wesley's `toml`; reads manifests with their spans.
+toml_edit = { version = "0.22", default-features = false, features = ["parse"] }

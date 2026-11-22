@@ -1,0 +1,753 @@
+# ASCII PLY Test Plan
+
+This document defines how Bunny proves the ASCII PLY reader and the decimal to
+Q32.32 conversion rule. The contract is [`README.md`](README.md).
+
+## Scope
+
+`parse_ascii_ply` and `parse_decimal_q32_32` in `bunny-codec`: the profile, the
+line, whitespace and comment rules, the conversion rule, and the error contract.
+It also covers the dependency contract of `bunny-codec` with its default features
+off, which is how a consumer without crates.io dependencies uses these readers.
+
+## Test Goals
+
+- Prove every conversion decision with hand-derived or exact-integer expected values.
+- Prove the conversion against an oracle written differently from the code under test.
+- Give every refusal its own typed error and line number.
+- Keep the tests native and WASM-compatible (the allocation witness is native only).
+- Use no floating point, including in expected values.
+
+## Non-Goals
+
+- Conversion to `f64` or `f32`: positions are Q32.32 only.
+- Faces with more than three vertices, face properties other than `vertex_indices`,
+  list properties on vertices, and binary or big-endian formats.
+
+## Requirements
+
+| ID | Requirement | Current Source |
+| --- | --- | --- |
+| APLY-REQ-001 | The profile accepts `format ascii 1.0`, a vertex element with `x`, `y`, `z` (float or double types, any order) and other scalar properties skipped by declaration, and a face element with one `vertex_indices` list; empty extra elements are ignored. | `README.md#the-profile` |
+| APLY-REQ-002 | Coordinates convert by `bunny-decimal-q32-32/1`: the exact rational value times 2^32 rounded to nearest with ties to even, symmetric in sign, with integer arithmetic only. | `README.md#the-conversion-rule` |
+| APLY-REQ-003 | The decimal grammar, overflow after rounding, certain overflow and zero by magnitude, and TooLong above 28 significant digits are typed errors. | `README.md#the-conversion-rule` |
+| APLY-REQ-004 | Lines end at LF or CRLF, mixed freely; a lone CR is an ordinary byte; the `end_header` line needs LF; the last body line may lack one. | `README.md#line-endings` |
+| APLY-REQ-005 | Words are split on spaces and tabs with leading and trailing ones ignored; header blank lines, `comment` and `obj_info` lines are ignored; body blank lines are skipped and body comments are refused. | `README.md#whitespace-blank-lines-and-comments` |
+| APLY-REQ-006 | Header strictness: magic, format, element, count and property mistakes are typed errors. | `README.md#errors-and-line-numbers` |
+| APLY-REQ-007 | Faces must be triangles with unsigned decimal indices below the vertex count. | `README.md#faces` |
+| APLY-REQ-008 | Errors are typed, carry a 1-based line number, and display it. | `README.md#errors-and-line-numbers` |
+| APLY-REQ-009 | The reader allocates nothing and never reserves memory from a declared count; the body must hold exactly the declared records. | `README.md#counts-and-allocation` |
+| APLY-REQ-010 | The binary reader is unchanged. | `README.md#relation-to-the-binary-reader` |
+| APLY-REQ-011 | Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds. | `README.md#the-profile` |
+| APLY-REQ-012 | With default features off, the normal and build dependency graphs of `bunny-codec` and `bunny-mesh` hold only Bunny path crates, and every `bunny-codec` reader and its tests still build and pass. | `README.md#dependencies-and-features` |
+| APLY-REQ-013 | With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature. | `README.md#dependencies-and-features` |
+| APLY-REQ-014 | `parse_ascii_ply_with_limits` refuses a declared vertex count, a declared face count or a line over the inclusive limits of `AsciiPlyLimits`, with a typed error naming the limit, the maximum, the observed value and the line; values at the limit are accepted; the checks run in the documented order and the counts are checked before any body line is read. | `README.md#limits` |
+| APLY-REQ-015 | `parse_ascii_ply` is unchanged, and `parse_ascii_ply_with_limits` with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same `AsciiPlyError` otherwise. | `README.md#limits` |
+| APLY-REQ-016 | The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is `UnsupportedProperty`. | `README.md#the-conversion-rule` |
+| APLY-REQ-017 | The chapter's statements match the code at three points: a face element before the vertex element or before `x`, `y`, `z` are declared is `MissingVertexElement` at the `element face` line; a face count that is not digits is `InvalidIndex` and a run of digits other than 3 is `NonTriangularFace`, with `03` accepted; and the `end_header` line is where a missing coordinate is reported when no face element follows. | `README.md#faces` |
+| APLY-REQ-018 | Under `bunny-ascii-ply-triangle-mesh/2`, a vertex element with `s` and `t`, or `u` and `v`, of a float type returns them as texture coordinates converted by `bunny-decimal-q32-32/1`; an incomplete, mixed, repeated or integer-typed pair is `UnsupportedProperty` at the last texture name's line; a file with none of the four names reads as under `/1`; and `/1` still skips the four names unchecked. | `README.md#texture-coordinates` |
+
+```toml
+[[requirement]]
+id = "APLY-REQ-001"
+summary = "The profile accepts `format ascii 1.0`, a vertex element with `x`, `y`, `z` (float or double types, any order) and other scalar properties skipped by declaration, and a face element with one `vertex_indices` list; empty extra elements are ignored."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-002"
+summary = "Coordinates convert by `bunny-decimal-q32-32/1`: the exact rational value times 2^32 rounded to nearest with ties to even, symmetric in sign, with integer arithmetic only."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-003"
+summary = "The decimal grammar, overflow after rounding, certain overflow and zero by magnitude, and TooLong above 28 significant digits are typed errors."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-004"
+summary = "Lines end at LF or CRLF, mixed freely; a lone CR is an ordinary byte; the `end_header` line needs LF; the last body line may lack one."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-005"
+summary = "Words are split on spaces and tabs with leading and trailing ones ignored; header blank lines, `comment` and `obj_info` lines are ignored; body blank lines are skipped and body comments are refused."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-006"
+summary = "Header strictness: magic, format, element, count and property mistakes are typed errors."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-007"
+summary = "Faces must be triangles with unsigned decimal indices below the vertex count."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-008"
+summary = "Errors are typed, carry a 1-based line number, and display it."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-009"
+summary = "The reader allocates nothing and never reserves memory from a declared count; the body must hold exactly the declared records."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-010"
+summary = "The binary reader is unchanged."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-011"
+summary = "Geordi's Stanford bunny asset reads with its declared counts and with bounds equal to the exact conversion of its manifest bounds."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-012"
+summary = "With default features off, the normal and build dependency graphs of `bunny-codec` and `bunny-mesh` hold only Bunny path crates, and every `bunny-codec` reader and its tests still build and pass."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-013"
+summary = "With default features on, the public items of `bunny-mesh` and `bunny-codec` are unchanged; `compute_mesh_hash` is the only item behind the `mesh-hash` feature."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-014"
+summary = "parse_ascii_ply_with_limits refuses a declared vertex count, a declared face count or a line over the inclusive limits of AsciiPlyLimits, with a typed error naming the limit, the maximum, the observed value and the line; values at the limit are accepted; the checks run in the documented order and the counts are checked before any body line is read."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-015"
+summary = "parse_ascii_ply is unchanged, and parse_ascii_ply_with_limits with limits that no input of that size reaches returns what it returns: the same counts and records for an accepted input and the same AsciiPlyError otherwise."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-016"
+summary = "The certain-overflow shortcut (magnitude at least 11) and the certain-underflow shortcut (magnitude at most -10) decide before the digit count, and a skipped vertex property with a type outside the scalar list is UnsupportedProperty."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-017"
+summary = "The chapter's statements match the code at three points: a face element before the vertex element or before x, y, z are declared is MissingVertexElement at the element face line; a face count that is not digits is InvalidIndex and a run of digits other than 3 is NonTriangularFace, with 03 accepted; and the end_header line is where a missing coordinate is reported when no face element follows."
+status = "active"
+
+[[requirement]]
+id = "APLY-REQ-018"
+summary = "Under bunny-ascii-ply-triangle-mesh/2, a vertex element with s and t, or u and v, of a float type returns them as texture coordinates converted by bunny-decimal-q32-32/1; an incomplete, mixed, repeated or integer-typed pair is UnsupportedProperty at the last texture name's line; a file with none of the four names reads as under /1; and /1 still skips the four names unchecked."
+status = "active"
+```
+
+## Test Cases
+
+| ID | Category | Requirements | Oracle | Test |
+| --- | --- | --- | --- | --- |
+| APLY-TP-001 | Golden path | APLY-REQ-001, APLY-REQ-002 | Hand-derived raw coordinates for a Geordi-style mesh with confidence and intensity properties. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_001_geordi_style_mesh_skips_extra_properties_by_declaration` |
+| APLY-TP-002 | Golden path, layout | APLY-REQ-001 | Exact raw values with extra properties first, middle and last and z, x, y declared in that order. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_002_coordinate_slots_follow_the_declared_order_and_types` |
+| APLY-TP-003 | Line endings | APLY-REQ-004 | Identical results for LF, CRLF, mixed endings and an unterminated last line. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_003_lf_crlf_and_mixed_line_endings_are_accepted` |
+| APLY-TP-004 | Line endings, negative | APLY-REQ-004, APLY-REQ-008 | Exact error kinds and lines for a lone CR in a body number, at the end of input, and in the header. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_004_a_lone_carriage_return_is_not_whitespace_or_a_line_end` |
+| APLY-TP-005 | Whitespace, comments | APLY-REQ-005 | Exact results for a header and body full of blanks, tabs, comments and obj_info lines. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_005_blank_lines_comments_and_whitespace_follow_the_stated_rules` |
+| APLY-TP-006 | Body comments, trailing data | APLY-REQ-005, APLY-REQ-008 | Exact error kinds and lines for a body comment, a record after the last, and a long face line. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_006_body_comments_and_content_after_the_records_are_refused` |
+| APLY-TP-007 | Header refusals | APLY-REQ-006, APLY-REQ-008 | Exact error kind and line for twenty-two malformed headers. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_007_header_refusals_name_their_kind_and_line` |
+| APLY-TP-008 | Property refusals | APLY-REQ-001, APLY-REQ-006, APLY-REQ-008 | Exact UnsupportedProperty and line for ten bad or repeated properties, and one before any element. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_008_property_refusals_name_their_kind_and_line` |
+| APLY-TP-009 | Empty elements, empty mesh | APLY-REQ-001, APLY-REQ-004 | An empty extra element with properties is ignored; a zero-count mesh parses; an unterminated end_header is refused. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_009_empty_elements_are_ignored_with_their_properties` |
+| APLY-TP-010 | Header encoding | APLY-REQ-005, APLY-REQ-008 | Invalid UTF-8 in the header is HeaderUtf8 at its line; UTF-8 comments and a non-ASCII body byte behave as stated. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_010_header_text_must_be_utf8_and_body_may_be_any_ascii` |
+| APLY-TP-011 | Vertex refusals | APLY-REQ-002, APLY-REQ-003, APLY-REQ-008 | Exact error kind at line 13 for each vertex-line mistake, and uninterpreted extra properties. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_011_vertex_line_refusals_name_their_kind_and_line` |
+| APLY-TP-012 | Face refusals | APLY-REQ-007, APLY-REQ-008 | Exact error kind at line 17 for fifteen malformed face lines, and the last valid index. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_012_face_refusals_name_their_kind_and_line` |
+| APLY-TP-013 | Counts | APLY-REQ-009, APLY-REQ-008 | Exact errors for missing records and for counts of 4294967295 over short bodies. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_013_missing_records_and_huge_declared_counts_are_refused_without_allocating` |
+| APLY-TP-014 | Error contract, siblings | APLY-REQ-008, APLY-REQ-010 | Exact Display text, std Error use, and mutual refusal of the two formats. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_014_errors_display_their_line_and_the_formats_refuse_each_other` |
+| APLY-TP-015 | Iterators | APLY-REQ-001, APLY-REQ-009 | Iterators restart and yield exactly the declared counts. | `crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_015_iterators_restart_and_yield_exactly_the_declared_counts` |
+| APLY-TP-020 | Identity | APLY-REQ-002 | The rule identifier string. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_020_rule_has_a_stable_identity` |
+| APLY-TP-021 | Golden path, conversion | APLY-REQ-002 | Exact raw values of dyadic decimals, derived as value times 2^32. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_021_whole_and_dyadic_values_are_exact` |
+| APLY-TP-022 | Grammar | APLY-REQ-002, APLY-REQ-003 | Ten spellings of 1.2 agree on raw 5153960755; valid forms with an empty side of the point. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_022_grammar_forms_agree_on_one_value` |
+| APLY-TP-023 | Exponents | APLY-REQ-002 | Hand-derived raw values with positive, negative and enormous exponents, and zero with any exponent. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_023_exponents_scale_by_powers_of_ten` |
+| APLY-TP-024 | Rounding | APLY-REQ-002 | Hand-derived nearest-rounding vectors in raw units, both signs. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_024_rounding_is_to_nearest_with_ties_to_even` |
+| APLY-TP-025 | Rounding, exact ties | APLY-REQ-002 | Exact ties built from 5^33 and one last digit either side, both signs. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_025_exact_ties_go_to_the_even_neighbour` |
+| APLY-TP-026 | Range edges | APLY-REQ-002, APLY-REQ-003 | i64::MAX, i64::MIN, rounding back into range, the smallest nonzero value, and the first overflow. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_026_range_edges_are_exact` |
+| APLY-TP-027 | Overflow | APLY-REQ-003 | Exact Overflow for out-of-range values, huge exponents and very long digit strings. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_027_values_outside_the_range_overflow` |
+| APLY-TP-028 | Underflow | APLY-REQ-002, APLY-REQ-003 | Zero for values below 1e-10 however long, one raw unit just above half. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_028_tiny_values_round_to_zero_however_long` |
+| APLY-TP-029 | TooLong | APLY-REQ-003 | 28 digits convert, 29 are TooLong, trailing zeros do not count. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_029_twenty_eight_significant_digits_convert_and_more_are_refused` |
+| APLY-TP-030 | Invalid | APLY-REQ-003 | Exact Invalid for thirty malformed texts. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_030_text_outside_the_grammar_is_invalid` |
+| APLY-TP-031 | Property, oracle | APLY-REQ-002, APLY-REQ-003 | 20,000 seeded inputs against an independent decimal-string-arithmetic oracle, all three outcomes reached. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_031_seeded_inputs_match_the_decimal_string_oracle` |
+| APLY-TP-032 | Exhaustive ties | APLY-REQ-002 | 2,000 consecutive exact ties against the even-neighbour rule and the oracle. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_032_every_tie_in_a_range_goes_to_even` |
+| APLY-TP-033 | Oracle check | APLY-REQ-002 | The oracle against hand-derived values. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_033_oracle_agrees_with_hand_derived_vectors` |
+| APLY-TP-040 | Allocation | APLY-REQ-009 | Zero allocation blocks for parse and iteration after warm-up, and for a huge declared count. | `crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up` |
+| APLY-TP-051 | Real asset | APLY-REQ-011 | Exact length, 1889 vertices, 3851 faces and per-axis bounds equal to the conversion of the manifest's decimal bounds, for the committed Stanford fixture. | `crates/bunny-codec/tests/ply_ascii_stanford_tests.rs::aply_tp_051_geordi_stanford_bunny_asset_reads_with_exact_bounds` |
+| APLY-TP-050 | Sibling, unchanged | APLY-REQ-010 | The existing binary reader's golden test passes unchanged. | `crates/bunny-codec/tests/ply_tests.rs::parses_binary_triangle_ply_as_borrowed_view` |
+| APLY-TP-052 | Dependencies, negative | APLY-REQ-012 | A seeded `cargo tree` listing with a crates.io crate, a deduplicated crates.io crate and a git crate among path crates reports exactly those three. | `xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported` |
+| APLY-TP-053 | Dependencies, look-alikes | APLY-REQ-012 | A listing of path crates only, with deduplication markers and a Windows path, reports nothing. | `xtask/src/feature_configs.rs::tests::path_crates_are_accepted` |
+| APLY-TP-054 | Public items | APLY-REQ-013 | The rustdoc item lists of both crates at `origin/main` and at the change are identical with default features; without them only `compute_mesh_hash` is gone. | [Feature Configurations](#feature-configurations) |
+| APLY-TP-055 | Counts at the limit | APLY-REQ-014 | A 3-vertex, 1-face mesh is accepted at limits 3 and 1 and refused at 2 and 0 with the exact limit, maximum, observed value and `element` line. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_055_counts_are_accepted_at_the_limit_and_refused_one_past_it` |
+| APLY-TP-056 | Early refusal | APLY-REQ-014 | A header declaring 4294967295 vertices and no body is `PayloadTooShort` for `parse_ascii_ply` and a `Vertices` limit error with the default limits; a count past `usize` keeps `IntegerOverflow`. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_056_a_huge_declared_count_is_refused_before_any_body_line_is_read` |
+| APLY-TP-057 | Line length | APLY-REQ-014 | A 60-byte header line is accepted at 60 and refused at 59 with LF and with CRLF; the `end_header` line, a blank body line, a blank line after the last record and a line of a million tokens are lines too, each with its exact length. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_057_line_length_counts_bytes_without_the_terminator` |
+| APLY-TP-058 | Order of the checks | APLY-REQ-014 | Each of the five steps of the documented order wins over the one after it, on one input per adjacent pair. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_058_the_checks_run_in_the_documented_order` |
+| APLY-TP-059 | Differential | APLY-REQ-015 | 20 000 generated valid and mutated inputs (10 761 accepted, 9 239 refused in the run that set the minimums of 8 000 and 5 000), with `UNLIMITED` and with limits equal to the input length: the same counts, vertices and triangles, or the same `AsciiPlyError`. | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_059_generous_limits_change_no_accepted_input_and_no_profile_error` |
+| APLY-TP-060 | Malformed input | APLY-REQ-014 | 30 000 mutated, truncated and random inputs under small limits never panic; every limit error has `observed > maximum`, the named maximum, and for a line length the length of that line found by an independent split and no earlier line over the limit; at least 500 of each limit kind and 500 accepted inputs are required (4 650, 1 825, 5 763 and 1 751 in the run that set them). | `crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_060_malformed_input_under_small_limits_never_panics_and_limit_errors_are_true` |
+| APLY-TP-061 | Magnitude shortcuts | APLY-REQ-016 | 32-digit values of at least 1e10 (both signs, with an exponent) are `Overflow`; just below 1e10 the value is `TooLong`; 32-digit values below 1e-10 are zero and one place higher are `TooLong`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_061_the_magnitude_shortcuts_decide_before_the_digit_count` |
+| APLY-TP-062 | Skipped property types | APLY-REQ-016 | Four undeclared or list-typed skipped properties are `UnsupportedProperty` at their line; each of the sixteen scalar types is accepted with a non-numeric column. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_062_a_skipped_vertex_property_needs_a_scalar_type` |
+| APLY-TP-063 | Missing coordinate line | APLY-REQ-017 | A missing `x` or `z` before the face element is `MissingVertexElement` at the `element face` line; with no face element, and with no vertex element, at the `end_header` line. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up` |
+| APLY-TP-064 | Face count kinds | APLY-REQ-017 | Seven counts that are not digits are `InvalidIndex`, six runs of digits other than 3 (one of 26 digits) are `NonTriangularFace`, and `3`, `03`, `0003` are accepted. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index` |
+| APLY-TP-065 | Face before vertex | APLY-REQ-017 | A face element before the vertex element is `MissingVertexElement` at its line; a repeated vertex element is `UnsupportedElement`. | `crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element` |
+| APLY-TP-066 | Generated exact | APLY-REQ-018 | 400 generated meshes (seed `0x3695eed`) in an `x y z s t` layout and a `u nx x v y z` layout: every texture coordinate and position equals `m * 2^(32-k)` for its decimal `m / 2^k`, through both entry points. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_066_both_pairs_return_exact_texture_coordinates_for_generated_decimals` |
+| APLY-TP-067 | Decimal rule | APLY-REQ-018 | Hand-derived raw values (0.5, 1, -0.125, 0.25, 0.1, 0.75) and 2 000 generated decimals (seed `0x369dec`) with signs, up to 18 fractional digits and exponents: each texture coordinate is `parse_decimal_q32_32` of its own text. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_067_texture_coordinates_follow_the_decimal_rule` |
+| APLY-TP-068 | Refused pairs | APLY-REQ-018 | Nine headers (each lone name, `s` with `v`, both pairs in two orders, a repeated `s`, an integer `t`) are `UnsupportedProperty` at the last texture name's line, through both entry points. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_068_an_incomplete_or_ambiguous_pair_is_refused_at_its_line` |
+| APLY-TP-069 | Bad values | APLY-REQ-018 | `nan`, `1e10` and a 29-digit value in `v` are `InvalidNumber`, `NumberOverflow` and `NumberTooLong` at the second vertex's line. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_069_a_bad_texture_coordinate_is_refused_at_its_body_line` |
+| APLY-TP-070 | Unchanged without UVs | APLY-REQ-018 | Under `/1` and `/2` the Stanford fixture has no texture coordinates and its positions and triangles hash to the FNV-1a digest taken at `origin/main` 4a3957b before the change; a skipped `nx` column stays skipped under `/2`. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_070_a_file_without_texture_coordinates_reads_as_under_v1` |
+| APLY-TP-071 | `/1` unchanged | APLY-REQ-018 | Six headers with texture names (five that `/2` refuses, one complete pair) and `nan` in those columns read under `/1` with no texture coordinates and the written positions, and are refused under `/2`. | `crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_071_v1_still_skips_texture_names_unchecked` |
+
+```toml
+[[case]]
+id = "APLY-TP-001"
+requirements = ["APLY-REQ-001", "APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_001_geordi_style_mesh_skips_extra_properties_by_declaration"
+oracle = "Hand-derived raw coordinates for a Geordi-style mesh with confidence and intensity properties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-002"
+requirements = ["APLY-REQ-001"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_002_coordinate_slots_follow_the_declared_order_and_types"
+oracle = "Exact raw values with extra properties first, middle and last and z, x, y declared in that order."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-003"
+requirements = ["APLY-REQ-004"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_003_lf_crlf_and_mixed_line_endings_are_accepted"
+oracle = "Identical results for LF, CRLF, mixed endings and an unterminated last line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-004"
+requirements = ["APLY-REQ-004", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_004_a_lone_carriage_return_is_not_whitespace_or_a_line_end"
+oracle = "Exact error kinds and lines for a lone CR in a body number, at the end of input, and in the header."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-005"
+requirements = ["APLY-REQ-005"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_005_blank_lines_comments_and_whitespace_follow_the_stated_rules"
+oracle = "Exact results for a header and body full of blanks, tabs, comments and obj_info lines."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-006"
+requirements = ["APLY-REQ-005", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_006_body_comments_and_content_after_the_records_are_refused"
+oracle = "Exact error kinds and lines for a body comment, a record after the last, and a long face line."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-007"
+requirements = ["APLY-REQ-006", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_007_header_refusals_name_their_kind_and_line"
+oracle = "Exact error kind and line for twenty-two malformed headers."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-008"
+requirements = ["APLY-REQ-001", "APLY-REQ-006", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_008_property_refusals_name_their_kind_and_line"
+oracle = "Exact UnsupportedProperty and line for ten bad or repeated properties, and one before any element."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-009"
+requirements = ["APLY-REQ-001", "APLY-REQ-004"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_009_empty_elements_are_ignored_with_their_properties"
+oracle = "An empty extra element with properties is ignored; a zero-count mesh parses; an unterminated end_header is refused."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-010"
+requirements = ["APLY-REQ-005", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_010_header_text_must_be_utf8_and_body_may_be_any_ascii"
+oracle = "Invalid UTF-8 in the header is HeaderUtf8 at its line; UTF-8 comments and a non-ASCII body byte behave as stated."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-011"
+requirements = ["APLY-REQ-002", "APLY-REQ-003", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_011_vertex_line_refusals_name_their_kind_and_line"
+oracle = "Exact error kind at line 13 for each vertex-line mistake, and uninterpreted extra properties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-012"
+requirements = ["APLY-REQ-007", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_012_face_refusals_name_their_kind_and_line"
+oracle = "Exact error kind at line 17 for fifteen malformed face lines, and the last valid index."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-013"
+requirements = ["APLY-REQ-009", "APLY-REQ-008"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_013_missing_records_and_huge_declared_counts_are_refused_without_allocating"
+oracle = "Exact errors for missing records and for counts of 4294967295 over short bodies."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-014"
+requirements = ["APLY-REQ-008", "APLY-REQ-010"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_014_errors_display_their_line_and_the_formats_refuse_each_other"
+oracle = "Exact Display text, std Error use, and mutual refusal of the two formats."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-015"
+requirements = ["APLY-REQ-001", "APLY-REQ-009"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_tests.rs::aply_tp_015_iterators_restart_and_yield_exactly_the_declared_counts"
+oracle = "Iterators restart and yield exactly the declared counts."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-020"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_020_rule_has_a_stable_identity"
+oracle = "The rule identifier string."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-021"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_021_whole_and_dyadic_values_are_exact"
+oracle = "Exact raw values of dyadic decimals, derived as value times 2^32."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-022"
+requirements = ["APLY-REQ-002", "APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_022_grammar_forms_agree_on_one_value"
+oracle = "Ten spellings of 1.2 agree on raw 5153960755; valid forms with an empty side of the point."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-023"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_023_exponents_scale_by_powers_of_ten"
+oracle = "Hand-derived raw values with positive, negative and enormous exponents, and zero with any exponent."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-024"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_024_rounding_is_to_nearest_with_ties_to_even"
+oracle = "Hand-derived nearest-rounding vectors in raw units, both signs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-025"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_025_exact_ties_go_to_the_even_neighbour"
+oracle = "Exact ties built from 5^33 and one last digit either side, both signs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-026"
+requirements = ["APLY-REQ-002", "APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_026_range_edges_are_exact"
+oracle = "i64::MAX, i64::MIN, rounding back into range, the smallest nonzero value, and the first overflow."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-027"
+requirements = ["APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_027_values_outside_the_range_overflow"
+oracle = "Exact Overflow for out-of-range values, huge exponents and very long digit strings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-028"
+requirements = ["APLY-REQ-002", "APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_028_tiny_values_round_to_zero_however_long"
+oracle = "Zero for values below 1e-10 however long, one raw unit just above half."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-029"
+requirements = ["APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_029_twenty_eight_significant_digits_convert_and_more_are_refused"
+oracle = "28 digits convert, 29 are TooLong, trailing zeros do not count."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-030"
+requirements = ["APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_030_text_outside_the_grammar_is_invalid"
+oracle = "Exact Invalid for thirty malformed texts."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-031"
+requirements = ["APLY-REQ-002", "APLY-REQ-003"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_031_seeded_inputs_match_the_decimal_string_oracle"
+oracle = "20,000 seeded inputs against an independent decimal-string-arithmetic oracle, all three outcomes reached."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-032"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_032_every_tie_in_a_range_goes_to_even"
+oracle = "2,000 consecutive exact ties against the even-neighbour rule and the oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-033"
+requirements = ["APLY-REQ-002"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_033_oracle_agrees_with_hand_derived_vectors"
+oracle = "The oracle against hand-derived values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-040"
+requirements = ["APLY-REQ-009"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up"
+oracle = "Zero allocation blocks for parse and iteration after warm-up, and for a huge declared count."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-051"
+requirements = ["APLY-REQ-011"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_stanford_tests.rs::aply_tp_051_geordi_stanford_bunny_asset_reads_with_exact_bounds"
+oracle = "Exact byte length, declared counts, and the conversion of the manifest's decimal bounds."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-050"
+requirements = ["APLY-REQ-010"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_tests.rs::parses_binary_triangle_ply_as_borrowed_view"
+oracle = "The existing binary reader's golden test passes unchanged."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-052"
+requirements = ["APLY-REQ-012"]
+evidence = "test"
+test = "xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported"
+oracle = "Exactly `sha2`, the deduplicated `typenum` and the git crate are reported, once each, in listing order."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-053"
+requirements = ["APLY-REQ-012"]
+evidence = "test"
+test = "xtask/src/feature_configs.rs::tests::path_crates_are_accepted"
+oracle = "No crate is reported for path crates, deduplicated path crates and a Windows path."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-054"
+requirements = ["APLY-REQ-013"]
+evidence = "manual-audit"
+artifact = "docs/topics/ascii-ply/test-plan.md#feature-configurations"
+oracle = "Identical rustdoc item lists with default features; only `compute_mesh_hash` absent without them."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-055"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_055_counts_are_accepted_at_the_limit_and_refused_one_past_it"
+oracle = "Exact limit errors one past each count limit; acceptance at it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-056"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_056_a_huge_declared_count_is_refused_before_any_body_line_is_read"
+oracle = "A 4294967295-vertex header without a body is a Vertices limit error."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-057"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_057_line_length_counts_bytes_without_the_terminator"
+oracle = "Exact line lengths at and one past the limit, LF and CRLF, header and body, blank lines."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-058"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_058_the_checks_run_in_the_documented_order"
+oracle = "One input per adjacent pair of checks."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-059"
+requirements = ["APLY-REQ-015"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_059_generous_limits_change_no_accepted_input_and_no_profile_error"
+oracle = "Differential: parse_ascii_ply against the limits entry point with unreachable limits, 20 000 generated inputs."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-060"
+requirements = ["APLY-REQ-014"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_limits_tests.rs::aply_tp_060_malformed_input_under_small_limits_never_panics_and_limit_errors_are_true"
+oracle = "Independent line split checks every line-length error; 30 000 generated inputs, no panic."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-061"
+requirements = ["APLY-REQ-016"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_061_the_magnitude_shortcuts_decide_before_the_digit_count"
+oracle = "Exact errors and zero on both sides of each magnitude shortcut, with 32-digit values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-062"
+requirements = ["APLY-REQ-016"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_062_a_skipped_vertex_property_needs_a_scalar_type"
+oracle = "UnsupportedProperty at the line for unknown and list types; all sixteen scalar types accepted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-063"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_063_a_missing_coordinate_is_reported_where_the_header_gives_it_up"
+oracle = "Exact kind and line for four missing-coordinate headers."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-064"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_064_a_face_count_that_is_not_digits_is_an_invalid_index"
+oracle = "Exact kind for thirteen face counts, and acceptance of 03."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-065"
+requirements = ["APLY-REQ-017"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_rules_tests.rs::aply_tp_065_a_face_element_before_the_vertex_element_is_a_missing_vertex_element"
+oracle = "Exact kind and line for a reordered header and a repeated vertex element."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-066"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_066_both_pairs_return_exact_texture_coordinates_for_generated_decimals"
+oracle = "Dyadic decimals whose raw value is a shift of the generating integer; no conversion in the oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-067"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_067_texture_coordinates_follow_the_decimal_rule"
+oracle = "Hand-derived raw values, then the decimal rule applied to the same strings."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-068"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_068_an_incomplete_or_ambiguous_pair_is_refused_at_its_line"
+oracle = "Exact kind and line counted by hand."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-069"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_069_a_bad_texture_coordinate_is_refused_at_its_body_line"
+oracle = "Exact kind and line counted by hand."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-070"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_070_a_file_without_texture_coordinates_reads_as_under_v1"
+oracle = "Digest of the reader's output before the change."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "APLY-TP-071"
+requirements = ["APLY-REQ-018"]
+evidence = "test"
+test = "crates/bunny-codec/tests/ply_ascii_uv_tests.rs::aply_tp_071_v1_still_skips_texture_names_unchecked"
+oracle = "Hand-derived raw positions; the /1 behaviour on main, which skips the columns."
+tier = "fast"
+status = "implemented"
+```
+
+## Fixtures
+
+Every input but one is a short text written in the test, with expected raw values
+derived in comments. The exception is `tests/fixtures/stanford-bunny-ascii/`, Stanford's
+data byte-identical to Geordi's asset, with its provenance in that directory's README;
+it is marked `-text` in `.gitattributes` and excluded from the published package.
+
+## Oracle
+
+The independent oracle in `ply_ascii_decimal_tests.rs` multiplies the digit string
+by 2^32 with 32 decimal doublings, shifts by appending or dropping decimal digits,
+and rounds by comparing the dropped digits with `5 * 10^(k-1)` as strings. It uses
+no division, no shifts and no 128-bit arithmetic, so it shares no code path with the
+reader. `APLY-TP-033` checks the oracle itself against hand-derived values.
+
+## Feature Configurations
+
+The full gate (`code-dojo --all`) proves APLY-REQ-012 on every run: it lists
+`cargo tree --locked -p <crate> --no-default-features --edges normal,build
+--target all --prefix none --format {p}` for `bunny-mesh` and `bunny-codec` and
+fails on any crate that is not a local path crate, then runs Clippy, the tests
+(doctests included) and a `wasm32-unknown-unknown` check of both crates with
+`--no-default-features`. Each command names only these two packages, so no other
+workspace member can turn the feature back on through feature unification.
+APLY-TP-052 and APLY-TP-053 test the listing check; a seeded violation (the
+`bunny-mesh` dependency of `bunny-codec` without `default-features = false`)
+makes the gate fail.
+
+APLY-TP-054 is an audit, repeated for a change to either crate's features: build
+`cargo doc --no-deps -p bunny-mesh -p bunny-codec` at the base and at the change,
+and compare the `href` entries of each crate's `all.html`. The lists must be
+identical with default features, and without them differ only by
+`fn.compute_mesh_hash.html`.
+
+Audit at flyingrobots/bunny#291 against `origin/main` 3c395f9: the default-feature
+lists were identical (10 entries for `bunny-mesh`, 28 for `bunny-codec`), and the
+no-default lists lacked only `fn.compute_mesh_hash.html`.
+
+## Mutation Check
+
+The tie rule `quotient + (quotient & 1)` in `round_half_even_div` was mutated to
+round half up and to round half down; `APLY-TP-025` and `APLY-TP-032` fail in both
+cases and every other conversion test still passes, because random inputs almost
+never land on an exact tie. Each mutant ran under `timeout 120`.
+
+The limit checks of `limits.rs` were mutated, each run under `timeout 120` with the sources
+touched before the rebuild, and each mutant fails the tests named:
+
+| Mutant | Fails |
+| --- | --- |
+| the inclusive comparison made exclusive (`>=`) | APLY-TP-055, 057, 060 |
+| the face-count check removed | APLY-TP-055, 060 |
+| the header line-length limit ignored | APLY-TP-057, 058, 060 |
+| blank body lines not checked | APLY-TP-057 |
+| `observed` reported one too high | APLY-TP-055, 056, 057, 058, 060 |
+
+The constants and the type check behind APLY-TP-061 and APLY-TP-062 were mutated, each run under
+`timeout 120` with the sources touched before the rebuild, against the older conversion and reader
+tests and against the new file:
+
+| Mutant | Older tests failing | New tests failing |
+| --- | --- | --- |
+| `CERTAIN_OVERFLOW_MAGNITUDE` 11 to 12 | 0 | APLY-TP-061 |
+| `CERTAIN_OVERFLOW_MAGNITUDE` 11 to 10 | 5 | APLY-TP-061 |
+| `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -11 | 2 | APLY-TP-061 |
+| `CERTAIN_UNDERFLOW_MAGNITUDE` -10 to -9 | 8 | APLY-TP-061 |
+| the `SCALAR_TYPES` check disabled | 0 | APLY-TP-062 |
+
+Texture coordinates (flyingrobots/bunny#369) were mutated, each against
+`ply_ascii_uv_tests.rs`:
+
+| Mutant | Tests failing |
+| --- | --- |
+| `u` and `v` read from each other's column | 2 |
+| texture coordinates not validated when the mesh is parsed | 1 |
+| an incomplete or mixed pair accepted as no texture coordinates | 1 |
+| the refusal reported at the first texture name's line, not the last | 1 |
+| `/1` reading texture names as `/2` does | 1 (APLY-TP-071) |
+
+## Open Gaps
+
+| Gap | Blocking item |
+| --- | --- |
+| Conversion to `f64` at a float boundary. | A consumer that needs it and states the rounding rule. |
+| Values with more than 28 significant digits. | A consumer with such data; needs a wider working integer. |
