@@ -353,7 +353,7 @@ type Second {
         let lock = include_str!("../../../Cargo.lock");
         let resolved = lock
             .split("[[package]]")
-            .find(|package| package.contains("name = \"wesley-core\"\n"))
+            .find(|package| package.lines().any(|line| line == "name = \"wesley-core\""))
             .and_then(|package| package.lines().find_map(|line| line.strip_prefix("version = ")))
             .map(|version| version.trim_matches('"'))
             .unwrap();
