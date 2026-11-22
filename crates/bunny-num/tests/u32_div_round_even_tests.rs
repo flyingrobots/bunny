@@ -105,7 +105,8 @@ fn udre_tp_003_boundary_grid_and_large_ties_match_u128_oracle() {
         }
     }
 
-    // Large even-denominator exact ties where 2 * r overflows u32
+    // Large even-denominator exact ties. At a tie 2 * r == d, so 2 * r cannot overflow u32;
+    // the overflow-producing non-ties are covered by the boundary grid above.
     for step in 0_u32..64 {
         let d = u32::MAX - 1 - step * 2;
         let half = d / 2;

@@ -203,16 +203,6 @@ pub fn run_u32_div_round_even_cpu(vectors: &[DivVector]) -> KernelConformanceRec
     }
 }
 
-fn classify_device_type(device_type: wgpu::DeviceType) -> ExecutionClass {
-    match device_type {
-        wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu => {
-            ExecutionClass::HardwareGpu
-        }
-        wgpu::DeviceType::Cpu | wgpu::DeviceType::VirtualGpu => ExecutionClass::SoftwareGpu,
-        wgpu::DeviceType::Other => ExecutionClass::Unknown,
-    }
-}
-
 struct RunContext {
     manifest_sha: String,
     shader_sha: String,
@@ -472,7 +462,7 @@ pub fn run_u32_div_round_even_gpu_with_shader(
     };
 
     let info = adapter.get_info();
-    let exec_class = classify_device_type(info.device_type);
+    let exec_class = ExecutionClass::from_device_type(info.device_type);
     let environment = ExecutionEnvironment {
         os: std::env::consts::OS.to_owned(),
         arch: std::env::consts::ARCH.to_owned(),
