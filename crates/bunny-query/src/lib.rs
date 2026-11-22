@@ -37,8 +37,8 @@ pub use ray::{
     ray_intersects_triangle, PreparedRay3,
 };
 pub use trace::{
-    BoxHit, CylinderHit, SphereHit, TraceBox, TraceBoxError, TraceCylinder, TraceCylinderError,
-    TraceRay, TraceSphere, TraceSphereError, TraceTriangle, TriangleHit, RAY_BOX_ID,
-    RAY_CYLINDER_ID, TRACE_COORD_LIMIT_RAW, TRACE_DIRECTION_LIMIT_RAW,
-    TRACE_UNIT_DIRECTION_LIMIT_RAW,
+    BoxHit, CylinderHit, DiscHit, SphereHit, TraceBox, TraceBoxError, TraceCylinder,
+    TraceCylinderError, TraceDisc, TraceDiscError, TraceRay, TraceSphere, TraceSphereError,
+    TraceTriangle, TriangleHit, RAY_BOX_ID, RAY_CYLINDER_ID, RAY_DISC_ID, TRACE_COORD_LIMIT_RAW,
+    TRACE_DIRECTION_LIMIT_RAW, TRACE_UNIT_DIRECTION_LIMIT_RAW,
 };
