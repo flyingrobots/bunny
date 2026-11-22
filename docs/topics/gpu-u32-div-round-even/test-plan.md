@@ -40,6 +40,7 @@ status = "active"
 | UDRE-TP-007 | UDRE-REQ-003 | Content-addressed manifest and artifact SHA-256 digests are deterministic 64-hex values matching `bunny_num::CRATE_VERSION`. | `crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_003_manifest_and_receipt_identities_are_deterministic` |
 | UDRE-TP-008 | UDRE-REQ-003 | Empty vector slices return `Outcome::NotRun` with `actual_results_sha256: None` on both CPU and GPU. | `crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_004_empty_vectors_return_not_run` |
 | UDRE-TP-009 | UDRE-REQ-003 | Invalid WGSL compilation errors are captured via `wgpu` error scopes and return `Outcome::Fail` without panicking. | `crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_005_invalid_wgsl_returns_fail_without_panicking` |
+| UDRE-TP-010 | UDRE-REQ-003 | Receipt execution class follows the adapter device type: only `Cpu` is `SoftwareGpu`; `VirtualGpu` and `Other` are `Unknown`. | `crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_006_only_a_cpu_adapter_is_classified_as_software_execution` |
 
 ```toml
 [[case]]
@@ -120,6 +121,15 @@ requirements = ["UDRE-REQ-003"]
 evidence = "test"
 test = "crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_005_invalid_wgsl_returns_fail_without_panicking"
 oracle = "Malformed WGSL triggers wgpu validation error scope and returns Outcome::Fail with detail without panicking."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "UDRE-TP-010"
+requirements = ["UDRE-REQ-003"]
+evidence = "test"
+test = "crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_006_only_a_cpu_adapter_is_classified_as_software_execution"
+oracle = "DiscreteGpu and IntegratedGpu map to HardwareGpu, Cpu maps to SoftwareGpu, and VirtualGpu and Other map to Unknown."
 tier = "fast"
 status = "implemented"
 ```

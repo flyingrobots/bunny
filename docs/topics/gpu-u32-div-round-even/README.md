@@ -33,4 +33,6 @@ in `crates/bunny-num` and `crates/bunny-gpu`.
 
 The verification design and implemented test anchors live in [`test-plan.md`](test-plan.md).
 The `wgpu` harness reports `Outcome::Unavailable` (never `Outcome::Pass`) when a host has
-no compatible GPU or software adapter.
+no compatible GPU or software adapter. A receipt records `software-gpu` only for an adapter
+whose device type is `Cpu`; a virtual adapter is recorded as `unknown`, because virtualization
+alone does not show where the shader ran.

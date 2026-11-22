@@ -59,6 +59,16 @@ Checks run:
 - `cargo run --locked -p xtask -- repo-respect check --branch` (passed)
 - `cargo run --locked -p xtask -- code-dojo-commit-msg` (passed)
 
+Review follow-up (`VirtualGpu` classification):
+- `ExecutionClass::from_device_type` in `crates/bunny-gpu/src/receipt.rs` replaces the private
+  mapping in `crates/bunny-gpu/src/u32_div_round_even.rs`. `VirtualGpu` now maps to `Unknown`,
+  not `SoftwareGpu`.
+- `cargo test --locked -p bunny-gpu udre_gpu_006` (RED with the old mapping: `SoftwareGpu`
+  against `Unknown`; GREEN after the change).
+- `crates/bunny-num/tests/u32_div_round_even_tests.rs`: corrected the comment that said exact
+  ties overflow `2 * r`.
+- The pinned WGSL and fixture files are untouched.
+
 Known risks:
 - `bunny-u32-div-round-even/1` is a bounded unsigned-integer kernel and makes no claim of Q32.32 GPU conformance.
 - Headless CI runners without a Vulkan/software GPU adapter report `Outcome::Unavailable` rather than `Outcome::Pass`.

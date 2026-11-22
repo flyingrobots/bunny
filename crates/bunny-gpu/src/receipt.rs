@@ -27,8 +27,24 @@ pub enum ExecutionClass {
     SoftwareGpu,
     /// Dedicated or integrated hardware GPU (e.g., Apple Metal, Vulkan, DX12).
     HardwareGpu,
-    /// Adapter device type could not be classified cleanly.
+    /// Adapter device type does not establish the execution class (virtual or other adapters).
     Unknown,
+}
+
+impl ExecutionClass {
+    /// Classifies a `wgpu` adapter by the device type it reports.
+    ///
+    /// Only `Cpu` identifies software execution. A `VirtualGpu` is a virtual or hosted
+    /// adapter, which may pass through to hardware, so it is `Unknown` rather than
+    /// `SoftwareGpu`.
+    #[must_use]
+    pub const fn from_device_type(device_type: wgpu::DeviceType) -> Self {
+        match device_type {
+            wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu => Self::HardwareGpu,
+            wgpu::DeviceType::Cpu => Self::SoftwareGpu,
+            wgpu::DeviceType::VirtualGpu | wgpu::DeviceType::Other => Self::Unknown,
+        }
+    }
 }
 
 /// Adapter selection preference for `wgpu` equivalence runs.

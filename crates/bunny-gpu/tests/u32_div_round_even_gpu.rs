@@ -174,3 +174,20 @@ fn udre_gpu_005_invalid_wgsl_returns_fail_without_panicking() {
         other => panic!("invalid WGSL must return Outcome::Fail (or Unavailable), got {other:?}"),
     }
 }
+
+#[test]
+fn udre_gpu_006_only_a_cpu_adapter_is_classified_as_software_execution() {
+    use wgpu::DeviceType;
+
+    assert_eq!(
+        ExecutionClass::from_device_type(DeviceType::DiscreteGpu),
+        ExecutionClass::HardwareGpu
+    );
+    assert_eq!(
+        ExecutionClass::from_device_type(DeviceType::IntegratedGpu),
+        ExecutionClass::HardwareGpu
+    );
+    assert_eq!(ExecutionClass::from_device_type(DeviceType::Cpu), ExecutionClass::SoftwareGpu);
+    assert_eq!(ExecutionClass::from_device_type(DeviceType::VirtualGpu), ExecutionClass::Unknown);
+    assert_eq!(ExecutionClass::from_device_type(DeviceType::Other), ExecutionClass::Unknown);
+}
