@@ -45,7 +45,7 @@ const NONDETERMINISM_CRATES: &[&str] = &[
     "bunny-contract",
 ];
 const GENERATOR_CRATES: &[&str] = &["bunny-wesley"];
-const TOOLING_CRATES: &[&str] = &["xtask", "bunny-perf"];
+const TOOLING_CRATES: &[&str] = &["xtask", "bunny-perf", "bunny-gpu"];
 const STRICT_CLIPPY_PACKAGES: &[&str] = &[
     "bunny-num",
     "bunny-linalg",

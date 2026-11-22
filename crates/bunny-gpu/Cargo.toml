@@ -1,0 +1,24 @@
+[package]
+name = "bunny-gpu"
+description = "Quarantined GPU shader artifacts and wgpu CPU-vs-GPU equivalence harness for Bunny deterministic kernels."
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+bunny-num = { path = "../bunny-num", version = "0.7.1" }
+hex = "0.4"
+pollster = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10.9"
+wgpu = { version = "29.0.4", default-features = false, features = ["wgsl", "metal", "vulkan", "dx12"] }
