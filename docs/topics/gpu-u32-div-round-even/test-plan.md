@@ -33,7 +33,7 @@ status = "active"
 | --- | --- | --- | --- |
 | UDRE-TP-001 | UDRE-REQ-001 | All 15 core golden vectors checked against `u128` oracle, `Result`, `[value, status]`, and 8-byte LE wire format. | `crates/bunny-num/tests/u32_div_round_even_tests.rs::udre_tp_001_golden_vectors_match_contract` |
 | UDRE-TP-002 | UDRE-REQ-001 | Division by zero across representative `n` values returns `Err(DivisionByZero)` and `[0, 1]`. | `crates/bunny-num/tests/u32_div_round_even_tests.rs::udre_tp_002_division_by_zero_returns_canonical_error` |
-| UDRE-TP-003 | UDRE-REQ-001 | 19x19 boundary grid and large even-denominator ties (where `2 * r` overflows `u32`) match `u128` oracle. | `crates/bunny-num/tests/u32_div_round_even_tests.rs::udre_tp_003_boundary_grid_and_large_ties_match_u128_oracle` |
+| UDRE-TP-003 | UDRE-REQ-001 | 19x19 boundary grid (including non-ties like `3,000,000,000 / 4,000,000,000` where `2 * r` wraps `u32`) and large even-denominator ties match `u128` oracle. | `crates/bunny-num/tests/u32_div_round_even_tests.rs::udre_tp_003_boundary_grid_and_large_ties_match_u128_oracle` |
 | UDRE-TP-004 | UDRE-REQ-001 | 50,000 seeded random pairs match `u128` oracle. | `crates/bunny-num/tests/u32_div_round_even_tests.rs::udre_tp_004_seeded_property_sweep_matches_u128_oracle` |
 | UDRE-TP-005 | UDRE-REQ-002 | Checked-in 1,720-vector JSON fixture matches CPU reference and pins the `3,000,000,000 / 4,000,000,000` counterexample. | `crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_001_fixture_matches_cpu_reference_and_15_core_vectors` |
 | UDRE-TP-006 | UDRE-REQ-003 | Real `wgpu` compute execution of assembled WGSL matches CPU canonical output digest bit-for-bit (or reports `Unavailable` honestly). | `crates/bunny-gpu/tests/u32_div_round_even_gpu.rs::udre_gpu_002_wgsl_compute_matches_cpu_bit_for_bit` |
@@ -65,7 +65,7 @@ id = "UDRE-TP-003"
 requirements = ["UDRE-REQ-001"]
 evidence = "test"
 test = "crates/bunny-num/tests/u32_div_round_even_tests.rs::udre_tp_003_boundary_grid_and_large_ties_match_u128_oracle"
-oracle = "19x19 boundary grid and large ties where 2*r wraps u32 match u128 oracle."
+oracle = "19x19 boundary grid (including non-ties like 3,000,000,000 / 4,000,000,000 where 2*r wraps u32) and large even-denominator ties match u128 oracle."
 tier = "fast"
 status = "implemented"
 
