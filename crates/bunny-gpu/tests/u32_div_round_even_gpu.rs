@@ -2,10 +2,26 @@
 
 use bunny_gpu::{
     load_u32_div_round_even_fixture, run_u32_div_round_even_cpu, run_u32_div_round_even_gpu,
-    run_u32_div_round_even_gpu_with_shader, u32_div_round_even_manifest, AdapterPolicy, DivVector,
-    ExecutionClass, Outcome,
+    run_u32_div_round_even_gpu_with_shader, sha256_hex, u32_div_round_even_manifest, AdapterPolicy,
+    DivVector, ExecutionClass, Outcome,
 };
 use bunny_num::{div_round_even_u32_words, CRATE_VERSION, U32_DIV_ROUND_EVEN_CONTRACT_ID};
+
+const EXPECTED_CPU_SOURCE_BYTES: &[u8] =
+    include_bytes!("../../bunny-num/src/u32_div_round_even.rs");
+
+fn u128_oracle_words(numerator: u32, denominator: u32) -> [u32; 2] {
+    if denominator == 0 {
+        return [0, 1];
+    }
+    let n = u128::from(numerator);
+    let d = u128::from(denominator);
+    let q = n / d;
+    let r = n % d;
+    let two_r = r * 2;
+    let rounded = if two_r > d || (two_r == d && (q & 1) == 1) { q + 1 } else { q };
+    [u32::try_from(rounded).expect("u32 quotient"), 0]
+}
 
 const EXPECTED_CORE_15: &[(u32, u32, u32, u32)] = &[
     (0, 1, 0, 0),
@@ -43,15 +59,20 @@ fn udre_gpu_001_fixture_matches_cpu_reference_and_15_core_vectors() {
     }
 
     for vec in &fixture.vectors {
-        assert_eq!(
-            div_round_even_u32_words(vec.numerator, vec.denominator),
-            [vec.expected_value, vec.expected_status],
-        );
+        let expected = [vec.expected_value, vec.expected_status];
+        assert_eq!(div_round_even_u32_words(vec.numerator, vec.denominator), expected);
+        assert_eq!(u128_oracle_words(vec.numerator, vec.denominator), expected);
     }
 
+    let expected_cpu_artifact_sha = sha256_hex(EXPECTED_CPU_SOURCE_BYTES);
     let cpu_receipt = run_u32_div_round_even_cpu(&fixture.vectors);
     assert_eq!(cpu_receipt.outcome, Outcome::Pass);
     assert_eq!(cpu_receipt.execution_class, ExecutionClass::Cpu);
+    assert_eq!(cpu_receipt.execution_artifact_sha256, expected_cpu_artifact_sha);
+    assert_ne!(
+        cpu_receipt.execution_artifact_sha256,
+        sha256_hex(b"bunny-num::div_round_even_u32_bytes"),
+    );
     assert_eq!(
         cpu_receipt.actual_results_sha256.as_deref(),
         Some(cpu_receipt.expected_results_sha256.as_str()),
@@ -119,6 +140,7 @@ fn udre_gpu_004_empty_vectors_return_not_run() {
     let cpu = run_u32_div_round_even_cpu(&[]);
     assert_eq!(cpu.outcome, Outcome::NotRun);
     assert_eq!(cpu.vector_count, 0);
+    assert_eq!(cpu.execution_artifact_sha256, sha256_hex(EXPECTED_CPU_SOURCE_BYTES));
     assert!(cpu.actual_results_sha256.is_none());
     assert!(cpu.detail.is_some());
 
