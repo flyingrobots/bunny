@@ -25,6 +25,10 @@ pub const U32_ELLIPSE_CLASSIFY_COMPUTE_WRAPPER_WGSL: &str =
 pub const U32_ELLIPSE_CLASSIFY_VECTORS_JSON: &str =
     include_str!("../fixtures/u32_ellipse_classify_vectors.json");
 
+/// CPU reference implementation source bytes hashed for CPU conformance receipts.
+const U32_ELLIPSE_CLASSIFY_CPU_SOURCE_BYTES: &[u8] =
+    include_bytes!("../../bunny-num/src/u32_ellipse_classify.rs");
+
 const MANIFEST_VERSION: &str = "bunny-gpu-manifest/1";
 const RECEIPT_VERSION: &str = "bunny-gpu-kernel-receipt/1";
 const WORKGROUP_SIZE: u32 = 64;
@@ -204,12 +208,13 @@ pub fn run_u32_ellipse_classify_cpu(vectors: &[EllipseVector]) -> KernelConforma
         driver: None,
         driver_info: None,
     };
+    let cpu_artifact_sha = sha256_hex(U32_ELLIPSE_CLASSIFY_CPU_SOURCE_BYTES);
     if vectors.is_empty() {
         return KernelConformanceReceipt {
             receipt_version: RECEIPT_VERSION.to_owned(),
             contract_id: U32_ELLIPSE_CLASSIFY_CONTRACT_ID.to_owned(),
             implementation_manifest_sha256: manifest_sha,
-            execution_artifact_sha256: sha256_hex(b"bunny-num::classify_ellipse_u32_bytes"),
+            execution_artifact_sha256: cpu_artifact_sha,
             vectors_sha256: sha256_hex(&input_bytes),
             expected_results_sha256: expected_sha,
             actual_results_sha256: None,
@@ -229,7 +234,7 @@ pub fn run_u32_ellipse_classify_cpu(vectors: &[EllipseVector]) -> KernelConforma
         receipt_version: RECEIPT_VERSION.to_owned(),
         contract_id: U32_ELLIPSE_CLASSIFY_CONTRACT_ID.to_owned(),
         implementation_manifest_sha256: manifest_sha,
-        execution_artifact_sha256: sha256_hex(b"bunny-num::classify_ellipse_u32_bytes"),
+        execution_artifact_sha256: cpu_artifact_sha,
         vectors_sha256: sha256_hex(&input_bytes),
         expected_results_sha256: expected_sha,
         actual_results_sha256: Some(actual_sha),
