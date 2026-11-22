@@ -46,3 +46,6 @@ in `crates/bunny-num` and `crates/bunny-gpu`.
 The verification design and implemented test anchors live in [`test-plan.md`](test-plan.md).
 The `wgpu` harness reports `Outcome::Unavailable` (never `Outcome::Pass`) when a host has
 no compatible GPU or software adapter, and `Outcome::NotRun` when passed an empty vector slice.
+Its receipts classify the adapter by the rule shared with
+[`gpu-u32-div-round-even`](../gpu-u32-div-round-even/README.md#conformance-evidence): only a
+`Cpu` adapter is `software-gpu`, and a virtual adapter is `unknown`.

@@ -44,6 +44,14 @@ Checks run:
 - `cargo run --locked -p xtask -- code-dojo-rust --all`
 - `cargo run --locked -p xtask -- repo-respect check --branch`
 
+Review follow-up (`VirtualGpu` classification):
+- `crates/bunny-gpu/src/u32_ellipse_classify.rs` drops its private copy of the device-type
+  mapping and calls `ExecutionClass::from_device_type` (`crates/bunny-gpu/src/receipt.rs`,
+  covered by `udre_gpu_006_only_a_cpu_adapter_is_classified_as_software_execution`), so a
+  `VirtualGpu` adapter is recorded as `Unknown` here too.
+- `cargo test --locked -p bunny-gpu` (pass on Apple Metal).
+- The pinned WGSL and fixture files are untouched.
+
 Known risks:
 - `bunny-u32-ellipse-classify/1` is a bounded 2-limb `u32` (64-bit) predicate over `0..=46,340` and makes no claim of full Q32.32 GPU conformance.
 - Headless CI runners without a Vulkan/software GPU adapter report `Outcome::Unavailable` rather than `Outcome::Pass`.
