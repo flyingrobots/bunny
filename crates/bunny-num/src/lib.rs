@@ -17,10 +17,16 @@
 pub mod fixed_angle;
 pub mod fixed_divisor;
 pub mod fixed_q32_32;
+pub mod u32_div_round_even;
 
 pub use fixed_angle::FixedAngle;
 pub use fixed_divisor::FixedDivisor;
 pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
+pub use u32_div_round_even::{
+    div_round_even_u32, div_round_even_u32_bytes, div_round_even_u32_words, DivisionByZero,
+    U32_DIV_ROUND_EVEN_CONTRACT_ID, U32_DIV_ROUND_EVEN_STATUS_DIV_BY_ZERO,
+    U32_DIV_ROUND_EVEN_STATUS_OK,
+};
 
 /// Bunny's first scalar representation.
 ///
