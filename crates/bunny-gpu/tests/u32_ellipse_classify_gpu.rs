@@ -1,15 +1,42 @@
 //! `wgpu` CPU-vs-GPU equivalence tests for `bunny-u32-ellipse-classify/1`
 //! (`flyingrobots/bunny#430`).
 
+use core::cmp::Ordering;
+
 use bunny_gpu::{
     load_u32_ellipse_classify_fixture, run_u32_ellipse_classify_cpu, run_u32_ellipse_classify_gpu,
-    run_u32_ellipse_classify_gpu_with_shader, u32_ellipse_classify_manifest, AdapterPolicy,
-    EllipseVector, ExecutionClass, Outcome,
+    run_u32_ellipse_classify_gpu_with_shader, sha256_hex, u32_ellipse_classify_manifest,
+    AdapterPolicy, EllipseVector, ExecutionClass, Outcome,
 };
 use bunny_num::{
     classify_ellipse_u32_words, CRATE_VERSION, U32_ELLIPSE_CLASSIFY_CONTRACT_ID,
     U32_ELLIPSE_MAX_COORD,
 };
+
+const EXPECTED_CPU_SOURCE_BYTES: &[u8] =
+    include_bytes!("../../bunny-num/src/u32_ellipse_classify.rs");
+
+fn u128_oracle_words(dx: u32, dy: u32, semi_x: u32, semi_y: u32) -> [u32; 2] {
+    if dx > U32_ELLIPSE_MAX_COORD
+        || dy > U32_ELLIPSE_MAX_COORD
+        || semi_x > U32_ELLIPSE_MAX_COORD
+        || semi_y > U32_ELLIPSE_MAX_COORD
+    {
+        return [0, 1];
+    }
+    if semi_x == 0 || semi_y == 0 {
+        return [if dx == 0 && dy == 0 { 1 } else { 2 }, 0];
+    }
+    let p = u128::from(dx) * u128::from(semi_y);
+    let q = u128::from(dy) * u128::from(semi_x);
+    let r = u128::from(semi_x) * u128::from(semi_y);
+    let class = match (p * p + q * q).cmp(&(r * r)) {
+        Ordering::Less => 0,
+        Ordering::Equal => 1,
+        Ordering::Greater => 2,
+    };
+    [class, 0]
+}
 
 #[test]
 fn uec_gpu_001_fixture_matches_cpu_reference_and_zero_axis_traps() {
@@ -56,15 +83,20 @@ fn uec_gpu_001_fixture_matches_cpu_reference_and_zero_axis_traps() {
     );
 
     for vec in &fixture.vectors {
-        assert_eq!(
-            classify_ellipse_u32_words(vec.dx, vec.dy, vec.semi_x, vec.semi_y),
-            [vec.expected_class, vec.expected_status],
-        );
+        let expected = [vec.expected_class, vec.expected_status];
+        assert_eq!(classify_ellipse_u32_words(vec.dx, vec.dy, vec.semi_x, vec.semi_y), expected);
+        assert_eq!(u128_oracle_words(vec.dx, vec.dy, vec.semi_x, vec.semi_y), expected);
     }
 
+    let expected_cpu_artifact_sha = sha256_hex(EXPECTED_CPU_SOURCE_BYTES);
     let cpu_receipt = run_u32_ellipse_classify_cpu(&fixture.vectors);
     assert_eq!(cpu_receipt.outcome, Outcome::Pass);
     assert_eq!(cpu_receipt.execution_class, ExecutionClass::Cpu);
+    assert_eq!(cpu_receipt.execution_artifact_sha256, expected_cpu_artifact_sha);
+    assert_ne!(
+        cpu_receipt.execution_artifact_sha256,
+        sha256_hex(b"bunny-num::classify_ellipse_u32_bytes"),
+    );
     assert_eq!(
         cpu_receipt.actual_results_sha256.as_deref(),
         Some(cpu_receipt.expected_results_sha256.as_str()),
@@ -113,6 +145,7 @@ fn uec_gpu_003_manifest_empty_and_invalid_wgsl_behave_honestly() {
 
     let cpu_empty = run_u32_ellipse_classify_cpu(&[]);
     assert_eq!(cpu_empty.outcome, Outcome::NotRun);
+    assert_eq!(cpu_empty.execution_artifact_sha256, sha256_hex(EXPECTED_CPU_SOURCE_BYTES));
     assert!(cpu_empty.actual_results_sha256.is_none());
 
     let gpu_empty = run_u32_ellipse_classify_gpu(&[], AdapterPolicy::HardwarePreferred);
