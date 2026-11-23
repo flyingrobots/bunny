@@ -35,7 +35,8 @@
 //! `try_` forms of the surface hit, the bounce direction and the bounce ray name each refusal
 //! with a [`SecondaryRayError`]. [`SurfaceHit::specular_reflection`]
 //! (`bunny-specular-reflection/1`) gives a perfect mirror's continuation ray and its Fresnel
-//! throughput.
+//! throughput, and [`SurfaceHit::ggx_reflection`] (`bunny-ggx-conductor/1`) samples a rough
+//! conductor's GGX lobe and weights it.
 //!
 //! [`interpolate_uv`] gives a triangle's texture coordinates at a hit from its barycentric
 //! numerators, and [`bilinear`] the four texels and weights of a bilinear lookup, with
@@ -86,11 +87,12 @@ pub use pixel::{
 pub use point::point_at;
 pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
-    schlick_fresnel, smooth_normal, Albedo, DirectionalLight, LightSample, SecondaryRayError,
-    ShadingError, ShadingFrame, SkyLight, SmoothBounce, SmoothHit, SpecularSample, SurfaceHit,
-    TriangleSurface, VertexNormalError, VertexNormals, FRAC_1_PI, MAX_LIGHT_RAW,
-    MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID, SHADOW_T_MAX, SMOOTH_NORMAL_ID,
-    SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
+    reflect, schlick_fresnel, smooth_normal, Albedo, DirectionalLight, GgxConductor,
+    GgxRoughnessError, GgxScatter, LightSample, SecondaryRayError, ShadingError, ShadingFrame,
+    SkyLight, SmoothBounce, SmoothHit, SpecularSample, SurfaceHit, TriangleSurface,
+    VertexNormalError, VertexNormals, FRAC_1_PI, GGX_CONDUCTOR_ID, MAX_LIGHT_RAW,
+    MAX_NORMAL_TRIANGLES, MIN_BOUNCE_COSINE_RAW, MIN_GGX_ROUGHNESS_RAW, PI, SHADING_ID,
+    SHADOW_T_MAX, SMOOTH_NORMAL_ID, SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
 pub use texture::{bilinear, interpolate_uv, BilinearTaps, TextureWrap, TEXTURE_BILINEAR_ID};
 pub use xoroshiro::Xoroshiro128Plus;

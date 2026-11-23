@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `xtask`: the `repo_respect` tests no longer read `GITHUB_BASE_REF` or
+  `CODE_DOJO_BASE_REF` through the code under test. The base ref is resolved
+  once at the entry points and passed down, so the tests pass on a stacked pull
+  request whose base branch is absent from their temporary repository.
 * `bunny-perf` builds with each feature group alone. Helpers shared by several
   groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
   now gated on the groups that use them, so the `cargo xtask perf` per-group
@@ -221,6 +225,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SecondaryRayError` variants, `ArrivesBelowSurface` and
   `ReflectionBelowSurface`. No existing output changes. Closes
   flyingrobots/bunny#370.
+
+* `bunny-optics`: the GGX rough conductor, `bunny-ggx-conductor/1`
+  (`GGX_CONDUCTOR_ID`). `SurfaceHit::ggx_reflection` and `try_ggx_reflection`
+  draw a microfacet normal from the GGX distribution of the normals visible
+  from the incoming ray (Heitz 2018) from one sampler pair, reflect the ray
+  about it, and weight the sample by Schlick's Fresnel term times the
+  height-correlated Smith ratio `G2 / G1`. The result is a `GgxScatter`:
+  `Reflected(SpecularSample)`, or `Absorbed` when the direction does not
+  leave the surface, which is a result and not a refusal. `GgxConductor`
+  holds the base reflectance and the roughness, the distribution's width
+  `alpha` in `2^-16..=1.0` (`MIN_GGX_ROUGHNESS_RAW`); any other value is a
+  `GgxRoughnessError`. Every square root, product, division and
+  normalization has one stated rounding, and the Smith ratio is within
+  `1/2 + 2^-11` raw units of the exact formula at the rounded cosines. At
+  the minimum roughness a sample with `u <= 1/2` is within `33 alpha` of the
+  mirror's direction (derived). With `F = 1` the mean weight is the
+  single-scattering albedo, below one and falling with roughness
+  (`1 - ln 2` at roughness 1.0 and normal incidence); `2^16` stratified
+  samples are within `2^-11` of it, a measured tolerance. `reflect` is now
+  public: the unit vector along the exact reflection of a direction about
+  any normal, the one reflection the mirror and this sampler share. No
+  existing output changes. Closes flyingrobots/bunny#371.
 
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and
