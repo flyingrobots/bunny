@@ -25,6 +25,11 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `ThinLensCamera` (`new`, `ray`, `position`, `forward`, `right`, `up`,
   `aperture_radius`, `focus_distance`, `scale_shift`), `ThinLensSpec`,
   `ThinLensError`, `lens_disc_point` and `THIN_LENS_ID`;
+- for the [orthographic camera](#orthographic-camera)
+  (`bunny-orthographic-camera/1`): `OrthographicCamera` (`new`, `ray`,
+  `position`, `forward`, `right`, `up`, `half_height`, `width`, `height`),
+  `OrthographicSpec`, `OrthographicError`, `ORTHOGRAPHIC_CAMERA_ID` and
+  `ORTHOGRAPHIC_HALF_HEIGHT_LIMIT_RAW`;
 - `PixelStream` (`new`, `bits`, `fraction`), `fraction_from_bits` and
   `SAMPLE_HASH_ID`, the counter-based [sample hash](#sample-hash);
 - `PixelSampler` (`new`, `point`, `camera_sample`, `x`, `y`) and `SAMPLER_ID`,
@@ -103,8 +108,9 @@ diffuse, the perfect mirror, the smooth dielectric and the rough conductor
 (the rest of #160) are not part of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
 (right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
 field of view given by its tangent, aspect `width / height`) and `Viewport`
-(top-left origin, `y` down), but no test yet checks a ray against those
-matrices; that is an open gap in the test plan.
+(top-left origin, `y` down), and the [projection round
+trip](#projection-round-trip) checks that points along a camera's rays land on
+their samples through those matrices.
 
 All arithmetic is integer arithmetic on raw Q32.32 values (`i64`, widened to
 `i128`). There is no floating point, no `unsafe` code and no target-specific path, and
@@ -185,8 +191,11 @@ right and `+Y` up. The camera's up is the part of the hint orthogonal to
 
 The second round of cross products starts from two nearly orthogonal unit
 vectors, so the basis is orthogonal to a few raw units even when the hint is
-nearly parallel to `look`. The test plan checks every pairwise dot product
-below `2^36` raw-squared units, a cosine below `2^-28`.
+nearly parallel to `look`: every pairwise dot product is below
+`(3/2) sqrt(3) (1 + 2^-28) 2^32`, under `2.6 * 2^32` raw-squared units, a
+cosine below `2^-30.6`. That is proven in [Construction
+Safeguards](#construction-safeguards); the first round alone leaves `right`
+orthogonal to `forward` only to about `2^-16`.
 
 ## Image Convention
 
@@ -290,8 +299,10 @@ cameras (tangent 256.0, a 32768 by 1 image) need `k = 23`.
 direction `d` has `d . F > 2 * |F|_1` (raw `i128` arithmetic). Because
 `d . F` is within `|F|_1` of an affine function of the sample, this makes
 `d . F > 0` for every sample, so no direction is zero and every ray points
-ahead of the camera. The check passes with a wide margin for every camera the
-tests construct; failing it would return `Unrepresentable`.
+ahead of the camera. For the pinhole camera the check never fails: every
+corner has `d . F` above `2^39` against a slack below `2^33.8`, proven in
+[Construction Safeguards](#construction-safeguards). The thin-lens camera,
+whose shift can reach 32, does reach it.
 
 **Precision.** Halving the direction for wide images or fields of view costs
 one bit of each component per halving. A 90-degree 16:9 camera has `k = 1`;
@@ -436,10 +447,215 @@ or below (`FocusDistanceNotPositive`), a negative aperture
 (`ApertureNegative`), a position coordinate whose magnitude plus `2a` reaches
 `2^40` raw (`LensOutsideTraceDomain`), and no shift up to 32 that fits the
 margins (`Unrepresentable`: an aperture far larger than the focus distance,
-such as `2^38` raw over one raw unit).
+such as `2^38` raw over one raw unit, which no shift fits on the components;
+or `2^28` raw over one raw unit, whose components fit at `k = 30` but whose
+corners fail the forward check, while `2^28 - 1` raw is accepted at `k = 29`;
+see [Construction Safeguards](#construction-safeguards)).
 
 **Cost.** A thin-lens ray adds one square root, one `sin_cos`, and a dozen
 `i128` multiplications and divisions to the pinhole ray.
+
+## Orthographic Camera
+
+An `OrthographicCamera` gives parallel rays: every ray has the direction
+`forward` and starts at its sample's point on a view rectangle centred on the
+position. Its identity is `bunny-orthographic-camera/1`
+(`ORTHOGRAPHIC_CAMERA_ID`); it names the bits of `OrthographicCamera::ray`.
+
+**Inputs.** An `OrthographicSpec` is a `CameraSpec` with the tangent replaced
+by `half_height`, half the height of the view rectangle in world units:
+
+| Field | Meaning | Accepted |
+| --- | --- | --- |
+| `position` | The centre of the view rectangle. | Inside the trace domain: every `abs(raw) < 2^40`. |
+| `look`, `up` | The viewing direction and the roll hint. | As for the pinhole camera. |
+| `half_height` | Half the rectangle's height; half its width is `half_height * width / height`. | `0 < h <= 256.0` (`ORTHOGRAPHIC_HALF_HEIGHT_LIMIT_RAW = 2^40`). |
+| `width`, `height` | The image size in pixels. | `1..=32768` each. |
+
+The basis is the pinhole camera's, bit for bit (the same
+[Camera Frame](#camera-frame) steps), and so is the [image
+convention](#image-convention): pixel `(0, 0)` is top-left, rows grow toward
+`-up`, pixels are square. The rectangle spans `-h..=h` along `up` and
+`-h * width / height..=h * width / height` along `right`: the view volume of
+`FixedMat4::try_orthographic(h * width / height, h, near, far)` behind the view
+matrix `FixedMat4::try_look_at(position, position + look, up)`.
+
+**The ray.** With `a` and `b` the doubled offsets of [Image
+Convention](#image-convention), `a_raw` and `b_raw` their raw values, `h` the
+raw half height and `R`, `U` the raw basis:
+
+```text
+o_i       = round((a_raw * h * R_i + b_raw * h * U_i) / (height * 2^64))
+origin    = position + o                 // exact
+direction = forward                      // the stored unit vector, unchanged
+```
+
+The rounding is to nearest, ties to even, once per component, from the exact
+`i128` numerator, so each origin component is within half a raw unit of
+`position + (h / height) (a R + b U)` computed exactly with the stored basis.
+Each product is below `2^47 * 2^40 * (2^32 + 1)`, so the numerator stays below
+`2^120`; the divisor is at most `2^79`. `ray(sample)` returns `None` only for a
+sample outside the image, by the pinhole camera's rule.
+
+The direction is the unit forward vector, not a scaled one, so a trace
+distance `t` is the distance along `forward` (up to the basis rounding) and is
+comparable across pixels. Each of its components is at most 1.0: `FixedVec3::normalize`
+divides by the floored length, which is at least every component's magnitude.
+
+**Refusals.** Checked in this order, each its own `OrthographicError`: a
+position coordinate outside the trace domain (`PositionOutsideTraceDomain`),
+a zero width or height (`EmptyImage`) or one above 32768 (`ImageTooLarge`), a
+half height of zero or below (`HalfHeightNotPositive`) or above `2^40` raw
+(`HalfHeightTooLarge`), a zero look (`ZeroLook`), an up hint that is zero or
+nearly parallel by the pinhole camera's rule (`UpParallelToLook`), a view
+rectangle that leaves the trace domain (`ViewOutsideTraceDomain`), and a basis
+vector `FixedUnitVec3::new` fails to normalize (`Unrepresentable`, defensive:
+no accepted input is known to reach it).
+
+**The view check.** Each origin component is a monotone rounding of an affine
+function of `(a, b)`, so over the closed rectangle `|a| <= width`,
+`|b| <= height` it lies between its values at the four corners. The camera is
+refused when a rounded corner has a component of magnitude `2^40` raw or more;
+otherwise every sample has a ray. A sample has `a < width`, so the check can
+refuse a camera whose last sample is up to one pixel inside the domain. All
+four corners are needed: on a frame turned an eighth of a turn about the view
+axis the two diagonal corners leave one axis's extreme out.
+
+**Choices.** The view volume is given by half its height and the aspect ratio
+of the image, as the pinhole camera's is given by a tangent and the aspect
+ratio, rather than by explicit extents; `try_orthographic`'s half width is
+derived from it. The origin rounds to nearest (the pinhole floors its
+directions; the thin lens rounds its lens point to nearest). A maintainer may
+choose otherwise; each would be a new identity.
+
+## Projection Round Trip
+
+A point along a camera's ray, carried through the view matrix, a projection
+matrix and the viewport, lands on the ray's own sample, within a bound derived
+for each case. The cameras and the matrices agree on every convention: the
+handedness (`right = forward x up`, the view looking down `-Z`), the direction
+of `y` (rows grow downward in both) and the pixel centre (a sample's viewport
+coordinate is exactly `(x + sub_x, y + sub_y)`). Axis-aligned power-of-two
+cameras land exactly.
+
+**The path.** For a camera built from a spec:
+
+| Step | Function | Rounding |
+| --- | --- | --- |
+| The point | `point_at(ray, t)` | each product to nearest: half a raw unit |
+| View | `FixedMat4::try_look_at(position, position + look, up)` | axes within one raw unit of the ideal directions; each translation entry sums three products rounded to nearest: 3/2 raw units |
+| Projection | `try_perspective(tan, aspect, near, far)` with `aspect = width / height` rounded to nearest, or `try_orthographic(round(h * width / height), h, near, far)` | the entries, taken as they are |
+| Clip and divide | the matrices applied to the point exactly; `x / w` and `y / w` rounded once to nearest raw unit | half a raw unit of NDC |
+| Viewport | `Viewport::try_ndc_to_viewport` | floor: below one raw unit |
+
+`FixedMat4` has no matrix-times-point product, so the check applies the
+matrices itself, exactly, and rounds each NDC coordinate once.
+
+**The bound.** Write `F, R, U` for the camera's basis and `F', R', U'` for the
+view matrix's axes (the third row is `-F'`), `T` for the tangent,
+`alpha = a T / height`, `beta = b T / height` and
+`P = F + alpha R + beta U`, the sample's image-plane offset. A point at
+parameter `t` is `p + tau P + E` with `tau = t 2^-k` and
+`|E_i| <= t (1 + (width + height) / 2^33) 2^-32 + 2^-33`
+([Accuracy](#accuracy) and `point_at`). On the `x` axis the exact NDC value is
+`m00 x_v / w`, its ideal is `a / width = lambda alpha` with
+`lambda = height / (T width)`, and
+
+```text
+x_v - alpha w = tau (R' - alpha F') . P + (R' - alpha F') . E + eta_x + alpha eta_z
+|x_v - alpha w| <= M = tau |(R' - alpha F') . P| + (|R'|_1 + |alpha| |F'|_1) E_max
+                       + (1 + |alpha|) 3 2^-33
+w >= w_low = tau F' . P - |F'|_1 E_max - 3 2^-33 > 0
+|NDC - a / width| <= |m00 - lambda| (|alpha| + M / w_low) + lambda M / w_low + 2^-33
+```
+
+and the landing error is at most `width / 2` times that plus one raw unit. The
+`y` axis is the same with `U'`, `beta`, `m11` and `1 / T`, and `height / 2`.
+The orthographic path has `w = 1`, the point
+`p + (h / height)(a R + b U) + t F` within `2^-32` per component (the origin's
+and `point_at`'s roundings), and the ideal entries `height / (h width)` and
+`1 / h`.
+
+The terms `(R' - alpha F') . P` and `|m00 - lambda|` are the exact mismatch
+between the camera's basis and the view matrix's, and between the projection
+entry and its ideal value; they are computed exactly for each case from the
+stored bits, not bounded in advance. So the bound is proven for each case, and
+no uniform bound over every accepted camera is claimed: it grows with the
+aspect ratio and as the tangent or the half height shrinks.
+
+**What is asserted.** For every case, the measured error is at most the
+derived bound, and the derived bound is at most `2^-10` pixel (`2^22` raw
+units), the stated tolerance. A convention the two sides disagreed on would
+make the error far above the bound, or the bound far above the tolerance. Over
+the committed seeds (`OPTICS-TP-319` and `OPTICS-TP-320`):
+
+| Camera | Cases | Worst measured | Worst derived bound |
+| --- | --- | --- | --- |
+| Pinhole | 3 200 | 183 466 raw (about `2^-14.5` pixel) | 410 778 raw (about `2^-13.4` pixel) |
+| Orthographic | 4 000 | 401 416 raw (about `2^-13.4` pixel) | 420 161 raw (about `2^-13.3` pixel) |
+
+## Construction Safeguards
+
+Camera construction has two safeguards, and they rest on different evidence.
+
+| Safeguard | Status | Evidence |
+| --- | --- | --- |
+| The second orthogonalization: `up = unit(first_right x forward)`, then `right = unit(forward x up)` | Proven: every pairwise dot product of the basis is below `2.6 * 2^32` raw-squared units | The proof below. `OPTICS-TP-321` checks it at hints just inside the parallel threshold; removing the final cross product (`right = first_right`) fails that case and was caught by no earlier test. |
+| The positive-forward corner check, `d . F > 2 \|F\|_1` at the four corners | Proven never to refuse a pinhole camera | The proof below; `OPTICS-TP-322` checks the margin. A check that always passes is caught by no pinhole test, as the proof says. |
+| The same check with the thin-lens forward margin, `d . F > 2 \|F\|_1 + s_k` | Reached, and tested | `OPTICS-TP-323`: aperture `2^28` raw over focus 1 raw is refused at `k = 30`, `2^28 - 1` raw is accepted at `k = 29`; the margin set to 0, the slack `2 \|F\|_1` set to 0, or the check removed each accepts it. |
+| The scale search reaching a fitting shift (pinhole) | Proven | [Direction Scaling](#direction-scaling): by `k = 24`. |
+| `FixedUnitVec3::new` failing on a basis vector | Neither | Defensive: no test reaches it and no proof rules it out. |
+
+**The orthogonalization.** Raw units throughout; `|v|_1 <= sqrt(3) |v|` and
+every stored unit vector has length within `[2^32 - 1, 2^32 + 2)` (its floored
+length is within one raw unit of `2^32`). `FixedVec3::cross` rounds each of
+its two products to nearest, so each component of a computed cross product
+`c` is within one raw unit of the exact cross product `c*` of its stored
+inputs, which is exactly orthogonal to both. Normalizing `c` prescales it by a
+power of two (exact: `c` is below `2^61`), divides by the floored length of
+the prescaled vector (relative error below `2^-60`) and rounds each component
+to nearest (half a raw unit). So for `up = unit(c)`, `c = first_right x F`:
+
+```text
+up . F = psi 2^32 (c - c*) . F / |c| + r . F,   psi in [1, 1 + 2^-60], |r_i| <= 1/2
+|up . F| <= sqrt(3) (2^32 + 2) (psi 2^32 / |c| + 1/2)
+```
+
+`first_right` is the unit of the computed side vector `s`, accepted only with
+a component of at least `2^16`, so the same argument gives
+`|first_right . F| <= sqrt(3) (2^32 + 2) (2^16 psi + 1/2)`, a cosine below
+`sqrt(3) 2^-16 (1 + 2^-14)`. Then `|c*| >= (2^32 - 1)^2 (1 - 2^-30) / 2^32`,
+so `|c| >= 2^32 - 8` and `|up . F| < (3/2) sqrt(3) (1 + 2^-28) 2^32`, below
+`2.6 * 2^32`. The same steps for `right = unit(F x up)`, whose inputs are now
+orthogonal to that bound, give the bound for `right . F` and `right . up`. The
+largest seen in `OPTICS-TP-321` is `2.06 * 2^32`. Without the second round,
+`right . F` is bounded only by the first-right bound above, about `2^49`.
+
+**The pinhole forward check.** For a corner (`|a| <= width`, `|b| <= height`)
+the exact offset `P_raw = F + (T / height)(a R + b U)` has
+
+```text
+P . F >= |F|^2 - (T (width + height) / height) 2.6 * 2^32
+      >= (2^32 - 1)^2 - 2^23.0001 * 2.6 * 2^32 > 2^64 (1 - 2^-7)
+```
+
+since `T <= 256` and `(width + height) / height <= 2^15 + 1`. Each component
+of the direction is within `1 + 2^-17` raw units of `2^-k P_raw`
+([Accuracy](#accuracy)), so
+`d . F >= 2^(64 - k) (1 - 2^-7) - (1 + 2^-17) |F|_1`, which is above `2^39`
+for every `k <= 24`, while the slack `2 |F|_1` is below `2^33.8`. The check
+therefore never refuses a pinhole camera; `OPTICS-TP-322` finds the smallest
+ratio over the extreme cameras to be 147.
+
+**The thin-lens forward check.** A thin lens can need a shift up to 32, where
+`d . F` is near `2^(64 - k)` and so comparable to the slack. On a level 2 by 2
+camera with tangent 1 and focus distance 1 raw, the component margin
+`2a 2^32 / 2^k` first fits at `k = 30` for `a = 2^28` raw, where
+`d . F = 2^34` is not above `2 |F|_1 + s_30 = 2^33 + 2^33 + 2^32`: refused.
+The margin is conservative here: that camera's corrections have no forward
+component, so its rays would still face forward. The case shows that the
+check decides which lenses are accepted, not that it stops a backward ray in
+this camera.
 
 ## Sampling
 

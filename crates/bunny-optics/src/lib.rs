@@ -22,7 +22,9 @@
 //! A [`ThinLensCamera`] (`bunny-thin-lens/1`) adds an aperture radius and a focus distance:
 //! each ray starts at a point of the lens disc chosen by one sampler pair
 //! ([`lens_disc_point`]) and passes the sample's point on the focus plane; with aperture 0 its
-//! rays are the pinhole camera's, bit for bit.
+//! rays are the pinhole camera's, bit for bit. An [`OrthographicCamera`]
+//! (`bunny-orthographic-camera/1`) gives parallel rays along `forward`, each from its sample's
+//! point on a view rectangle, rounded once per component.
 //!
 //! Sample positions and random decisions come from pure functions of their key, so an image
 //! cannot depend on the order or the number of threads that compute it: [`PixelStream`]
@@ -82,6 +84,11 @@ mod error;
 mod footprint;
 #[allow(unreachable_pub)]
 mod hash;
+#[allow(
+    clippy::module_name_repetitions,
+    reason = "`OrthographicCamera` and its parts are the public names; the module is private"
+)]
+mod orthographic;
 #[allow(unreachable_pub)]
 mod pixel;
 #[allow(unreachable_pub)]
@@ -103,6 +110,10 @@ pub use footprint::{
     UnboundedReason, RAY_FOOTPRINT_ID,
 };
 pub use hash::{fraction_from_bits, PixelStream, SAMPLE_HASH_ID};
+pub use orthographic::{
+    OrthographicCamera, OrthographicError, OrthographicSpec, ORTHOGRAPHIC_CAMERA_ID,
+    ORTHOGRAPHIC_HALF_HEIGHT_LIMIT_RAW,
+};
 pub use pixel::{
     quantize_16, quantize_8, srgb8_to_linear, write_rgba8, PixelAccumulator, PixelError, ToneCurve,
     MAX_SAMPLES_PER_PIXEL, MAX_SAMPLE_RADIANCE_RAW, RGBA8_OPAQUE_IDENTITY, SRGB8_DECODE_IDENTITY,
