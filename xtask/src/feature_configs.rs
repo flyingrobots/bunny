@@ -68,15 +68,34 @@ const NO_STD_TARGET: &str = "thumbv7em-none-eabihf";
 /// feature unification. The tests themselves still link `std`.
 pub(super) fn no_std_commands() -> Vec<Vec<String>> {
     let rustup = ["rustup", "target", "add", NO_STD_TARGET, "wasm32-unknown-unknown"];
+    let mut commands = vec![rustup.map(str::to_owned).to_vec()];
+    commands.extend(no_std_package_commands(NO_STD_PACKAGE));
+    commands
+}
+
+/// The Bunny crates above [`NO_STD_PACKAGE`] that also build without `std`
+/// (flyingrobots/bunny#156), in dependency order: each depends only on the ones before it.
+const NO_STD_STACK_PACKAGES: &[&str] = &["bunny-linalg", "bunny-geom", "bunny-query"];
+
+/// The `no_std` gate of every crate in [`NO_STD_STACK_PACKAGES`]: the same five commands as
+/// [`no_std_commands`] runs for [`NO_STD_PACKAGE`], for one package at a time, so no other
+/// workspace member re-enables `std` through feature unification. It runs after
+/// [`no_std_commands`], which installs the targets.
+pub(super) fn no_std_stack_commands() -> Vec<Vec<String>> {
+    NO_STD_STACK_PACKAGES.iter().flat_map(|package| no_std_package_commands(package)).collect()
+}
+
+/// Builds `package` with default features off for [`NO_STD_TARGET`], for
+/// `wasm32-unknown-unknown` and natively, then lints and tests it in that configuration.
+fn no_std_package_commands(package: &str) -> Vec<Vec<String>> {
     let no_std = |head: &[&str], tail: &[&str]| {
         let mut args = vec!["cargo".to_owned()];
         args.extend(head.iter().map(|arg| (*arg).to_owned()));
-        args.extend(["--locked", "-p", NO_STD_PACKAGE, "--no-default-features"].map(str::to_owned));
+        args.extend(["--locked", "-p", package, "--no-default-features"].map(str::to_owned));
         args.extend(tail.iter().map(|arg| (*arg).to_owned()));
         args
     };
     vec![
-        rustup.map(str::to_owned).to_vec(),
         no_std(&["build"], &["--target", NO_STD_TARGET]),
         no_std(&["build"], &["--target", "wasm32-unknown-unknown"]),
         no_std(&["build"], &[]),
@@ -180,7 +199,8 @@ fn is_path_package(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        no_std_commands, perf_group_commands, rustdoc_command, third_party_packages, RUSTDOCFLAGS,
+        no_std_commands, no_std_stack_commands, perf_group_commands, rustdoc_command,
+        third_party_packages, RUSTDOCFLAGS,
     };
 
     #[test]
@@ -215,6 +235,45 @@ mod tests {
         assert!(builds_for(None), "the issue's native build");
         assert!(cargo.iter().any(|command| command[1] == "test"));
         assert!(cargo.iter().any(|command| command[1] == "clippy"));
+    }
+
+    #[test]
+    fn no_std_tp_010_linalg_geom_and_query_are_built_without_std_one_package_at_a_time() {
+        let stack = no_std_stack_commands();
+        let package_of = |command: &[String]| -> Vec<String> {
+            command
+                .windows(2)
+                .filter(|pair| pair[0] == "-p" || pair[0] == "--package")
+                .map(|pair| pair[1].clone())
+                .collect()
+        };
+        // bunny-num's commands, without the target install, are the template for each crate.
+        let template: Vec<Vec<String>> = no_std_commands()[1..].to_vec();
+        let mut expected = Vec::new();
+        for package in ["bunny-linalg", "bunny-geom", "bunny-query"] {
+            for command in &template {
+                let replaced: Vec<String> = command
+                    .iter()
+                    .map(|arg| if arg == "bunny-num" { package.to_owned() } else { arg.clone() })
+                    .collect();
+                expected.push(replaced);
+            }
+        }
+        assert_eq!(stack, expected, "five commands per crate, in dependency order");
+        for command in &stack {
+            assert_eq!(command[0], "cargo");
+            assert!(command.iter().any(|arg| arg == "--no-default-features"), "{command:?}");
+            assert!(!command.iter().any(|arg| arg == "--all-features" || arg == "--features"));
+            assert_eq!(package_of(command).len(), 1, "one package per command: {command:?}");
+        }
+        let bare_metal: Vec<Vec<String>> = stack
+            .iter()
+            .filter(|command| {
+                command.windows(2).any(|pair| pair == ["--target", "thumbv7em-none-eabihf"])
+            })
+            .map(|command| package_of(command))
+            .collect();
+        assert_eq!(bare_metal, [["bunny-linalg"], ["bunny-geom"], ["bunny-query"]]);
     }
 
     #[test]

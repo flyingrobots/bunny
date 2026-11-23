@@ -11,7 +11,7 @@ use super::{cross, dot, in_trace_domain, raw3, sub3, vec3, wide3, TraceRay, Wide
 use bunny_geom::FixedAabb3;
 use bunny_linalg::{FixedUnitVec3, FixedVec3};
 use bunny_num::FixedQ32_32;
-use std::fmt;
+use core::fmt;
 
 /// The contract identity of [`TraceRay::hit_sphere`].
 pub const RAY_SPHERE_ID: &str = "bunny-ray-sphere/1";
@@ -45,7 +45,7 @@ impl fmt::Display for TraceSphereError {
     }
 }
 
-impl std::error::Error for TraceSphereError {}
+impl core::error::Error for TraceSphereError {}
 
 impl TraceSphere {
     /// Prepares a sphere.

@@ -1,6 +1,6 @@
 //! Three-dimensional vector using deterministic Q32.32 fixed-point representation.
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::Vec3;
 use bunny_num::{FixedQ32_32, FloatConversionError};

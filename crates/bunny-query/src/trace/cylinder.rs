@@ -15,8 +15,8 @@ use super::{in_trace_domain, vec3, TraceRay};
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedUnitVec3;
 use bunny_num::FixedQ32_32;
+use core::fmt;
 use span::Line;
-use std::fmt;
 
 mod span;
 
@@ -54,7 +54,7 @@ impl fmt::Display for TraceCylinderError {
     }
 }
 
-impl std::error::Error for TraceCylinderError {}
+impl core::error::Error for TraceCylinderError {}
 
 impl TraceCylinder {
     /// Prepares a cylinder about the `+Y` axis with caps at heights `bottom` and `top`.

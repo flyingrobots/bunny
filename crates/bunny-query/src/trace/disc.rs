@@ -12,7 +12,7 @@ use super::{in_trace_domain, vec3, wide3, TraceRay};
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedUnitVec3;
 use bunny_num::FixedQ32_32;
-use std::fmt;
+use core::fmt;
 
 /// The identity of the exact ray-disc contract, including its rounding rule.
 pub const RAY_DISC_ID: &str = "bunny-ray-disc/1";
@@ -46,7 +46,7 @@ impl fmt::Display for TraceDiscError {
     }
 }
 
-impl std::error::Error for TraceDiscError {}
+impl core::error::Error for TraceDiscError {}
 
 impl TraceDisc {
     /// Prepares the disc of `radius` about `(0, 0, height)` in the plane `z = height`.

@@ -92,6 +92,20 @@ math for graphics pipelines.
 * **Safe & Portable**: Declares `#![deny(unsafe_code)]` and compiles cleanly on
   all platforms including WebAssembly (`wasm32-unknown-unknown`).
 
+## Features
+
+| Feature | Default | Effect |
+| --- | --- | --- |
+| `std` | on | Links `std` and turns on the `std` feature of `bunny-num`. Off, the crate is `no_std` and needs only `core` (no `alloc`); no public item is removed. |
+
+```toml
+[dependencies]
+bunny-linalg = { version = "0.7", default-features = false }
+```
+
+See [`docs/topics/no-std/`](../../docs/topics/no-std/README.md) for the gate
+that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
+
 ## Usage
 
 ```rust
