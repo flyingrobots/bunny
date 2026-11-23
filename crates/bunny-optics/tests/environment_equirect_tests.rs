@@ -52,8 +52,8 @@ impl Seeds {
 
     /// A value in `low..=high`.
     fn range(&mut self, low: i64, high: i64) -> i64 {
-        let span = (high as i128 - low as i128 + 1) as u128;
-        (low as i128 + (u128::from(self.next()) % span) as i128) as i64
+        let span = (i128::from(high) - i128::from(low) + 1) as u128;
+        (i128::from(low) + (u128::from(self.next()) % span) as i128) as i64
     }
 
     /// Any raw `i64`, from two draws.
@@ -475,7 +475,7 @@ fn optics_tp_242_exact_ties_round_to_even() {
     // The inverse's products: sin theta with 15 trailing zero bits times a sine or cosine with
     // 16 is an exact tie; four of each, whose floors have both parities.
     let polar = |v: i64| FixedAngle::from_raw((v as u64) << 31).sin().raw();
-    let v = (ONE / 3..).find(|&v| polar(v).trailing_zeros() == 15).expect("a polar sine");
+    let v = (ONE / 3..ONE).find(|&v| polar(v).trailing_zeros() == 15).expect("a polar sine");
     let long = |u: i64| FixedAngle::from_turns(fixed(u)).sin_cos();
     let product = |a: FixedQ32_32| i128::from(polar(v)) * i128::from(a.raw());
     let mut parities = [0; 2];

@@ -2866,7 +2866,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_230_seeded_directions_agree_with_the_interval_oracle"
 oracle = "12 000 seeded directions, 2 000 of each of six kinds (components within 1.0, any magnitude, near a pole, near the seam, any i64, a small lattice): u in [0, 1), v in [0, 1], and both within their bound of every point of the [equirectangular oracle](#the-equirectangular-oracle)'s interval; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-231"
@@ -2875,7 +2875,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_231_axes_and_diagonals_are_exact"
 oracle = "The six axes, the four horizontal diagonals and four vertical diagonals at five scales up to 2^62 raw give multiples of 1/8 exactly, by hand; (3, 5, 4) and (4, -5, 3) at four scales give v of exactly 1/4 and 3/4."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-232"
@@ -2884,7 +2884,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_232_the_seam_is_at_u_zero_and_continuous_one_raw_unit_either_side"
 oracle = "For z of 1.0, 2^40, 2^62 and i64::MAX raw and five y: x = 0 gives u = 0, x = -1 and +1 raw give u within one raw unit of 0 around the circle and v within one raw unit, x = +-z/8 fall either side of the image centre and sum to 1.0; all checked against the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-233"
@@ -2893,7 +2893,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_233_the_poles_have_u_zero_and_their_neighbours_are_continuous"
 oracle = "(0, y, 0) for y of 1, 1.0, 2^62, i64::MAX raw and their negations and i64::MIN give (0, 0) and (0, 1); six directions one raw unit off each of four poles give v within one raw unit of the pole and agree with the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-234"
@@ -2902,7 +2902,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_234_the_zero_direction_is_refused_and_any_other_length_accepted"
 oracle = "The zero vector is ZeroDirection; one raw unit along each axis maps exactly; (i64::MIN, i64::MIN, i64::MIN) maps to the bits of (-1, -1, -1) raw."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-235"
@@ -2911,7 +2911,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_235_doubling_gives_the_same_bits_and_the_mirror_reflects_u"
 oracle = "4 000 seeded directions shifted below 2^61: doubling gives the same bits; negating x keeps v and gives u + u' = 0 (mod 1.0); the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-236"
@@ -2920,7 +2920,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_236_extreme_components_neither_wrap_nor_panic"
 oracle = "All 511 nonzero directions with components from i64::MIN, i64::MIN + 1, -1.0, -1, 0, 1, 1.0, i64::MAX raw: no panic in a test build (which checks overflow) and agreement with the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-237"
@@ -2929,7 +2929,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_237_seeded_coordinates_invert_within_the_bound"
 oracle = "6 000 seeded (u, v) (half with any i64 u, two in seven within 2^16 raw of a pole) and 42 constructed ones: x and z within 5/2 and y within one raw unit of the oracle's Taylor sin and cos products, and 625 |d|^2 between (25 2^32 - 92)^2 and (25 2^32 + 92)^2; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-238"
@@ -2938,7 +2938,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_238_poles_and_axes_invert_exactly_and_u_wraps"
 oracle = "500 seeded u: v = 0 gives (0, 1.0, 0) and v = 1.0 gives (0, -1.0, 0) exactly, and u plus -3, -1, 1 and 5 turns gives the bits of u; the four horizontal axes at v = 1/2 are exact; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-239"
@@ -2947,7 +2947,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_239_v_outside_the_unit_interval_is_refused"
 oracle = "v of -1 raw, i64::MIN, 1.0 plus one raw unit and i64::MAX are VOutsideUnitInterval; 0 and 1.0 are accepted; both errors have distinct nonempty messages and are a std::error::Error; the identity string is bunny-environment-equirect/1."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-240"
@@ -2956,7 +2956,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_240_direction_to_coordinates_to_direction_is_within_the_bound"
 oracle = "6 000 seeded directions and 65 constructed at and one raw unit either side of the seam and at and next to both poles: the inverse of the forward map is within 42/5 raw units (Euclidean) of the unit vector along the original, decided exactly by comparing squares; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-241"
@@ -2965,7 +2965,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_241_coordinates_to_direction_to_coordinates_is_within_the_bound"
 oracle = "6 000 seeded and 25 constructed (u, v) with m >= 2^16 raw, the seam u = 0 and u = 1 - 2^-32 included: v returns within one raw unit and u within 1/2 + 0.29 2^32 / m raw around the circle; 200 seeded u at each pole return (0, 0) and (0, 1.0); the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-242"
@@ -2974,7 +2974,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_242_exact_ties_round_to_even"
 oracle = "Directions found by search whose FixedAngle::atan2 is exactly a rounding tie: four polar angles (2q + 1) 2^30 (and the same pair four times larger plus one raw unit in y, which the floor of the right shift restores) give the even v; four longitudes p + 1/2 raw, one at 2^32 - 1/2, give the even u, wrapping to 0; eight inverse products of a polar sine with 15 trailing zero bits and a sine or cosine with 16 give the even value, with floors of both parities."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-243"
@@ -2983,7 +2983,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_243_golden_vectors_are_bit_exact"
 oracle = "Twelve forward results equal the correctly rounded (u, v) of a 60-digit decimal model, each exact value at least 0.011 raw units from a midpoint, so the bound forces them; six inverse results are pinned kernel outputs, bounded by OPTICS-TP-237's oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-244"
@@ -2992,7 +2992,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/optics/test-plan.md#equirectangular-mutation-checks"
 oracle = "Nineteen rules of environment.rs broken on purpose; each fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -3695,6 +3695,14 @@ the normalization of `TriangleSurface::new`; their oracle is exact big-integer
 arithmetic in the test file, with no floating point. `OPTICS-TP-071` is the
 order evidence for them: the sums are exact, so face order, a cyclic rotation
 of a face's corners and vertex labels cannot change a bit.
+
+The equirectangular coordinates use only `bunny-num`'s integer `atan2`,
+`sin_cos` and `sqrt_u128`, and `u128` and `i128` shifts, multiplications and
+one rounding per output; their oracle is 124-bit integer fixed point and big
+integers in the test files, with no floating point. Every case runs natively
+and under WebAssembly. The bounds rest on the analysis in the living
+reference; OPTICS-TP-230 and OPTICS-TP-237 sample them, they do not exhaust
+the inputs.
 
 ## Known Failures
 

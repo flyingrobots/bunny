@@ -117,6 +117,15 @@ every buffer.
   meeting it behind the origin, or giving a derivative outside Q32.32 is a
   typed `RayFootprint::Unbounded` result; invalid inputs return a
   `RayFootprintError`.
+* `equirect_from_direction` and `direction_from_equirect`
+  (`bunny-environment-equirect/1`): a direction of any length to the
+  coordinates of an equirectangular environment image and back. `u` is the
+  longitude `atan2(-x, z)` in turns (`+z` is the seam at 0, `-z` the image
+  centre at 1/2, `u` in `[0, 1)`), `v` the polar angle from `+y` in half
+  turns (`v` in `[0, 1]`, 0 at the top), from `FixedAngle::atan2` rounded
+  once: within `1/2 + 2^-32` and `1/2 + 2^-29` raw units. The inverse is
+  within `5/2` raw units per component. The zero vector and `v` outside
+  `[0, 1]` return an `EquirectError`.
 * `SurfaceHit::ggx_reflection` (`bunny-ggx-conductor/1`): one sample of a
   rough metal. A GGX microfacet normal visible from the incoming ray (Heitz
   2018) from one sampler pair, the reflection about it (`reflect`, shared with

@@ -68,19 +68,19 @@ fn atan_series(z: u128) -> u128 {
 /// `(sin x, cos x)` for `0 <= x <= pi/4` by their Taylor series.
 fn sin_cos_series(x: u128) -> (u128, u128) {
     let x2 = mul(x, x);
-    let (mut sin_term, mut cos_term) = (x, ONE);
-    let (mut sin, mut cos) = (0_i128, 0_i128);
+    let (mut odd_term, mut even_term) = (x, ONE);
+    let (mut sine, mut cosine) = (0_i128, 0_i128);
     let mut n = 0_u128;
-    while sin_term != 0 || cos_term != 0 {
-        let sign = if n % 2 == 0 { 1 } else { -1 };
-        sin += sign * i128::try_from(sin_term).expect("a term below 2^124");
-        cos += sign * i128::try_from(cos_term).expect("a term below 2^124");
-        sin_term = mul(sin_term, x2) / ((2 * n + 2) * (2 * n + 3));
-        cos_term = mul(cos_term, x2) / ((2 * n + 1) * (2 * n + 2));
+    while odd_term != 0 || even_term != 0 {
+        let sign = if n & 1 == 0 { 1 } else { -1 };
+        sine += sign * i128::try_from(odd_term).expect("a term below 2^124");
+        cosine += sign * i128::try_from(even_term).expect("a term below 2^124");
+        odd_term = mul(odd_term, x2) / ((2 * n + 2) * (2 * n + 3));
+        even_term = mul(even_term, x2) / ((2 * n + 1) * (2 * n + 2));
         n += 1;
     }
     let unsigned = |value: i128| u128::try_from(value).expect("sin and cos are positive here");
-    (unsigned(sin), unsigned(cos))
+    (unsigned(sine), unsigned(cosine))
 }
 
 /// The largest `r` with `r^2 <= n`, for `n < 2^250`.
@@ -161,36 +161,36 @@ impl Oracle {
     /// `atan2(sqrt(x^2 + z^2), y)` of a nonzero direction, measured from `+y`.
     pub(crate) fn polar_interval(&self, [x, y, z]: [i64; 3]) -> (u128, u128) {
         let largest = [x, y, z].map(i64::unsigned_abs).into_iter().max().expect("three");
-        let j = 120 - bits(u128::from(largest));
-        let scale = Big::new(1 << j);
+        let shift = 120 - bits(u128::from(largest));
+        let scale = Big::new(1 << shift);
         let square = |c: i64| Big::new(u128::from(c.unsigned_abs()).pow(2));
         let scaled = square(x).add(&square(z)).mul(&scale).mul(&scale);
         let root = isqrt(&scaled);
-        let vertical = (y < 0, u128::from(y.unsigned_abs()) << j);
+        let vertical = (y < 0, u128::from(y.unsigned_abs()) << shift);
         let at = |r: u128| self.atan2((false, r), vertical).expect("y or r is nonzero");
-        let (a, b) = (at(root), at(root + 1));
-        (a.min(b), a.max(b))
+        let (below, above) = (at(root), at(root + 1));
+        (below.min(above), below.max(above))
     }
 
     /// `(sin, cos)` of `num / 2^bits` turn, in units of `2^-124`, for `2 <= bits <= 120`.
     pub(crate) fn sin_cos_turns(&self, num: u128, bits: u32) -> (i128, i128) {
         let full = 1_u128 << bits;
         let quarter = full / 4;
-        let t = num % full;
-        let (q, w) = (t / quarter, t % quarter);
-        let radians = |w: u128| mul(self.pi, (w << (FRAC - bits)) * 2);
-        let (s, c) = if w <= quarter / 2 {
-            sin_cos_series(radians(w))
+        let turn = num % full;
+        let (quadrant, within) = (turn / quarter, turn % quarter);
+        let radians = |part: u128| mul(self.pi, (part << (FRAC - bits)) * 2);
+        let (sine, cosine) = if within <= quarter / 2 {
+            sin_cos_series(radians(within))
         } else {
-            let (s, c) = sin_cos_series(radians(quarter - w));
-            (c, s)
+            let (sine, cosine) = sin_cos_series(radians(quarter - within));
+            (cosine, sine)
         };
-        let (s, c) = (signed(s), signed(c));
-        match q {
-            0 => (s, c),
-            1 => (c, -s),
-            2 => (-s, -c),
-            _ => (-c, s),
+        let (sine, cosine) = (signed(sine), signed(cosine));
+        match quadrant {
+            0 => (sine, cosine),
+            1 => (cosine, -sine),
+            2 => (-sine, -cosine),
+            _ => (-cosine, sine),
         }
     }
 }

@@ -42,8 +42,21 @@ None. The 60-digit decimal model of the forward goldens is posted on the pull re
 committed.
 
 Checks run:
-First commit (tests and planned cases only): the test target fails to compile because the
-kernel does not exist; topic-docs clean. Later commits list their checks in the pull request.
+First commit (tests and planned cases only): cargo test --locked -q -p bunny-optics --test
+environment_equirect_tests fails to compile (unresolved imports: the kernel does not exist);
+topic-docs and repo-respect check --branch clean.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (115 test
+result lines, every one `ok`, 0 failed); cargo run --locked -p xtask -- code-dojo-generated;
+code-dojo-rust --all; code-dojo-determinism --enforce; code-dojo-perf-groups; topic-docs;
+repo-respect check --branch. All clean. cargo clippy --locked -p bunny-optics --lib --test
+environment_equirect_tests -- -D warnings: clean.
+Mutations: nineteen, each applied to src/environment.rs, run with cargo test --locked -q -p
+bunny-optics --no-fail-fast --test environment_equirect_tests, and restored; each failed at
+least one case (the test plan's table).
+Not run locally: wasm-pack (not installed; CI's WebAssembly job runs it), cargo deny and
+markdownlint-cli2 (not installed; CI's Dojo job runs them), code-dojo-no-std (bunny-num is not
+touched).
 
 Known risks:
 The axis convention, the pole value `u = 0`, `v = 0` at the top and the closed range of `v`
