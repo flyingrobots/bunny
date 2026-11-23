@@ -85,7 +85,7 @@ fn near_hint(seeds: &mut Seeds, look: [i64; 3], shift: u32) -> [i64; 3] {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_321_the_basis_is_orthogonal_within_its_proven_bound() {
-    let seed = SAFEGUARD_SEED ^ 321;
+    let seed = SAFEGUARD_SEED ^ 0x141;
     println!("OPTICS-TP-321 seed {seed:#018x}");
     let mut seeds = Seeds(seed);
     let (mut cameras, mut worst) = (0, 0_i128);

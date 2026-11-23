@@ -190,10 +190,11 @@ impl View {
         let target = vec3([0, 1, 2].map(|i| raw3(position)[i] + raw3(look)[i]));
         let view = FixedMat4::try_look_at(position, target, up).expect("a view matrix");
         let rows = [view.row0(), view.row1(), view.row2()];
-        let [r, u, back] = rows.map(|row| [row.0.raw(), row.1.raw(), row.2.raw()]);
-        let row3 = view.row3();
-        assert_eq!([row3.0, row3.1, row3.2, row3.3].map(FixedQ32_32::raw), [0, 0, 0, ONE]);
-        Self { axes: [r, u, back.map(|c| -c)], translation: rows.map(|row| row.3.raw()) }
+        let [right, up, back] = rows.map(|row| [row.0.raw(), row.1.raw(), row.2.raw()]);
+        let last = view.row3();
+        assert_eq!([last.0, last.1, last.2, last.3].map(FixedQ32_32::raw), [0, 0, 0, ONE]);
+        let axes = [right, up, back.map(|c| -c)];
+        Self { axes, translation: rows.map(|row| row.3.raw()) }
     }
 
     /// The exact view-space point of `q`, in units of `2^-64`.
@@ -236,12 +237,22 @@ fn offsets(sample: PixelSample, size: (u32, u32)) -> [Ratio; 2] {
     [Ratio::raw(a), Ratio::raw(b)]
 }
 
-/// The bound on one NDC axis: `|m - ideal| (|s| + M / w) + ideal M / w + 2^-33`, where the
-/// exact NDC value is `m x / w` and its ideal is `ideal s`, with `|x - s w| <= M`.
-fn ndc_bound(entry: i64, ideal: &Ratio, s: &Ratio, mismatch: &Ratio, w_low: &Ratio) -> Ratio {
-    let ratio = mismatch.div(w_low);
-    let entry_error = Ratio::raw(i128::from(entry)).sub(ideal).abs();
-    entry_error.mul(&s.abs().add(&ratio)).add(&ideal.mul(&ratio)).add(&Ratio::frac(1, 1 << 33))
+/// One NDC axis of a round trip: the exact NDC value is `m x / w` for the projection entry
+/// `m`, its ideal is `ideal s`, and `|x - s w| <= mismatch`.
+struct Axis {
+    entry: FixedQ32_32,
+    ideal: Ratio,
+    s: Ratio,
+    mismatch: Ratio,
+}
+
+/// The bound on one NDC axis: `|m - ideal| (|s| + M / w) + ideal M / w + 2^-33` for every
+/// `w >= w_low > 0`, the last term the rounding of the NDC value to raw.
+fn ndc_bound(axis: &Axis, w_low: &Ratio) -> Ratio {
+    let ratio = axis.mismatch.div(w_low);
+    let entry_error = Ratio::raw(i128::from(axis.entry.raw())).sub(&axis.ideal).abs();
+    let scaled = entry_error.mul(&axis.s.abs().add(&ratio));
+    scaled.add(&axis.ideal.mul(&ratio)).add(&Ratio::frac(1, 1 << 33))
 }
 
 /// The pixel bound, raw, from an NDC bound on an axis of `size` pixels: `size / 2` times it,
@@ -283,6 +294,8 @@ impl Worst {
 }
 
 /// A pinhole camera's round trip at parameter `t_raw`: the landing error and its bound, raw.
+// The short names are those of the chapter's derivation.
+#[allow(clippy::many_single_char_names)]
 fn pinhole_trip(spec: &CameraSpec, sample: PixelSample, t_raw: i64) -> ([i128; 2], [Ratio; 2]) {
     let camera = PinholeCamera::new(spec).expect("valid camera");
     let ray = camera.ray(sample).expect("in-range sample");
@@ -302,15 +315,16 @@ fn pinhole_trip(spec: &CameraSpec, sample: PixelSample, t_raw: i64) -> ([i128; 2
     let numerators = [clip(x, projection.m00()), clip(y, projection.m11())];
     let landed = land((spec.width, spec.height), numerators, w);
     let errors = [0, 1].map(|i| landed[i] - target(sample)[i]);
-    (errors, pinhole_bounds(&camera, &view, sample, t_raw, [projection.m00(), projection.m11()]))
+    let entries = [projection.m00(), projection.m11()];
+    (errors, pinhole_bounds(&camera, &view, (sample, t_raw), entries))
 }
 
 /// The derived bound of the pinhole round trip on each axis, raw pixel units; see the chapter.
+#[allow(clippy::many_single_char_names)]
 fn pinhole_bounds(
     camera: &PinholeCamera,
     view: &View,
-    sample: PixelSample,
-    t_raw: i64,
+    (sample, t_raw): (PixelSample, i64),
     entries: [FixedQ32_32; 2],
 ) -> [Ratio; 2] {
     let size = (camera.width(), camera.height());
@@ -339,12 +353,15 @@ fn pinhole_bounds(
     let width = Ratio::int(i128::from(size.0));
     let ideal_x = height.div(&tan.mul(&width));
     let ideal_y = Ratio::int(1).div(&tan);
-    let ndc_x = ndc_bound(entries[0].raw(), &ideal_x, &alpha, &mismatch(rp, &alpha), &w_low);
-    let ndc_y = ndc_bound(entries[1].raw(), &ideal_y, &beta, &mismatch(up, &beta), &w_low);
+    let x_axis =
+        Axis { entry: entries[0], ideal: ideal_x, mismatch: mismatch(rp, &alpha), s: alpha };
+    let y_axis = Axis { entry: entries[1], ideal: ideal_y, mismatch: mismatch(up, &beta), s: beta };
+    let (ndc_x, ndc_y) = (ndc_bound(&x_axis, &w_low), ndc_bound(&y_axis, &w_low));
     [pixel_bound(size.0, &ndc_x), pixel_bound(size.1, &ndc_y)]
 }
 
 /// An orthographic camera's round trip at distance `t_raw`: the landing error and its bound.
+#[allow(clippy::many_single_char_names)]
 fn orthographic_trip(
     spec: &OrthographicSpec,
     sample: PixelSample,
@@ -368,18 +385,16 @@ fn orthographic_trip(
     let numerators = [clip(x, projection.m00()), clip(y, projection.m11())];
     let landed = land((spec.width, spec.height), numerators, 1 << 64);
     let errors = [0, 1].map(|i| landed[i] - target(sample)[i]);
-    (
-        errors,
-        orthographic_bounds(&camera, &view, sample, t_raw, [projection.m00(), projection.m11()]),
-    )
+    let entries = [projection.m00(), projection.m11()];
+    (errors, orthographic_bounds(&camera, &view, (sample, t_raw), entries))
 }
 
 /// The derived bound of the orthographic round trip on each axis, raw pixel units.
+#[allow(clippy::many_single_char_names)]
 fn orthographic_bounds(
     camera: &OrthographicCamera,
     view: &View,
-    sample: PixelSample,
-    t_raw: i64,
+    (sample, t_raw): (PixelSample, i64),
     entries: [FixedQ32_32; 2],
 ) -> [Ratio; 2] {
     let size = (camera.width(), camera.height());
@@ -404,8 +419,10 @@ fn orthographic_bounds(
     let one = Ratio::int(1);
     let ideal_x = one.div(&half.mul(&Ratio::frac(i128::from(size.0), i128::from(size.1))));
     let ideal_y = one.div(&half);
-    let ndc_x = ndc_bound(entries[0].raw(), &ideal_x, &alpha, &mismatch(rp, &alpha), &one);
-    let ndc_y = ndc_bound(entries[1].raw(), &ideal_y, &beta, &mismatch(up, &beta), &one);
+    let x_axis =
+        Axis { entry: entries[0], ideal: ideal_x, mismatch: mismatch(rp, &alpha), s: alpha };
+    let y_axis = Axis { entry: entries[1], ideal: ideal_y, mismatch: mismatch(up, &beta), s: beta };
+    let (ndc_x, ndc_y) = (ndc_bound(&x_axis, &one), ndc_bound(&y_axis, &one));
     [pixel_bound(size.0, &ndc_x), pixel_bound(size.1, &ndc_y)]
 }
 
@@ -478,7 +495,7 @@ fn optics_tp_318_axis_aligned_cameras_land_exactly_on_their_samples() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_319_pinhole_points_project_back_to_their_sample() {
-    let seed = ROUND_TRIP_SEED ^ 319;
+    let seed = ROUND_TRIP_SEED ^ 0x13F;
     println!("OPTICS-TP-319 seed {seed:#018x}");
     let mut seeds = Seeds(seed);
     let mut worst = Worst::default();
@@ -510,7 +527,7 @@ fn optics_tp_319_pinhole_points_project_back_to_their_sample() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_320_orthographic_points_project_back_to_their_sample() {
-    let seed = ROUND_TRIP_SEED ^ 320;
+    let seed = ROUND_TRIP_SEED ^ 0x140;
     println!("OPTICS-TP-320 seed {seed:#018x}");
     let mut seeds = Seeds(seed);
     let mut worst = Worst::default();

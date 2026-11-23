@@ -193,7 +193,7 @@ fn seeded_spec(seeds: &mut Seeds) -> OrthographicSpec {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn optics_tp_312_every_origin_is_the_exact_point_rounded_once() {
-    let seed = ORTHO_SEED ^ 312;
+    let seed = ORTHO_SEED ^ 0x138;
     println!("OPTICS-TP-312 seed {seed:#018x}");
     let mut seeds = Seeds(seed);
     let (mut cameras, mut rays) = (0, 0);
