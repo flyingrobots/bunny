@@ -10,8 +10,11 @@ Catmull-Rom spline `CatmullRom3` (flyingrobots/bunny#309).
   `bunny-linalg`, and `CURVE_CONTRACT_ID`
 - `CatmullRom3::new`, `segment_count`, `segment`, `to_beziers`, `at` and `derivative_at`,
   and `CatmullRomError`
+- `CurveBounds3` and `CurveBounds3::contains`, `CubicBezier3::control_bounds`,
+  `CubicBezier3::split_bounds` and `CatmullRom3::control_bounds` (flyingrobots/bunny#152)
 
-Out of scope: arc length (flyingrobots/bunny#307), and centripetal and chordal Catmull-Rom.
+Out of scope: arc length (flyingrobots/bunny#307), centripetal and chordal Catmull-Rom, and
+a box tighter than the control box (from the exact cubic's extrema).
 
 ## Requirements
 
@@ -27,6 +30,10 @@ Out of scope: arc length (flyingrobots/bunny#307), and centripetal and chordal C
 | CURVE-REQ-012 | `u` in `[0, segment_count]` (raw `0..=count * 2^32`) is segment `floor(u)` at the fraction, with `u = segment_count` the last segment at `t = 1.0`; any other `u` is `None` for `at` and `derivative_at`. | `README.md#catmull-rom-parameter` |
 | CURVE-REQ-013 | `at(u)` is `CubicBezier3::at` of the segment, within 15/8 raw units of the exact Catmull-Rom cubic, exactly point `k` at `u = k`, and `at(0) == at(segment_count)` when closed. | `README.md#catmull-rom-evaluation` |
 | CURVE-REQ-014 | `derivative_at(u)` is `CubicBezier3::derivative_at` of the segment, `None` when that overflows, within 9/2 raw units of the exact derivative; at a point it is within 3/2 raw units of `(P[k + 1] - P[k - 1]) / 2`, and equals the previous segment's derivative at `t = 1.0` bit for bit where both are defined. | `README.md#catmull-rom-derivative` |
+| CURVE-REQ-030 | `CubicBezier3::control_bounds` is the per-axis minimum and maximum of `p0` to `p3`, exact and never refused, and contains `at(t)` bit for bit at every `t` in `[0, 1]` with no widening; equal control points give that point. | `README.md#conservative-bounds` |
+| CURVE-REQ-031 | `CurveBounds3::contains(point)` is `min <= point <= max` on every axis, faces included. | `README.md#conservative-bounds` |
+| CURVE-REQ-032 | `CubicBezier3::split_bounds(t)` is each half's control box widened by 3 raw units per face and clipped to `control_bounds`; the first contains the original `at(s)` for every `s` in `[0, t]`, the second for every `s` in `[t, 1]`, each also its half's own evaluations; `None` for `t` outside `[0, 1]`. | `README.md#bounds-of-a-split` |
+| CURVE-REQ-033 | `CatmullRom3::control_bounds` is the union of every segment's control box (`n - 1` segments open, `n` closed), without allocating, and contains `at(u)` at every `u` in `[0, segment_count]`, including where the curve leaves the box of its points. | `README.md#bounds-of-a-catmull-rom-spline` |
 
 ```toml
 [[requirement]]
@@ -78,6 +85,26 @@ status = "active"
 id = "CURVE-REQ-014"
 summary = "derivative_at(u) is the segment's derivative, within 9/2 raw units, within 3/2 of (P[k+1] - P[k-1]) / 2 at a point, continuous bit for bit at joints."
 status = "active"
+
+[[requirement]]
+id = "CURVE-REQ-030"
+summary = "CubicBezier3::control_bounds is the exact per-axis min and max of the control points and contains every at(t) with no widening."
+status = "active"
+
+[[requirement]]
+id = "CURVE-REQ-031"
+summary = "CurveBounds3::contains is min <= point <= max on every axis, faces included."
+status = "active"
+
+[[requirement]]
+id = "CURVE-REQ-032"
+summary = "split_bounds(t) widens each half's control box by 3 raw units, clipped to the control box, and contains the original at(s) on the half's range; None outside [0, 1]."
+status = "active"
+
+[[requirement]]
+id = "CURVE-REQ-033"
+summary = "CatmullRom3::control_bounds is the union of the segments' control boxes and contains every at(u), not the box of the points."
+status = "active"
 ```
 
 ## Oracles
@@ -125,6 +152,13 @@ Every test is a `wasm_bindgen_test`, so the WebAssembly job runs the golden vect
 | CURVE-TP-023 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-014 | A control point at exactly `MAX + 1/2` (ties to the even `MAX + 1`, refused) and `MIN - 1/2` (ties to the even `MIN`, accepted), with the inputs one raw unit either side; a knot tangent of `3 * 3 074 457 345 618 258 602 = MAX - 1` defined, and the neighbouring inputs whose tie goes the other way refused, arriving and leaving alike; a knot whose arriving segment's middle difference is `2^63` (refused) or `2^63 - 1` (defined), the leaving tangent defined for both. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_023_overflow_on_and_past_each_threshold` |
 | CURVE-TP-024 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-012, CURVE-REQ-013, CURVE-REQ-014 | 20 000 seeded point lists of 1 to 6 points, open or closed (seed printed): `new` equals the port's outcome; for each valid spline the segments equal the port, four `u` each equal the port and are within 15/8 and 9/2 raw units of the exact power form; every point is hit exactly, tangents agree bit for bit at joints, knot tangents are within 3/2 of `(P[k + 1] - P[k - 1]) / 2`, closed seams are exact; both outcomes are reached and errors past 3/2 and 3 raw units occur. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_024_seeded_splines_match_both_oracles` |
 | CURVE-TP-025 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-012, CURVE-REQ-013 | Each Catmull-Rom rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
+| CURVE-TP-060 | CURVE-REQ-030, CURVE-REQ-031 | Hand-derived boxes: equal control points give that point and contain every evaluation; a flat curve has zero extent on its constant axes; a face set only by an inner control point (`y` up to 4, the curve peaking at 3); the ends of the raw range; `contains` on and one raw unit outside each face of each axis. | `crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_060_hand_derived_boxes_and_contains` |
+| CURVE-TP-061 | CURVE-REQ-030, CURVE-REQ-031 | 1 000 seeded polygons with the ends of the raw range often (seed printed), each at 324 `t` (257 multiples of 1/256 and every raw `t` within 16 of 0, 1/2 and 1): the box equals the independent minimum and maximum, and every `at(t)` lies in it, exactly per axis. | `crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_061_seeded_control_boxes_contain_every_evaluation` |
+| CURVE-TP-062 | CURVE-REQ-030 | Ties at a face: `x = (0, 1, 1, 0)` raw at `t = 1/2` ties three lerps and lands on the lower face (exact value 3/4 raw), and on and one raw unit either side of 1/2; `(MIN, MAX, MIN, MAX)` ties every first-level step at 1/2; faces one raw unit inside the range ends. | `crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_062_ties_at_a_box_face_stay_inside` |
+| CURVE-TP-063 | CURVE-REQ-032 | Constructed: the original at `s = 2 916 077 839` raw is 1 raw unit outside the right half's unwidened box (split at `t = 2 329 330 117` raw of `x = (-2, -3, 1, -4)`) and inside the widened one; `t` outside `[0, 1]` refused; 2 000 seeded polygons and `t` (seed printed): both boxes equal the independent port, the original at up to 69 `s` on each range and each half at 69 `u` lie inside. | `crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_063_split_bounds_contain_the_original_on_each_range` |
+| CURVE-TP-064 | CURVE-REQ-033 | Points `x = (0, 10, 10, 0)`: open, `at(1.5)` exceeds 10 (outside the points' box) and is inside the box, whose `x` maximum is `35 U / 3` rounded up; closed, `at(3.5)` dips below 0, outside the open box and inside the closed one; both boxes equal the port's union of segment boxes and contain 37 `u` per segment. | `crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_064_catmull_rom_box_covers_the_overshoot` |
+| CURVE-TP-065 | CURVE-REQ-033 | 2 000 seeded point lists of 2 to 6 points, open or closed (seed printed): for each one `new` accepts (more than half), the box equals the port's union of segment boxes and contains `at(u)` at 37 `u` per segment; evaluations outside the points' box occur. | `crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_065_seeded_catmull_rom_boxes_contain_every_evaluation` |
+| CURVE-TP-066 | CURVE-REQ-030, CURVE-REQ-031, CURVE-REQ-032, CURVE-REQ-033 | Each bounds rule broken on purpose, and each face shrunk by one raw unit, fails at least one case above. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -243,6 +277,69 @@ artifact = "docs/topics/curve/test-plan.md#mutation-checks"
 oracle = "Each Catmull-Rom rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "CURVE-TP-060"
+requirements = ["CURVE-REQ-030", "CURVE-REQ-031"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_060_hand_derived_boxes_and_contains"
+oracle = "Hand-derived raw boxes of constant, flat and bumped curves; contains on and one raw unit outside each face."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "CURVE-TP-061"
+requirements = ["CURVE-REQ-030", "CURVE-REQ-031"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_061_seeded_control_boxes_contain_every_evaluation"
+oracle = "Independent min and max over 1 000 seeded polygons, each evaluated at 324 parameters."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "CURVE-TP-062"
+requirements = ["CURVE-REQ-030"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_062_ties_at_a_box_face_stay_inside"
+oracle = "Constructed ties to even landing on a face, and ties at the ends of the raw range."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "CURVE-TP-063"
+requirements = ["CURVE-REQ-032"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_063_split_bounds_contain_the_original_on_each_range"
+oracle = "A constructed escape from the unwidened half box; independent de Casteljau port over 2 000 seeded splits."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "CURVE-TP-064"
+requirements = ["CURVE-REQ-033"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_064_catmull_rom_box_covers_the_overshoot"
+oracle = "Hand-derived overshoot of an open and a closed spline; independent segment conversion port."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "CURVE-TP-065"
+requirements = ["CURVE-REQ-033"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_065_seeded_catmull_rom_boxes_contain_every_evaluation"
+oracle = "Independent segment conversion port over 2 000 seeded point lists."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "CURVE-TP-066"
+requirements = ["CURVE-REQ-030", "CURVE-REQ-031", "CURVE-REQ-032", "CURVE-REQ-033"]
+evidence = "manual-audit"
+artifact = "docs/topics/curve/test-plan.md#mutation-checks"
+oracle = "Each bounds rule broken on purpose, and each face shrunk by one raw unit, makes at least one implemented case fail."
+tier = "manual"
+status = "planned"
 ```
 
 ## Mutation Checks
