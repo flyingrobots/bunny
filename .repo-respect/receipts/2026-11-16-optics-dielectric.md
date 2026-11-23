@@ -18,7 +18,11 @@ the radiance factor is stated in camera-path terms, `(a / b)^2` from index `a` i
 the rustdoc, the chapter, the crate README and the changelog; OPTICS-TP-186 covers indices one
 raw unit apart at both ends of the range; OPTICS-TP-185 and -187 count equal and near-equal
 indices; the start-point derivation names the `TraceRay::from_ray` case. `origin/main` merged,
-keeping both sides; no dielectric kernel line changed.
+keeping both sides; no dielectric kernel line changed. flyingrobots/bunny#389 (the GGX rough
+conductor) landed first with OPTICS-REQ-080 to -088 and OPTICS-TP-140 to -161, so the
+dielectric ids moved: OPTICS-REQ-080..086 to OPTICS-REQ-091..097 and OPTICS-TP-160..176 to
+OPTICS-TP-183..199 (each case +23), with the test function names; the seed constants of the
+seeded cases are unchanged, so their counts are too.
 
 Files read:
 CONTRIBUTING.md, CODE_STANDARDS.md, docs/NUMERIC_CONSTITUTION.md
@@ -63,7 +67,7 @@ Mutations (test plan, Dielectric Mutation Checks): 33, each under `timeout 600`;
 least one case, 4 rounding choices pass and are listed as an open gap; the restored source
 passes.
 cargo fmt, clippy -D warnings; code-dojo --all at the final commit (see the PR).
-Review follow-up, on the host after merging origin/main: cargo fmt --check; cargo test
+Review follow-up, on the host after both merges of origin/main and the renumbering: cargo fmt --check; cargo test
 --workspace --all-targets --all-features (12 dielectric cases); code-dojo-generated,
 code-dojo-rust --all, code-dojo-determinism --enforce, code-dojo-perf-groups, topic-docs and
 repo-respect check --branch. The mutation table was not rerun: no kernel line changed after
