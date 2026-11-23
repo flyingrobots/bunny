@@ -97,8 +97,11 @@ impl std::error::Error for RefractiveIndexError {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DielectricReflectance {
     /// The unpolarized Fresnel reflectance, in `0..=1.0`: the probability that
-    /// [`SurfaceHit::dielectric_scatter`] reflects. Below 1.0 a refracted ray exists and
-    /// some choice value takes it. At exactly 1.0 no choice value refracts: either the exact
+    /// [`SurfaceHit::dielectric_scatter`] reflects. Below 1.0 some choice value selects
+    /// refraction; building that ray can still end in a documented refusal
+    /// ([`SecondaryRayError::RefractionAboveSurface`] for a near-grazing refraction about the
+    /// rounded normal, [`SecondaryRayError::StartOutsideTraceDomain`] at the domain's edge),
+    /// for every choice that selects it. At exactly 1.0 no choice value refracts: either the exact
     /// reflectance rounds to 1.0 just short of the critical angle, or the ray arrives along
     /// or behind the plane of the rounded normal (`d . n >= 0`) while still arriving against
     /// the exact face, and no refraction is computed.

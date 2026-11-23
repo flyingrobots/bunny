@@ -1425,7 +1425,8 @@ moves `r_s` by at most `2 / (a m + q)` and `r_p` by at most
 least `2^96`, and when `a > b` a refracted ray needs
 `(a m)^2 > (a^2 - b^2)(d.d)(n.n) >= 2^96`, so both are below `2^-41`, and far
 smaller unless the direction is a few raw units long. Equal indices give
-`q = a m` exactly and `R = 0`.
+`q = a m` exactly and `R = 0` when `m > 0`; the grazing rule comes first, so
+at `m <= 0` the reflectance is 1.0 for equal indices too.
 
 **The choice and the weights.** `R` raw is an integer in `0..=2^32`. The `R`
 choice values `0..R` reflect and the other `2^32 - R` refract, so for a
@@ -1440,7 +1441,10 @@ the critical angle also reflects for every choice value (the refracted share
 is below `2^-33`), and so does a ray that arrives against the exact face but
 along or behind the plane of the rounded normal (`m <= 0`, the grazing row
 above), for which no refraction is computed. A `Partial` reflectance below
-1.0 always has a refracted ray that some choice value takes.
+1.0 always has some choice value that selects refraction, but building that ray
+can still end in a refusal listed under **Refusals** below: in the test plan's
+grazing-refraction case the reflectance is zero and every choice value is
+refused with `RefractionAboveSurface`.
 
 **The radiance factor is not applied.** The throughput of 1.0 is a weight for
 power. Radiance also changes with the index: a path traced from the camera

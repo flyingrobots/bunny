@@ -23,6 +23,11 @@ conductor) landed first with OPTICS-REQ-080 to -088 and OPTICS-TP-140 to -161, s
 dielectric ids moved: OPTICS-REQ-080..086 to OPTICS-REQ-091..097 and OPTICS-TP-160..176 to
 OPTICS-TP-183..199 (each case +23), with the test function names; the seed constants of the
 seeded cases are unchanged, so their counts are too.
+CodeRabbit follow-up: the `Partial` rustdoc and the chapter say some choice selects refraction
+and that building the ray can still be refused (OPTICS-TP-193); OPTICS-REQ-092 gives the
+grazing rule (`d . n >= 0`, reflectance 1.0) precedence over the equal-index rule, as the
+kernel does; the `|` inside code spans of OPTICS-TP-185, -186, -187 and -196 are escaped so
+those rows keep five cells (topic-docs: 666 implemented cases before and after).
 
 Files read:
 CONTRIBUTING.md, CODE_STANDARDS.md, docs/NUMERIC_CONSTITUTION.md
