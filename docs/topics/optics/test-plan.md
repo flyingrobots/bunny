@@ -64,6 +64,12 @@ and `point_at`:
   hand-derived mirrors, Schlick's term at its ends and rounding boundaries,
   exact big-integer oracles for the term and the reflected direction on
   seeded inputs, normal incidence and the two refusals.
+- the point light `bunny-point-light/1` (`PointLight`, `PointLightError`,
+  `SurfaceHit::point_light_sample`, `LightSample::shadow_t_max`,
+  `MIN_LIGHT_DISTANCE_RAW`, `POINT_LIGHT_ID`): hand-derived irradiance with a
+  rounding tie, an exact big-integer oracle over seeded inputs, the shadow
+  ray's end at the light against occluders on both sides of it, and the
+  refusals at the minimum distance and the trace domain.
 - the smooth dielectric `bunny-dielectric/1`
   (`SurfaceHit::dielectric_reflectance`, `dielectric_scatter`,
   `try_dielectric_scatter`, `front_face`, `DielectricBoundary`,
@@ -191,6 +197,9 @@ formatting.
 | OPTICS-REQ-087 | `try_ggx_reflection` refuses, in this order, a sample coordinate outside `[0, 1)` (`SecondaryRayError::SampleOutsideUnitInterval`) and a ray with `d . N >= 0` (`SecondaryRayError::ArrivesBelowSurface`). | `README.md#ggx-rough-conductor` |
 | OPTICS-REQ-088 | `reflect(direction, normal)` is the unit vector along the exact `d (n . n) - 2 (d . n) n`, each component within one raw unit (plus the prescale's floor, below `2^-27`) and clamped to `-1.0..=1.0`, for a normal of any length; `None` when a component of either vector exceeds `2^32 + 1` raw or either vector is zero. The mirror and the GGX sampler both reflect with it. | `README.md#ggx-rough-conductor` |
 | OPTICS-REQ-090 | The incidence cosine of `try_specular_reflection` is `-(u . n)`, with `u` the unit vector along the incoming direction `d` (prescaled to `[2^61, 2^62)` and normalized by `FixedUnitVec3::new`) and `n` the facing frame normal, computed exactly in `i128` in units of `2^-64`, divided by `2^32` and rounded once to nearest raw unit with a tie going to the even raw value, then clamped to `0..=1.0`; no other rule or step rounds it. | `README.md#specular-reflection` |
+| OPTICS-REQ-100 | `PointLight::irradiance` (`bunny-point-light/1`) is `intensity_c * g` with `g` the exact `c 2^64` divided by the exact `v . v` and rounded once to nearest with ties to even, `c` the cosine with the normalized `v` rounded once and clamped to `0..=1.0`, and the product rounded to nearest with ties to even; it is within `I_c (3 / d^2 + 1/2) + 1/2` raw units of the exact `I_c max(n . v, 0) / \|v\|^3`. | `README.md#point-light` |
+| OPTICS-REQ-101 | `SurfaceHit::point_light_sample` gives a `LightSample` whose shadow ray runs from the start point along `v 2^32 / m` (each component rounded to nearest, the largest exactly 1.0) with `shadow_t_max` `m - 1` raw, so an occluder counts exactly when it is nearer than the light; a light with `v . N' <= 0` exactly gives a dark sample; the radiance is `E_c * FRAC_1_PI`; a directional light's sample has `shadow_t_max` `SHADOW_T_MAX`. | `README.md#point-light` |
+| OPTICS-REQ-102 | A point at most `MIN_LIGHT_DISTANCE_RAW` (`2^25` raw) from the light (`v . v <= 2^50`, exact) is refused with `PointLightError::TooNear { to_light }`, before the side test and without a division; `PointLight::new` refuses, in this order, a position outside the trace domain, a negative intensity channel and one above `MAX_LIGHT_RAW`; `irradiance` refuses a point outside the trace domain. | `README.md#point-light` |
 
 ```toml
 [[requirement]]
@@ -556,6 +565,21 @@ status = "active"
 [[requirement]]
 id = "OPTICS-REQ-090"
 summary = "The incidence cosine of try_specular_reflection is -(u . n), with u the unit vector along the incoming direction d (prescaled to [2^61, 2^62) and normalized by FixedUnitVec3::new) and n the facing frame normal, computed exactly in i128 in units of 2^-64, divided by 2^32 and rounded once to nearest raw unit with a tie going to the even raw value, then clamped to 0..=1.0; no other rule or step rounds it."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-100"
+summary = "PointLight::irradiance (bunny-point-light/1) is intensity_c * g with g the exact c 2^64 divided by the exact v . v and rounded once to nearest with ties to even, c the cosine with the normalized v rounded once and clamped to 0..=1.0, and the product rounded to nearest with ties to even; it is within I_c (3 / d^2 + 1/2) + 1/2 raw units of the exact I_c max(n . v, 0) / |v|^3."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-101"
+summary = "SurfaceHit::point_light_sample gives a LightSample whose shadow ray runs from the start point along v 2^32 / m (each component rounded to nearest, the largest exactly 1.0) with shadow_t_max m - 1 raw, so an occluder counts exactly when it is nearer than the light; a light with v . N' <= 0 exactly gives a dark sample; the radiance is E_c * FRAC_1_PI; a directional light's sample has shadow_t_max SHADOW_T_MAX."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-102"
+summary = "A point at most MIN_LIGHT_DISTANCE_RAW (2^25 raw) from the light (v . v <= 2^50, exact) is refused with PointLightError::TooNear { to_light }, before the side test and without a division; PointLight::new refuses, in this order, a position outside the trace domain, a negative intensity channel and one above MAX_LIGHT_RAW; irradiance refuses a point outside the trace domain."
 status = "active"
 ```
 
@@ -978,6 +1002,13 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-159 | Smith ratio rounding | OPTICS-REQ-081, OPTICS-REQ-084 | At roughness 1.0 the ratio is `c_l (c_v + 1) / (c_l + c_v)`: `(1.0, 1/2)` gives 2/3, raw `2 863 311 531`; raw cosines `(1, 1)` give the tie `2 147 483 648.5`, to the even `...648`; `(3, 3)` the tie `...649.5`, to the even `...650`; `(3, 1)` gives `...824.75`, to `...825`; equal directions at normal incidence give 1.0. Roughness 1/2 at `(1.0, 1/2)`: `4 (sqrt(7) - 2) / 3`, raw `3 697 974 350`. A cosine of zero or below gives zero. | `crates/bunny-optics/src/shading/smith/tests.rs::optics_tp_159_the_masking_ratio_is_rounded_to_nearest_ties_to_even` |
 | OPTICS-TP-160 | Weight rounding | OPTICS-REQ-081, OPTICS-REQ-084 | With a Fresnel term of 1/2 and ratios of 1, 3 and 5 raw units: 0.5, 1.5 and 2.5, to 0, 2 and 2; just above and below one half; a factor of 1.0 leaves the other unchanged. | `crates/bunny-optics/src/shading/ggx/tests.rs::optics_tp_160_the_weight_is_rounded_to_nearest_ties_to_even` |
 | OPTICS-TP-161 | GGX mutations | OPTICS-REQ-080, OPTICS-REQ-081, OPTICS-REQ-082, OPTICS-REQ-083, OPTICS-REQ-084, OPTICS-REQ-087, OPTICS-REQ-088 | Each rule and each rounding broken on purpose fails at least one case above, except the two listed as not observable. | [GGX mutation checks](#ggx-mutation-checks) |
+| OPTICS-TP-200 | Hand-derived irradiance | OPTICS-REQ-100, OPTICS-REQ-101 | Intensity `(16, 1, 3)` 4 units straight above gives `(1.0, 1/16, 3/16)` exactly and 8 units a quarter of it; a normal facing away gives zero; at `(2, 2, 0)` with intensity 8 the division is a tie (379 625 062.5) that rounds to even, irradiance raw 3 037 000 496; a hit's sample `2^34 - 1` raw below a light of 16 has radiance `FRAC_1_PI` exactly. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_200_hand_derived_irradiance_falls_off_with_the_square_of_distance` |
+| OPTICS-TP-201 | Seeded irradiance against the exact value | OPTICS-REQ-100 | 3 000 seeded points, normals and intensities, a third of the lights within 1/16 unit: each channel within `I (3 / d^2 + 1/2) + 1/2` raw of the exact `I max(n . v, 0) 2^32 / \|v\|^3`, decided by exact big-integer comparison of squares; the seed is printed. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_201_irradiance_is_within_the_stated_rounding_of_the_exact_value` |
+| OPTICS-TP-202 | The shadow ray stops at the light | OPTICS-REQ-101 | A light 4 units above a ground hit: the ray runs along `(0, 1, 0)` with `shadow_t_max` `m - 1`; occluders at 2 units and one raw unit short of the light shadow it, occluders in the light's plane and beyond it do not; a directional light's sample keeps `SHADOW_T_MAX` and is shadowed by the occluder beyond. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_202_the_shadow_ray_stops_at_the_light` |
+| OPTICS-TP-203 | Seeded shadow rays | OPTICS-REQ-101 | 2 000 seeded ground hits and lights: dark exactly when the light is not above the start point; otherwise the largest axis is exactly `+-1.0`, `shadow_t_max` is `m - 1`, every component within half a raw unit of `v_i 2^32 / m`, and the radiance the irradiance times `FRAC_1_PI` rounded to nearest, ties to even; the seed is printed. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_203_seeded_shadow_rays_reach_the_light_on_their_largest_axis` |
+| OPTICS-TP-204 | The minimum distance | OPTICS-REQ-102 | `TooNear` at distance zero, at exactly `2^25` raw on two axes and at a diagonal with `v . v = 3 2^48`; one raw unit farther is accepted with every channel below `2^46` raw; a light at a hit's start point is refused through `point_light_sample`. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_204_a_point_at_or_inside_the_minimum_distance_is_refused` |
+| OPTICS-TP-205 | Domain and intensity refusals | OPTICS-REQ-102, OPTICS-REQ-101 | A position at `TRACE_COORD_LIMIT_RAW` is refused and one raw unit inside accepted; a negative channel and one above `MAX_LIGHT_RAW` are refused and `MAX_LIGHT_RAW` accepted; a point outside the domain is refused; a light in the start point's plane gives a dark sample. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_205_lights_and_points_outside_the_domain_are_refused` |
+| OPTICS-TP-206 | Point-light mutations | OPTICS-REQ-100, OPTICS-REQ-101, OPTICS-REQ-102 | Each of twelve rules broken on purpose fails at least one case above. | [Point-light mutation checks](#point-light-mutation-checks) |
 
 ```toml
 [[case]]
@@ -2392,6 +2423,69 @@ artifact = "docs/topics/optics/test-plan.md#ggx-mutation-checks"
 oracle = "Each rule and rounding of the sampler broken on purpose, each mutant's tests under timeout 400; each fails at least one case, except two listed as not observable."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-200"
+requirements = ["OPTICS-REQ-100", "OPTICS-REQ-101"]
+evidence = "test"
+test = "crates/bunny-optics/tests/point_light_tests.rs::optics_tp_200_hand_derived_irradiance_falls_off_with_the_square_of_distance"
+oracle = "Hand-derived: intensity (16, 1, 3) 4 units straight above gives (1.0, 1/16, 3/16) exactly and 8 units a quarter of it; a normal facing away gives zero; at (2, 2, 0) with intensity 8 the division is a tie (379 625 062.5) that rounds to even, irradiance raw 3 037 000 496; a hit's sample 2^34 - 1 raw below a light of 16 has radiance FRAC_1_PI exactly (model)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-201"
+requirements = ["OPTICS-REQ-100"]
+evidence = "test"
+test = "crates/bunny-optics/tests/point_light_tests.rs::optics_tp_201_irradiance_is_within_the_stated_rounding_of_the_exact_value"
+oracle = "3 000 seeded points, normals and intensities, a third of the lights within 1/16 unit: each channel within I (3 / d^2 + 1/2) + 1/2 raw of the exact I max(n . v, 0) 2^32 / |v|^3, decided by exact big-integer comparison of squares; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-202"
+requirements = ["OPTICS-REQ-101"]
+evidence = "test"
+test = "crates/bunny-optics/tests/point_light_tests.rs::optics_tp_202_the_shadow_ray_stops_at_the_light"
+oracle = "A light 4 units above a ground hit: the shadow ray starts at the start point along (0, 1, 0) with shadow_t_max m - 1; occluders at 2 units and one raw unit short of the light shadow it; occluders in the light's plane and beyond it do not; a directional light's sample keeps SHADOW_T_MAX and is shadowed by the occluder beyond."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-203"
+requirements = ["OPTICS-REQ-101"]
+evidence = "test"
+test = "crates/bunny-optics/tests/point_light_tests.rs::optics_tp_203_seeded_shadow_rays_reach_the_light_on_their_largest_axis"
+oracle = "2 000 seeded ground hits and lights: dark exactly when the light is not above the start point; otherwise the direction's largest axis is exactly +-1.0, shadow_t_max is m - 1, every component within half a raw unit of v_i 2^32 / m (exact), and the radiance the irradiance times FRAC_1_PI rounded to nearest, ties to even (written in the test); the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-204"
+requirements = ["OPTICS-REQ-102"]
+evidence = "test"
+test = "crates/bunny-optics/tests/point_light_tests.rs::optics_tp_204_a_point_at_or_inside_the_minimum_distance_is_refused"
+oracle = "TooNear with the vector to the light at distance zero and at exactly 2^25 raw on two axes, and at a diagonal with v . v = 3 2^48; one raw unit farther is accepted with every channel below 2^46 raw; a light at a hit's start point is refused through point_light_sample."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-205"
+requirements = ["OPTICS-REQ-102", "OPTICS-REQ-101"]
+evidence = "test"
+test = "crates/bunny-optics/tests/point_light_tests.rs::optics_tp_205_lights_and_points_outside_the_domain_are_refused"
+oracle = "A position at TRACE_COORD_LIMIT_RAW is refused and one raw unit inside accepted; a negative channel and one above MAX_LIGHT_RAW are refused and MAX_LIGHT_RAW accepted; a point outside the domain is refused; a light in the start point's plane gives a dark sample."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-206"
+requirements = ["OPTICS-REQ-100", "OPTICS-REQ-101", "OPTICS-REQ-102"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#point-light-mutation-checks"
+oracle = "Twelve rules of point_light.rs broken on purpose, each mutant's tests under timeout 120; each fails at least one case."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -2699,6 +2793,33 @@ case fail; the restored source passed every case.
 | The leaving test removed | A grazing reflection is refused | OPTICS-TP-107 |
 | The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
 | `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
+
+## Point-Light Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/point_light.rs`, and the tests were run with
+`timeout 120 cargo test --locked -q -p bunny-optics --no-fail-fast --test
+point_light_tests` per mutation. Every mutation made at least one case fail;
+the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `shadow_t_max` is `m` | The shadow ray stops before the light | OPTICS-TP-202, OPTICS-TP-203 |
+| The distance test `v . v < 2^50` | A point at the minimum distance is refused | OPTICS-TP-204 |
+| The side test removed | A light behind the surface is dark | OPTICS-TP-203, OPTICS-TP-205 |
+| The cosine clamped to `-1.0..=1.0` | The cosine is clamped at zero | OPTICS-TP-200, OPTICS-TP-201 |
+| No division by `d^2` | Inverse-square falloff | OPTICS-TP-200, OPTICS-TP-201 |
+| The falloff halved | Inverse-square falloff | OPTICS-TP-200, OPTICS-TP-201 |
+| The falloff division floors | Round to nearest | OPTICS-TP-201 |
+| The falloff division ties upward | Ties to even | OPTICS-TP-200 |
+| The cosine taken with `v`, not its unit vector | Normalization | OPTICS-TP-200, OPTICS-TP-201 |
+| The radiance without `FRAC_1_PI` | The radiometric convention | OPTICS-TP-200, OPTICS-TP-203 |
+| The direction's components set to `+-1.0` | The direction is `v 2^32 / m` | OPTICS-TP-203 |
+| The direction's division floors | Round to nearest | OPTICS-TP-203 |
+
+The first attempt at the `FRAC_1_PI` and normalization mutants did not
+compile (an unused import and an unused function under `-D warnings`); they
+were rewritten to keep the names in use and then failed as listed.
 
 ## Dielectric Mutation Checks
 
