@@ -9,6 +9,9 @@ This document defines how Bunny proves the [angle and trigonometry contract](REA
 - `sin`, `cos` and `sin_cos`: exact cases, symmetry, the error bound and golden bits
 - conversions out of `FixedAngle` (`to_turns`, `to_degrees`, `to_radians`) and `atan2`
   (flyingrobots/bunny#244): rounding, bounds, round trips, exact cases, branch and golden bits
+- `atan` of a single ratio, `asin`, `acos` and the signed conversions out
+  (`to_turns_signed`, `to_degrees_signed`, `to_radians_signed`, flyingrobots/bunny#244):
+  domain, bounds, exact cases, identities, relation to the unsigned forms and golden bits
 
 ## Test Goals
 
@@ -21,7 +24,7 @@ This document defines how Bunny proves the [angle and trigonometry contract](REA
 
 ## Non-Goals
 
-- Tangent, `asin`, `acos` and `atan` of a single ratio (not implemented).
+- Tangent and a retained `sin_cos` error sweep tool (not implemented).
 - Timing; see the performance chapter.
 
 ## Requirements
@@ -361,7 +364,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_030_atan_is_atan2_over_one_and_within_its_bound"
 oracle = "Bit equality with atan2(x, 1.0) and the 124-bit oracle over seeded and boundary ratios."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-031"
@@ -370,7 +373,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_031_atan_exact_values_range_and_odd_symmetry"
 oracle = "Exact angles at 0 and +-1, signed range, odd symmetry, extremes inside the quarter turns."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-032"
@@ -379,7 +382,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_032_asin_and_acos_refuse_ratios_outside_minus_one_to_one"
 oracle = "None one raw unit outside +-1.0 and at the extremes; Some at and inside them."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-033"
@@ -388,7 +391,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_033_asin_and_acos_are_within_two_thirds_of_a_unit"
 oracle = "Independent oracle with a Newton square root over a dense sweep, both ends and seeded ratios."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-034"
@@ -397,7 +400,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_034_asin_and_acos_exact_cases_and_one_unit_inside_each_end"
 oracle = "Exact quarter-turn multiples at 0 and +-1.0, and one raw unit inside each end."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-035"
@@ -406,7 +409,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_035_asin_and_acos_identities_are_bit_exact"
 oracle = "Bit equality of the complement, odd and mirror identities over the sweep."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-036"
@@ -415,7 +418,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_036_signed_conversions_round_once_within_their_bounds"
 oracle = "Exact signed rational by Euclidean division, and the 124-bit oracle for radians."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-037"
@@ -424,7 +427,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_037_signed_conversions_match_the_unsigned_ones_and_negation"
 oracle = "Bit equality with the unsigned forms and with negation; the half-turn ends."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-038"
@@ -433,7 +436,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_038_golden_vectors_are_bit_exact"
 oracle = "Correctly rounded raw values from a 60-digit decimal model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-039"
@@ -442,7 +445,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/angle-trigonometry/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one of AT-TP-030 to AT-TP-038 fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -469,6 +472,37 @@ the source was restored after each. The unmutated source passed every case.
 | The sign of `y` is ignored | Conjugation | 013, 014, 015, 016 |
 | The origin gives `ZERO` | `None` at the origin | 014, 015 |
 
+The cases AT-TP-030 to AT-TP-038 were checked the same way against
+`fixed_angle/inverse_ratio.rs`, `fixed_angle/conversions_out.rs` and `fixed_angle/atan2.rs`,
+running `cargo test --locked -q --no-fail-fast -p bunny-num --test fixed_angle_inverse_ratio_tests
+--test fixed_angle_inverse_tests`. The `atan2` mutations above were run again after
+`atan2.rs` was refactored to share its fold with `asin` and `acos`; each still fails the
+cases listed above, and the new cases listed here as well.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `asin` and `acos` take the floor root at Q32.32, without the 32 extra bits | Legs 32 bits wider | 033, 034, 038 |
+| `asin` and `acos` refuse `±1.0` | `\|x\| <= 1.0` accepted | 032, 033, 034, 035 |
+| The floor root plus one | Floor square root | 038 only: the error stays inside `2/3`, so only the goldens see it |
+| `asin` takes the `acos` direction | `(sqrt(1 - x²), x)` | 033, 034, 035, 038 |
+| `acos` puts the sign of `x` on `y` | `(x, sqrt(1 - x²))` | 033, 034, 035, 038 |
+| `atan` divides by `0.5` | `atan2(x, 1.0)` | 030, 031, 038 |
+| `atan` ignores the sign of `x` | Odd symmetry | 030, 031, 038 |
+| The signed forms drop the sign | Signed reading | 036, 037, 038 |
+| The half turn reads as `+1/2` | `[-1/2, 1/2)` | 036, 037, 038 |
+| A signed degrees tie goes up | Ties to even | 036, 037 |
+| Signed turns floor the magnitude | Round to nearest | 036, 037, 038 |
+| Signed radians use `2 pi` with 32 fractional bits | `2 pi` with 61 fractional bits | 036, 037, 038 |
+| `atan2` runs 64 CORDIC steps | 72 steps | 013, 016, 030, 033, 038 |
+| `atan2` runs 70 CORDIC steps | 72 steps | 013, 030 |
+| `atan2` floors the sum of step angles | Round to nearest | 013, 016, 030, 033, 038 |
+| The first step angle is a sixteenth turn | `atan(1)` is an eighth turn | 013 to 016, 030, 031, 033, 034, 038 |
+| A swapped octant is added to the quarter turn | `QUARTER_TURN - a` | 013, 015, 016, 030, 031, 033, 034, 035, 038 |
+| A mirrored quadrant is added to the half turn | `HALF_TURN - a` | 013 to 016, 033, 034, 035, 038 |
+| The sign of `y` is ignored | Conjugation | 013 to 016, 030, 031, 033, 034, 035, 038 |
+
+The origin mutation of the first table was not run again: the origin check is unchanged.
+
 ## Oracles For The Conversions Out And Atan2
 
 `crates/bunny-num/tests/angle_oracle/mod.rs` is unsigned fixed point with 124 fractional
@@ -488,6 +522,28 @@ committed; it is posted on the pull request. For every `atan2` and `to_radians` 
 exact value is at least 0.02 raw units from a rounding boundary, so the kernel's bound
 forces the nearest value.
 
+## Oracles For Atan, Asin, Acos And The Signed Conversions
+
+`atan` is checked against `angle_oracle::Oracle::atan2(x, 1.0)` and the signed radians
+against `Oracle::radians` of the magnitude, negated. `crates/bunny-num/tests/inverse_oracle/mod.rs`
+adds `asin` and `acos`: the cosine leg `sqrt(1 - x²)` with 124 fractional bits is the exact
+floor square root of a 248-bit number, by integer Newton iteration from above over the
+oracle's binary long division, and the angle is the oracle's Taylor `atan`. The kernel
+takes `u128::isqrt` of a 128-bit radicand and runs CORDIC; the two share no algorithm,
+constant or helper. The oracle's error is below `2^-50` of an angle unit. The signed turns
+and degrees are checked against the exact signed rational rounded by `i128` Euclidean
+quotient and remainder (the kernel rounds the magnitude by a shift and a mask, then applies
+the sign).
+
+The golden vectors of AT-TP-038 are inline in
+`crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs`. They were recorded from the
+implementation and each checked against a separate 60-digit Python `decimal` model (Machin
+`pi`, Taylor `atan`, `Decimal.sqrt`), which is not committed; it is posted on the pull
+request. Every `atan` and signed golden is the correctly rounded value and forced by its
+bound. Of the `asin` and `acos` goldens, those whose exact angle is within `1/3` of a unit
+of an integer are forced to it; the others pin the kernel's bits, and at `-0.875` they are
+the other neighbour.
+
 ## Determinism Obligations And Evidence
 
 `sin_cos` uses only integer arithmetic on a table computed at compile time by integer code:
@@ -502,6 +558,10 @@ result.
 - AT-TP-010, AT-TP-011 and AT-TP-013 sample inputs; they are not exhaustive. The bounds of
   `to_radians` and `atan2` rest on the error analyses in the living reference, which the
   samples check.
+- AT-TP-030, AT-TP-033 and AT-TP-036 sample inputs; AT-TP-033 covers every `2^18`-th
+  ratio of the `2^33 + 1` in the domain and the 2 048 at each end, not all of them. The
+  `asin` and `acos` bound rests on the error analysis in the living reference; the
+  measured worst case it reports applies to that set only.
 - AT-TP-004 samples angles; it is not exhaustive over all `2^64` angles. The interpolation
   error analysis (cubic Hermite error at most `h^4 / 384` for segment width
   `h = π / 2048`, about `1.4e-14`) is the argument for angles between samples.

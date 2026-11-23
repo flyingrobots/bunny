@@ -45,7 +45,10 @@ ecosystem to guarantee bit-level CPU determinism.
   unit of the exact value. Conversions out: `to_turns` and `to_degrees` are
   correctly rounded and `to_radians` is within `1/2 + 2^-30` raw units;
   `FixedAngle::atan2(y, x)` is within `1/2 + 2^-9` angle units of the exact angle
-  of `(x, y)` by integer CORDIC, `None` only at the origin.
+  of `(x, y)` by integer CORDIC, `None` only at the origin. `FixedAngle::atan(x)`
+  is exactly `atan2(x, 1.0)`; `asin` and `acos` take `|x| <= 1.0` (else `None`)
+  and are within `2/3` of an angle unit; `to_turns_signed`, `to_degrees_signed`
+  and `to_radians_signed` read the angle in `[-1/2, 1/2)` turn.
 * **Zero Dependency & No-Unsafe**: Compiled under `#![deny(unsafe_code)]` with
   zero external runtime dependencies.
 * **`no_std`**: With default features off the crate is `#![no_std]` and needs

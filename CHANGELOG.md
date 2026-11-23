@@ -124,6 +124,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outside its range, and a hit ray parallel to the plane or with the plane
   not ahead return a `RayFootprintError`. Closes flyingrobots/bunny#383.
 
+* `bunny-num`: `FixedAngle::atan`, `asin`, `acos` and signed conversions out.
+  `atan(x)` is exactly `atan2(x, 1.0)`, within `1/2 + 2^-9` angle units, strictly
+  inside a quarter turn either side of zero. `asin(x)` and `acos(x)` take
+  `|x| <= 1.0` and return `None` otherwise; they run the `atan2` kernel on the
+  legs `|x|` and the floor square root of `1 - x^2`, both with 32 bits more than
+  Q32.32, and are within `2/3` of an angle unit (measured worst `0.648`). They are
+  exact at `0` and `±1.0`, and `asin(x) + acos(x)` is exactly a quarter turn.
+  `to_turns_signed`, `to_degrees_signed` and `to_radians_signed` read the angle in
+  `[-1/2, 1/2)` turn and round once like the unsigned forms, which they equal below
+  a half turn. Golden vectors, independent oracles and mutation checks; tangent
+  is not included. Refs flyingrobots/bunny#244.
+
 * `bunny-num`: conversions out of `FixedAngle` and `FixedAngle::atan2`.
   `to_turns` (`[0, 1]`) and `to_degrees` (`[0, 360]`) are the exact value
   rounded once to Q32.32, ties to even; `to_radians` multiplies by

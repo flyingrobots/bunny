@@ -22,7 +22,7 @@ fn sqrt_q124(v: u128) -> u128 {
     }
     let mut root = ONE;
     loop {
-        let next = (root + ratio(v, root, FRAC)) / 2;
+        let next = u128::midpoint(root, ratio(v, root, FRAC));
         if next >= root {
             return root;
         }

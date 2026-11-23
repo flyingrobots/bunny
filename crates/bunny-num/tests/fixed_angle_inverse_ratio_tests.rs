@@ -147,7 +147,7 @@ fn at_tp_033_asin_and_acos_are_within_two_thirds_of_a_unit() {
         }
     }
     // Reported, not asserted: the largest error this set reaches, in angle units.
-    let units = worst * 1_000_000 >> EXTRA_BITS;
+    let units = (worst * 1_000_000) >> EXTRA_BITS;
     println!("asin/acos worst error {units} micro-units at x raw {worst_at}");
 }
 
@@ -260,4 +260,65 @@ fn at_tp_037_signed_conversions_match_the_unsigned_ones_and_negation() {
     assert_eq!(below.to_turns_signed().raw(), ONE_RAW / 2);
     assert_eq!(below.to_degrees_signed().raw(), 180 * ONE_RAW);
     assert_eq!(below.to_radians_signed().raw(), -half.to_radians_signed().raw());
+}
+
+/// `(ratio raw, atan raw)`, each the correctly rounded angle from a 60-digit decimal model,
+/// with the exact angle's offset from it; every offset is inside `1/2 - 2^-9`, so the bound
+/// of `atan2` forces the nearest unit.
+const ATAN_GOLDEN: &[(i64, u64)] = &[
+    (1 << 31, 1_361_218_612_134_873_190),   // atan(1/2), +0.338
+    (2 << 32, 3_250_467_406_292_514_714),   // atan(2), -0.338
+    (-3 << 32, 14_779_682_452_360_984_474), // atan(-3), -0.338
+    (1, 683_565_276),                       // one raw unit, -0.424
+    (i64::MAX, 4_611_686_017_060_257_353),  // -0.153
+    (i64::MIN, 13_835_058_056_649_294_263), // +0.153
+    (429_496_730, 292_616_250_594_435_491), // about 0.1, -0.122
+    (-7_439_101_574, 15_372_286_728_009_045_968), // about -sqrt(3), +0.256
+];
+
+/// `(ratio raw, asin raw, acos raw)` and the exact angle's offset from the nearest angle
+/// unit, from the same model. Where the offset is beyond `1/3` the bound of `2/3` does not
+/// force the nearest unit; at `-0.875` the kernel gives the other neighbour.
+const INVERSE_GOLDEN: &[(i64, u64, u64)] = &[
+    (1 << 31, 1_537_228_672_809_129_301, 3_074_457_345_618_258_603), // 30 degrees, +0.333
+    (-(1 << 31), 16_909_515_400_900_422_315, 6_148_914_691_236_517_205), // -0.333
+    (3 << 30, 2_489_817_403_875_320_551, 2_121_868_614_552_067_353), // 0.75, -0.165
+    (1 << 30, 741_841_561_438_501_776, 3_869_844_456_988_886_128),   // 0.25, +0.309
+    (-(7 << 29), 15_318_741_178_159_167_264, 7_739_688_913_977_772_256), // -0.382, not nearest
+    (ONE_RAW - 1, 4_611_622_664_298_856_039, 63_354_128_531_865),    // -0.491
+    (1 - ONE_RAW, 13_835_121_409_410_695_577, 9_223_308_682_726_243_943), // +0.491
+    (1, 683_565_276, 4_611_686_017_743_822_628),                     // -0.424
+    ((1 << 31) + 1, 1_537_228_673_598_442_493, 3_074_457_344_828_945_411), // +0.120
+    (0x9E37_79B9, 1_956_006_022_334_419_543, 2_655_679_996_092_968_361), // -0.308
+    (3_037_000_500, 2_305_843_009_236_846_889, 2_305_843_009_190_541_015), // ~sqrt(1/2), -0.251
+    (-2_576_980_378, 16_557_495_279_210_127_455, 6_500_934_812_926_812_065), // ~-0.6, -0.127
+];
+
+/// `(angle raw, turns, degrees, radians)` signed, from the same model; every radians value
+/// is at least 0.02 raw units from a rounding boundary.
+const SIGNED_GOLDEN: &[(u64, i64, i64, i64)] = &[
+    (HALF - 1, 2_147_483_648, 773_094_113_280, 13_493_037_705), // rounds up to +1/2
+    (HALF, -2_147_483_648, -773_094_113_280, -13_493_037_705),  // exactly -1/2
+    (HALF + 1, -2_147_483_648, -773_094_113_280, -13_493_037_705),
+    (u64::MAX, 0, 0, 0),
+    (3 * QUARTER, -1_073_741_824, -386_547_056_640, -6_746_518_852), // -90 degrees
+    (0x9555_5555_5555_5555, -1_789_569_707, -644_245_094_400, -11_244_198_087), // -150
+    (0xD741_9F24_6C6E_FAB6, -683_565_276, -246_083_499_208, -4_294_967_296), // -1 radian
+    (0xDEAD_BEEF_0123_4567, -559_038_737, -201_253_945_318, -3_512_543_978),
+];
+
+#[wasm_bindgen_test(unsupported = test)]
+fn at_tp_038_golden_vectors_are_bit_exact() {
+    for &(x, raw) in ATAN_GOLDEN {
+        assert_eq!(FixedAngle::atan(q(x)).raw(), raw, "atan x={x}");
+    }
+    for &(x, asin, acos) in INVERSE_GOLDEN {
+        assert_eq!((asin_raw(x), acos_raw(x)), (Some(asin), Some(acos)), "x={x}");
+    }
+    for &(raw, turns, degrees, radians) in SIGNED_GOLDEN {
+        let a = FixedAngle::from_raw(raw);
+        let actual = (a.to_turns_signed(), a.to_degrees_signed(), a.to_radians_signed());
+        let actual = (actual.0.raw(), actual.1.raw(), actual.2.raw());
+        assert_eq!(actual, (turns, degrees, radians), "angle={raw:#018x}");
+    }
 }
