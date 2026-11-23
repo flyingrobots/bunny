@@ -3,18 +3,13 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::hint::black_box;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Barrier};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::thread;
-
-#[global_allocator]
-static GLOBAL: dhat::Alloc = dhat::Alloc;
 
 /// Blocks allocated by the calling thread while `operation` runs.
 fn blocks_during(operation: impl FnOnce()) -> u64 {
-    let _profiler = dhat::Profiler::builder().testing().build();
-    operation();
-    dhat::HeapStats::get().total_blocks
+    allocation_counter::measure(operation).count_total
 }
 
 #[test]
@@ -30,7 +25,7 @@ fn tscope_tp_001_foreign_thread_allocations_are_not_counted() {
                     drop(black_box(Box::new([0_u64; 8])));
                     foreign_blocks.fetch_add(1, Ordering::AcqRel);
                 } else {
-                    thread::yield_now();
+                    std::hint::spin_loop();
                 }
             }
         })
@@ -40,7 +35,7 @@ fn tscope_tp_001_foreign_thread_allocations_are_not_counted() {
         go.store(true, Ordering::Release);
         // The measurement window stays open until the other thread has certainly allocated in it.
         while foreign_blocks.load(Ordering::Acquire) < 1000 {
-            thread::yield_now();
+            std::hint::spin_loop();
         }
     });
     stop.store(true, Ordering::Release);
@@ -87,16 +82,23 @@ fn tscope_tp_004_a_block_freed_on_another_thread_does_not_change_the_count() {
 
 #[test]
 fn tscope_tp_005_two_measuring_threads_do_not_see_each_other() {
-    let barrier = Arc::new(Barrier::new(2));
+    let arrived = Arc::new(AtomicUsize::new(0));
     let run = |blocks: usize| {
-        let barrier = barrier.clone();
+        let arrived = arrived.clone();
         thread::spawn(move || {
             blocks_during(|| {
                 // Both scopes are open here, so each thread allocates inside the other's window.
-                barrier.wait();
+                // A spin rendezvous on atomics: parking would allocate inside the scope.
+                arrived.fetch_add(1, Ordering::AcqRel);
+                while arrived.load(Ordering::Acquire) < 2 {
+                    std::hint::spin_loop();
+                }
                 let kept: Vec<Box<u64>> =
                     (0..blocks as u64).map(|i| Box::new(black_box(i))).collect();
-                barrier.wait();
+                arrived.fetch_add(1, Ordering::AcqRel);
+                while arrived.load(Ordering::Acquire) < 4 {
+                    std::hint::spin_loop();
+                }
                 drop(black_box(kept));
             })
         })
