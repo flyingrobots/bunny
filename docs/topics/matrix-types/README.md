@@ -227,6 +227,10 @@ its bits; the fidelity test compares against the retained 0.7.0 code.
 `FixedMat3::try_look_rotation(forward, up)` reuses this basis without an eye;
 see [Look Rotation](../look-rotation/README.md).
 
+`FixedAffine3::from_trs`, `rotate_about_point` and `scale_about_point` build
+translate, rotate and scale transforms and rotations or scales about a pivot;
+see [Transform Composition](../transform/README.md).
+
 ## Required Tests
 
 The current repository must keep tests for:

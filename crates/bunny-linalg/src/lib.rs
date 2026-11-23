@@ -19,6 +19,7 @@ use bunny_num::{FixedQ32_32, Scalar};
 
 mod fixed_affine2;
 mod fixed_affine3;
+mod fixed_affine3_trs;
 mod fixed_mat2;
 mod fixed_mat3;
 mod fixed_mat3_rotation;
@@ -34,6 +35,7 @@ mod viewport;
 
 pub use fixed_affine2::FixedAffine2;
 pub use fixed_affine3::FixedAffine3;
+pub use fixed_affine3_trs::TRANSFORM_CONTRACT_ID;
 pub use fixed_mat2::FixedMat2;
 pub use fixed_mat3::FixedMat3;
 pub use fixed_mat3_rotation::ROTATION_CONTRACT_ID;
