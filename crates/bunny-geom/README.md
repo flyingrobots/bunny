@@ -13,13 +13,16 @@ queries, collision detection, and ray-casting.
   and maximum bounds through `Aabb3::try_new`.
 * **Sphere3**: Represents spheres with finite centers and finite non-negative
   radii through `Sphere3::try_new`.
-* **FixedPlane3 / FixedSegment3**: Checked plane classification, segment
-  clipping and convex polygon clipping (`clip_polygon`, into a caller buffer)
-  to the closed front half-space; see
-  `docs/topics/plane-clipping/README.md`.
+* **FixedPlane3 / FixedSegment3**: Checked plane classification of points,
+  segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
+  polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
+  half-space; see `docs/topics/plane-clipping/README.md`.
 * **Ray and box transforms**: `FixedRay3::checked_transform` maps a ray by a
   `FixedAffine3` into a `TransformedRay3` whose direction is not renormalised,
-  so a hit parameter `t` carries over (within `3/2 (1 + |t|)` raw);
+  so a parameter `t` keeps its meaning: each component of the point at `t` on
+  the transformed ray is within `3/2 (1 + |t|)` raw of the exact image of the
+  point at `t` on the original. That bounds the position, not `t`: near a
+  grazing hit a small change in position can move or remove the hit;
   `FixedAabb3::checked_transform` returns the hull of the eight mapped
   corners. Typed `TransformError` refusals for inverted boxes, overflow and a
   zero direction; see `docs/topics/transform/README.md#rays-boxes-and-normals`.

@@ -19,6 +19,7 @@ use bunny_num::{FixedQ32_32, Scalar};
 
 mod catmull_rom3;
 mod cubic_bezier3;
+mod curve_bounds3;
 mod fixed_affine2;
 mod fixed_affine3;
 mod fixed_affine3_normal;
@@ -38,6 +39,7 @@ mod viewport;
 
 pub use catmull_rom3::{CatmullRom3, CatmullRomError};
 pub use cubic_bezier3::{CubicBezier3, CURVE_CONTRACT_ID};
+pub use curve_bounds3::CurveBounds3;
 pub use fixed_affine2::FixedAffine2;
 pub use fixed_affine3::FixedAffine3;
 pub use fixed_affine3_trs::TRANSFORM_CONTRACT_ID;
