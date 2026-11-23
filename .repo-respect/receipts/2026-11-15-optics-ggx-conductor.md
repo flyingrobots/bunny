@@ -22,6 +22,8 @@ crates/bunny-query/src/trace.rs (TraceRay::new)
 xtask/src/code_dojo.rs (limits), xtask/src/topic_docs.rs
 .repo-respect/receipts/2026-11-15-optics-specular-reflection.md
 The independent review of flyingrobots/bunny#376 and flyingrobots/bunny#423
+crates/bunny-optics/tests/specular_cosine_rounding_tests.rs and the incidence-cosine sections
+of the optics chapter and test plan (from main, flyingrobots/bunny#423)
 
 Files edited:
 crates/bunny-optics/src/shading/ggx.rs, smith.rs, visible_normal.rs (new)
@@ -33,7 +35,8 @@ crates/bunny-optics/src/shading/wide.rs (a comment on `div_round`'s widths)
 crates/bunny-optics/src/shading.rs, crates/bunny-optics/src/lib.rs
 crates/bunny-optics/tests/ggx_conductor_tests.rs, tests/ggx_reference/mod.rs (new)
 crates/bunny-optics/README.md
-docs/topics/optics/README.md (Status, Specular Reflection, GGX Rough Conductor)
+docs/topics/optics/README.md (Status, Specular Reflection, GGX Rough Conductor; the
+cosine rule of the GGX steps)
 docs/topics/optics/test-plan.md (OPTICS-REQ-080 to -088; OPTICS-TP-140 to -161; the GGX
 oracles; mutation checks; open gaps)
 CHANGELOG.md (Unreleased)
@@ -59,6 +62,15 @@ case of OPTICS-TP-143 and measured the furnace difference on finer grids.
 Mutations (test plan, GGX Mutation Checks): each under `timeout 400`; the restored sources
 pass.
 cargo fmt, clippy -D warnings, code-dojo --all at the final commit (see the pull request).
+2026-11-22, merging origin/main (flyingrobots/bunny#423 and others): the test plan's
+requirement, case and open-gap tables conflicted and both sides were kept; no requirement or
+case ID of this branch collides with main's (main adds OPTICS-REQ-090 and OPTICS-TP-180 to
+-182). The GGX cosines already follow the incidence-cosine rule #423 pins (one exact i128 dot
+product rounded once, to nearest, ties to even); the chapter now says so. No kernel line
+changed in the merge, and `reflect_about` is the mirror's former body, so the mirror's output
+is unchanged. On the host (Rust 1.100.0): cargo fmt --check, the workspace tests, and the
+gates code-dojo-generated, code-dojo-rust --all, code-dojo-determinism --enforce,
+code-dojo-perf-groups, topic-docs and repo-respect check --branch.
 
 Known risks:
 The furnace tolerance (`2^-11`) and the agreement with the ideal map are measured, not derived.
