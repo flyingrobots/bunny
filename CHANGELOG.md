@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-optics`: the rounding of the incidence cosine in
+  `bunny-specular-reflection/1` is now tested. The rule is the documented one:
+  the exact `-(u . n)`, in units of `2^-64`, rounded once to nearest raw unit
+  with ties to even. Before this, a kernel that floored the cosine passed
+  every case. Five constructed hits on planes with non-axis normals now pin it
+  at cosines below 0.38: one `2^-64` unit under a tie, on three ties and one
+  unit over a tie. An oracle that shares no code with the crate derives each
+  expected value. The kernel already followed the rule, so no output changes
+  and the contract id stays `bunny-specular-reflection/1`. Closes
+  flyingrobots/bunny#423.
+
 * Code Dojo's dependency check holds every crate a deterministic crate
   depends on (normal and build edges, workspace and all features) to the
   scanned set: another deterministic crate at its own directory, or a

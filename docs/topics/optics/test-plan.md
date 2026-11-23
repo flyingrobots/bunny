@@ -157,6 +157,7 @@ formatting.
 | OPTICS-REQ-058 | The weights of `bilinear` are in `0..=1.0`, sum to exactly 1.0, `w11` and `w10` are the exact products rounded once to nearest with ties to even, `w01` and `w00` their exact complements, and each is within half a raw unit of its exact product. | `README.md#texture-coordinates` |
 | OPTICS-REQ-059 | At a texel centre `u = (i + 1/2) / width`, `v = (j + 1/2) / height` that is exactly a raw value the first tap is texel `(i, j)` with weight exactly 1.0 and the others have weight zero, under every wrap pairing and, for repeat, shifted by whole tiles; at a rounded centre the texel can be the second tap, and rounded weights can tie for texels at different distances. | `README.md#texture-coordinates` |
 | OPTICS-REQ-066 | `srgb8_to_linear` (`bunny-srgb8-decode/1`) maps each of the 256 8-bit sRGB codes to the exact sRGB decode (IEC 61966-2-1: toe `c / (255 * 12.92)` for `c <= 10`, else `((c / 255 + 0.055) / 1.055)^2.4`) rounded to nearest in raw Q32.32, with code 0 giving 0 and code 255 giving 1.0; encoding each result with `bunny-tone-srgb/1` returns the original code. | `README.md#decoding-srgb-codes` |
+| OPTICS-REQ-090 | The incidence cosine of `try_specular_reflection` is `-(u . n)`, with `u` the unit vector along the incoming direction `d` (prescaled to `[2^61, 2^62)` and normalized by `FixedUnitVec3::new`) and `n` the facing frame normal, computed exactly in `i128` in units of `2^-64`, divided by `2^32` and rounded once to nearest raw unit with a tie going to the even raw value, then clamped to `0..=1.0`; no other rule or step rounds it. | `README.md#specular-reflection` |
 
 ```toml
 [[requirement]]
@@ -438,6 +439,11 @@ status = "active"
 id = "OPTICS-REQ-066"
 summary = "srgb8_to_linear (bunny-srgb8-decode/1) maps each of the 256 8-bit sRGB codes to the exact sRGB decode rounded to nearest in raw Q32.32, code 0 to 0 and code 255 to 1.0; encoding each result with bunny-tone-srgb/1 returns the original code."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-090"
+summary = "The incidence cosine of try_specular_reflection is -(u . n), with u the unit vector along the incoming direction d (prescaled to [2^61, 2^62) and normalized by FixedUnitVec3::new) and n the facing frame normal, computed exactly in i128 in units of 2^-64, divided by 2^32 and rounded once to nearest raw unit with a tie going to the even raw value, then clamped to 0..=1.0; no other rule or step rounds it."
+status = "active"
 ```
 
 ## Fixtures
@@ -684,6 +690,9 @@ products are checked; an overflow fails the case.
 | OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
 | OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
 | OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
+| OPTICS-TP-180 | The incidence cosine at its rounding boundaries | OPTICS-REQ-090, OPTICS-REQ-053 | Five constructed kernel hits on the planes `x - y + z = 0` (frame normal `g (1, -1, 1)`, g = 2 479 700 525) and `x = y` (`h (1, -1, 0)`, h = 3 037 000 500), whose exact `-(u . n)` sits one `2^-64` unit under a tie, on ties with floors even, even and odd, and one unit over a tie, at cosines below 0.38: each throughput, for F0 = (0, 0.04, 0.5), equals the pinned value bit for bit, and every mismatching case is listed. | `crates/bunny-optics/tests/specular_cosine_rounding_tests.rs::optics_tp_180_the_incidence_cosine_rounds_once_to_nearest_with_ties_to_even` |
+| OPTICS-TP-181 | The pinned cosines derived without the kernel | OPTICS-REQ-090 | For each case of OPTICS-TP-180, without the kernel: u equals `FixedUnitVec3::new` of the prescaled d and lies within one raw unit of the exact `d / \|d\|` (exact squares); the exact i128 `-(u . n)` equals the value derived by hand in the case's comment; a separately written round-to-nearest-even gives the pinned cosine; a big-integer Schlick oracle gives the pinned throughput; and each wrong rule the case targets (floor, ceiling, ties away, ties toward zero, ties to odd) would change at least one channel. The remainders against the tie (-1, 0, 1, 0, 0) and the tie floors' parities are asserted. | `crates/bunny-optics/tests/specular_cosine_rounding_tests.rs::optics_tp_181_each_pinned_case_is_derived_independently_of_the_kernel` |
+| OPTICS-TP-182 | Incidence-cosine mutations | OPTICS-REQ-090 | Each other rounding rule, and rounding at another step, fails OPTICS-TP-180; normalizing `d` without the prescale is not caught (recorded). | [Incidence-cosine mutation checks](#incidence-cosine-mutation-checks) |
 | OPTICS-TP-110 | Hand-derived coordinates | OPTICS-REQ-056 | Corners exactly; the centroid 1 431 655 765 and two thirds 2 863 311 531 raw (hand: 2^32 / 3 and 2^33 / 3); ties of 1.5 and 2.5 raw to 2, -1.5 to -2 and -0.5 to 0; the extremes of i64 with det = i128::MAX - 1. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_110_hand_derived_coordinates_interpolate_exactly` |
 | OPTICS-TP-111 | Seeded coordinates against the exact rational | OPTICS-REQ-056 | 20 000 seeded triangles and hits (det up to 2^127, coordinates over the full raw range and near zero): each component r satisfies (2r - 1) det <= 2 sum w_i t_i <= (2r + 1) det in exact big integers, an end only for even r; the seed is printed. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_111_interpolated_coordinates_match_the_exact_rational_oracle` |
 | OPTICS-TP-112 | Hand-derived lookups | OPTICS-REQ-057, OPTICS-REQ-058 | The middle of a 2 by 2 texture: four quarters; u = v = 0 on 4 by 4 wraps to the last texel under repeat and clamps to texel 0; a texel centre along one axis only; the corner-weight roundings (2^30 + 1 + 2^-32 to 2^30 + 1, 2^30 - 2^-32 to 2^30) and two ties to even (1/2 raw to 0, 2^31 - 1/2 to 2^31), all by hand; zero sizes refused. | `crates/bunny-optics/tests/texture_bilinear_tests.rs::optics_tp_112_hand_derived_lookups` |
@@ -1626,6 +1635,33 @@ tier = "manual"
 status = "implemented"
 
 [[case]]
+id = "OPTICS-TP-180"
+requirements = ["OPTICS-REQ-090", "OPTICS-REQ-053"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_cosine_rounding_tests.rs::optics_tp_180_the_incidence_cosine_rounds_once_to_nearest_with_ties_to_even"
+oracle = "Five constructed kernel hits on the planes x - y + z = 0 (frame normal g (1, -1, 1), g = 2 479 700 525) and x = y (h (1, -1, 0), h = 3 037 000 500), whose exact -(u . n) sits one 2^-64 unit under a tie, on ties with floors even, even and odd, and one unit over a tie, at cosines below 0.38: each throughput, for F0 = (0, 0.04, 0.5), equals the pinned value bit for bit, and every mismatching case is listed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-181"
+requirements = ["OPTICS-REQ-090"]
+evidence = "test"
+test = "crates/bunny-optics/tests/specular_cosine_rounding_tests.rs::optics_tp_181_each_pinned_case_is_derived_independently_of_the_kernel"
+oracle = "For each case of OPTICS-TP-180, without the kernel: u equals FixedUnitVec3::new of the prescaled d and lies within one raw unit of the exact d / |d| (exact squares); the exact i128 -(u . n) equals the value derived by hand in the case's comment; a separately written round-to-nearest-even gives the pinned cosine; a big-integer Schlick oracle gives the pinned throughput; and each wrong rule the case targets (floor, ceiling, ties away, ties toward zero, ties to odd) would change at least one channel. The remainders against the tie (-1, 0, 1, 0, 0) and the tie floors' parities are asserted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-182"
+requirements = ["OPTICS-REQ-090"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#incidence-cosine-mutation-checks"
+oracle = "Eight changes to the incidence cosine of specular.rs, each run against both specular test files; seven fail OPTICS-TP-180 and no older case, one (no prescale) fails none and is recorded."
+tier = "manual"
+status = "implemented"
+
+[[case]]
 id = "OPTICS-TP-110"
 requirements = ["OPTICS-REQ-056"]
 evidence = "test"
@@ -2040,6 +2076,28 @@ case fail; the restored source passed every case.
 | The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
 | `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
 
+## Incidence-Cosine Mutation Checks
+
+Each change below was made to `incidence_cosine` in
+`crates/bunny-optics/src/shading/specular.rs` on a local checkout, and both
+specular test files were run with `cargo test --locked -p bunny-optics
+--no-fail-fast --test specular_cosine_rounding_tests --test
+specular_reflection_tests`; the source was restored after each. No case
+before OPTICS-TP-180 failed under any of them (OPTICS-TP-103's window holds a
+floored cosine, OPTICS-TP-100's normal is an axis, and OPTICS-TP-104's weight
+is zero near cosine 1). The restored source passed every case.
+
+| Mutation | Rule broken | Cases of OPTICS-TP-180 that fail |
+| --- | --- | --- |
+| `-(u . n) >> 32`, a floor (and truncation, since the value is not negative) | Round to nearest | above a tie; a tie on an odd floor |
+| `-((u . n) >> 32)`, a ceiling | Round to nearest | below a tie; both ties on an even floor |
+| `(-(u . n) + 2^31) >> 32`, ties away from zero | Ties to even | both ties on an even floor |
+| `(-(u . n) + 2^31 - 1) >> 32`, ties toward zero | Ties to even | the tie on an odd floor |
+| A tie goes to the odd neighbour | Ties to even | all three ties |
+| Each product `u_i n_i` rounded to a raw unit before the sum | Rounded once, after the exact sum | the tie on an even floor (slant); the tie on an odd floor |
+| Rounded by `2^16` twice | Rounded once | above a tie (the first rounding makes it a tie on an even floor) |
+| `u` normalized from `d` without the prescale | The prescale of `d` | none: every case's `d` has a component of exactly 1.0, and on these inputs the throughput does not change (an open gap) |
+
 ## Texture-Bilinear Mutation Checks
 
 Each rule below was broken on purpose in a container copy of
@@ -2242,5 +2300,6 @@ case with a stable test name.
 | An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |
 | Shrinking for `OPTICS-TP-062` and `OPTICS-TP-064`: a failure reports its seed, case and variant, not a reduced input. | None; a property-testing harness or a hand-written reducer. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_specular_reflection`: no input is known to reach it (the start point is inside the domain and the clamped unit direction is a valid trace direction). | None; a constructed case if one is found. |
+| A case where normalizing the incoming direction without the prescale changes the throughput (OPTICS-TP-182): the pinned and seeded specular directions have a component of exactly 1.0, except OPTICS-TP-104's, whose cosine is near 1.0 where the weight rounds to zero. | None; a constructed direction whose largest component is below 1.0. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |

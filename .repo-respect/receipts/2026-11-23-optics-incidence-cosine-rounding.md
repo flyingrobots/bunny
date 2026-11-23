@@ -21,10 +21,16 @@ docs/topics/optics/README.md and test-plan.md (also as they stand on the open br
 
 Files edited:
 crates/bunny-optics/tests/specular_cosine_rounding_tests.rs (new)
+docs/topics/optics/README.md (Specular Reflection: the Cosine row and the cosine's rounding)
+docs/topics/optics/test-plan.md (OPTICS-REQ-090; OPTICS-TP-180 to -182; Incidence-Cosine
+Mutation Checks; an open gap)
+CHANGELOG.md (Unreleased, Fixed)
 .repo-respect/receipts/2026-11-23-optics-incidence-cosine-rounding.md
 
 Topic docs:
-Pending in a later commit of this branch.
+docs/topics/optics/README.md (Specular Reflection) and test-plan.md. The ids were chosen so
+that no open branch uses them. crates/bunny-optics/README.md does not state the cosine's rule,
+so it is unchanged.
 
 Generated artifacts:
 None.
