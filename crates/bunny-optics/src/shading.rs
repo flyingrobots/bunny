@@ -20,18 +20,25 @@
 //! smooth boundary between two refractive indices ([`DielectricBoundary`]), chosen by one
 //! sampler value with the exact Fresnel reflectance as the probability, as a
 //! [`DielectricScatter`].
+//!
+//! [`SurfaceHit::ggx_reflection`] (`bunny-ggx-conductor/1`) samples a rough conductor: a GGX
+//! microfacet normal visible from the incoming ray, the mirror about it, and the weight
+//! `F G2 / G1`, as a [`GgxScatter`].
 
 mod dielectric;
 mod frame;
+mod ggx;
 mod hit;
 mod light;
 mod refusal;
+mod smith;
 mod smooth_hit;
 mod smooth_normal;
 mod snell;
 mod specular;
 mod surface;
 mod vertex_normals;
+mod visible_normal;
 mod wide;
 mod wide256;
 
@@ -40,12 +47,15 @@ pub use dielectric::{
     DIELECTRIC_ID, MAX_REFRACTIVE_INDEX_RAW,
 };
 pub use frame::ShadingFrame;
+pub use ggx::{
+    GgxConductor, GgxRoughnessError, GgxScatter, GGX_CONDUCTOR_ID, MIN_GGX_ROUGHNESS_RAW,
+};
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
 pub use refusal::SecondaryRayError;
 pub use smooth_hit::{SmoothBounce, SmoothHit, SMOOTH_SHADING_ID};
 pub use smooth_normal::{smooth_normal, SMOOTH_NORMAL_ID};
-pub use specular::{schlick_fresnel, SpecularSample, SPECULAR_REFLECTION_ID};
+pub use specular::{reflect, schlick_fresnel, SpecularSample, SPECULAR_REFLECTION_ID};
 pub use surface::TriangleSurface;
 pub use vertex_normals::{
     VertexNormalError, VertexNormals, MAX_NORMAL_TRIANGLES, VERTEX_NORMALS_ID,

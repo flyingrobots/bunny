@@ -96,6 +96,13 @@ every buffer.
   barycentric interpolation, and the four texels and weights of a bilinear
   lookup (texel centres at `(i + 1/2) / size`, `TextureWrap::Repeat` or
   `Clamp` per axis, weights summing to exactly 1.0), as a `BilinearTaps`.
+* `SurfaceHit::ggx_reflection` (`bunny-ggx-conductor/1`): one sample of a
+  rough metal. A GGX microfacet normal visible from the incoming ray (Heitz
+  2018) from one sampler pair, the reflection about it (`reflect`, shared with
+  the mirror), and the weight `schlick_fresnel` times the height-correlated
+  Smith ratio `G2 / G1`, as a `GgxScatter`: `Reflected(SpecularSample)`, or
+  `Absorbed` when the direction does not leave the surface. A `GgxConductor`
+  holds the base reflectance and the roughness `alpha` in `2^-16..=1.0`.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.

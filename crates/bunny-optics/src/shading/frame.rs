@@ -135,6 +135,6 @@ impl ShadingFrame {
 
 const ONE_RAW: i64 = 1 << 32;
 
-const fn in_unit_interval(value: FixedQ32_32) -> bool {
+pub(super) const fn in_unit_interval(value: FixedQ32_32) -> bool {
     value.raw() >= 0 && value.raw() < ONE_RAW
 }

@@ -138,7 +138,7 @@ fn partial(raw: i64) -> DielectricReflectance {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_160_hand_derived_boundaries_reflect_and_refract() {
+fn optics_tp_183_hand_derived_boundaries_reflect_and_refract() {
     assert_eq!(DIELECTRIC_ID, "bunny-dielectric/1");
     let ground = triangle(GROUND);
     let glass = boundary(ONE, GLASS);
@@ -174,7 +174,7 @@ fn optics_tp_160_hand_derived_boundaries_reflect_and_refract() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_161_equal_indices_pass_straight_through_and_the_range_is_inclusive() {
+fn optics_tp_184_equal_indices_pass_straight_through_and_the_range_is_inclusive() {
     let ground = triangle(GROUND);
     let d = [123_456_789, -987_654_321, 5_555];
     let incoming = ray([0, ONE, 0], d);
@@ -352,9 +352,9 @@ fn is_grazing(d: Wide3, n: Wide3) -> bool {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_162_refracted_directions_satisfy_snells_law_on_seeded_hits() {
+fn optics_tp_185_refracted_directions_satisfy_snells_law_on_seeded_hits() {
     let seed = DIELECTRIC_TEST_SEED ^ 0x0162;
-    println!("OPTICS-TP-162 seed {seed:#x}");
+    println!("OPTICS-TP-185 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     // Refracted, reflected (total or a reflectance of 1.0), refused as grazing, no scene.
     let mut counts = [0_u32; 4];
@@ -395,8 +395,8 @@ fn optics_tp_162_refracted_directions_satisfy_snells_law_on_seeded_hits() {
             Err(other) => panic!("{label}: unexpected refusal {other:?}"),
         }
     }
-    println!("OPTICS-TP-162 refracted, reflected, grazing-refused, no scene: {counts:?}");
-    println!("OPTICS-TP-162 entering, leaving, one apart, grazing, short, equal: {reach:?}");
+    println!("OPTICS-TP-185 refracted, reflected, grazing-refused, no scene: {counts:?}");
+    println!("OPTICS-TP-185 entering, leaving, one apart, grazing, short, equal: {reach:?}");
     assert!(counts[0] >= 1_000 && counts[1] >= 100, "too few cases: {counts:?}");
     assert!(reach.iter().all(|&count| count >= 50), "a kind of input is not reached: {reach:?}");
 }
@@ -407,7 +407,7 @@ fn optics_tp_162_refracted_directions_satisfy_snells_law_on_seeded_hits() {
 const CRITICAL: Raw3 = [ONE, 3 * ONE / 4, 0];
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_163_total_internal_reflection_is_decided_exactly() {
+fn optics_tp_186_total_internal_reflection_is_decided_exactly() {
     let ground = triangle(GROUND);
     let dense = boundary(ONE, 5 * ONE / 4);
     let probe = ray([0, -ONE, 0], [0, ONE, 0]);
@@ -481,9 +481,9 @@ fn critical_lift(a: i64, b: i64, x: i64) -> i64 {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_164_total_internal_reflection_matches_the_oracle_around_the_critical_angle() {
+fn optics_tp_187_total_internal_reflection_matches_the_oracle_around_the_critical_angle() {
     let seed = DIELECTRIC_TEST_SEED ^ 0x0164;
-    println!("OPTICS-TP-164 seed {seed:#x}");
+    println!("OPTICS-TP-187 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     let ground = triangle(GROUND);
     let probe = ray([0, -ONE, 0], [0, ONE, 0]);
@@ -527,8 +527,8 @@ fn optics_tp_164_total_internal_reflection_matches_the_oracle_around_the_critica
         assert_eq!(total, expected, "seed {seed:#x} tilted case {case}: d {d:?} n {n:?}");
         tilted[usize::from(!total)] += 1;
     }
-    println!("OPTICS-TP-164 total, partial: near critical {counts:?}, seeded {tilted:?}");
-    println!("OPTICS-TP-164 near critical: {equal} equal pairs, closest unequal {closest}");
+    println!("OPTICS-TP-187 total, partial: near critical {counts:?}, seeded {tilted:?}");
+    println!("OPTICS-TP-187 near critical: {equal} equal pairs, closest unequal {closest}");
     assert!(counts.iter().chain(&tilted).all(|&count| count >= 200), "{counts:?} {tilted:?}");
 }
 
@@ -565,9 +565,9 @@ fn check_reflectance(hit: &SurfaceHit, incoming: &TraceRay, boundary: &Dielectri
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_165_the_reflectance_is_the_exact_fresnel_formula_rounded_once() {
+fn optics_tp_188_the_reflectance_is_the_exact_fresnel_formula_rounded_once() {
     let seed = DIELECTRIC_TEST_SEED ^ 0x0165;
-    println!("OPTICS-TP-165 seed {seed:#x}");
+    println!("OPTICS-TP-188 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     let mut partial = 0;
     for _ in 0..3_000 {
@@ -594,14 +594,14 @@ fn optics_tp_165_the_reflectance_is_the_exact_fresnel_formula_rounded_once() {
         let incoming = ray([0, -ONE, 0], [x, lift, 0]);
         steep += u32::from(check_reflectance(&hit, &incoming, &boundary(outside, inside)));
     }
-    println!("OPTICS-TP-165 partial reflectances checked: seeded {partial}, near critical {steep}");
+    println!("OPTICS-TP-188 partial reflectances checked: seeded {partial}, near critical {steep}");
     assert!(partial >= 1_000 && steep >= 300, "too few cases: {partial} {steep}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_166_the_two_branches_share_the_choice_values_and_each_weighs_one() {
+fn optics_tp_189_the_two_branches_share_the_choice_values_and_each_weighs_one() {
     let seed = DIELECTRIC_TEST_SEED ^ 0x0166;
-    println!("OPTICS-TP-166 seed {seed:#x}");
+    println!("OPTICS-TP-189 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     let white = Albedo::new([fixed(ONE); 3]).expect("white");
     // Cases with both branches, with reflection only, with refraction only.
@@ -641,7 +641,7 @@ fn optics_tp_166_the_two_branches_share_the_choice_values_and_each_weighs_one() 
             0
         }] += 1;
     }
-    println!("OPTICS-TP-166 both branches, reflection only, refraction only: {counts:?}");
+    println!("OPTICS-TP-189 both branches, reflection only, refraction only: {counts:?}");
     assert!(counts[0] >= 1_000 && counts[1] >= 100, "too few cases: {counts:?}");
 }
 
@@ -725,7 +725,7 @@ fn check_start(face: &TraceTriangle, hit: &SurfaceHit, incoming: &TraceRay, ray:
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_167_a_parallel_slab_returns_the_original_direction() {
+fn optics_tp_190_a_parallel_slab_returns_the_original_direction() {
     // A glass slab between y = 0 and y = -1, entered along (4, -3) / 5: cos = 0.6 outside,
     // so the bound is 1 + 6 * 1.5 / 0.6 = 16 raw units (17 with 1 / cos rounded up to 2).
     let faces = slab(GROUND, [0, -ONE, 0]).expect("inside the trace domain");
@@ -738,7 +738,7 @@ fn optics_tp_167_a_parallel_slab_returns_the_original_direction() {
     // round trip gives (..837, ..377) (model), 0.6 raw units from it.
     assert_eq!((direction, bound), ([3_435_973_837, -2_576_980_377, 0], 19));
     let seed = DIELECTRIC_TEST_SEED ^ 0x0167;
-    println!("OPTICS-TP-167 seed {seed:#x}");
+    println!("OPTICS-TP-190 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     // Crossed with a dense slab, crossed with a rarer slab, the largest deviation from the
     // rounded unit vector along the original direction and the bound of that case.
@@ -781,15 +781,15 @@ fn optics_tp_167_a_parallel_slab_returns_the_original_direction() {
         }
     }
     println!(
-        "OPTICS-TP-167 crossed dense, rarer: {crossed:?}; worst deviation, its bound: {worst:?}"
+        "OPTICS-TP-190 crossed dense, rarer: {crossed:?}; worst deviation, its bound: {worst:?}"
     );
     assert!(crossed[0] >= 1_000 && crossed[1] >= 150, "too few slabs crossed: {crossed:?}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_168_a_refracted_ray_starts_strictly_on_the_far_side() {
+fn optics_tp_191_a_refracted_ray_starts_strictly_on_the_far_side() {
     let seed = DIELECTRIC_TEST_SEED ^ 0x0168;
-    println!("OPTICS-TP-168 seed {seed:#x}");
+    println!("OPTICS-TP-191 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     // Refracted rays by the number of raw-unit steps from the hit's start point.
     let mut steps = [0_u32; 6];
@@ -805,12 +805,12 @@ fn optics_tp_168_a_refracted_ray_starts_strictly_on_the_far_side() {
         let moved = (0..3).map(|i| (raw3(hit.point())[i] - raw3(sample.ray().origin())[i]).abs());
         steps[usize::try_from(moved.max().expect("three axes")).expect("a step count")] += 1;
     }
-    println!("OPTICS-TP-168 refracted rays by steps 0..=5: {steps:?}");
+    println!("OPTICS-TP-191 refracted rays by steps 0..=5: {steps:?}");
     assert!(steps.iter().sum::<u32>() >= 1_000 && steps[0] == 0, "{steps:?}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_169_a_dielectric_sample_names_each_refusal() {
+fn optics_tp_192_a_dielectric_sample_names_each_refusal() {
     let ground = triangle(GROUND);
     let glass = boundary(ONE, GLASS);
     let down = ray([0, 2 * ONE, 0], [0, -ONE, 0]);
@@ -852,7 +852,7 @@ const GRAZING: [Raw3; 3] = [
 ];
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_170_a_refraction_that_stays_above_the_plane_is_refused() {
+fn optics_tp_193_a_refraction_that_stays_above_the_plane_is_refused() {
     let d = [-1_198_499_278, -2_982_918_887, -1_952_966_126];
     let grazing = ray([8_261_038_461, 3_544_467_172, -2_095_509_591], d);
     let face = triangle(GRAZING);
@@ -883,7 +883,7 @@ const BEHIND_THE_ROUNDED_NORMAL: [Raw3; 3] = [
 ];
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_176_a_reflectance_of_one_has_no_refracted_ray() {
+fn optics_tp_199_a_reflectance_of_one_has_no_refracted_ray() {
     // Short of the critical angle: a refracted ray exists in exact arithmetic, the reflectance
     // is `Partial`, not `Total`, and it is exactly 1.0, so every choice value reflects.
     let ground = triangle(GROUND);
