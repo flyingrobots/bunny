@@ -45,6 +45,12 @@ Mutations of `incidence_cosine` in specular.rs, each run with
 away from zero, ties toward zero, ties to odd, per-component rounding and a double rounding
 each fail OPTICS-TP-180 and no older case; normalizing `d` without the prescale fails none.
 
+Full local gate at the docs commit, each its own command on the host (local Rust 1.100.0; CI
+uses the pinned 1.96.0): cargo fmt --all --check; cargo test --locked --workspace
+--all-targets --all-features; cargo run --locked -p xtask -- code-dojo-generated;
+code-dojo-rust --all; code-dojo-determinism --enforce; topic-docs; repo-respect check
+--branch. All clean. markdownlint-cli2 and cargo deny are not installed locally; CI runs them.
+
 Known risks:
 The unit vector `u` along `d` is a premise pinned from `FixedUnitVec3::new` (and checked
 within one raw unit of the exact unit vector), not derived by hand.
