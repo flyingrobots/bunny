@@ -7,9 +7,9 @@ flyingrobots/bunny#304.
 ## Scope
 
 - `bunny_num::ease::{power_in, power_out, power_in_out, steps}` and `EASE_CONTRACT_ID`
+- `bunny_num::ease::{sine_in, sine_out, sine_in_out}` (part 3, flyingrobots/bunny#306)
 
-Out of scope: back, circ and bounce (flyingrobots/bunny#305) and the sine eases
-(flyingrobots/bunny#306), which extend the same module.
+Out of scope: back, circ and bounce (flyingrobots/bunny#305), which extend the same module.
 
 ## Requirements
 
@@ -19,6 +19,9 @@ Out of scope: back, circ and bounce (flyingrobots/bunny#305) and the sine eases
 | EASE-REQ-002 | `power_in` is `t^n`, `power_out` is `1 - (1 - t)^n`, and `power_in_out` is `2^(n-1) t^n` below `1/2` and `1 - 2^(n-1) (1 - t)^n` from `1/2`, each its exact rational value rounded once to the nearest raw unit, ties to even: within half a raw unit. | `README.md#power-eases` |
 | EASE-REQ-003 | Every power ease is exactly `0` at `t = 0` and `1.0` at `t = 1`, non-decreasing on `[0, 1]`; `power_out(n, t) = 1 - power_in(n, 1 - t)` and `power_in_out(n, 1 - t) = 1 - power_in_out(n, t)` bit for bit; `power_in_out(n, 1/2) = 1/2`, and one raw unit either side of `1/2` it moves by at most `n` raw units. | `README.md#properties` |
 | EASE-REQ-004 | `steps(n, t)` is `k / n` rounded once to nearest (never a tie), for `k = floor(n t)`: `k / n` on `[k/n, (k+1)/n)` and `1.0` at `t = 1`. | `README.md#steps` |
+| EASE-REQ-020 | `sine_in`, `sine_out` and `sine_in_out` are `None` for `t` outside `[0, 1]` (raw outside `0..=2^32`). | `README.md#sine-eases` |
+| EASE-REQ-021 | `sine_in` is `U - cos(r 2^30)`, `sine_out` is `U - sine_in(1 - t)` (equal to `sin(r 2^30)`), and `sine_in_out` is `round_half_even((U - cos(r 2^31)) / 2)` below `1/2` and its reflection from `1/2`, reading `FixedAngle::sin_cos` at an exact angle; each is within one raw unit of `1 - cos(t pi/2)`, `sin(t pi/2)` and `(1 - cos(t pi)) / 2`. | `README.md#sine-eases` |
+| EASE-REQ-022 | Each sine ease is exactly `0` at `t = 0` and `1.0` at `t = 1`, `sine_in_out(1/2) = 1/2`; `sine_out(t) = 1 - sine_in(1 - t)` and `sine_in_out(1 - t) = 1 - sine_in_out(t)` bit for bit, and both equal the direct formulas; non-decreasing over the tested points. | `README.md#sine-eases` |
 
 ```toml
 [[requirement]]
@@ -40,6 +43,21 @@ status = "active"
 id = "EASE-REQ-004"
 summary = "steps(n, t) is round(floor(n t) / n), 1.0 at t = 1."
 status = "active"
+
+[[requirement]]
+id = "EASE-REQ-020"
+summary = "The sine eases are None for t outside [0, 1]."
+status = "active"
+
+[[requirement]]
+id = "EASE-REQ-021"
+summary = "The sine eases read sin_cos at an exact angle, halve in-out once ties to even, and are within one raw unit."
+status = "active"
+
+[[requirement]]
+id = "EASE-REQ-022"
+summary = "Sine eases: exact ends and 1/2, bit-exact reflections equal to the direct formulas, monotone over the tested points."
+status = "active"
 ```
 
 ## Oracles
@@ -58,6 +76,15 @@ digests (every grid output and every seeded output, function by function) and th
 values. Every test is a `wasm_bindgen_test`, so the WebAssembly job runs the golden vectors
 and digests too.
 
+The sine eases have their own oracle in `crates/bunny-num/tests/ease_sine_tests.rs`:
+`oracle_sin` is the exact `sin(pi r / 2^33)` in unsigned fixed point with 124 fractional bits,
+from `pi` by Machin's formula and the Taylor series of `sin`, and gives every exact sine ease
+(`1 - sin((1 - t) pi/2)`, `sin(t pi/2)`, `sin(t pi/2)^2`) to about `2^-90` raw units. It shares
+nothing with `sin_cos`'s table and interpolation, and it is written there rather than taken
+from `tests/angle_oracle`, which has no sine. A separate Python model, posted on the pull
+request, ports `sin_cos` and evaluates `decimal` sine series at 40 digits: it printed the two
+pinned digests and the golden raw values, and measured the same worst cases as EASE-TP-042.
+
 ## Test Cases
 
 | ID | Requirements | Oracle | Test |
@@ -70,6 +97,13 @@ and digests too.
 | EASE-TP-006 | EASE-REQ-003 | At every grid and seeded point, `power_out(n, t) == 1 - power_in(n, 1 - t)` and `power_in_out(n, 1 - t) == 1 - power_in_out(n, t)` exactly; `power_in_out(n, 1/2) = 1/2`; at `1/2` plus and minus one raw unit the value moves by 1 to `n` raw units. | `crates/bunny-num/tests/ease_tests.rs::ease_tp_006_reflections_symmetry_and_the_join_are_exact` |
 | EASE-TP-007 | EASE-REQ-004 | Hand-derived steps one raw unit either side of `k / n` for `n` of 1, 2, 3, 4 and `u32::MAX`, each equal to `oracle_steps`; 100 000 seeded `(n, t)` (seed printed, `n` of every magnitude) equal `oracle_steps` and are non-decreasing one raw unit on. | `crates/bunny-num/tests/ease_tests.rs::ease_tp_007_steps_are_k_over_n_on_each_interval` |
 | EASE-TP-008 | EASE-REQ-001, EASE-REQ-002, EASE-REQ-003, EASE-REQ-004 | Each rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
+| EASE-TP-040 | EASE-REQ-021 | The identity string; 12 golden `t` (the ends, `1/2` and one raw unit either side, one raw unit from each end, `1/4`, `3/4`, three full-resolution values) for all three eases, each from the Python model and within one raw unit of `oracle_sin`; four halving ties, `U - cos` of 1, 3, 5 and 7, going to 0, 2, 2 and 4. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_040_golden_vectors_and_the_halving_tie_go_to_even` |
+| EASE-TP-041 | EASE-REQ-020, EASE-REQ-022 | `sin_cos` exact at 0, a quarter and a half turn; `f(0) = 0` and `f(1) = 1.0` for each ease, `sine_in_out(1/2) = 1/2`; `None` at raw `-1`, `2^32 + 1`, `-2^32`, `2^33` and the ends of `i64`. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_041_the_domain_is_refused_outside_and_the_ends_and_middle_are_exact` |
+| EASE-TP-042 | EASE-REQ-021 | Every `t = k / 2^20` (1 048 577 points, 3 145 731 cases) within one raw unit of `oracle_sin`, each ease's largest error and its `k` printed; the outputs' digest equals the Python model's. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_042_the_sweep_over_every_k_over_2_20_is_within_one_raw_unit` |
+| EASE-TP-043 | EASE-REQ-021 | 100 000 seeded full-resolution `t` (seed printed) and every raw `t` within 4 096 of 0, `1/2` and 1 (16 387 points) within one raw unit of `oracle_sin`; the seeded outputs' digest equals the Python model's. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_043_seeded_and_boundary_points_are_within_one_raw_unit` |
+| EASE-TP-044 | EASE-REQ-022 | Non-decreasing over every `t = k / 2^20` and over every `t = k / 2^16` and one raw unit either side (196 609 points); equal grid neighbours only within 128 grid steps of an end, counted and printed. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_044_every_sine_ease_is_monotone_non_decreasing` |
+| EASE-TP-045 | EASE-REQ-022 | At 169 634 grid, seeded and near-zero points, both reflections hold bit for bit and each ease equals its direct formula read from `sin_cos` (`sin(r 2^30)` for out, the lower in-out formula on the whole interval). | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_045_reflections_and_the_direct_formulas_agree_bit_for_bit` |
+| EASE-TP-046 | EASE-REQ-020, EASE-REQ-021, EASE-REQ-022 | Each sine rule broken on purpose fails at least one case above. | [Sine mutation checks](#sine-mutation-checks) |
 
 ```toml
 [[case]]
@@ -143,6 +177,69 @@ artifact = "docs/topics/ease/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "EASE-TP-040"
+requirements = ["EASE-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_040_golden_vectors_and_the_halving_tie_go_to_even"
+oracle = "Golden raw values from the Python model, each within one raw unit of the independent series oracle; halving ties."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "EASE-TP-041"
+requirements = ["EASE-REQ-020", "EASE-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_041_the_domain_is_refused_outside_and_the_ends_and_middle_are_exact"
+oracle = "Exact ends and 1/2; refusals one raw unit past each end of the domain."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "EASE-TP-042"
+requirements = ["EASE-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_042_the_sweep_over_every_k_over_2_20_is_within_one_raw_unit"
+oracle = "Independent Machin and sine-series oracle at all 1 048 577 points of k / 2^20, and the Python model's digest."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "EASE-TP-043"
+requirements = ["EASE-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_043_seeded_and_boundary_points_are_within_one_raw_unit"
+oracle = "Independent series oracle at 100 000 seeded and 16 387 boundary points, and the Python model's digest."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "EASE-TP-044"
+requirements = ["EASE-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_044_every_sine_ease_is_monotone_non_decreasing"
+oracle = "Order of consecutive outputs over the 2^20 grid and one raw unit either side of the 2^16 grid."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "EASE-TP-045"
+requirements = ["EASE-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_045_reflections_and_the_direct_formulas_agree_bit_for_bit"
+oracle = "Bit-exact reflections and agreement with the direct formulas read from sin_cos."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "EASE-TP-046"
+requirements = ["EASE-REQ-020", "EASE-REQ-021", "EASE-REQ-022"]
+evidence = "manual-audit"
+artifact = "docs/topics/ease/test-plan.md#sine-mutation-checks"
+oracle = "Each sine rule broken on purpose makes at least one implemented case fail."
+tier = "manual"
+status = "planned"
 ```
 
 ## Mutation Checks
