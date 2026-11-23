@@ -38,12 +38,22 @@ cargo test -p bunny-optics: every case passes, thin_lens_tests 7 of 7.
 Mutations (test plan, Thin-Lens Mutation Checks): eleven; ten fail at least one case; the
 defensive forward margin is not reached (an open gap).
 cargo fmt, clippy -D warnings; code-dojo --all at the final commit (see the PR).
+2026-11-22, after merging origin/main (GGX conductor, cosine rounding, dielectric, texture,
+ray-disc and ray-cylinder): cargo fmt --all --check; cargo test --locked --workspace
+--all-targets --all-features (107 test binaries, 0 failed; thin_lens_tests 7 of 7);
+code-dojo-generated; code-dojo-rust --all; code-dojo-determinism --enforce;
+code-dojo-perf-groups; topic-docs (0 duplicate IDs); repo-respect check --branch. The merge
+changed no line of thin_lens.rs, camera.rs or plane.rs, so the mutations were not rerun.
 
 Known risks:
 The forward margin is defensive and no test reaches it. A large aperture for its focus
 distance raises the scale shift, shortening directions. The disc is shrunk by sqrt(1 - 2^-28)
 so that its rounded points stay inside the unit disc. IDs OPTICS-REQ-070.. and
-OPTICS-TP-130.. leave room for parallel optics work (#366, #367).
+OPTICS-TP-130.. leave room for parallel optics work (#366, #367); after the merge none
+collides with main.
+The GGX sampler on main has its own disk_point (radius sqrt(u), floored); the lens keeps
+lens_disc_point because its radius sqrt(u (1 - 2^-28)) is what keeps every rounded point
+strictly inside the disc, and switching would change pinned output bits.
 
 Human reviewer:
 James Ross (maintainer); review pending.
