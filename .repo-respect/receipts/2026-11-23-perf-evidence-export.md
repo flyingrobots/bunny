@@ -19,10 +19,13 @@ Files edited:
 - `xtask/src/perf_evidence/tests.rs`
 - `xtask/src/main.rs`
 - `docs/topics/performance/test-plan.md`
+- `docs/topics/performance/README.md`
+- `CHANGELOG.md`
 - `.repo-respect/receipts/2026-11-23-perf-evidence-export.md`
 
 Topic docs:
-- `docs/topics/performance/test-plan.md`: PERF-REQ-011 to PERF-REQ-013 and planned cases PERF-TP-058 to PERF-TP-065.
+- `docs/topics/performance/test-plan.md`: PERF-REQ-011 to PERF-REQ-013 and cases PERF-TP-058 to PERF-TP-065, planned in the first commit and implemented in the second; scope, fixtures, determinism and gaps updated.
+- `docs/topics/performance/README.md`: the `--evidence` option row, a new "Evidence files" section (location, naming, every field of `bunny-perf-evidence/1`, ordering, how to recompute the table), and the ledger introduction saying new entries link an evidence file. No existing ledger entry was changed.
 
 Generated artifacts:
 None.
@@ -30,6 +33,10 @@ None.
 Checks run:
 - `cargo test --locked -p xtask perf`: RED, the six `perf_evidence` tests fail against the stubs; the two new `perf` tests and every existing test pass.
 - `cargo run --locked -p xtask -- topic-docs`: clean, zero duplicate IDs.
+- After the implementation: `cargo test --locked -p xtask perf` 29 passed; `cargo test --locked --workspace --all-targets --all-features` 116 suites, 845 passed, 0 failed.
+- Mutations, each restored: numbers written with two decimals fails PERF-TP-058 and PERF-TP-059; dropping round 1 from the file fails PERF-TP-058, -059 and -062; treating untracked files as clean fails PERF-TP-061; taking the upper middle value as the even-count median in `perf_report` fails PERF-TP-058.
+- `cargo fmt --all --check`; `cargo run --locked -p xtask -- code-dojo-generated`; `code-dojo-rust --all`; `code-dojo-determinism --enforce`; `code-dojo-perf-groups`; `topic-docs`; `repo-respect check --branch`: all clean.
+- `cargo clippy --locked -p xtask --all-targets --all-features -- -D warnings` on local Rust 1.100.0: no finding in the new code; it reports `assert!(x.is_empty())` findings in untouched lines of `perf.rs`, `perf_report.rs`, `nondeterminism/tests.rs` and `topic_docs.rs`, a lint the pinned 1.96.0 does not have.
 
 Known risks:
 - No real `cargo xtask perf` run was made (no measurement is claimed); the default path is covered by `the_report_is_rendered_as_before` and by construction.

@@ -6,7 +6,6 @@
 //! for byte is a table any reader of the file could rebuild.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write as _;
 
 use super::*;
 use crate::perf::{report, ReportScope};
@@ -357,7 +356,7 @@ impl Reading {
                 if n % 2 == 1 {
                     values[n / 2]
                 } else {
-                    (values[n / 2 - 1] + values[n / 2]) / 2.0
+                    f64::midpoint(values[n / 2 - 1], values[n / 2])
                 }
             };
             let lowest = lines.iter().map(|l| l.p50).fold(f64::INFINITY, f64::min);

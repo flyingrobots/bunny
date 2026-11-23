@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `cargo xtask perf --evidence <file>` writes every round of both sides (case,
+  side, round, p50, p95, p99) and the build identity (base reference, full base
+  and candidate SHAs, target triple, flags, and whether the working tree was
+  dirty by `git status --porcelain`) to a new `bunny-perf-evidence/1` JSON
+  Lines file, from which the report table can be recomputed exactly. It refuses
+  an existing path and non-finite numbers. The performance chapter documents
+  every field and says evidence lives under `docs/topics/performance/evidence/`,
+  linked from each new ledger entry; existing entries are unchanged. Without
+  the option the command prints, appends and exits as before.
+  Closes flyingrobots/bunny#238.
+
 * `bunny-linalg`: translate, rotate and scale composition under the contract
   identity `bunny-transform/1` (`TRANSFORM_CONTRACT_ID`).
   `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S`: a point

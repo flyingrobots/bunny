@@ -8,6 +8,7 @@ described in the [performance chapter](README.md).
 This plan covers:
 
 - parsing, aggregation and comparison of `bunny-perf` output in `cargo xtask perf`
+- the `bunny-perf-evidence/1` file written by `--evidence`, and recomputing the report from it
 - the regression threshold used by CI
 - building the harness against a revision that lacks newer feature groups
 - the fidelity rule that every optimization must satisfy
@@ -21,6 +22,8 @@ kernel runs in a given number of nanoseconds.
 - Prove the regression gate fails exactly when a case slows past the threshold.
 - Prove cases present only in the candidate are reported as new, not as regressions.
 - Prove the generated harness manifest points at the requested revision's crates.
+- Prove an evidence file holds every round and the build identity, and that the report table
+  can be rebuilt from it by code independent of the report's own.
 
 ## Non-Goals
 
@@ -119,7 +122,10 @@ Each optimization adds its equivalence or error-bound cases under PERF-REQ-001.
 
 ## Fixtures
 
-No external fixtures. Tests build synthetic `bunny-perf` output and manifests in memory.
+No external fixtures. Tests build synthetic `bunny-perf` output and manifests in memory. The
+evidence tests record constructed rounds through `Measured::record`, the same seam
+`run_interleaved` uses, so no harness is built or timed; the dirty flag is tested on
+constructed `git status --porcelain` text, never by dirtying the real tree.
 
 ## Test Cases
 
@@ -661,7 +667,7 @@ evidence = "test"
 test = "xtask/src/perf_evidence/tests.rs::an_independent_reading_of_the_evidence_recomputes_the_report_table"
 oracle = "A reader written in the test, sharing no helper with `perf_report`, parses the file and rebuilds the whole report table byte for byte, and each case's floor p50s, for 1, 2, 4, 5 and 7 rounds over constructed cases with ties, identical sides, a case on one side only, zero timings and decimals that need 17 digits; every round of every case and side is present."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-059"
@@ -670,7 +676,7 @@ evidence = "test"
 test = "xtask/src/perf_evidence/tests.rs::the_evidence_format_is_pinned_line_by_line"
 oracle = "The exact text of a one-round file: key order, line order, JSON escaping of quotes, backslashes and control characters, `null` and empty arrays, and shortest round-trip numbers."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-060"
@@ -679,7 +685,7 @@ evidence = "test"
 test = "xtask/src/perf_evidence/tests.rs::the_evidence_is_the_same_whatever_order_the_rounds_were_recorded_in"
 oracle = "Rounds recorded in reverse give the same file and table; lines are sorted by case, side and round."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-061"
@@ -688,7 +694,7 @@ evidence = "test"
 test = "xtask/src/perf_evidence/tests.rs::the_dirty_flag_follows_git_status"
 oracle = "Empty `git status --porcelain` output is clean; a modified, staged or untracked entry is dirty; both states reach the build line."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-062"
@@ -697,7 +703,7 @@ evidence = "test"
 test = "xtask/src/perf_evidence/tests.rs::non_finite_numbers_are_refused"
 oracle = "Infinite or NaN timings, which the report parses, and an infinite threshold are refused rather than written."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-063"
@@ -706,7 +712,7 @@ evidence = "test"
 test = "xtask/src/perf_evidence/tests.rs::the_host_triple_comes_from_rustc_verbose_version"
 oracle = "The host triple is the `host:` line of `rustc -vV`, with or without a carriage return; no line, no triple."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-064"
@@ -715,7 +721,7 @@ evidence = "test"
 test = "xtask/src/perf.rs::tests::the_evidence_option_is_opt_in"
 oracle = "No `--evidence`, no evidence path; the option takes a value; an existing file is refused and a missing one accepted."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PERF-TP-065"
@@ -724,17 +730,23 @@ evidence = "test"
 test = "xtask/src/perf.rs::tests::the_report_is_rendered_as_before"
 oracle = "Recording rounds accumulates the same runs as `add_run` did, and the report is `render` of `compare` with the heading labels `handle` used before; a malformed line is still an error."
 tier = "fast"
-status = "planned"
+status = "implemented"
 ```
 
 ## Determinism Obligations And Evidence
 
 The report logic is pure: it parses text, sorts with `f64::total_cmp` and renders
 Markdown, with no clock, randomness or filesystem access in the tested functions. Timing
-runs are deliberately outside the test oracle.
+runs are deliberately outside the test oracle. The evidence writer is pure in the same way:
+the same rounds and identity give the same bytes whatever order the rounds were recorded in
+(PERF-TP-060).
 
 ## Gaps
 
 - The interleaving, worktree handling, cross-target runs and CI workflow are exercised by
   running `cargo xtask perf`, not by automated tests. The platform matrix has not run on
   GitHub yet.
+- The git and `rustc -vV` calls that gather the build identity, and the write of the evidence
+  file itself, run only in a real `cargo xtask perf --evidence` run; the tests cover the pure
+  functions they feed (PERF-TP-061, PERF-TP-063) and the refusal of an existing path
+  (PERF-TP-064). No evidence file is committed yet.
