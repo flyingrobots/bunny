@@ -10,6 +10,7 @@ mod lint_policy;
 mod module_tree;
 mod nondeterminism;
 mod perf;
+mod perf_evidence;
 mod perf_report;
 mod repo_respect;
 mod topic_docs;
@@ -85,7 +86,7 @@ fn print_help() {
     println!(
         "  perf [--base <rev>] [--rounds <n>] [--max-regression <percent>] [--summary <file>]"
     );
-    println!("                  [--filter <text>] [--align-code]");
+    println!("                  [--filter <text>] [--align-code] [--evidence <file>]");
     println!(
         "                  Time Bunny kernels before (base revision) and after (working tree)"
     );
