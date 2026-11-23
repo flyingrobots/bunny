@@ -7,6 +7,8 @@ This document defines how Bunny proves the [angle and trigonometry contract](REA
 - the `FixedAngle` representation and its wrapping arithmetic
 - conversions from turns, degrees and radians
 - `sin`, `cos` and `sin_cos`: exact cases, symmetry, the error bound and golden bits
+- conversions out of `FixedAngle` (`to_turns`, `to_degrees`, `to_radians`) and `atan2`
+  (flyingrobots/bunny#244): rounding, bounds, round trips, exact cases, branch and golden bits
 
 ## Test Goals
 
@@ -19,7 +21,7 @@ This document defines how Bunny proves the [angle and trigonometry contract](REA
 
 ## Non-Goals
 
-- Tangent, inverse trigonometry and conversions out of `FixedAngle` (not implemented).
+- Tangent, `asin`, `acos` and `atan` of a single ratio (not implemented).
 - Timing; see the performance chapter.
 
 ## Requirements
@@ -38,6 +40,11 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | AT-REQ-007 | `from_radians` and `from_degrees` are symmetric under negation. | `README.md#conversions` |
 | AT-REQ-008 | `sin_cos` output bits are identical on every supported target. | `README.md#how-it-is-computed` |
 | AT-REQ-009 | The interpolated value, with 62 fractional bits, is rounded to Q32.32 to nearest with ties to even, and exact ties are reachable. | `README.md#how-it-is-computed` |
+| AT-REQ-010 | `to_turns` and `to_degrees` are the exact value `raw / 2^64` turn or `raw * 360 / 2^64` degrees rounded once to Q32.32, to nearest with ties to even, in `[0, 1]` and `[0, 360]`. | `README.md#conversions-out` |
+| AT-REQ-011 | `to_radians` is within `1/2 + 2^-30` raw Q32.32 units of the exact `raw * 2 pi / 2^64`. | `README.md#conversions-out` |
+| AT-REQ-012 | `to_turns(from_turns(t))` is exactly the fractional part of `t` in `[0, 1)`, and `from_turns(to_turns(a))` is `a` rounded to the nearest multiple of `2^32` units, ties to even, wrapping. | `README.md#conversions-out` |
+| AT-REQ-013 | `atan2(y, x)` is within `1/2 + 2^-9` angle units of the exact angle of `(x, y)`, and `None` only at the origin. | `README.md#atan2` |
+| AT-REQ-014 | `atan2` gives exact results on the axes and diagonals, a half turn on the negative x axis, and is bit for bit symmetric under conjugation, mirroring and swapping, and invariant under doubling both inputs. | `README.md#atan2` |
 
 ```toml
 [[requirement]]
@@ -84,6 +91,31 @@ status = "active"
 id = "AT-REQ-009"
 summary = "The interpolated value, with 62 fractional bits, is rounded to Q32.32 to nearest with ties to even, and exact ties are reachable."
 status = "active"
+
+[[requirement]]
+id = "AT-REQ-010"
+summary = "to_turns and to_degrees are the exact value rounded once to Q32.32, to nearest with ties to even, in [0, 1] and [0, 360]."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-011"
+summary = "to_radians is within 1/2 + 2^-30 raw Q32.32 units of the exact raw * 2 pi / 2^64."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-012"
+summary = "to_turns(from_turns(t)) is the fractional part of t exactly; from_turns(to_turns(a)) is a rounded to the nearest multiple of 2^32 units, ties to even."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-013"
+summary = "atan2(y, x) is within 1/2 + 2^-9 angle units of the exact angle of (x, y), and None only at the origin."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-014"
+summary = "atan2 is exact on the axes and diagonals, a half turn on the negative x axis, bit-exact symmetric under conjugation, mirroring and swapping, and invariant under doubling."
+status = "active"
 ```
 
 ## Fixtures
@@ -107,6 +139,14 @@ an independent high-precision oracle when you do.
 | AT-TP-006 | Conversion | AT-REQ-006 | Exact raw angles for 0, ±90, 180, 270, 360 and 450 degrees. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_006_whole_quarter_degrees_convert_exactly` |
 | AT-TP-007 | Conversion | AT-REQ-007 | `from_radians(-x)` equals the wrapped negation of `from_radians(x)` over 20 000 seeded values. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_007_radians_round_to_the_nearest_unit_symmetrically` |
 | AT-TP-009 | Final rounding tie | AT-REQ-009 | Six quarter-wave positions whose interpolated sine is exactly half a raw unit above an integer (three even, three odd, found by bisection over a replica of the interpolation) give the even neighbour from `sin` and from `cos` at the mirrored angle; rounding ties away from zero or toward zero fails. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_009_an_exact_tie_in_the_last_rounding_goes_to_even` |
+| AT-TP-010 | Conversion out | AT-REQ-010 | Exact rational rounded by `u128` quotient and remainder, over 20 000 seeded angles and the ties of each conversion with one unit either side. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_010_turns_and_degrees_are_rounded_once_to_nearest_even` |
+| AT-TP-011 | Conversion out | AT-REQ-011 | Independent 124-bit oracle (`pi` by Machin's formula) over the same angles. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_011_radians_are_within_half_a_unit_and_two_to_the_minus_thirty` |
+| AT-TP-012 | Round trip | AT-REQ-012 | `rem_euclid` of the turns and the exactly rounded multiple of `2^32`, over 20 000 seeded values each. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_012_turn_round_trips_are_exact` |
+| AT-TP-013 | Error bound | AT-REQ-013 | Independent 124-bit oracle (Machin `pi`, Taylor `atan`) over 20 000 seeded directions of every magnitude and the directions on and one raw unit either side of the axes, the diagonals and the extremes. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_013_atan2_is_within_half_a_unit_and_two_to_the_minus_nine` |
+| AT-TP-014 | Exact values and branch | AT-REQ-013, AT-REQ-014 | Hand-derived exact angles on the axes and diagonals, `None` at the origin, and one raw unit either side of the negative and positive x axis. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_014_atan2_axes_diagonals_branch_and_origin` |
+| AT-TP-015 | Symmetry | AT-REQ-014 | Bit equality of `atan2(-y, x)`, `atan2(y, -x)`, `atan2(x, y)` and `atan2(2y, 2x)` with the wrapped transforms of `atan2(y, x)` over 20 000 seeded directions. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_015_atan2_symmetries_and_scale_are_bit_exact` |
+| AT-TP-016 | Golden vectors | AT-REQ-008, AT-REQ-010, AT-REQ-011, AT-REQ-013 | Raw conversions of 11 angles and 12 `atan2` angles, each the correctly rounded value from a 60-digit decimal model. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_016_golden_vectors_are_bit_exact` |
+| AT-TP-017 | Mutation | AT-REQ-010, AT-REQ-011, AT-REQ-013, AT-REQ-014 | Each rule broken on purpose makes at least one of AT-TP-010 to AT-TP-016 fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -189,7 +229,85 @@ test = "crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_009_an_exact_tie_in_t
 oracle = "Six quarter-wave positions whose interpolated sine is exactly half a raw unit above an integer (three even, three odd, found by bisection over a replica of the interpolation) give the even neighbour from `sin` and from `cos` at the mirrored angle; rounding ties away from zero or toward zero fails."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "AT-TP-010"
+requirements = ["AT-REQ-010"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_010_turns_and_degrees_are_rounded_once_to_nearest_even"
+oracle = "Exact rational rounded by u128 quotient and remainder, over seeded angles and every tie with one unit either side."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-011"
+requirements = ["AT-REQ-011"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_011_radians_are_within_half_a_unit_and_two_to_the_minus_thirty"
+oracle = "Independent 124-bit oracle with pi by Machin's formula."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-012"
+requirements = ["AT-REQ-012"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_012_turn_round_trips_are_exact"
+oracle = "rem_euclid of the turns and the exactly rounded multiple of 2^32 units."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-013"
+requirements = ["AT-REQ-013"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_013_atan2_is_within_half_a_unit_and_two_to_the_minus_nine"
+oracle = "Independent 124-bit oracle (Machin pi, Taylor atan) over seeded and boundary directions."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-014"
+requirements = ["AT-REQ-013", "AT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_014_atan2_axes_diagonals_branch_and_origin"
+oracle = "Hand-derived exact angles, None at the origin, one raw unit either side of the x axis."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-015"
+requirements = ["AT-REQ-014"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_015_atan2_symmetries_and_scale_are_bit_exact"
+oracle = "Bit equality with the wrapped conjugate, mirror, swap and doubled results."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-016"
+requirements = ["AT-REQ-008", "AT-REQ-010", "AT-REQ-011", "AT-REQ-013"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_016_golden_vectors_are_bit_exact"
+oracle = "Correctly rounded raw values from a 60-digit decimal model."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-017"
+requirements = ["AT-REQ-010", "AT-REQ-011", "AT-REQ-013", "AT-REQ-014"]
+evidence = "manual-audit"
+artifact = "docs/topics/angle-trigonometry/test-plan.md#mutation-checks"
+oracle = "Each rule broken on purpose makes at least one implemented case fail."
+tier = "manual"
+status = "planned"
 ```
+
+## Mutation Checks
+
+Planned: each rounding rule, the CORDIC step count, the octant reconstruction and the
+origin rule of `atan2` is broken on purpose and AT-TP-010 to AT-TP-016 are run; the results
+will be recorded here.
 
 ## Determinism Obligations And Evidence
 
