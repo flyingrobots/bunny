@@ -17,7 +17,7 @@ crates/bunny-optics/src/thin_lens.rs (new)
 crates/bunny-optics/src/camera.rs (shared sample_direction, parts, narrow)
 crates/bunny-optics/src/plane.rs (Margin, fit_with; fit unchanged in output)
 crates/bunny-optics/src/lib.rs (module, exports, crate docs)
-crates/bunny-optics/tests/thin_lens_tests.rs (new)
+crates/bunny-optics/tests/thin_lens_tests.rs (new; the radius-scaled octant exclusion)
 crates/bunny-optics/tests/exact/mod.rs (Signed::sign)
 crates/bunny-optics/README.md
 docs/topics/optics/README.md (Status, Thin-Lens Camera)
@@ -44,6 +44,11 @@ ray-disc and ray-cylinder): cargo fmt --all --check; cargo test --locked --works
 code-dojo-generated; code-dojo-rust --all; code-dojo-determinism --enforce;
 code-dojo-perf-groups; topic-docs (0 duplicate IDs); repo-respect check --branch. The merge
 changed no line of thin_lens.rs, camera.rs or plane.rs, so the mutations were not rerun.
+CodeRabbit review on a193459: the octant check of OPTICS-TP-132 excluded a fixed 2^-24 turn,
+which rejects valid small-radius points (u = 1 raw, v = 2^29 - 256 gives (46340, 46340)). The
+new constructed points failed the old exclusion first; the exclusion is now 2^31 / r raw turns.
+After the change the four mutants that cite OPTICS-TP-132 (disc factor removed, angle in half
+turns, radius u, cosine and sine swapped) still fail it.
 
 Known risks:
 The forward margin is defensive and no test reaches it. A large aperture for its focus

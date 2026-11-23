@@ -360,6 +360,12 @@ in an interval of length `2^-m` land in a ring of `2^-m` of the disc's area,
 and those with `v` in an interval of length `2^-m` in a sector of that
 fraction. An aligned block of `2^m` sampler points therefore puts one lens
 point in each of `2^m` equal-area rings and in each of `2^m` equal sectors.
+That holds for the exact map; the rounded point can cross a sector boundary.
+Each coordinate is within 3/2 raw units of the exact point (`sin_cos` within
+one raw unit, times a radius below 1.0, then one rounding), so a point of raw
+radius `r` whose angle is within `2^31 / r` raw turns (units of `2^-32` turn)
+of a boundary may land on its other side. At `u` = 1 raw (`r` = 65 535) that
+is up to `2^-16` turn; near the rim it is under one raw turn.
 
 **Each step and its rounding.** With `a` the raw aperture, `f` the raw focus
 distance, `k` the scale shift, `R`, `U` the raw basis and `d` the pinhole

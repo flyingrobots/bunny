@@ -204,6 +204,12 @@ fn optics_tp_132_disc_points_lie_inside_the_unit_disc_at_their_radius_and_angle(
     let edges = [0, 1, ONE / 8, ONE / 4, ONE / 2, 3 * ONE / 4, LAST - 1, LAST];
     let mut points: Vec<[i64; 2]> =
         edges.iter().flat_map(|&u| edges.iter().map(move |&v| [u, v])).collect();
+    // Small radii just inside each octant boundary, where rounding a coordinate turns the
+    // angle by far more than 2^-24 turn: radius 65 535 at `u` = 1 raw.
+    let boundaries = (1..8).map(|k| k << 29);
+    points.extend(
+        boundaries.flat_map(|b| [1, 4, 64].map(|u| [[u, b - 256], [u, b + 256]])).flatten(),
+    );
     points.extend((0..20_000).map(|_| [seeds.range(0, LAST), seeds.range(0, LAST)]));
     for [u, v] in points {
         let [x, y] = disc_raw([fixed(u), fixed(v)]);
@@ -212,9 +218,15 @@ fn optics_tp_132_disc_points_lie_inside_the_unit_disc_at_their_radius_and_angle(
         let ideal = i128::from(u) * ((1 << 32) - 16);
         assert!((squared - ideal).abs() <= RADIUS_SQUARED_SLACK, "u {u}, v {v}: radius");
         let angle_octant = u32::try_from(v >> 29).expect("below 8");
-        // Within 2^-24 turn of an octant boundary the rounding may cross it.
+        // Each coordinate is within 3/2 raw units of the exact point (sin_cos within one raw
+        // unit times a radius below 1.0, then one rounding), so the point moves less than
+        // 2.13 raw units. At `d` raw turns from a boundary (at most 1/16 turn) the exact point
+        // is at least 0.97 r 2 pi d / 2^32 raw units from the boundary line, which exceeds
+        // 2.13 once r d > 2^31: below that the rounding may cross the boundary.
         let into_octant = v & ((1 << 29) - 1);
-        let near_boundary = !((1 << 8)..=(1 << 29) - (1 << 8)).contains(&into_octant);
+        let to_boundary = i128::from(into_octant.min((1 << 29) - into_octant));
+        let radius = i128::try_from(ideal.unsigned_abs().isqrt()).expect("below 2^32");
+        let near_boundary = radius * to_boundary <= 1 << 31;
         if squared > 0 && !near_boundary {
             assert_eq!(octant([x, y]), angle_octant, "u {u}, v {v}: ({x}, {y})");
         }
