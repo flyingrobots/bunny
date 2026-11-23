@@ -126,13 +126,18 @@ impl Signed {
 
 /// Whether `a * sqrt(q) <= t`, exactly.
 fn at_most(a: i128, t: &Signed, q: &Big) -> bool {
-    let a_magnitude = Big::new(a.unsigned_abs());
-    let lhs = a_magnitude.mul(&a_magnitude).mul(q);
+    sqrt_product_at_most(&Signed::new(a), q, t)
+}
+
+/// Whether `a * sqrt(q) <= t`, exactly, for big `a` and `t`: decided by comparing squares.
+pub(crate) fn sqrt_product_at_most(a: &Signed, q: &Big, t: &Signed) -> bool {
+    let lhs = a.square().mul(q);
     let rhs = t.square();
+    let a_positive = !a.negative && a.magnitude != Big::new(0);
     if t.negative {
-        a < 0 && lhs.compare(&rhs) != Ordering::Less
+        a.negative && lhs.compare(&rhs) != Ordering::Less
     } else {
-        a <= 0 || lhs.compare(&rhs) != Ordering::Greater
+        !a_positive || lhs.compare(&rhs) != Ordering::Greater
     }
 }
 

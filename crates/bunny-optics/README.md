@@ -82,6 +82,12 @@ every buffer.
   reflectance exactly at normal incidence), as a `SpecularSample`; a ray from
   below the face and a grazing reflection under the plane are refused with a
   `SecondaryRayError`.
+* `PointLight` (`bunny-point-light/1`): a light at a point given by its
+  radiant intensity; `irradiance` is `intensity * cos / d^2`, each step
+  rounded once, and `SurfaceHit::point_light_sample` returns a `LightSample`
+  whose shadow ray stops one raw unit short of the light
+  (`LightSample::shadow_t_max`); a point at most 1/128 unit from the light is
+  refused with `PointLightError::TooNear`.
 * `SurfaceHit::dielectric_scatter` (`bunny-dielectric/1`): the reflected or
   refracted continuation ray at a smooth boundary between two refractive
   indices (`DielectricBoundary`, each in `1.0..=8.0`, ordered by the hit's

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-num` and `bunny-linalg`: exact interpolation and ratios under the
+  contract identity `bunny-lerp/1` (`LERP_CONTRACT_ID`).
+  `FixedQ32_32::lerp(a, b, t)` is `a + round_half_even((b - a) * t / 2^32)`
+  on raw values from an exact `i128` step: exactly `a` at `t = 0` and `b` at
+  `t = 1.0`, monotone in `t` (strictly when `|b - a| >= 1.0`), extrapolating
+  outside `[0, 1]`, and `None` only when the result is outside Q32.32.
+  `FixedQ32_32::from_ratio(n, d)` rounds `n * 2^32 / d` to nearest for `u32`
+  operands, `None` for `d = 0` or a result of `2^31` or more.
+  `FixedVec3::lerp` and `lerp_channels` (three `FixedQ32_32` channels, no
+  colour space assumed) apply the scalar lerp per component. Closes
+  flyingrobots/bunny#303.
+
 * `bunny-query`: `ShapeFrame`, the rigid frame an analytic shape is placed
   with, under the contract identity `bunny-shape-frame/1`
   (`SHAPE_FRAME_ID`). `ShapeFrame::new` takes three right-handed unit axes
@@ -159,6 +171,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the prelude spellings until now. Closes flyingrobots/bunny#347.
 
 ### Added
+
+* `bunny-optics`: the point light, `bunny-point-light/1` (`POINT_LIGHT_ID`).
+  `PointLight::new(position, intensity)` takes a position in the trace domain
+  and a radiant intensity per channel; `PointLight::irradiance` gives
+  `intensity * cos / d^2` with the cosine normalized once and the division by
+  the exact squared distance and the product each rounded once to nearest,
+  ties to even. `SurfaceHit::point_light_sample` returns a `LightSample` whose
+  shadow ray runs toward the light with its largest component exactly 1.0 and
+  whose new `shadow_t_max` is one raw unit short of the light, so an occluder
+  counts exactly when it is nearer than the light; a directional light's
+  sample reports `SHADOW_T_MAX`, so a renderer queries both alike. A point at
+  most 1/128 unit (`MIN_LIGHT_DISTANCE_RAW`, raw `2^25`) from the light is
+  refused with `PointLightError::TooNear`, not divided by zero. No existing
+  output changes. Closes flyingrobots/bunny#365.
 
 * `ThinLensCamera` (`bunny-thin-lens/1`, `THIN_LENS_ID`) in `bunny-optics`:
   a `ThinLensSpec` (a pinhole `CameraSpec`, an aperture radius and a focus

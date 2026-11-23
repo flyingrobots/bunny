@@ -99,11 +99,12 @@ pub use sampler::{PixelSampler, SAMPLER_ID};
 pub use shading::{
     reflect, schlick_fresnel, smooth_normal, Albedo, DielectricBoundary, DielectricReflectance,
     DielectricScatter, DirectionalLight, GgxConductor, GgxRoughnessError, GgxScatter, LightSample,
-    RefractiveIndexError, SecondaryRayError, ShadingError, ShadingFrame, SkyLight, SmoothBounce,
-    SmoothHit, SpecularSample, SurfaceHit, TriangleSurface, VertexNormalError, VertexNormals,
-    DIELECTRIC_ID, FRAC_1_PI, GGX_CONDUCTOR_ID, MAX_LIGHT_RAW, MAX_NORMAL_TRIANGLES,
-    MAX_REFRACTIVE_INDEX_RAW, MIN_BOUNCE_COSINE_RAW, MIN_GGX_ROUGHNESS_RAW, PI, SHADING_ID,
-    SHADOW_T_MAX, SMOOTH_NORMAL_ID, SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
+    PointLight, PointLightError, RefractiveIndexError, SecondaryRayError, ShadingError,
+    ShadingFrame, SkyLight, SmoothBounce, SmoothHit, SpecularSample, SurfaceHit, TriangleSurface,
+    VertexNormalError, VertexNormals, DIELECTRIC_ID, FRAC_1_PI, GGX_CONDUCTOR_ID, MAX_LIGHT_RAW,
+    MAX_NORMAL_TRIANGLES, MAX_REFRACTIVE_INDEX_RAW, MIN_BOUNCE_COSINE_RAW, MIN_GGX_ROUGHNESS_RAW,
+    MIN_LIGHT_DISTANCE_RAW, PI, POINT_LIGHT_ID, SHADING_ID, SHADOW_T_MAX, SMOOTH_NORMAL_ID,
+    SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
 pub use texture::{bilinear, interpolate_uv, BilinearTaps, TextureWrap, TEXTURE_BILINEAR_ID};
 pub use thin_lens::{lens_disc_point, ThinLensCamera, ThinLensError, ThinLensSpec, THIN_LENS_ID};

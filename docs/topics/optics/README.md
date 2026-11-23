@@ -81,7 +81,11 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   (`bunny-ggx-conductor/1`): `SurfaceHit` (`ggx_reflection`,
   `try_ggx_reflection`), `GgxConductor` (`new`, `roughness`, `reflectance`),
   `GgxScatter` (`Reflected`, `Absorbed`), `GgxRoughnessError` (`roughness`),
-  `MIN_GGX_ROUGHNESS_RAW` and `GGX_CONDUCTOR_ID`.
+  `MIN_GGX_ROUGHNESS_RAW` and `GGX_CONDUCTOR_ID`;
+- for the [point light](#point-light) (`bunny-point-light/1`): `PointLight`
+  (`new`, `position`, `intensity`, `irradiance`), `SurfaceHit`
+  (`point_light_sample`), `LightSample::shadow_t_max`, `PointLightError`,
+  `MIN_LIGHT_DISTANCE_RAW` and `POINT_LIGHT_ID`.
 
 Evidence is listed in the [test plan](test-plan.md). Rough (frosted)
 transmission, dispersion, absorption inside a medium, the evaluation of a
@@ -1208,6 +1212,74 @@ differ by less than 512 units on that axis, and every occluder is at a
 distance below 512: raw `2^41`. Every limit of at least `2^41` gives the same
 answer, so the limit is not pixel-affecting; the test plan checks an occluder
 on the far face of the domain.
+
+### Point Light
+
+`PointLight::new(position, intensity)` is a light at a point with no size:
+hard shadows that end at the light. Its identity is `bunny-point-light/1`
+(`POINT_LIGHT_ID`); nothing in `bunny-diffuse-shading/1` changes.
+
+**Units.** `intensity` is, per channel, radiant intensity: power per unit
+solid angle, the same in every direction. A surface at distance `d` whose
+normal makes the angle `theta` with the direction to the light receives
+irradiance `E = intensity * cos(theta) / d^2`. A directional light is given by
+`E` itself (its value is irradiance, see the
+[radiometric convention](#radiometric-convention)), so a point light of
+intensity `I` at distance `d` lights a surface as a directional light of
+irradiance `I / d^2` from the same direction does. This is the convention of
+pbrt's point light and of Mitsuba's `point` emitter (`intensity`). Each channel
+is in `0..=MAX_LIGHT_RAW`, and the position is inside the trace domain.
+
+**Irradiance.** `PointLight::irradiance(point, normal)`, with `v = position -
+point` and `Q = v . v` (both exact, raw), each step and its rounding:
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Distance test | `Q <= 2^50`, that is a distance of at most `MIN_LIGHT_DISTANCE_RAW` (`2^25` raw, 1/128 unit), is `TooNear` | exact (`i128`) |
+| Normalization | `u = unit(v)`, by the prescale and `FixedUnitVec3::new`, as the directional light normalizes its direction | each component within one raw unit of `v / \|v\|`; the prescale is exact (every `\|v_i\|` is below `2^41`) |
+| Cosine | `c = normal . u`, clamped to `0..=1.0` | once, to nearest, ties to even; within three raw units of the exact `normal . v / \|v\|` for a unit normal |
+| Falloff | `g = c / d^2`: the exact `c 2^64` divided by the exact `Q` | once, to nearest, ties to even |
+| Irradiance | `E_c = intensity_c * g` | one Q32.32 product per channel, to nearest, ties to even |
+
+So `E_c` is within `I_c (3 / d^2 + 1/2) + 1/2` raw units of the exact
+`I_c max(normal . v, 0) / |v|^3` (`I_c` and `d^2` in units). Proven
+infallible past the refusals: `g` is at most `2^14` units (`2^46` raw) and
+each intensity at most `2^16` units, so `E` is below `2^30` units. The minimum
+distance is chosen for that: at half of it the brightest light's irradiance
+would leave Q32.32.
+
+**The sample.** `SurfaceHit::point_light_sample(&light)` returns a
+`LightSample`, the type a directional light's sample has, so a renderer
+treats both kinds of light alike:
+
+- `TooNear` when the start point is at most the minimum distance from the
+  light, checked first;
+- a dark sample (no shadow ray, zero radiance, `shadow_t_max` zero) when
+  `v . N' <= 0` exactly, with `v` from the start point and `N'` the facing
+  plane normal: the light is along or behind the surface;
+- otherwise the shadow ray from the start point along `v 2^32 / m`, with
+  `m` the largest `|v_i|`, each component rounded to nearest with ties to
+  even, so the largest is exactly 1.0; `shadow_t_max` is `m - 1` raw; and the
+  radiance is `E_c * FRAC_1_PI`, one product per channel rounded to nearest
+  with ties to even, with `E` the irradiance at the start point and the hit
+  frame's normal.
+
+**The shadow ray ends at the light.** Along the axis of the 1.0 component a
+distance `t` moves exactly `t` raw units, so the light is at distance exactly
+`m`. The triangle test floors its distance, so an occluder is reported within
+`0..=m - 1` exactly when its true distance is below `m`: an occluder nearer
+than the light shadows it; one at the light's distance or beyond does not.
+The renderer queries every shadow ray with any-hit, minimum distance zero and
+`LightSample::shadow_t_max()`, which is `SHADOW_T_MAX` for a directional
+light. The other components are within half a raw unit of the exact
+direction, so the ray passes within `m / 2^33` raw units of the light.
+
+**Refusals.** `PointLight::new` refuses, in this order, a position with a
+coordinate magnitude of at least `TRACE_COORD_LIMIT_RAW`
+(`PositionOutsideTraceDomain`), a negative channel (`NegativeIntensity`) and
+one above `MAX_LIGHT_RAW` (`IntensityTooLarge`). `irradiance` refuses a point
+outside the trace domain (`PointOutsideTraceDomain`), then `TooNear
+{ to_light }`, which carries `v`. No input divides by zero.
 
 ### Sky
 
