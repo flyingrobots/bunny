@@ -17,6 +17,10 @@ pub const fn lerp_channels(
     b: [FixedQ32_32; 3],
     t: FixedQ32_32,
 ) -> Option<[FixedQ32_32; 3]> {
-    let _ = (a, b, t);
-    None
+    let ([a0, a1, a2], [b0, b1, b2]) = (a, b);
+    match (FixedQ32_32::lerp(a0, b0, t), FixedQ32_32::lerp(a1, b1, t), FixedQ32_32::lerp(a2, b2, t))
+    {
+        (Some(c0), Some(c1), Some(c2)) => Some([c0, c1, c2]),
+        _ => None,
+    }
 }

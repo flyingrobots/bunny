@@ -32,8 +32,10 @@ impl FixedVec3 {
     /// Returns `None` when any component's result is outside the Q32.32 range.
     #[must_use]
     pub const fn lerp(a: Self, b: Self, t: FixedQ32_32) -> Option<Self> {
-        let _ = (a, b, t);
-        None
+        match crate::lerp::lerp_channels([a.x, a.y, a.z], [b.x, b.y, b.z], t) {
+            Some([lerp_x, lerp_y, lerp_z]) => Some(Self::new(lerp_x, lerp_y, lerp_z)),
+            None => None,
+        }
     }
 
     /// Computes the dot product of two vectors.

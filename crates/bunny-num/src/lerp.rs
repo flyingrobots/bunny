@@ -28,8 +28,19 @@ impl FixedQ32_32 {
     /// Returns `None` when the rounded result is outside the Q32.32 range.
     #[must_use]
     pub const fn lerp(a: Self, b: Self, t: Self) -> Option<Self> {
-        let _ = (a, b, t, FRAC_BITS);
-        None
+        // |b - a| <= 2^64 - 1 and |t| <= 2^63, so |step| < 2^127: both exact in i128.
+        let step = (b.raw() as i128 - a.raw() as i128) * t.raw() as i128;
+        // The arithmetic shift is the floor, and the mask the remainder in [0, 2^32).
+        let floor = step >> FRAC_BITS;
+        let remainder = step & ((1 << FRAC_BITS) - 1);
+        let half = 1 << (FRAC_BITS - 1);
+        let rounded = if remainder > half || (remainder == half && floor & 1 == 1) {
+            floor + 1
+        } else {
+            floor
+        };
+        // |rounded| <= 2^95, so the sum is exact in i128 before the range check.
+        Self::from_i128(a.raw() as i128 + rounded)
     }
 
     /// The Q32.32 value nearest `numerator / denominator` (`bunny-lerp/1`).
@@ -41,8 +52,36 @@ impl FixedQ32_32 {
     /// Returns `None` when `denominator == 0` (including `0 / 0`) and when the result is
     /// `2^31` or more, outside the Q32.32 range.
     #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
     pub const fn from_ratio(numerator: u32, denominator: u32) -> Option<Self> {
-        let _ = (numerator, denominator);
-        None
+        if denominator == 0 {
+            return None;
+        }
+        // numerator * 2^32 < 2^64, exact in u64.
+        let scaled = (numerator as u64) << FRAC_BITS;
+        let divisor = denominator as u64;
+        let quotient = scaled / divisor;
+        let remainder = scaled % divisor;
+        let complement = divisor - remainder;
+        // A divisor of 1 leaves no remainder, so an increment only follows a quotient below 2^63.
+        let rounded = if remainder > complement || (remainder == complement && quotient & 1 == 1) {
+            quotient + 1
+        } else {
+            quotient
+        };
+        if rounded > i64::MAX as u64 {
+            None
+        } else {
+            Some(Self::from_raw(rounded as i64))
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    const fn from_i128(raw: i128) -> Option<Self> {
+        if raw < i64::MIN as i128 || raw > i64::MAX as i128 {
+            None
+        } else {
+            Some(Self::from_raw(raw as i64))
+        }
     }
 }

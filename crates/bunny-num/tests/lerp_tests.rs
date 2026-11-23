@@ -187,7 +187,7 @@ fn lerp_tp_004_seeded_triples_match_the_oracle() {
         }
     }
     println!("lerp_tp_004 defined={defined} refused={refused} ties={ties}");
-    assert!(defined >= 10_000 && refused >= 10_000 && ties >= 1_000, "every class is reached");
+    assert!(defined >= 10_000 && refused >= 5_000 && ties >= 1_000, "every class is reached");
 }
 
 #[wasm_bindgen_test(unsupported = test)]

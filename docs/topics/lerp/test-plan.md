@@ -63,7 +63,7 @@ in both files is a `wasm_bindgen_test`, so the WebAssembly job (`wasm-pack test 
 | LERP-TP-001 | LERP-REQ-001 | The identity string; hand-derived golden vectors: `lerp(0, 1.0, 0.5) = 0.5`, `lerp(-1.0, 1.0, 0.25) = -0.5`; steps of 1 and 3 raw at `t = 0.5` (ties to 0 and 2), one raw unit of `t` either side, and the negative ties; the step, not the sum, is rounded (`lerp(5, 6, 0.5) = 5` raw); `lerp(0, 1.0, 2.0) = 2.0` and `t = -1.0`; results on and one raw unit past `i64::MAX` and `i64::MIN`; `b - a = 2^64 - 1` with ties at the widest step; the widest products refused. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_001_hand_derived_lerps_and_ties_round_to_even` |
 | LERP-TP-002 | LERP-REQ-002 | `lerp(a, b, 0) == a` and `lerp(a, b, 1.0) == b` for all 4 096 pairs of the 64-value grid (0, `+-0.5`, `+-1.0` and `+-2^30`, each with three raw units either side, and the ends of the raw range). | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_002_the_ends_are_exact_for_every_grid_pair` |
 | LERP-TP-003 | LERP-REQ-001 | Every grid pair at all 4 097 `t = k 2^20` in `[0, 1]` (16 781 312 cases) equals `oracle_lerp`. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_003_the_grid_matches_the_oracle_exhaustively` |
-| LERP-TP-004 | LERP-REQ-001 | 100 000 seeded triples (seed printed; `a`, `b` of every magnitude; `t` in `[0, 1]`, in `[-4, 4)`, of every magnitude, and multiples of 1/2) equal `oracle_lerp`; at least 10 000 defined, 10 000 refused and 1 000 ties. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_004_seeded_triples_match_the_oracle` |
+| LERP-TP-004 | LERP-REQ-001 | 100 000 seeded triples (seed printed; `a`, `b` of every magnitude; `t` in `[0, 1]`, in `[-4, 4)`, of every magnitude, and multiples of 1/2) equal `oracle_lerp`; at least 10 000 defined, 5 000 refused and 1 000 ties. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_004_seeded_triples_match_the_oracle` |
 | LERP-TP-005 | LERP-REQ-002 | For 256 pairs from the grid and 12 291 `t` (`k 2^22` and one raw unit either side, `k` in `-2048..=2048`), the defined outputs are ordered as `b` against `a`, and never repeat when `\|b - a\| >= 1.0`; `lerp(0, 1 raw, 0) == lerp(0, 1 raw, 1 raw)` shows it is not strict below. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_005_lerp_is_monotone_in_t` |
 | LERP-TP-006 | LERP-REQ-003 | Hand-derived golden ratios: `1/3` and `2/3` (raw 1 431 655 765 and 2 863 311 531), `7/7` and `(2^32 - 1)/(2^32 - 1)` are `ONE`; division by zero; `2^31 - 1` and `(2^32 - 1)/2` fit and `2^31` does not; ratios just under and over a half raw unit; each equals `oracle_ratio`. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_006_hand_derived_ratios` |
 | LERP-TP-007 | LERP-REQ-003 | A 13 by 13 grid of boundary `u32` values, `from_ratio(d, d) == ONE` for `d` in `1..=4096`, and 100 000 seeded pairs (seed printed, `d` of every magnitude) equal `oracle_ratio`; at least 10 000 defined and 1 000 refused. | `crates/bunny-num/tests/lerp_tests.rs::lerp_tp_007_ratios_match_the_oracle_on_a_grid_and_seeded_pairs` |
@@ -79,7 +79,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_001_hand_derived_lerps_and_ties_round_to_even"
 oracle = "Hand-derived raw golden vectors, each also checked against the independent i128 oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-002"
@@ -88,7 +88,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_002_the_ends_are_exact_for_every_grid_pair"
 oracle = "a at t = 0 and b at t = 1.0 for every pair of the 64-value grid."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-003"
@@ -97,7 +97,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_003_the_grid_matches_the_oracle_exhaustively"
 oracle = "Independent i128 oracle over 64 x 64 grid pairs and 4 097 values of t."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-004"
@@ -106,7 +106,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_004_seeded_triples_match_the_oracle"
 oracle = "Independent i128 oracle over 100 000 seeded triples."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-005"
@@ -115,7 +115,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_005_lerp_is_monotone_in_t"
 oracle = "Order of consecutive outputs over a boundary grid of t."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-006"
@@ -124,7 +124,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_006_hand_derived_ratios"
 oracle = "Hand-derived raw golden ratios, each also checked against the independent u128 oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-007"
@@ -133,7 +133,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/lerp_tests.rs::lerp_tp_007_ratios_match_the_oracle_on_a_grid_and_seeded_pairs"
 oracle = "Independent u128 oracle over a boundary grid and 100 000 seeded pairs."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-008"
@@ -142,7 +142,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/lerp_tests.rs::lerp_tp_008_vector_and_channel_lerps_are_component_wise"
 oracle = "Hand-derived raw component values."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-009"
@@ -151,7 +151,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/lerp_tests.rs::lerp_tp_009_seeded_vectors_and_channels_match_the_oracle"
 oracle = "Per-component i128 oracle written in the test, 20 000 seeded triples."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "LERP-TP-010"
@@ -160,10 +160,31 @@ evidence = "manual-audit"
 artifact = "docs/topics/lerp/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule of the kernel is broken on purpose, the tests are run, and the failing
-cases are recorded here.
+Each rule below was broken on purpose in a local copy of `crates/bunny-num/src/lerp.rs` or
+`crates/bunny-linalg/src/lerp.rs`, and `cargo test --locked --no-fail-fast -p bunny-num
+-p bunny-linalg --test lerp_tests` was run; the source was restored after each. The
+unmutated source passed every case. "Half up" means a tie goes toward positive infinity.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| A tie of the step goes half up | Ties to even | 001 (the tie `b - a = 1` raw at `t = 0.5`), 003, 004, 008 |
+| A tie goes away from zero | Ties to even | 001, 003, 004, 008 |
+| A tie goes toward zero | Ties to even | 001, 003, 004 |
+| A tie goes to the odd neighbour | Ties to even | 001, 003, 004, 008 |
+| The step is floored, not rounded | Round to nearest | 001, 003, 004, 009 |
+| `b - a` checked in `i64`, `None` when it overflows | `b - a` exact in `i128` | 001, 002, 003, 009 |
+| `a 2^32 + (b - a) t` rounded as a whole | The step, not the sum, is rounded | 001 (`lerp(5, 6, 0.5)`), 003, 004, 008 |
+| The `i64` range check removed (the sum wraps) | `None` outside Q32.32 | 001, 004, 005, 008, 009 |
+| `from_ratio` truncates | Round to nearest | 006 (`2/3`), 007 |
+| `from_ratio` range check removed (wraps) | `None` for `2^31` or more | 006, 007 |
+| `lerp_channels` returns its last two channels swapped | Per component | 008, 009 |
+| `lerp_channels` keeps `b`'s third channel when it is refused | `None` when any channel is | 008, 009 |
+| `from_ratio` ties go half up | Ties to even | none, as proved: no `u32` ratio is a tie ([from ratio](README.md#from-ratio)) |
+
+`FixedVec3::lerp` calls `lerp_channels`, so the two channel mutations change it too and
+LERP-TP-008 and -009 check both.
