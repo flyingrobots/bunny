@@ -12,6 +12,8 @@
 
 // The 384-bit integer splits and joins `u128` values into `u64` limbs.
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+// The port names its de Casteljau points `a` to `m`, as `docs/topics/curve/README.md` does.
+#![allow(clippy::many_single_char_names)]
 
 use bunny_linalg::{CubicBezier3, FixedVec3, CURVE_CONTRACT_ID};
 use bunny_num::FixedQ32_32;
@@ -152,9 +154,9 @@ fn param32(t: i64) -> Param {
     Param { s: W::new(i128::from(t)), one: W::new(1 << 32) }
 }
 
-/// Whether `|result - scale * B(s)| <= halves / 2` raw units, where `B` is the Bernstein
-/// polynomial with these coefficients, decided on the exact numerator over `one^n`.
-fn exact_within(result: i64, scale: i128, coefficients: &[i128], at: Param, halves: i128) -> bool {
+/// Whether `|result - B(s)| <= halves / 2` raw units, where `B` is the Bernstein polynomial
+/// with these coefficients, decided on the exact numerator over `one^n`.
+fn exact_within(result: i64, coefficients: &[i128], at: Param, halves: i128) -> bool {
     let n = coefficients.len() - 1;
     let binomial = [[1, 0, 0, 0], [1, 1, 0, 0], [1, 2, 1, 0], [1, 3, 3, 1]][n];
     let rest = at.one.sub(at.s);
@@ -170,8 +172,7 @@ fn exact_within(result: i64, scale: i128, coefficients: &[i128], at: Param, halv
         numerator = numerator.add(term);
     }
     let denominator = (0..n).fold(W::new(1), |d, _| d.mul(at.one));
-    let twice_error =
-        W::new(2 * i128::from(result)).mul(denominator).sub(numerator.mul(W::new(2 * scale)));
+    let twice_error = W::new(2 * i128::from(result)).mul(denominator).sub(numerator.mul(W::new(2)));
     let bound = denominator.mul(W::new(halves));
     twice_error.at_most(bound) && twice_error.neg().at_most(bound)
 }
@@ -185,13 +186,18 @@ fn next_seed(state: &mut u64) -> u64 {
     *state
 }
 
+/// A draw below `n` from the high half of the state: an LCG's low bits have short periods.
+fn pick(state: &mut u64, n: u64) -> u64 {
+    (next_seed(state) >> 32) % n
+}
+
 /// A coordinate of every magnitude, with the ends of the raw range and zero often.
 fn coordinate(state: &mut u64) -> i64 {
-    match next_seed(state) % 16 {
+    match pick(state, 16) {
         0 => i64::MIN,
         1 => i64::MAX,
         2 => 0,
-        _ => next_seed(state).cast_signed() >> (next_seed(state) % 64),
+        _ => next_seed(state).cast_signed() >> pick(state, 64),
     }
 }
 
@@ -200,14 +206,16 @@ fn polygon(state: &mut u64) -> Polygon {
     [point(), point(), point(), point()]
 }
 
-/// A parameter in `[0, 1]`: the ends and one raw unit inside them, else uniform.
+/// A parameter in `[0, 1]`: the ends and one raw unit inside them, multiples of 1/8 (whose
+/// steps tie often), else uniform.
 fn parameter(state: &mut u64) -> i64 {
-    match next_seed(state) % 8 {
+    match pick(state, 8) {
         0 => 0,
         1 => U,
         2 => 1,
         3 => U - 1,
-        _ => (next_seed(state) % (1 << 32 | 1)).cast_signed(),
+        4 | 5 => pick(state, 9).cast_signed() * (U / 8),
+        _ => ((next_seed(state) >> 16) % (1 << 32 | 1)).cast_signed(),
     }
 }
 
@@ -340,19 +348,19 @@ fn curve_tp_005_seeded_evaluation_and_derivative_match_both_oracles() {
         let context = format!("seed={SEED:#018x} case={case} p={p:?} t={t}");
         let expected = per_axis(|k| port_levels(axis(&p, k), t)[5]);
         assert_eq!(at(&p, t), Some(expected), "{context}");
-        for k in 0..3 {
+        for (k, &value) in expected.iter().enumerate() {
             let c = coordinates(axis(&p, k));
-            assert!(exact_within(expected[k], 1, &c, param32(t), 3), "{context} axis={k}");
-            past_one += u32::from(!exact_within(expected[k], 1, &c, param32(t), 2));
+            assert!(exact_within(value, &c, param32(t), 3), "{context} axis={k}");
+            past_one += u32::from(!exact_within(value, &c, param32(t), 2));
         }
         let slope = all3(per_axis(|k| port_derivative(axis(&p, k), t)));
         assert_eq!(derivative(&p, t), slope, "{context}");
         if let Some(slope) = slope {
             defined += 1;
-            for k in 0..3 {
-                let d = differences(axis(&p, k));
-                assert!(exact_within(slope[k], 3, &d, param32(t), 6), "{context} axis={k}");
-                past_two += u32::from(!exact_within(slope[k], 3, &d, param32(t), 4));
+            for (k, &value) in slope.iter().enumerate() {
+                let d = differences(axis(&p, k)).map(|d| 3 * d);
+                assert!(exact_within(value, &d, param32(t), 6), "{context} axis={k}");
+                past_two += u32::from(!exact_within(value, &d, param32(t), 4));
             }
         } else {
             refused += 1;
@@ -399,13 +407,15 @@ fn curve_tp_006_seeded_splits_share_their_points_and_track_the_original() {
         let inner = Param { s: wt.mul(wu), one };
         let outer = Param { s: wt.mul(W::new(1 << 32)).add(W::new(1 << 32).sub(wt).mul(wu)), one };
         for (half, at_half) in [(&left, inner), (&right, outer)] {
-            let value = at(half, u).expect("u in [0, 1]");
-            for k in 0..3 {
+            let point = at(half, u).expect("u in [0, 1]");
+            for (k, &value) in point.iter().enumerate() {
                 let c = coordinates(axis(&p, k));
-                assert!(exact_within(value[k], 1, &c, at_half, 6), "{context} axis={k}");
-                past_evaluation_bound += u32::from(!exact_within(value[k], 1, &c, at_half, 3));
+                assert!(exact_within(value, &c, at_half, 6), "{context} axis={k}");
+                past_evaluation_bound += u32::from(!exact_within(value, &c, at_half, 3));
             }
         }
     }
     println!("curve_tp_006 past_evaluation_bound={past_evaluation_bound}");
+    // A half is less exact than evaluating the original: its inner points are rounded.
+    assert!(past_evaluation_bound > 0, "halves exceed the 3/2 raw unit bound of at");
 }

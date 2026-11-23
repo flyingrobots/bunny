@@ -84,7 +84,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_tests.rs::curve_tp_001_hand_derived_curves"
 oracle = "Hand-derived raw values of straight, flat and constant curves."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-002"
@@ -93,7 +93,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_tests.rs::curve_tp_002_golden_vectors"
 oracle = "Raw golden vectors from an independent Python model of the rule, checked with fractions."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-003"
@@ -102,7 +102,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_tests.rs::curve_tp_003_t_outside_zero_to_one_is_refused"
 oracle = "None on and one raw unit outside each end of [0, 1]."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-004"
@@ -111,7 +111,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_tests.rs::curve_tp_004_derivative_overflow_on_and_past_each_threshold"
 oracle = "Hand-derived i64 thresholds of the differences and of the multiplication by 3."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-005"
@@ -120,7 +120,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_tests.rs::curve_tp_005_seeded_evaluation_and_derivative_match_both_oracles"
 oracle = "Independent rule port and exact 384-bit Bernstein form over 100 000 seeded cases."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-006"
@@ -129,7 +129,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_tests.rs::curve_tp_006_seeded_splits_share_their_points_and_track_the_original"
 oracle = "Independent rule port and exact 384-bit Bernstein form over 20 000 seeded splits."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-007"
@@ -138,11 +138,28 @@ evidence = "manual-audit"
 artifact = "docs/topics/curve/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule is broken on purpose in a local copy of
-`crates/bunny-linalg/src/cubic_bezier3.rs`, the curve tests are run, and the source is
-restored; the results are recorded here.
+Each rule below was broken on purpose in a local copy of
+`crates/bunny-linalg/src/cubic_bezier3.rs`, and `cargo test --locked --no-fail-fast -p
+bunny-linalg --test curve_tests` was run; the source was restored after each. The unmutated
+source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `p1` and `p2` swapped in evaluation | The control-point order | 001, 002 (the asymmetric vector at `t = 1/3`), 005, 006 |
+| The second level lerps from the later point, `lerp(b, a, 1 - t)` | The stated lerp direction | 002, 005, 006 |
+| The third level lerps from the later point, `lerp(e, d, 1 - t)` | The stated lerp direction | 002, 005, 006 |
+| `t` outside `[0, 1]` accepted (extrapolated) | `None` outside `[0, 1]` | 003 |
+| `t = 1.0` refused (the upper end made exclusive) | `[0, 1]` is closed | 001, 003, 004, 005, 006 |
+| The multiplication by 3 wraps | Checked multiplication by 3 | 004, 005 |
+| The differences wrap | Checked differences | 002, 004, 005 |
+| The derivative as `3 (e - d)` from the second-level points | 3 times the quadratic of the differences | 002, 005 |
+| The second half's inner points swapped | The halves are the de Casteljau points | 001, 002, 006 |
+| The first half's inner points swapped | The halves are the de Casteljau points | 001, 002, 006 |
+
+The lerp-direction mutations change results only on ties, which is why the seeded
+parameters include multiples of 1/8.
