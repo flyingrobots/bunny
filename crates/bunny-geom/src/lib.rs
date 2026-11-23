@@ -24,7 +24,7 @@ mod conversions;
 mod plane;
 
 pub use plane::{
-    FixedPlane3, FixedSegment3, PlaneSide, PolygonClip, PolygonClipError, SegmentClip,
+    FixedPlane3, FixedSegment3, PlaneSide, PlaneSpan, PolygonClip, PolygonClipError, SegmentClip,
 };
 
 /// Error type for bounding shape constructors.
