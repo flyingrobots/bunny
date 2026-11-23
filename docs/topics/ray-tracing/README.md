@@ -32,6 +32,22 @@ as:
 - `TraceTriangle` (`new`, `vertices`, `bounds`);
 - `TriangleHit` (`distance`, `front_face`, `barycentrics`,
   `barycentric_numerators`);
+- `TraceSphere` (`new`, `center`, `radius`, `bounds`), `TraceSphereError`,
+  `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
+  with the identity constant `RAY_SPHERE_ID`, in
+  `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
+- `TraceCylinder` (`new`, `radius`, `bottom`, `top`, `bounds`),
+  `TraceCylinderError`, `CylinderHit` (`distance`, `front_face`, `normal`) and
+  `TraceRay::hit_cylinder`, with the identity constant `RAY_CYLINDER_ID`, in
+  `crates/bunny-query/src/trace/cylinder.rs` and `cylinder/span.rs` (see
+  [Ray-Cylinder](#ray-cylinder));
+- `TraceBox` (`new`, `min`, `max`, `bounds`), `TraceBoxError`, `BoxHit`
+  (`distance`, `front_face`, `normal`) and `TraceRay::hit_box`, in
+  `crates/bunny-query/src/trace/box_hit.rs` (see [Ray-Box](#ray-box));
+- `TraceDisc` (`new`, `height`, `radius`, `bounds`), `TraceDiscError`,
+  `DiscHit` (`distance`, `front_face`, `normal`), `TraceRay::hit_disc` and
+  `RAY_DISC_ID`, in
+  `crates/bunny-query/src/trace/disc.rs` (see [Ray-Disc](#ray-disc));
 - `BarycentricNumerators` (`new`, `u`, `v`, `det`), in
   `crates/bunny-query/src/barycentric.rs`;
 - `TRACE_COORD_LIMIT_RAW`, `TRACE_DIRECTION_LIMIT_RAW` and
@@ -78,7 +94,7 @@ The kernels accept only values inside a fixed trace domain:
 `TraceRay::new` returns `None` when an origin coordinate or a direction
 component is outside the domain, or when the direction is zero.
 `TraceTriangle::new` returns `None` when any vertex coordinate is outside the
-domain. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
+domain. `TraceBox::new` returns `Err(TraceBoxError::CornerOutsideTraceDomain)` for a corner outside it, and `Err(TraceBoxError::MinimumAboveMaximum)` for a minimum above its maximum. `TraceRay::from_ray` accepts a `FixedRay3` and returns `None` only for
 an origin outside the domain: `FixedUnitVec3::try_from_unit` allows the length
 to be off by one raw unit, so a unit direction can have one component of
 magnitude `2^32 + 1` (the other two then have squares summing to at most
@@ -251,6 +267,330 @@ which `v0, v1, v2` appear counter-clockwise, that is when
 the direction is not normalized. `TraceTriangle::vertices` returns the three
 vertices given to `new`, and `TraceTriangle::bounds` returns the smallest
 `FixedAabb3` that contains them.
+
+## Ray-Sphere
+
+`TraceRay::hit_sphere(sphere, t_min, t_max)` is the exact ray-sphere test.
+Its contract identity is **`bunny-ray-sphere/1`**, published as
+`RAY_SPHERE_ID`. The general-purpose
+`ray_intersects_sphere` in `ray.rs` is a separate solver with its own
+contract and is unchanged.
+
+**The sphere.** `TraceSphere::new(center, radius)` takes a centre and a
+radius, so a sphere anywhere in the trace domain needs no change of frame; a
+caller with spheres in an object frame passes a centre at the origin of that
+frame. Every centre coordinate and the radius must be inside the trace domain
+(`abs(raw) < 2^40`), and the radius must be positive. Any other input is
+refused with a typed `TraceSphereError`: `CenterOutsideTraceDomain`,
+`RadiusNotPositive` or `RadiusOutsideTraceDomain`. Nothing wraps, saturates or
+panics. `TraceSphere::bounds` is the box `center -+ radius`.
+
+**The hit** has the form of `TriangleHit`, so a renderer compares distances
+across kinds directly:
+
+- `SphereHit::distance` is in multiples of the ray direction, as for
+  triangles;
+- `SphereHit::front_face` is `true` at the near root (the ray arrives from
+  outside, or touches a tangent point) and `false` at the far root (the ray
+  leaves from inside);
+- `SphereHit::normal` is the outward unit normal at the exact hit point, a
+  `FixedUnitVec3` (see the rounding rule below).
+
+**The arithmetic.** With `f = origin - center`, `d` the direction and `r` the
+radius, all raw, the point at distance `t` lies on the sphere when
+`a t^2 + 2 b t + (f . f - r^2) = 0`, with `a = d . d` and `b = f . d`. The
+quarter discriminant is computed as `a r^2 - |f x d|^2` (Lagrange's identity),
+exactly, in 256-bit unsigned integers (`crates/bunny-query/src/trace/wide.rs`).
+The line misses when it is negative. Otherwise `E = 2^64 * discriminant` and
+the roots in raw distance units are `(-2^32 b -+ sqrt(E)) / a`.
+
+`floor(sqrt(E))` is exact: below `2^128` it is `FixedQ32_32::sqrt_u128`,
+Bunny's exact integer square root; above, the root of the high 128 bits gives
+the top 64 bits of the result and the low 64 bits are set one at a time,
+largest first, while the square stays at most `E`.
+
+Widths in the trace domain: `abs(f) < 2^41` and `abs(d) <= 2^32 + 1` per
+component, so `a < 2^66`, `abs(b) < 2^75`, each component of `f x d` is below
+`2^75`, `a r^2 < 2^146`, `E < 2^210` and its root below `2^105`;
+`2^32 b -+ root` is below `2^108`. Every value fits its type with room to
+spare.
+
+**Rounding rule of `bunny-ray-sphere/1`.**
+
+- Each root is the floor of the true root in raw units:
+  `floor((-2^32 b - sqrt(E)) / a)` and `floor((-2^32 b + sqrt(E)) / a)`, with
+  the square root real, not rounded. Over integers this is
+  `floor((-2^32 b - g - 1) / a)` for the near root when `E` is not a perfect
+  square and `floor((-2^32 b - g) / a)` when it is, and
+  `floor((-2^32 b + g) / a)` for the far root, where `g = floor(sqrt(E))`.
+  This is the rule of `TriangleHit::distance`.
+- The distance limits are inclusive and apply to the rounded distance. The
+  near root is reported when `t_min <= near <= t_max`; otherwise the far root
+  when `t_min <= far <= t_max`; otherwise there is no hit.
+- The normal is taken at the exact root, not at the rounded distance. At the
+  root `t = (-b -+ sqrt(disc)) / a` the offset from the centre is `f + d t`,
+  and `a (f + d t) = w -+ d sqrt(disc)` with `w = a f - b d`, a vector of
+  length `a r`. With `k = 124 - bits(a r)`, so that `2^k a r` is in
+  `[2^123, 2^124)`, the kernel forms `v = 2^k w -+ d g` with
+  `g = floor(sqrt(2^2k disc))`, exactly, in `i128` and 256-bit integers. It
+  then applies Bunny's unit-vector rule, as the triangle surfaces do: `v` is
+  shifted right (flooring) until its largest component magnitude is in
+  `[2^61, 2^62)` and normalized by `FixedUnitVec3::new`. The normal is a unit
+  vector by that rule for every admitted radius, including one raw unit, and is
+  never zero: `v` is at least `2^123 - 2^34` long.
+- **Bound on the normal**, derived before it was measured: the floored root `g`
+  moves `v` by less than `abs(d_i) <= 2^32 + 1` per component against a length
+  of at least `2^123`, which turns the direction by at most `2^-89`
+  (`2^-57` raw); the shift moves each component by less than one unit against a
+  length of at least `2^61`, at most `2^-58` in direction (`2^-26` raw); the
+  floored length of `FixedVec3::normalize` adds at most `2^-29` raw; its rounded
+  division adds at most half a raw unit. Each component is therefore within
+  `1/2 + 2^-24` raw units of `2^32` times the exact unit normal.
+- The normal replaced, under the same identity, one that was the offset at the
+  rounded distance over the radius, floored. That rule was documented as
+  "within a few raw units of 1.0", which held only for a radius near 1.0 or
+  larger: at a radius of 0.01 the length was `2^32 + 56` raw units, and at a
+  radius of one raw unit it could be the zero vector (flyingrobots/bunny#422).
+
+**Cases.**
+
+- **Tangent rays.** A discriminant of zero is a hit at the one root, front
+  face. Contact is inclusive: a ray whose line touches the sphere hits.
+- **Origin inside.** The near root is negative, so with `t_min >= 0` the far
+  root is reported, with `front_face == false`.
+- **Behind the origin.** When both rounded roots are below `t_min` there is no
+  hit; a negative `t_min` lets a caller see them.
+
+## Ray-Cylinder
+
+`TraceRay::hit_cylinder(cylinder, t_min, t_max)` is the exact test of a ray
+against a capped cylinder. Its contract identity is
+**`bunny-ray-cylinder/1`**, published as `RAY_CYLINDER_ID`.
+
+**The cylinder** is in object space: its axis is the `+Y` axis (the up axis of
+the [coordinate law](../coordinate-law/README.md)), so the solid is
+`x^2 + z^2 <= r^2` with `bottom <= y <= top`. A cylinder that is moved or
+tilted is traced by a caller that first carries the ray into the cylinder's
+object space. `TraceCylinder::new(radius, bottom, top)` requires a positive
+radius, the radius and both cap heights inside the trace domain
+(`abs(raw) < 2^40`), and `bottom < top`. Any other input is refused with a
+typed `TraceCylinderError`, checked in this order: `RadiusNotPositive`,
+`RadiusOutsideTraceDomain`, `CapOutsideTraceDomain`, `CapsNotOrdered`.
+Nothing wraps, saturates or panics. `TraceCylinder::bounds` is the box
+`(-r, bottom, -r)` to `(r, top, r)`.
+
+**The hit** has the form of `SphereHit`, a unit normal included:
+
+- `CylinderHit::distance` is in multiples of the ray direction, rounded down;
+- `CylinderHit::front_face` is `true` at the entry (the ray arrives from
+  outside, or only touches the cylinder) and `false` at the exit (the ray
+  leaves from inside);
+- `CylinderHit::normal` is the outward unit normal of the surface hit, a
+  `FixedUnitVec3`.
+
+**The arithmetic.** With `o` the origin and `d` the direction, raw, the line
+is inside the slab `bottom <= y <= top` between its two cap crossings, at
+`(height - o_y) / d_y` direction multiples, and inside the infinite cylinder
+between the two roots of the side's quadratic
+`a t^2 + 2 b t + (o_x^2 + o_z^2 - r^2) = 0`, with `a = d_x^2 + d_z^2` and
+`b = o_x d_x + o_z d_z`. Those roots are the sphere test's with the `y`
+components set to zero: the quarter discriminant `D = a r^2 - (o_x d_z - o_z d_x)^2`
+is exact in 256-bit integers and a negative `D` is a miss. The entry is the
+later of the two starts and the exit the earlier of the two ends; the line
+misses when the entry is after the exit. No rounded value is compared: a cap
+crossing `n / q` (with `q = abs(d_y)` and `n = (height - o_y) * sign(d_y)`)
+against a side root `(-b -+ sqrt(D)) / a` is the sign of `a n + q b` against
+`-+ sqrt(q^2 D)`, decided by squaring.
+
+Widths in the trace domain: `abs(o) < 2^40` and `abs(d) <= 2^32 + 1` per
+component, so `a < 2^66`, `abs(b) < 2^74`, `q < 2^33`, `abs(n) < 2^41`,
+`abs(a n + q b) < 2^108` and its square and `q^2 D` are below `2^216`. The
+side's roots have the widths of the sphere test's.
+
+**Rounding rule of `bunny-ray-cylinder/1`.**
+
+- A cap distance is `floor(n * 2^32 / q)` raw; a side distance is the floor
+  of the true root, by the rule of `bunny-ray-sphere/1`. The floor is
+  monotone, so the floor of the entry is the largest of the floors of the
+  starts, and likewise for the exit.
+- The distance limits are inclusive and apply to the rounded distance. The
+  entry is reported when `t_min <= entry <= t_max`; otherwise the exit when
+  `t_min <= exit <= t_max`; otherwise there is no hit.
+- On a cap the normal is exactly `(0, -1, 0)` (bottom) or `(0, 1, 0)` (top),
+  raw `2^32`. On the side it is taken at the exact root, not at the rounded
+  distance: there `a (x, z) = cross (d_z, -d_x) -+ sqrt(D) (d_x, d_z)`, with
+  `cross = o_x d_z - o_z d_x`, a vector of length `a r`. Both terms are scaled
+  by `2^s`, `s` the largest shift up to 64 that keeps `a r 2^s < 2^125`, with
+  `sqrt(D 2^2s)` floored; the result is shifted down below `2^62` and
+  normalized by `FixedUnitVec3::new`, with `y = 0`. The normal is a unit vector
+  by Bunny's unit-vector rule for every admitted radius, including one raw unit.
+- **Bound on the side normal**, derived before it was measured: the floored
+  square root moves the vector by at most `abs(d)` against a length of at least
+  `2^64 abs(d)` (below `2^-32` raw once normalized); the shift and the floored
+  length each add below `2^-28` raw; the rounded division of
+  `FixedVec3::normalize` adds at most half a raw unit. Each component is
+  therefore within one raw unit of the exact unit normal.
+
+**Tie rule at the rim.** Where the side meets a cap, when the side's root and
+the cap's crossing are the same exact distance, the cap is reported, with the
+cap's normal. This holds at the entry, at the exit, and for a line that only
+touches the cylinder at a rim point (the side's entry and the cap's exit
+coincide). Equal rounded distances are not a tie: only exact equality is.
+
+**Cases.**
+
+- **Grazing rays.** A line tangent to the side, with its contact between the
+  caps, hits at that one point, front face, with the side's normal; contact is
+  inclusive.
+- **A ray parallel to the axis** (`d_x = d_z = 0`) makes the side's quadratic
+  degenerate (`a = 0`). The side then constrains nothing when
+  `o_x^2 + o_z^2 <= r^2` and rules the cylinder out otherwise, so the hit is
+  on a cap. A ray running along the side itself enters at the rim, where the
+  cap wins.
+- **A ray in a cap's plane** (`d_y = 0` and `o_y` equal to a cap height) is
+  inside the closed slab, so the slab constrains nothing and the hit is on
+  the side, with the side's normal; one raw unit outside the plane misses.
+  Any ray with `d_y = 0` and `o_y` outside `bottom..=top` misses.
+- **Origin inside.** The entry is negative, so with `t_min >= 0` the exit is
+  reported, through the side or a cap, with `front_face == false`.
+- **Behind the origin.** When both rounded distances are below `t_min` there
+  is no hit; a negative `t_min` lets a caller see them.
+
+## Ray-Box
+
+`TraceRay::hit_box(box, t_min, t_max)` is the exact ray-box test for a box
+aligned with the axes of the frame the ray is in. Its contract identity is
+**`bunny-ray-box/1`**, the public constant `RAY_BOX_ID`. `TraceRay::box_entry` (the conservative traversal test) and the
+general-purpose `ray_intersects_aabb` are separate and unchanged. A box that is
+rotated is traced by a caller that carries the ray into the box's object space
+first.
+
+**The box.** `TraceBox::new(min, max)` takes two corners. Every coordinate of
+both must be inside the trace domain (`abs(raw) < 2^40`) and no minimum may be
+above its maximum. Any other input is refused with a typed `TraceBoxError`:
+`CornerOutsideTraceDomain` (reported first) or `MinimumAboveMaximum`. Nothing
+wraps, saturates or panics. Equal bounds on an axis are allowed: the box is then
+flat (a rectangle, a segment or a point). `TraceBox::bounds` is the same box as a
+`FixedAabb3`.
+
+**The hit** has the form of `SphereHit`:
+
+- `BoxHit::distance` is in multiples of the ray direction, rounded down;
+- `BoxHit::front_face` is `true` at the entry (the ray arrives from outside, or
+  touches the box) and `false` at the exit (the ray leaves from inside);
+- `BoxHit::normal` is the outward normal of the face hit: exactly `1.0` or
+  `-1.0` (raw `2^32` or `-2^32`) in one component and `0` in the other two.
+
+**The arithmetic.** On each axis with a nonzero direction component `d`, the
+ray crosses the faces at the raw distances `(bound - origin) * 2^32 / d`. For a
+positive `d` it enters at the minimum face and leaves at the maximum face; for a
+negative `d` the reverse. The ray is inside the box between the largest entry
+and the smallest exit over the three axes, and hits the closed box exactly when
+that entry is not after that exit. These crossings are kept as exact fractions
+and compared by cross-multiplication, never by their rounded values. Widths in
+the trace domain: each offset `bound - origin` is below `2^41`, each numerator
+below `2^73`, each denominator at most `2^32 + 1`, so every product is below
+`2^107` and fits `i128`.
+
+**Rounding rule of `bunny-ray-box/1`.**
+
+- The distance is the floor of the true crossing in raw units,
+  `floor((bound - origin) * 2^32 / d)`. The floor is monotone, so the floor of
+  the largest entry is the largest of the floors.
+- The distance limits are inclusive and apply to the rounded distance. The entry
+  is reported when `t_min <= entry <= t_max`; otherwise the exit when
+  `t_min <= exit <= t_max`; otherwise there is no hit. A start clipped by `t_min`
+  therefore reports the exit with `front_face == false`, as `hit_sphere` does.
+
+**Tie rule for edges and corners.** When the ray crosses two or three faces at
+exactly the same true distance (it hits an edge or a corner), the face reported
+is the one on the lowest axis, in the order x, y, z. This holds for the entry and
+for the exit alike. Equal rounded distances are not a tie: the face crossed
+later by the exact fractions is the one hit (TRACE-TP-513 has two faces whose
+floors are both 1).
+
+**A ray parallel to a slab** (a zero direction component) never supplies a face.
+Its axis rules the box out when the origin's coordinate is outside the closed
+slab, even by one raw unit, and constrains nothing otherwise. A ray lying
+exactly in the plane of a face, or on the line of an edge, is inside the closed
+box's slab, so it can hit through the faces of the other axes. The direction is
+never zero, so at least one axis supplies a crossing.
+
+**Cases.**
+
+- **Grazing rays.** Contact is inclusive: a ray that touches only a face, edge
+  or corner hits. One raw unit outside it misses.
+- **Origin inside.** The entry is negative, so with `t_min >= 0` the exit is
+  reported, `front_face == false`, with the outward normal of the face left.
+- **Origin on a face.** Entering gives distance `0`, front face; leaving gives
+  distance `0`, back face.
+- **Behind the origin.** When the rounded entry and exit are both below `t_min`
+  there is no hit; a negative `t_min` lets a caller see them.
+
+## Ray-Disc
+
+`TraceRay::hit_disc(disc, t_min, t_max)` is the exact ray-disc test. Its
+contract identity is **`bunny-ray-disc/1`**, public as `RAY_DISC_ID`.
+
+**The disc.** `TraceDisc::new(height, radius)` is the disc of the given radius
+about the point `(0, 0, height)` in the plane `z = height`: a disc in the
+`xy` plane, centred on the `z` axis, in object space. A disc elsewhere or
+tilted is traced through the shape frame (flyingrobots/bunny#374): the caller
+maps the ray into the disc's object space and the hit back. The height and
+the radius must be inside the trace domain (`abs(raw) < 2^40`) and the radius
+must be positive. Any other input is refused with a typed `TraceDiscError`:
+`HeightOutsideTraceDomain`, `RadiusNotPositive` or `RadiusOutsideTraceDomain`.
+Nothing wraps, saturates or panics. `TraceDisc::bounds` is the flat box
+`[-r, r] x [-r, r] x [height, height]`.
+
+**The hit** is a `DiscHit`:
+
+- `DiscHit::distance` is in multiples of the ray direction, as for triangles
+  and spheres;
+- `DiscHit::front_face` is `true` when the ray arrives at the `+z` side (its
+  direction has a negative `z`) and `false` when it arrives at the `-z` side.
+  The disc is two-sided: both sides are hit;
+- `DiscHit::normal` is the `FixedUnitVec3` `(0, 0, 1)` (`UNIT_Z`), the exact
+  axis of the disc and the normal of the `+z` side, on both sides; it is never
+  derived from the rounded hit point, and `front_face` says which side was hit.
+
+**The arithmetic.** With `f = origin.z - height` and `d` the direction, all
+raw, a ray with `d.z != 0` meets the plane at `t = -f / d.z` direction
+lengths. The hit point is inside the disc when `x^2 + y^2 <= r^2` for
+`x = origin.x + d.x t` and `y = origin.y + d.y t`. Multiplied through by
+`d.z^2` this is
+
+```text
+(origin.x d.z - d.x f)^2 + (origin.y d.z - d.y f)^2 <= r^2 d.z^2
+```
+
+which is decided exactly by integer comparison in 256-bit unsigned integers
+(`crates/bunny-query/src/trace/wide.rs`), on the exact hit point and never on
+the rounded one. Widths in the trace domain: `abs(f) < 2^41` and
+`abs(d) <= 2^32 + 1` per component, so each numerator is below `2^75`, a
+square below `2^150`, the sum of two below `2^151` and `r^2 d.z^2` below
+`2^146`; `f 2^32` is below `2^73`. Every value fits its type.
+
+**Rounding rule of `bunny-ray-disc/1`.**
+
+- The distance is the floor of the true distance in raw units,
+  `floor(-f 2^32 / d.z)`, rounded toward negative infinity when it is
+  negative. This is the rule of `TriangleHit::distance`.
+- The radius test uses the exact meeting point, so a ray whose rounded hit
+  point is on or inside the rim but whose exact point is outside misses.
+- The distance limits are inclusive and apply to the rounded distance: the
+  disc is hit when `t_min <= distance <= t_max`, else there is no hit.
+
+**Cases.**
+
+- **Rim.** A hit point exactly at distance `r` from the axis is inside.
+- **Parallel and in the plane.** A ray with `d.z == 0` misses, including a
+  ray that lies in the plane of the disc, through the disc. A ray that lies
+  in the plane has no single hit distance, so Bunny reports none.
+- **Origin on the disc.** The distance is 0 (a hit when `t_min <= 0`), front
+  face when the direction has a negative `z`.
+- **Behind the origin.** When the rounded distance is below `t_min` there is no
+  hit; a negative `t_min` lets a caller see it.
 
 ## General-Purpose Ray-AABB Solver
 
@@ -597,11 +937,12 @@ A closest-hit search pops every entry it pushes, so also `box_entries =
 popped_skipped + interior_visits + leaf_visits`; an any-hit search stops at
 its first accepted primitive and leaves the rest of the stack unpopped. An empty
 tree counts nothing; a ray that misses the root box counts one box test.
-These are the definitions of the benchmark profile's replica (`box_calls`,
-`box_some`, `skipped_at_pop`, `interior_visited`, `leaf_visited`, `tri_tests`,
-`stack_peak` in `crates/bunny-perf/src/profile.rs`), which counts on the
-`BvhNode` tree: a compact tree makes the same box tests in the same order, and
-`TRACE-TP-418` checks that every count and answer agrees with the replica on
+The benchmark profile (`box_calls`, `box_some`, `skipped_at_pop`,
+`interior_visited`, `leaf_visited`, `tri_tests`, `stack_peak` in
+`crates/bunny-perf/src/profile.rs`) takes these counts from the counted searches
+on the compact copy of its tree. Its replica of the search on the `BvhNode` tree
+makes the same box tests in the same order, and `TRACE-TP-418` checks that every
+answer and the number of box and primitive tests agree with the replica on
 all 1 024 benchmark rays (20 238 box tests over the `closest_hit` searches, the
 profile table's 19.76 per ray). The profile's "nodes popped" is
 `popped_skipped + interior_visits + leaf_visits`.

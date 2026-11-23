@@ -13,6 +13,7 @@
     allow(dead_code)
 )]
 
+#[cfg(any(feature = "scene", feature = "trace", feature = "build", feature = "sah"))]
 use std::hint::black_box;
 
 use bunny_broadphase::{build_bvh, BvhNode};
@@ -21,9 +22,12 @@ use bunny_linalg::FixedVec3;
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
 
+#[cfg(any(feature = "scene", feature = "trace"))]
+use crate::cases::case;
+#[cfg(any(feature = "scene", feature = "trace", feature = "build", feature = "sah"))]
+use crate::cases::Case;
 #[cfg(feature = "trace")]
 use crate::cases::BATCH;
-use crate::cases::{case, Case};
 
 /// Quads along each edge of each cube face: 6 * 48 * 48 * 2 = 27 648 triangles.
 const GRID: i64 = 48;

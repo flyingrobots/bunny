@@ -87,7 +87,7 @@ fn round_q(value: i128) -> i128 {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_120_hand_derived_irradiance_falls_off_with_the_square_of_distance() {
+fn optics_tp_200_hand_derived_irradiance_falls_off_with_the_square_of_distance() {
     assert_eq!(POINT_LIGHT_ID, "bunny-point-light/1");
     let up = vec3([0, ONE, 0]);
     // Straight above at 4 units: cosine 1, 1 / d^2 = 1/16; intensity (16, 1, 3) gives
@@ -120,8 +120,8 @@ fn optics_tp_120_hand_derived_irradiance_falls_off_with_the_square_of_distance()
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_121_irradiance_is_within_the_stated_rounding_of_the_exact_value() {
-    println!("OPTICS-TP-121 seed {POINT_LIGHT_TEST_SEED:#x}");
+fn optics_tp_201_irradiance_is_within_the_stated_rounding_of_the_exact_value() {
+    println!("OPTICS-TP-201 seed {POINT_LIGHT_TEST_SEED:#x}");
     let mut seeds = Seeds(POINT_LIGHT_TEST_SEED);
     let mut checked = 0;
     for case in 0..3_000 {
@@ -149,7 +149,7 @@ fn optics_tp_121_irradiance_is_within_the_stated_rounding_of_the_exact_value() {
         }
         checked += 1;
     }
-    println!("OPTICS-TP-121 checked {checked} of 3000");
+    println!("OPTICS-TP-201 checked {checked} of 3000");
     assert!(checked > 2_900, "too few cases reached the oracle: {checked}");
 }
 
@@ -171,7 +171,7 @@ fn within_stated_rounding(e: i64, intensity: i64, nv: i128, v: Wide3) -> bool {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_122_the_shadow_ray_stops_at_the_light() {
+fn optics_tp_202_the_shadow_ray_stops_at_the_light() {
     let hit = ground_hit(0, 0);
     let sample = hit.point_light_sample(&light([0, 4 * ONE, 0], [ONE; 3])).expect("lit");
     let ray = sample.shadow_ray().expect("a shadow ray");
@@ -193,9 +193,9 @@ fn optics_tp_122_the_shadow_ray_stops_at_the_light() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_123_seeded_shadow_rays_reach_the_light_on_their_largest_axis() {
+fn optics_tp_203_seeded_shadow_rays_reach_the_light_on_their_largest_axis() {
     let seed = POINT_LIGHT_TEST_SEED ^ 0x0123;
-    println!("OPTICS-TP-123 seed {seed:#x}");
+    println!("OPTICS-TP-203 seed {seed:#x}");
     let mut seeds = Seeds(seed);
     let mut lit = 0;
     for case in 0..2_000 {
@@ -226,7 +226,7 @@ fn optics_tp_123_seeded_shadow_rays_reach_the_light_on_their_largest_axis() {
         assert_eq!(sample.radiance(false), [FixedQ32_32::ZERO; 3], "{context}");
         lit += 1;
     }
-    println!("OPTICS-TP-123 lit {lit} of 2000");
+    println!("OPTICS-TP-203 lit {lit} of 2000");
     assert!(lit > 800, "too few lit samples: {lit}");
 }
 
@@ -246,7 +246,7 @@ fn check_shadow_ray(ray: &TraceRay, t_max: FixedQ32_32, v: Wide3, context: &str)
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_124_a_point_at_or_inside_the_minimum_distance_is_refused() {
+fn optics_tp_204_a_point_at_or_inside_the_minimum_distance_is_refused() {
     assert_eq!(MIN_LIGHT_DISTANCE_RAW, 1 << 25);
     let lamp = light([0; 3], [ONE; 3]);
     let up = vec3([0, ONE, 0]);
@@ -275,7 +275,7 @@ fn optics_tp_124_a_point_at_or_inside_the_minimum_distance_is_refused() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn optics_tp_125_lights_and_points_outside_the_domain_are_refused() {
+fn optics_tp_205_lights_and_points_outside_the_domain_are_refused() {
     let limit = TRACE_COORD_LIMIT_RAW;
     let outside = vec3([0, limit, 0]);
     assert_eq!(

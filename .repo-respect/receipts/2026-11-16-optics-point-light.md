@@ -22,10 +22,19 @@ crates/bunny-optics/tests/point_light_tests.rs (new)
 crates/bunny-optics/tests/exact/mod.rs (a big-operand form of the square-root comparison)
 crates/bunny-optics/README.md
 docs/topics/optics/README.md (Status, Point Light)
-docs/topics/optics/test-plan.md (scope; OPTICS-REQ-070 to -072; OPTICS-TP-120 to -126;
-point-light mutation checks)
+docs/topics/optics/test-plan.md (scope; OPTICS-REQ-100 to -102; OPTICS-TP-200 to -206 with their
+Test Cases rows; point-light mutation checks)
 CHANGELOG.md (Unreleased)
 .repo-respect/receipts/2026-11-16-optics-point-light.md
+
+2026-11-22, the merge of main (GGX conductor, incidence-cosine rule, smooth dielectric,
+texture bilinear, sRGB decode, ray disc, cylinder, box and sphere): conflicts in CHANGELOG.md,
+crates/bunny-optics/README.md, src/lib.rs, src/shading.rs and the optics topic docs resolved
+by keeping both sides. The point light's IDs moved from OPTICS-REQ-070 to -072 (also used by
+the open thin-lens branch) and OPTICS-TP-120 to -126 (TP-120 to -123 landed on main for the
+sRGB decode) to OPTICS-REQ-100 to -102 and OPTICS-TP-200 to -206, in the requirement table,
+metadata, cases, mutation table and test names; the missing Test Cases rows were added and a
+bare `|` in a table code span escaped.
 
 Topic docs:
 docs/topics/optics/README.md and test-plan.md

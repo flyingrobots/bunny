@@ -61,6 +61,10 @@ pub(crate) struct Row {
     /// case's fast mode even when process placement makes it bimodal.
     pub(crate) base_best: Option<f64>,
     pub(crate) head_best: Option<f64>,
+    /// The p50 the gate compares: the lowest, or the second-lowest once there are enough
+    /// rounds that one lucky round is not the only evidence of a fast mode.
+    pub(crate) base_floor: Option<f64>,
+    pub(crate) head_floor: Option<f64>,
 }
 
 impl Row {
@@ -69,12 +73,21 @@ impl Row {
         relative_change(self.base?.p50, self.head?.p50)
     }
 
-    /// Relative change of the best p50, in percent (positive is slower). The regression gate
-    /// uses this one.
+    /// Relative change of the best p50, in percent (positive is slower). It is shown in the
+    /// table, but one lucky round on either side moves it, so the gate does not use it alone.
     pub(crate) fn best_change_percent(&self) -> Option<f64> {
         relative_change(self.base_best?, self.head_best?)
     }
+
+    /// Relative change of the gate's floor p50 (see [`floor_p50`]), in percent (positive is
+    /// slower).
+    pub(crate) fn floor_change_percent(&self) -> Option<f64> {
+        relative_change(self.base_floor?, self.head_floor?)
+    }
 }
+
+/// Rounds from which the gate's floor skips the single lowest p50.
+pub(crate) const ROBUST_FLOOR_ROUNDS: usize = 5;
 
 fn relative_change(before: f64, after: f64) -> Option<f64> {
     (before > 0.0).then(|| (after - before) / before * 100.0)
@@ -82,6 +95,17 @@ fn relative_change(before: f64, after: f64) -> Option<f64> {
 
 fn best_p50(timings: &[Timing]) -> Option<f64> {
     timings.iter().map(|t| t.p50).min_by(f64::total_cmp)
+}
+
+/// The p50 the gate treats as a side's fast mode: the lowest across rounds, except that with
+/// at least [`ROBUST_FLOOR_ROUNDS`] rounds the second-lowest, so one lucky round on either
+/// side neither fails an unrelated change nor hides a real regression. A fast mode that
+/// shows up in two or more rounds is still found.
+fn floor_p50(timings: &[Timing]) -> Option<f64> {
+    let mut p50s: Vec<f64> = timings.iter().map(|t| t.p50).collect();
+    p50s.sort_by(f64::total_cmp);
+    let at = usize::from(p50s.len() >= ROBUST_FLOOR_ROUNDS);
+    p50s.get(at).copied()
 }
 
 /// Pairs every case seen in either revision, in case order.
@@ -97,14 +121,21 @@ pub(crate) fn compare(base: &Runs, head: &Runs) -> Vec<Row> {
             head: head.get(case).and_then(|t| median_timing(t)),
             base_best: base.get(case).and_then(|t| best_p50(t)),
             head_best: head.get(case).and_then(|t| best_p50(t)),
+            base_floor: base.get(case).and_then(|t| floor_p50(t)),
+            head_floor: head.get(case).and_then(|t| floor_p50(t)),
         })
         .collect()
 }
 
-/// Cases whose best p50 slowed down by more than `max_percent`.
+/// Cases whose floor p50 and median p50 both slowed down by more than `max_percent`. The floor
+/// keeps the bimodal-case reasoning (noise only adds time); the median must agree, so a fast
+/// mode that appears on one side only does not fail a case whose typical round did not move.
 pub(crate) fn regressions(rows: &[Row], max_percent: f64) -> Vec<&Row> {
     rows.iter()
-        .filter(|row| row.best_change_percent().is_some_and(|change| change > max_percent))
+        .filter(|row| {
+            row.floor_change_percent().is_some_and(|change| change > max_percent)
+                && row.change_percent().is_some_and(|change| change > max_percent)
+        })
         .collect()
 }
 
@@ -252,5 +283,70 @@ mod tests {
         );
         assert_eq!(rows[0].best_change_percent(), Some(0.0));
         assert!(regressions(&rows, 15.0).is_empty());
+    }
+
+    /// The shape of the false failure on pull request 252: seven rounds each, one base round
+    /// that happened to run fast, every other round on both sides within 0.5 %.
+    fn pr_252() -> (Runs, Runs) {
+        let base = [97.62, 80.69, 97.70, 97.55, 97.62, 97.80, 97.60].map(timing).to_vec();
+        let head = [97.50, 97.00, 97.60, 97.40, 97.50, 97.70, 97.45].map(timing).to_vec();
+        (
+            Runs::from([("query/ray_triangle".to_owned(), base)]),
+            Runs::from([("query/ray_triangle".to_owned(), head)]),
+        )
+    }
+
+    #[test]
+    fn one_lucky_base_round_does_not_fail_the_gate() {
+        let (base, head) = pr_252();
+        let rows = compare(&base, &head);
+        assert!(
+            rows[0].best_change_percent().expect("both sides") > 20.0,
+            "the minimum alone would trip the gate"
+        );
+        assert!(regressions(&rows, 20.0).is_empty(), "one lucky round is not a regression");
+    }
+
+    #[test]
+    fn a_regression_in_every_round_still_fails_the_gate() {
+        let base = [100.0, 101.0, 99.5, 100.5, 100.2, 99.8, 100.1].map(timing).to_vec();
+        let head = [130.0, 131.0, 129.5, 130.5, 130.2, 129.8, 130.1].map(timing).to_vec();
+        let rows =
+            compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
+        let slow: Vec<&str> = regressions(&rows, 20.0).iter().map(|r| r.case.as_str()).collect();
+        assert_eq!(slow, ["c"]);
+    }
+
+    #[test]
+    fn one_lucky_head_round_does_not_hide_a_regression() {
+        let base = [100.0, 101.0, 99.5, 100.5, 100.2, 99.8, 100.1].map(timing).to_vec();
+        let head = [130.0, 95.0, 129.5, 130.5, 130.2, 129.8, 130.1].map(timing).to_vec();
+        let rows =
+            compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
+        assert!(rows[0].best_change_percent().expect("both sides") < 0.0, "the minimum hides it");
+        assert_eq!(regressions(&rows, 20.0).len(), 1);
+    }
+
+    #[test]
+    fn a_floor_that_regresses_while_the_median_does_not_passes() {
+        // Fast mode on the base side in 3 of 7 rounds, never on the head side; medians agree.
+        let base = [40.0, 40.0, 40.0, 52.0, 52.0, 52.0, 52.0].map(timing).to_vec();
+        let head = [52.0, 52.0, 52.0, 52.0, 52.0, 52.0, 52.0].map(timing).to_vec();
+        let rows =
+            compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
+        assert!(rows[0].change_percent().expect("both sides").abs() < f64::EPSILON);
+        assert!(regressions(&rows, 20.0).is_empty());
+    }
+
+    #[test]
+    fn the_floor_skips_the_lowest_round_only_from_five_rounds() {
+        let four = [10.0, 20.0, 21.0, 22.0].map(timing);
+        let five = [10.0, 20.0, 21.0, 22.0, 23.0].map(timing);
+        assert_eq!(floor_p50(&four), Some(10.0));
+        assert_eq!(floor_p50(&five), Some(20.0));
+        assert_eq!(floor_p50(&[]), None);
+        // Two rounds that reach the fast mode keep it: the floor is not a median.
+        let two_fast = [40.0, 40.0, 52.0, 52.0, 52.0].map(timing);
+        assert_eq!(floor_p50(&two_fast), Some(40.0));
     }
 }

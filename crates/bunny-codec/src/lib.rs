@@ -18,8 +18,10 @@ pub use compressed::{
 pub use obj::{parse_obj_text, ObjError, ObjMesh, ObjTriangles, ObjVertex, ObjVertices};
 pub use ply::{parse_binary_ply, PlyBinaryMesh, PlyError, PlyVertex};
 pub use ply_ascii::{
-    parse_ascii_ply, parse_ascii_ply_with_limits, parse_decimal_q32_32, AsciiPlyError,
-    AsciiPlyErrorKind, AsciiPlyLimit, AsciiPlyLimitExceeded, AsciiPlyLimitedError, AsciiPlyLimits,
-    AsciiPlyMesh, AsciiPlyTriangles, AsciiPlyVertex, AsciiPlyVertices, DecimalError,
-    ASCII_PLY_PROFILE_ID, DECIMAL_Q32_32_ID, MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
+    parse_ascii_ply, parse_ascii_ply_v2, parse_ascii_ply_v2_with_limits,
+    parse_ascii_ply_with_limits, parse_decimal_q32_32, AsciiPlyError, AsciiPlyErrorKind,
+    AsciiPlyLimit, AsciiPlyLimitExceeded, AsciiPlyLimitedError, AsciiPlyLimits, AsciiPlyMesh,
+    AsciiPlyTextureCoordinate, AsciiPlyTextureCoordinates, AsciiPlyTriangles, AsciiPlyVertex,
+    AsciiPlyVertices, DecimalError, ASCII_PLY_PROFILE_ID, ASCII_PLY_PROFILE_V2_ID,
+    DECIMAL_Q32_32_ID, MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
 };

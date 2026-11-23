@@ -9,7 +9,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `bunny-query`: `ShapeFrame`, the rigid frame an analytic shape is placed
+  with, under the contract identity `bunny-shape-frame/1`
+  (`SHAPE_FRAME_ID`). `ShapeFrame::new` takes three right-handed unit axes
+  (exact pairwise dot products at most `2^-24`) and an origin in the trace
+  domain; `to_object` maps a `TraceRay` into object space and `to_world` a
+  normal back, each component one exact `i128` dot product rounded once to
+  Q32.32, ties to even. A direction lengthened past the kernels' limit by the
+  rotation is divided by `2^k` (`k` 0 or 1) inside that one rounding, not
+  refused; the returned `ObjectRay` carries `k`, and `world_distance`
+  (`floor(t / 2^k)`) and `object_distance` map hit distances and limits
+  between the rays. Results outside the trace domain or Q32.32 are typed
+  `ShapeFrameError` refusals. Closes flyingrobots/bunny#357.
+
+### Changed
+
+* Tests: the four zero-allocation tests (`bunny-broadphase` `bvh_allocation_tests`
+  and `bvh_sah_allocation_tests`, `bunny-codec` `ply_allocation_tests` and
+  `ply_ascii_allocation_tests`) count allocations of the measuring thread only,
+  with `allocation-counter` in place of the process-wide `dhat` count, so the
+  test harness or another thread can no longer fail them by chance. Each keeps
+  its exact zero assertions. `thread_scoped_allocation_tests` proves a foreign
+  thread's allocations are ignored and the thread's own are counted. The
+  `dhat` dev-dependency is removed and `Cargo.lock` loses it and its
+  dependencies. Closes flyingrobots/bunny#439.
+
+* `bunny-perf`: the `--stats` profile takes its node, box and leaf counts from
+  `compact_closest_hit_counted` and `compact_any_hit_counted` instead of
+  replicating them in the harness; the replica stays for the per-stage triangle
+  counters, the child counts and the recorded calls the kernel replays need.
+  The printed tables are unchanged, and `--stats` now needs the `trace_counted`
+  group. No kernel changed.
+
 ### Fixed
+
+* `bunny-query`: the sphere kernel's normal is corrected under the same
+  identity, `bunny-ray-sphere/1`, now public as `RAY_SPHERE_ID`.
+  **Breaking for the type:** `SphereHit::normal` returns a `FixedUnitVec3`, not
+  a `FixedVec3`; a caller that wants the vector calls `.into_inner()`. No crate,
+  bench or example in the workspace calls it. The value is the outward unit
+  normal at the exact (unrounded) root, normalized by Bunny's unit-vector rule
+  (the prescale to `[2^61, 2^62)` and `FixedUnitVec3::new` that triangle
+  surfaces use). Each component is within `1/2 + 2^-24` raw units of the exact
+  unit normal, for every admitted radius, and it is never zero. The rule it
+  replaces (the offset at the floored distance over the radius, floored) was
+  documented as "within a few raw units of 1.0", which held only for a radius
+  near 1.0 or larger: at a radius of 0.01 its length was `2^32 + 56` raw units
+  and at a radius of 1 raw unit it could be the zero vector. The normal's test
+  oracle no longer repeats the kernel's formula: it checks the bound against
+  the exact rational offset, a positive dot product with it and unit length,
+  and named tests now put a root exactly on `t_min`, on `t_max` and one raw unit
+  past each. The identity is kept because the contract merged on 2026-11-16
+  (flyingrobots/bunny#375), is in no release and has no caller. Distances and
+  facing are unchanged. Closes flyingrobots/bunny#422.
+
+* `xtask`: the `repo_respect` tests no longer read `GITHUB_BASE_REF` or
+  `CODE_DOJO_BASE_REF` through the code under test. The base ref is resolved
+  once at the entry points and passed down, so the tests pass on a stacked pull
+  request whose base branch is absent from their temporary repository.
+
+* `bunny-perf` builds with each feature group alone. Helpers shared by several
+  groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
+  now gated on the groups that use them, so the `cargo xtask perf` per-group
+  fallback no longer reports a buildable group as new. The full gate runs the
+  new `code-dojo-perf-groups` check, which builds the harness once per group
+  alone and once with all groups. Closes flyingrobots/bunny#272.
+
+* `bunny-optics`: the rounding of the incidence cosine in
+  `bunny-specular-reflection/1` is now tested. The rule is the documented one:
+  the exact `-(u . n)`, in units of `2^-64`, rounded once to nearest raw unit
+  with ties to even. Before this, a kernel that floored the cosine passed
+  every case. Five constructed hits on planes with non-axis normals now pin it
+  at cosines below 0.38: one `2^-64` unit under a tie, on three ties and one
+  unit over a tie. An oracle that shares no code with the crate derives each
+  expected value. The kernel already followed the rule, so no output changes
+  and the contract id stays `bunny-specular-reflection/1`. Closes
+  flyingrobots/bunny#423.
+
+* `cargo xtask perf`: the regression gate no longer trips on one lucky round. A
+  case fails only when its floor p50 (the lowest across rounds, or the
+  second-lowest from five rounds) and its median p50 both slow past the
+  threshold, so one fast base round no longer fails an unrelated change (pull
+  request 252: best +20.2 % against medians 0.1 % apart) and one fast head
+  round no longer hides a real regression. The performance chapter describes
+  the rule. Closes flyingrobots/bunny#254.
 
 * Code Dojo's dependency check holds every crate a deterministic crate
   depends on (normal and build edges, workspace and all features) to the
@@ -89,6 +174,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused with `PointLightError::TooNear`, not divided by zero. No existing
   output changes. Closes flyingrobots/bunny#365.
 
+* `bunny-query`: `TraceCylinder` and `TraceRay::hit_cylinder`, the
+  trace-domain ray-cylinder kernel under the contract `bunny-ray-cylinder/1`
+  (`RAY_CYLINDER_ID`).
+  The cylinder is in object space, about the `+Y` axis, with a radius and two
+  cap heights. A hit has the form of `SphereHit` (a distance in multiples of
+  the ray direction, rounded down, `front_face`, and the outward normal as a
+  `FixedUnitVec3`, taken at the exact hit and unit for every radius): the
+  nearest of the side and the two cap discs, or from an origin inside the
+  exit. Every comparison between a cap crossing and a side root is exact in
+  256-bit integers. Where the side meets a cap at the same exact distance the
+  cap is reported, with its normal. `TraceCylinder::new` refuses a radius that
+  is not positive, a radius or cap outside the trace domain, or a bottom cap
+  not below the top cap, with `TraceCylinderError`. Closes
+  flyingrobots/bunny#360.
+
+* `bunny-optics`: texture coordinates at a hit and bilinear texel weights,
+  `bunny-texture-bilinear/1` (`TEXTURE_BILINEAR_ID`). `interpolate_uv`
+  interpolates a triangle's vertex coordinates at a hit's
+  `BarycentricNumerators`, each component rounded once to nearest with ties
+  to even (exact for every accepted weight). `bilinear(uv, [width, height],
+  [wrap_u, wrap_v])` returns a `BilinearTaps`: four texels `[column, row]` and Q32.32
+  weights that sum to exactly 1.0, with texel `i`'s centre at
+  `(i + 1/2) / size`, `TextureWrap::Repeat` or `Clamp` per axis, two corner
+  weights rounded once and the other two their exact complements; at a texel
+  centre that is exactly a raw value that texel is the first tap with weight
+  1.0 (elsewhere neither the first tap nor the largest weight is
+  sure to be the nearest texel). Closes flyingrobots/bunny#367.
+
+* `bunny-query`: `TraceBox`, `TraceBoxError`, `BoxHit` and `TraceRay::hit_box`,
+  the trace-domain ray-box kernel for an axis-aligned box under the contract
+  `bunny-ray-box/1` (public constant `RAY_BOX_ID`). A hit has the form of `SphereHit`: a distance in multiples
+  of the ray direction, rounded down, `front_face` (true at the entry, false at
+  the exit from an inside origin) and the outward face normal, a unit vector
+  along one axis. Crossings are exact fractions; contact is inclusive; an edge or
+  corner hit reports the lowest axis (x, y, z); a ray parallel to a slab is
+  decided by its origin lying in the closed slab. `TraceBox::new` refuses a
+  corner outside the trace domain or a minimum above a maximum with
+  `TraceBoxError`. `ray_intersects_aabb` and `box_entry` are unchanged. Closes
+  flyingrobots/bunny#359.
+
+* `bunny-query`: `TraceDisc` and `TraceRay::hit_disc`, the trace-domain ray-disc
+  kernel under the contract `bunny-ray-disc/1`. The disc lies in the plane
+  `z = height`, centred on the `z` axis; a tilted disc is traced through the
+  shape frame. The ray meets the plane at the floor of the true distance in
+  raw units, then the exact hit point is tested against the radius by exact
+  integer comparison (the rim is inside). A ray parallel to the plane misses,
+  including one lying in it. The disc is two-sided: `DiscHit::front_face` is
+  true on the `+z` side, and `DiscHit::normal` is the exact unit axis
+  `FixedUnitVec3::UNIT_Z`. The identity is public as `RAY_DISC_ID`.
+  `TraceDisc::new` refuses a height or radius outside
+  the trace domain, or a radius that is not positive, with `TraceDiscError`.
+  Closes flyingrobots/bunny#363.
+
+* `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
+  `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed
+  256-entry table, each entry the exact sRGB decode rounded to nearest in raw
+  Q32.32. Closes flyingrobots/bunny#366.
+
+* `bunny-query`: `TraceSphere` and `TraceRay::hit_sphere`, the trace-domain
+  ray-sphere kernel under the contract `bunny-ray-sphere/1`. A hit has the
+  form of `TriangleHit` (a distance in multiples of the ray direction, rounded
+  down, and `front_face`, true when the ray enters from outside) plus the
+  outward normal. The discriminant is exact in 256-bit integers and its square
+  root is the exact floor, so the distance is the floor of the true distance.
+  `TraceSphere::new` refuses a centre or radius outside the trace domain, or a
+  radius that is not positive, with `TraceSphereError`. `ray_intersects_sphere`
+  is unchanged. Closes flyingrobots/bunny#358.
+
+* The ASCII PLY profile `bunny-ascii-ply-triangle-mesh/2`
+  (`parse_ascii_ply_v2`, `parse_ascii_ply_v2_with_limits`,
+  `ASCII_PLY_PROFILE_V2_ID`) returns per-vertex texture coordinates: a
+  vertex element that declares `s` and `t`, or `u` and `v`, with a float
+  type has them converted by `bunny-decimal-q32-32/1` and returned by
+  `AsciiPlyMesh::texture_coordinates` as `AsciiPlyTextureCoordinate { u, v }`
+  (`has_texture_coordinates` says whether they are there). A lone name of a
+  pair, names from both pairs, a repeated name or an integer type is
+  `UnsupportedProperty` at the last texture name's line. A file without the
+  four names reads to the same mesh as under `/1`. `/1` (`parse_ascii_ply`)
+  is unchanged and not deprecated: it still skips those columns unchecked.
+  Closes flyingrobots/bunny#369.
+
 * `bunny-optics`: the perfect mirror, `bunny-specular-reflection/1`
   (`SPECULAR_REFLECTION_ID`). `SurfaceHit::specular_reflection` and
   `try_specular_reflection` give the continuation ray from the hit's start
@@ -104,6 +270,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SecondaryRayError` variants, `ArrivesBelowSurface` and
   `ReflectionBelowSurface`. No existing output changes. Closes
   flyingrobots/bunny#370.
+
+* `bunny-optics`: the smooth dielectric, `bunny-dielectric/1`
+  (`DIELECTRIC_ID`). `SurfaceHit::dielectric_scatter` and
+  `try_dielectric_scatter` give the reflected or the refracted continuation
+  ray at a boundary between two refractive indices, chosen by one sampler
+  value, as a `DielectricScatter` (`Reflected` or `Refracted`, each a
+  `SpecularSample`). A `DielectricBoundary` holds the index outside the
+  triangle's front face and the index behind it, each in `1.0..=8.0`
+  (`MAX_REFRACTIVE_INDEX_RAW`, else `RefractiveIndexError`); the hit's facing,
+  now public as `SurfaceHit::front_face`, decides which the ray arrives
+  through. Total internal reflection is decided by one exact 256-bit integer
+  comparison. `dielectric_reflectance` gives a `DielectricReflectance`:
+  `Total`, or `Partial` with the exact unpolarized Fresnel formula rounded
+  once, within one raw unit; it is the probability of reflection, so each
+  branch's throughput is exactly 1.0. The refracted direction is within one
+  raw unit of Snell's law about the frame normal, and its ray starts at the
+  nearest point strictly on the far side of the exact plane, at most five
+  raw-unit steps from the hit's start point. A slab with parallel faces
+  returns the original direction within `1 + 6 h / c` raw units (index ratio
+  `h`, rarer-side cosine `c`). Two new `SecondaryRayError` variants,
+  `ChoiceOutsideUnitInterval` and `RefractionAboveSurface`. The radiance
+  factor of a refraction is not applied: a camera path that refracts from
+  index `a` into index `b` multiplies its throughput by `(a / b)^2` to carry
+  radiance, and the factors cancel on a path that enters a medium and leaves
+  it. Rough transmission, dispersion and absorption are not modelled. No
+  existing output changes. Closes flyingrobots/bunny#372.
+
+* `bunny-optics`: the GGX rough conductor, `bunny-ggx-conductor/1`
+  (`GGX_CONDUCTOR_ID`). `SurfaceHit::ggx_reflection` and `try_ggx_reflection`
+  draw a microfacet normal from the GGX distribution of the normals visible
+  from the incoming ray (Heitz 2018) from one sampler pair, reflect the ray
+  about it, and weight the sample by Schlick's Fresnel term times the
+  height-correlated Smith ratio `G2 / G1`. The result is a `GgxScatter`:
+  `Reflected(SpecularSample)`, or `Absorbed` when the direction does not
+  leave the surface, which is a result and not a refusal. `GgxConductor`
+  holds the base reflectance and the roughness, the distribution's width
+  `alpha` in `2^-16..=1.0` (`MIN_GGX_ROUGHNESS_RAW`); any other value is a
+  `GgxRoughnessError`. Every square root, product, division and
+  normalization has one stated rounding, and the Smith ratio is within
+  `1/2 + 2^-11` raw units of the exact formula at the rounded cosines. At
+  the minimum roughness a sample with `u <= 1/2` is within `33 alpha` of the
+  mirror's direction (derived). With `F = 1` the mean weight is the
+  single-scattering albedo, below one and falling with roughness
+  (`1 - ln 2` at roughness 1.0 and normal incidence); `2^16` stratified
+  samples are within `2^-11` of it, a measured tolerance. `reflect` is now
+  public: the unit vector along the exact reflection of a direction about
+  any normal, the one reflection the mirror and this sampler share. No
+  existing output changes. Closes flyingrobots/bunny#371.
 
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and

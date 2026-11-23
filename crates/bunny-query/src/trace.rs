@@ -33,6 +33,17 @@ const RECIPROCAL_BITS: u32 = 63;
 /// `(n * reciprocal) >> 31` is `n * 2^32 / |d|`, a raw Q32.32 distance.
 const RECIPROCAL_SHIFT: u32 = RECIPROCAL_BITS - FixedQ32_32::FRACTIONAL_BITS;
 
+mod box_hit;
+mod cylinder;
+mod disc;
+mod sphere;
+mod wide;
+
+pub use box_hit::{BoxHit, TraceBox, TraceBoxError, RAY_BOX_ID};
+pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError, RAY_CYLINDER_ID};
+pub use disc::{DiscHit, TraceDisc, TraceDiscError, RAY_DISC_ID};
+pub use sphere::{SphereHit, TraceSphere, TraceSphereError, RAY_SPHERE_ID};
+
 type Wide3 = [i128; 3];
 
 /// A ray prepared for repeated box and triangle tests.
@@ -69,7 +80,11 @@ impl TraceRay {
     }
 
     /// `new` with the inclusive bound on direction components as a parameter.
-    fn prepare(origin: FixedVec3, direction: FixedVec3, direction_limit: i64) -> Option<Self> {
+    pub(crate) fn prepare(
+        origin: FixedVec3,
+        direction: FixedVec3,
+        direction_limit: i64,
+    ) -> Option<Self> {
         let origin = raw3(origin);
         let direction = raw3(direction);
         let valid = origin.iter().all(|&c| in_trace_domain(c))
