@@ -25,6 +25,7 @@ use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
 // dojo: allow float-boundary -- imports the f32 DTO alias for Sphere3
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
+mod bounds;
 mod conversions;
 mod plane;
 mod transform;
@@ -33,6 +34,8 @@ pub use plane::{
     FixedPlane3, FixedSegment3, PlaneSide, PlaneSpan, PolygonClip, PolygonClipError, SegmentClip,
 };
 pub use transform::{TransformError, TransformedRay3};
+
+pub use bounds::{BoundsError, BOUNDS_CONTRACT_ID};
 
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

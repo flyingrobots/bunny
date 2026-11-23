@@ -24,6 +24,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the host (NOSTD-REQ-010 to -013, NOSTD-TP-010 to -017). Closes
   flyingrobots/bunny#156.
 
+* `bunny-linalg`: matrix-side unprojection under `bunny-unproject/1`.
+  `Viewport::try_unproject(coordinate, clip_from_view, view_from_world)` maps a
+  continuous viewport coordinate in the closed viewport to a world-space
+  `ViewportRay`: origin at NDC depth 0 (the near plane), direction to the
+  depth-1 point, not normalized. The viewport map, the projection (divide
+  included) and the view are inverted exactly in 512-bit integers, so each
+  component is the exact value rounded once to nearest, ties to even, and
+  equals the general inverse of `clip_from_world` bit for bit before that
+  rounding. Only the two shapes `try_perspective` and `try_orthographic`
+  produce (any entries) and affine views are accepted. Typed `UnprojectError`
+  refusals: `OutsideViewport`, `UnsupportedProjection`, `SingularProjection`,
+  `PointAtInfinity`, `PointBehindCamera`, `UnsupportedView`, `SingularView`,
+  `Overflow`, `DegenerateRay`. Its rays agree with `PinholeCamera::ray` and
+  `OrthographicCamera::ray` within a measured `2^6` raw. Refs
+  flyingrobots/bunny#150.
+
 * `bunny-geom`: classify a segment, a triangle or an AABB against a
   `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
   return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
@@ -62,6 +78,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `None` outside `[0, 1]`. `CatmullRom3::control_bounds()` is the union of the
   segments' control boxes, not the box of the points. Closes
   flyingrobots/bunny#152.
+
+* `bunny-geom`: box helpers on `FixedAabb3` under `bunny-bounds/1`
+  (`BOUNDS_CONTRACT_ID`). `from_points(&[FixedVec3])` and `from_triangle` are
+  each axis's exact minimum and maximum (no points is `BoundsError::NoPoints`);
+  `merge` is the smallest box containing both; `expand(margin)` and
+  `expand_axes` move each face by the margin, exact in `i128`, refusing
+  `InvertedBox`, then `ShrinkInvertsBox`, then `OutOfRange`, never saturating;
+  `from_sphere` is `centre -/+ r` (`NegativeRadius`, `OutOfRange`);
+  `bounding_sphere` rounds each midpoint once, ties to even, and takes the
+  ceiling of the exact root to the farthest corner, so it contains all eight
+  corners (`OutOfRange` above `i64::MAX`). Every helper refuses an inverted box,
+  as `FixedAabb3::try_new` does. `bunny-mesh`: `mesh_bounds` bounds the vertices
+  a mesh's triangles use (`MeshBoundsError::EmptyMesh`, `IndexOutOfRange {
+  triangle }`). Dedicated tests pin the existing `union_aabb`,
+  `TraceSphere::bounds` and `TraceTriangle::bounds` as they behave today. Closes
+  flyingrobots/bunny#151.
 
 * `bunny-geom` and `bunny-linalg`: ray, box and normal transforms under a
   `FixedAffine3`, the remainder of flyingrobots/bunny#108.

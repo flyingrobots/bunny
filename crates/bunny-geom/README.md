@@ -17,6 +17,12 @@ queries, collision detection, and ray-casting.
   segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
   polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
   half-space; see `docs/topics/plane-clipping/README.md`.
+* **Bounds helpers** (`bunny-bounds/1`): `FixedAabb3::from_points`,
+  `from_triangle`, `merge`, `expand`, `expand_axes`, `from_sphere` and
+  `bounding_sphere`, exact on raw values, with typed `BoundsError` refusals for
+  no points, inverted boxes, inverting shrinks, negative radii and the raw range;
+  the bounding sphere's radius is rounded outward so it contains every corner.
+  See `docs/topics/bounding-volumes/README.md`.
 * **Ray and box transforms**: `FixedRay3::checked_transform` maps a ray by a
   `FixedAffine3` into a `TransformedRay3` whose direction is not renormalised,
   so a parameter `t` keeps its meaning: each component of the point at `t` on
