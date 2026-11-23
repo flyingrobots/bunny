@@ -19,6 +19,8 @@ pub mod bvh;
 #[allow(clippy::module_name_repetitions)]
 pub mod closest_hit;
 #[allow(clippy::module_name_repetitions)]
+pub mod closest_point;
+#[allow(clippy::module_name_repetitions)]
 pub mod compact;
 #[allow(clippy::module_name_repetitions)]
 pub mod compact_hit;
@@ -30,6 +32,7 @@ pub mod utils;
 
 pub use bvh::{build_bvh, build_bvh_sah, BvhNode};
 pub use closest_hit::{any_hit, closest_hit, BvhView, ClosestHit};
+pub use closest_point::{closest_point, ClosestPoint};
 pub use compact::{compact_bvh, CompactChild, CompactError, CompactNode, CompactRoot};
 pub use compact_hit::{
     compact_any_hit, compact_any_hit_counted, compact_closest_hit, compact_closest_hit_counted,

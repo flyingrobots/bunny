@@ -7,6 +7,8 @@
 //! point. It shares no helper with `bunny-query`.
 
 #![allow(dead_code)]
+// The oracle follows the textbook names of points and parameters.
+#![allow(clippy::many_single_char_names)]
 
 use std::cmp::Ordering;
 

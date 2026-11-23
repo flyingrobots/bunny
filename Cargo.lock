@@ -134,10 +134,12 @@ name = "bunny-codec"
 version = "0.7.1"
 dependencies = [
  "allocation-counter",
+ "bunny-broadphase",
  "bunny-geom",
  "bunny-linalg",
  "bunny-mesh",
  "bunny-num",
+ "bunny-query",
  "wasm-bindgen-test",
 ]
 
@@ -179,9 +181,11 @@ dependencies = [
 name = "bunny-mesh"
 version = "0.7.1"
 dependencies = [
+ "bunny-broadphase",
  "bunny-geom",
  "bunny-linalg",
  "bunny-num",
+ "bunny-query",
  "sha2",
  "wasm-bindgen-test",
 ]

@@ -105,8 +105,8 @@ per-triangle kernel and none of the tree logic; the kernel itself is proven by t
 ## Fixtures
 
 - Seeds: `0xB002_0246_0000_0001` (MQ-TP-006, 3 000 cases; MQ-TP-007 uses it XOR `0xB0C5`,
-  2 000 boxes), `0xB002_0246_0000_0002` (MQ-TP-010 to MQ-TP-014; 13 and 14 XOR their
-  number), `0xB002_0246_0000_0003` (MQ-TP-022, 300 cases) and `0xB002_0246_0000_0004`
+  2 000 boxes), `0xB002_0246_0000_0002` (MQ-TP-010; XOR `0x0B` for MQ-TP-011 and `0x0E`
+  for MQ-TP-014), `0xB002_0246_0000_0003` (MQ-TP-022, 300 cases) and `0xB002_0246_0000_0004`
   (MQ-TP-030, 128 rays and 64 points), each drawn with a 64-bit LCG. Every failure message
   names the seed and the case.
 - `crates/bunny-codec/tests/fixtures/stanford-bunny-ascii/bun_zipper_res3.ply`, the
@@ -145,7 +145,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_001_query_points_outside_the_trace_domain_are_refused"
 oracle = "Hand-derived domain boundary, one raw unit either side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-002"
@@ -154,7 +154,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_002_each_region_gives_its_hand_derived_point"
 oracle = "Hand-computed points and squared distances in whole units; the rational oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-003"
@@ -163,7 +163,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_003_coordinates_and_squared_distances_round_to_nearest_ties_to_even"
 oracle = "Hand-derived exact halves and the rational oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-004"
@@ -172,7 +172,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_004_degenerate_triangles_are_the_segment_or_point_they_span"
 oracle = "The rational oracle, which takes the hull of the vertices; hand-computed segment and point distances."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-005"
@@ -181,7 +181,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_005_the_widest_inputs_in_the_trace_domain_are_exact"
 oracle = "The rational oracle; the largest squared distance rounded by hand in i128."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-006"
@@ -190,7 +190,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_006_seeded_points_match_the_oracle_and_compare_exactly"
 oracle = "Exact rational oracle sharing no helper with the kernel."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-007"
@@ -199,7 +199,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/point_triangle_tests.rs::mq_tp_007_the_box_bound_is_the_exact_distance_and_never_above_it"
 oracle = "Squared distance to the clamped point, computed independently in i128."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-010"
@@ -208,7 +208,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_point_tests.rs::mq_tp_010_every_tree_shape_returns_what_a_test_of_every_triangle_returns"
 oracle = "A test of every triangle with the exact comparison and the lowest index; it shares the kernel and none of the tree logic."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-011"
@@ -217,7 +217,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_point_tests.rs::mq_tp_011_shared_edges_and_vertices_resolve_to_the_lowest_index_on_every_tree"
 oracle = "The brute force; exact ties counted with cmp_distance."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-012"
@@ -226,7 +226,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_point_tests.rs::mq_tp_012_pruning_keeps_every_subtree_that_can_hold_the_answer"
 oracle = "Hand-derived squared distances and the list of tested primitives."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-013"
@@ -235,7 +235,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_point_tests.rs::mq_tp_013_malformed_trees_are_the_traversal_errors_and_empty_trees_find_nothing"
 oracle = "The TraversalError contract of closest_hit; the brute force."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-014"
@@ -244,7 +244,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_point_tests.rs::mq_tp_014_primitives_the_closure_leaves_out_are_ignored"
 oracle = "The brute force over the subset."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-015"
@@ -253,7 +253,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/closest_point_allocation_tests.rs::mq_tp_015_closest_point_allocates_nothing"
 oracle = "allocation_counter's count of heap blocks on the calling thread."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-020"
@@ -262,7 +262,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/mesh_bvh_tests.rs::mq_tp_020_meshes_are_refused_with_typed_errors_in_order"
 oracle = "Hand-built meshes with one fault each."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-021"
@@ -271,7 +271,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/mesh_bvh_tests.rs::mq_tp_021_triangle_i_of_the_index_buffer_is_primitive_i_at_both_widths"
 oracle = "TraceTriangle::new and bounds on the index buffer read directly."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-022"
@@ -280,7 +280,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/mesh_bvh_tests.rs::mq_tp_022_mesh_searches_equal_a_test_of_every_triangle"
 oracle = "Brute force over every triangle; hand-derived ties."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-023"
@@ -289,7 +289,7 @@ evidence = "doctest"
 artifact = "crates/bunny-mesh/src/mesh_bvh.rs::MeshBvh"
 oracle = "Hand-computed distances in whole units."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-030"
@@ -298,7 +298,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/mesh_bvh_stanford_tests.rs::mq_tp_030_the_stanford_bunny_is_traced_and_queried_through_the_mesh_layout"
 oracle = "Brute force over all 3 851 triangles; the faces that name each vertex, read from the index buffer."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MQ-TP-040"
@@ -307,7 +307,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/mesh-queries/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations

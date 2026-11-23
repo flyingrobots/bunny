@@ -101,18 +101,12 @@ impl Tree {
         max_leaf: usize,
     ) -> Self {
         let mut tree = Self { nodes: vec![empty_node()], prim_indices: Vec::new() };
-        tree.fill(0, triangles, order, seeds, max_leaf);
+        tree.fill(0, order, &mut Split { triangles, seeds, max_leaf });
         tree
     }
 
-    fn fill(
-        &mut self,
-        at: usize,
-        triangles: &[TraceTriangle],
-        order: &[usize],
-        seeds: &mut Seeds,
-        max_leaf: usize,
-    ) {
+    fn fill(&mut self, at: usize, order: &[usize], split_with: &mut Split<'_>) {
+        let Split { triangles, ref mut seeds, max_leaf } = *split_with;
         let bounds =
             order.iter().map(|&i| triangles[i].bounds()).reduce(union_aabb).expect("not empty");
         if order.len() <= 1 + seeds.below(max_leaf) {
@@ -127,9 +121,16 @@ impl Tree {
         let first = u32::try_from(left).expect("small");
         self.nodes[at] = BvhNode { bounds, first_child_or_prim_idx: first, prim_count: 0 };
         let split = 1 + seeds.below(order.len() - 1);
-        self.fill(left, triangles, &order[..split], seeds, max_leaf);
-        self.fill(left + 1, triangles, &order[split..], seeds, max_leaf);
+        self.fill(left, &order[..split], split_with);
+        self.fill(left + 1, &order[split..], split_with);
     }
+}
+
+/// What a random tree is split with.
+struct Split<'a> {
+    triangles: &'a [TraceTriangle],
+    seeds: &'a mut Seeds,
+    max_leaf: usize,
 }
 
 fn search(tree: &Tree, triangles: &[TraceTriangle], p: &PointQuery) -> Option<ClosestPoint> {
@@ -252,7 +253,7 @@ fn mq_tp_010_every_tree_shape_returns_what_a_test_of_every_triangle_returns() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn mq_tp_011_shared_edges_and_vertices_resolve_to_the_lowest_index_on_every_tree() {
-    let mut seeds = Seeds(POINT_TREE_SEED ^ 11);
+    let mut seeds = Seeds(POINT_TREE_SEED ^ 0x0B);
     let mut ties = 0;
     for (round, scale) in [(0, ONE_RAW), (1, 1), (2, 3)] {
         let triangles = grid(&mut seeds, 6, scale);
@@ -397,7 +398,7 @@ fn mq_tp_013_malformed_trees_are_the_traversal_errors_and_empty_trees_find_nothi
 
 #[wasm_bindgen_test(unsupported = test)]
 fn mq_tp_014_primitives_the_closure_leaves_out_are_ignored() {
-    let mut seeds = Seeds(POINT_TREE_SEED ^ 14);
+    let mut seeds = Seeds(POINT_TREE_SEED ^ 0x0E);
     let triangles = soup(&mut seeds, 90, 8 * ONE_RAW);
     let order: Vec<usize> = (0..triangles.len()).collect();
     let tree = Tree::built(&triangles, &order, true);

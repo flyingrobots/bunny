@@ -20,6 +20,8 @@ mod closest;
 #[allow(clippy::module_name_repetitions)]
 mod frame;
 #[allow(clippy::module_name_repetitions)]
+mod point_query;
+#[allow(clippy::module_name_repetitions)]
 mod ray;
 #[allow(clippy::module_name_repetitions)]
 mod trace;
@@ -32,6 +34,7 @@ pub use frame::{
     ObjectRay, ShapeFrame, ShapeFrameError, SHAPE_FRAME_AXIS_DOT_LIMIT_RAW, SHAPE_FRAME_ID,
     SHAPE_FRAME_MAX_DIRECTION_SHIFT,
 };
+pub use point_query::{PointQuery, TrianglePoint, POINT_BOX_GAP_LIMIT_RAW};
 pub use ray::{
     ray_intersects_aabb, ray_intersects_aabb_prepared, ray_intersects_sphere,
     ray_intersects_triangle, PreparedRay3,

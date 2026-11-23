@@ -23,9 +23,11 @@ use bunny_num::FixedQ32_32;
 
 #[cfg(feature = "mesh-hash")]
 mod hash;
+mod mesh_bvh;
 
 #[cfg(feature = "mesh-hash")]
 pub use hash::compute_mesh_hash;
+pub use mesh_bvh::{MeshBvh, MeshError, MeshView};
 
 const QUANTIZATION_STEPS: u128 = u16::MAX as u128;
 
