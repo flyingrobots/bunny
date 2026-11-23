@@ -88,6 +88,14 @@ every buffer.
   whose shadow ray stops one raw unit short of the light
   (`LightSample::shadow_t_max`); a point at most 1/128 unit from the light is
   refused with `PointLightError::TooNear`.
+* `DirectionalLight::from_angles` and `DirectionalLight::from_direction`
+  (`bunny-light-direction/1`): a directional light toward
+  `(cos e cos a, sin e, cos e sin a)` (azimuth 0 along `+x`, a positive
+  azimuth toward `+z`, a positive elevation toward `+y`) or toward any nonzero
+  vector, each component divided by the largest magnitude and rounded to
+  nearest, ties to even, so the largest is exactly `+-1.0`; from angles each
+  component is within 9.161 raw units of the exact scaled direction. The zero
+  vector is refused with `LightDirectionError::ZeroDirection`.
 * `SurfaceHit::dielectric_scatter` (`bunny-dielectric/1`): the reflected or
   refracted continuation ray at a smooth boundary between two refractive
   indices (`DielectricBoundary`, each in `1.0..=8.0`, ordered by the hit's

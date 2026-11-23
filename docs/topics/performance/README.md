@@ -54,6 +54,7 @@ cargo run --locked -p xtask -- perf --filter num/ --max-regression 20
 | `--filter <text>`, `--samples <n>` | all cases, 101 | Passed through to the harness. |
 | `--target <triple>` | the host | Build the harness for another Rust target (see [other targets](#measuring-other-targets)). |
 | `--runner <command>` | none | Run the harness through a command, such as `wasmtime`; needed when the target cannot run natively. |
+| `--evidence <file>` | none | Also write every round of both sides and the build identity to a new file (see [evidence files](#evidence-files)). Without it nothing changes. |
 
 How the comparison stays fair:
 
@@ -201,6 +202,92 @@ Hosted runners are shared virtual machines, so treat their tables as coarse: the
 reliably show tens of percent, not a few. The WebAssembly job installs wasmtime with the
 official `bytecodealliance/actions/wasmtime/setup` action rather than a downloaded script.
 
+### Evidence files
+
+`--evidence <file>` keeps what the table is computed from. After the table is printed (and
+appended to `--summary`), and before the regression gate decides the exit status, the command
+writes every round of both sides, with the identity of the two builds, to `<file>`. The file
+must not exist yet: the command refuses an existing path before it builds anything, so a
+ledger's evidence is never overwritten. Without the option the command prints, appends and
+exits exactly as it did before.
+
+```sh
+# Illustrative file name.
+cargo run --locked -p xtask -- perf --base origin/main --rounds 11 --align-code \
+  --evidence docs/topics/performance/evidence/2026-11-23-example.jsonl
+```
+
+**Where they live.** Evidence for a ledger entry is committed under
+`docs/topics/performance/evidence/`, one file per run, named
+`<date>-<short-topic>[-run-<n>].jsonl`, and the entry's **Measured** paragraph links the file of
+every run it reports. Every new ledger entry links one. Entries recorded before the option
+existed are not rewritten and have none; their numbers cannot be recomputed from the
+repository.
+
+**Format: `bunny-perf-evidence/1`.** JSON Lines, UTF-8, one object per line, each line ending
+in a line feed (a Windows checkout may turn that into a carriage return and line feed, which a
+reader strips). Every line carries `"schema": "bunny-perf-evidence/1"` and a `kind`. The first
+line is the `build` line; every other line is a `round` line. Keys are written in the order
+listed below. Numbers are the shortest decimal that reads back as the same 64-bit float, with no
+exponent, so a reader recovers the exact value the report used; a timing or threshold that is
+not finite is refused rather than written. The file holds no clock time and no path the
+command adds itself. For the same rounds and identity the file is byte-for-byte the same.
+
+**The schemas are the definition.** Each line kind has a JSON Schema (draft 2020-12) in
+[`schemas/bunny/perf-evidence/v1/`](../../../schemas/bunny/perf-evidence/v1/):
+[`build.schema.json`](../../../schemas/bunny/perf-evidence/v1/build.schema.json) and
+[`round.schema.json`](../../../schemas/bunny/perf-evidence/v1/round.schema.json). They list
+every field as required, allow no others (`additionalProperties: false`), fix `schema` and
+`kind` with `const`, and distinguish integers from numbers. The tables below explain those
+fields; where they and the schema files disagree, the schema files are right. Tests validate
+every line the writer produces against them (`PERF-TP-066` to `PERF-TP-069`). A later
+incompatible change gets a new identifier (`bunny-perf-evidence/2`) and a new `v2` directory
+beside `v1`.
+
+The `build` line:
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `schema` | string | `bunny-perf-evidence/1`. |
+| `kind` | string | `build`. |
+| `base_ref` | string | `--base` as given, such as `origin/main`. |
+| `base_revision` | string | The full SHA `base_ref` resolved to. The table heading shows its first 12 digits. |
+| `candidate_revision` | string | The full SHA of `HEAD` of the working tree that was measured. |
+| `candidate_dirty` | boolean | Whether `git status --porcelain --untracked-files=normal` printed anything before the build: a modified, staged, deleted or renamed tracked file, or an untracked file that is not ignored. Untracked files count because the harness copies every file of `crates/bunny-perf/src`. When it is `true`, `candidate_revision` does not identify the measured code on its own. |
+| `target` | string | `--target` as given, or else the host triple from `rustc -vV` (run at the repository root, so under the pinned toolchain). |
+| `target_is_host` | boolean | `true` when no `--target` was given. |
+| `platform` | string | The platform as the table heading names it. |
+| `rounds` | integer | Rounds per side, as the table heading states. |
+| `align_code` | boolean | Whether `--align-code` was given. |
+| `rustflags` | string | The exact `RUSTFLAGS` both harness builds received: the inherited value, with the alignment flags appended under `--align-code`. It is recorded as given, so an inherited flag that names a local path shows that path. |
+| `harness_args` | array of strings | The arguments passed through to every harness run (`--filter`, `--samples` and their values), in order. |
+| `runner` | string or `null` | `--runner` as given. |
+| `max_regression` | number or `null` | `--max-regression` as given. |
+
+Each `round` line is one case on one side in one round:
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `schema` | string | `bunny-perf-evidence/1`. |
+| `kind` | string | `round`. |
+| `case` | string | The harness case, such as `num/sqrt`. |
+| `side` | string | `base` (the base revision, the table's "Before") or `candidate` (the working tree, "After"). |
+| `round` | integer | The round, from 1. Odd rounds ran the base first, even rounds the candidate first. |
+| `p50`, `p95`, `p99` | number | Nanoseconds per call, as the harness printed them for that round. |
+
+Round lines are sorted by `case` (byte order, as in the table), then `side` (`base` first),
+then `round`. A case that only one side built has lines for that side only, and the table
+reports it as `new`.
+
+**Recomputing the table.** Group the round lines by case and side. Each side's p50 and p95
+columns are the median across its rounds (the mean of the two middle values for an even count),
+its best is the lowest p50, and its floor (for the gate) is the lowest p50, or the
+second-lowest from five rounds. Change is `(after - before) / before * 100` when `before` is
+positive, and `new` otherwise; speedup is the best `before / after` when `after` is positive.
+The heading is built from `platform`, `base_ref`, the first 12 digits of `base_revision` and
+`rounds`. `PERF-TP-058` rebuilds the whole table this way, byte for byte, with code that shares
+nothing with the command's own report.
+
 ### Target-specific implementations
 
 When a measurement shows an exact optimization winning on some targets and losing on
@@ -322,7 +409,10 @@ kernel and count how many reach the division (entry 6).
 ## Optimization Ledger
 
 Each landed optimization is recorded here with its technique, fidelity, trade-offs and
-measured effect. Measurements name the machine and the command that produced them.
+measured effect. Measurements name the machine and the command that produced them. A new
+entry also links the [evidence file](#evidence-files) of every run it reports, written with
+`--evidence` under `docs/topics/performance/evidence/`; the earlier entries below predate
+evidence files and are left as recorded.
 
 ### 1. Table-seeded integer square root
 

@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `cargo xtask perf --evidence <file>` writes every round of both sides (case,
+  side, round, p50, p95, p99) and the build identity (base reference, full base
+  and candidate SHAs, target triple, flags, and whether the working tree was
+  dirty by `git status --porcelain`) to a new `bunny-perf-evidence/1` JSON
+  Lines file, from which the report table can be recomputed exactly. It refuses
+  an existing path and non-finite numbers. The performance chapter documents
+  every field and says evidence lives under `docs/topics/performance/evidence/`,
+  linked from each new ledger entry; existing entries are unchanged. Without
+  the option the command prints, appends and exits as before. Each line kind
+  is defined by a JSON Schema (draft 2020-12) in
+  `schemas/bunny/perf-evidence/v1/build.schema.json` and `round.schema.json`;
+  the tests validate every line the writer produces against them.
+  Closes flyingrobots/bunny#238.
+
+* `bunny-optics`: a directional light from two angles or from any nonzero
+  vector, under the identity `bunny-light-direction/1`
+  (`LIGHT_DIRECTION_ID`). `DirectionalLight::from_angles(azimuth, elevation,
+  irradiance)` points toward `(cos e cos a, sin e, cos e sin a)`, from
+  `FixedAngle::sin_cos` with each product rounded once to nearest, ties to
+  even: azimuth 0 and elevation 0 along `+x`, a positive azimuth toward `+z`
+  (the right-hand rule about `-y`), a positive elevation toward `+y`; every
+  angle is accepted and a light below the horizon is valid.
+  `DirectionalLight::from_direction(v, irradiance)` divides each `v_i 2^32` by
+  the exact largest magnitude, rounded once to nearest, ties to even, so the
+  largest component is exactly `+-1.0` and the result is a light
+  `DirectionalLight::new` accepts. From angles each component is within
+  `5 sqrt(3) + 1/2 + 10^-8` (below 9.161) raw units of the exact scaled
+  direction and the angle's sine below `4.55 x 2^-32`; at the poles the
+  direction is exactly `(0, +-1, 0)` for every azimuth. The zero vector is
+  refused with the new `LightDirectionError::ZeroDirection`, an out-of-range
+  irradiance with `LightDirectionError::Light`. `DirectionalLight::new` and
+  `bunny-diffuse-shading/1` are unchanged. Closes flyingrobots/bunny#313.
+
 * `bunny-linalg`: translate, rotate and scale composition under the contract
   identity `bunny-transform/1` (`TRANSFORM_CONTRACT_ID`).
   `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S`: a point
@@ -35,6 +68,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `power_in_out(n, 1/2) = 1/2`. `steps(n, t)` is `floor(n t) / n` rounded once.
   `t` outside `[0, 1]`, `n` outside `2..=5` (or `0` for `steps`) are `None`.
   Closes flyingrobots/bunny#304.
+
+* `bunny-linalg`: cubic Bezier curves under the contract identity
+  `bunny-curve/1` (`CURVE_CONTRACT_ID`), part 1. `CubicBezier3 { p0, p1, p2,
+  p3 }` has `at(t)`, the de Casteljau recurrence over `FixedVec3::lerp`
+  (`bunny-lerp/1`) in a stated order, six lerps per component, within 3/2 raw
+  units of the exact cubic and exactly `p0` and `p3` at the ends;
+  `derivative_at(t)`, 3 times the de Casteljau quadratic of the checked
+  differences, within 3 raw units, exactly `3 (p1 - p0)` and `3 (p3 - p2)` at
+  the ends and `None` when a difference or the product by 3 overflows; and
+  `split(t)`, the de Casteljau halves sharing `at(t)` bit for bit. Every
+  function returns `None` for `t` outside `[0, 1]`. Closes
+  flyingrobots/bunny#308.
 
 * `bunny-num`: sine eases under `bunny-ease/1`, part 3. `ease::sine_in(t)` is
   `1 - cos(t pi/2)`, `sine_out(t)` is `sin(t pi/2)` (as `1 - sine_in(1 - t)`,
