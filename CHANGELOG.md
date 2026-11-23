@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-geom`: classify a segment, a triangle or an AABB against a
+  `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
+  return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
+  each defined by the existing point rule `classify` at the endpoints, vertices
+  or eight corners; a shape touching the plane from one side takes that side,
+  and `None` means a vertex's signed distance overflows. `classify_aabb`
+  evaluates two corners, chosen per axis by the sign of the normal component,
+  and equals the eight-corner result bit for bit, `None` included (seeded
+  sweeps of 70 000 boxes, ends of the range included). Inverted boxes are the
+  box with the same corners; degenerate triangles are classified, not refused.
+  Additive: `classify`, `clip_segment` and `clip_polygon` are unchanged. See
+  `docs/topics/plane-clipping/` (PC-REQ-014 to -019, PC-TP-025 to -037). Closes
+  flyingrobots/bunny#162.
+
+* `bunny-num`: inverse lerp, remap and an exact checked clamp under
+  `bunny-lerp/1`. `FixedQ32_32::inverse_lerp(a, b, x)` is
+  `round_half_even((x - a) * 2^32 / (b - a))` on raw values: exactly `0` at
+  `a` and `1.0` at `b`, extrapolating, `None` for `a == b` or a result outside
+  Q32.32. `lerp(a, b, inverse_lerp(a, b, x))` is exactly `x` when
+  `|b - a| <= 1.0` and `inverse_lerp(a, b, lerp(a, b, t))` exactly `t` when
+  `|b - a| >= 1.0`, each within a stated bound otherwise.
+  `FixedQ32_32::remap(x, [in_lo, in_hi], [out_lo, out_hi])` rounds its exact
+  step once from a `u128` product (within half a raw unit whatever the
+  ranges), is exact at both ends, equals `lerp` and `inverse_lerp` on unit
+  ranges, and is `None` for `in_lo == in_hi` or a result outside Q32.32.
+  `x.checked_clamp(lo, hi)` is exact and `None` when `lo > hi`. Refs
+  flyingrobots/bunny#111.
+
+* `bunny-linalg`: conservative bounds for `bunny-curve/1`. `CurveBounds3 {
+  min, max }` is a closed box with `contains`. `CubicBezier3::control_bounds()`
+  is the per-axis minimum and maximum of the control points, exact, and
+  contains every `at(t)` as rounded, with no widening (a lerp with `t` in
+  `[0, 1]` cannot round outside its ends). `CubicBezier3::split_bounds(t)`
+  widens each half's control box by a derived 3 raw units and clips it to the
+  control box, so it contains the original's evaluations on that half's range;
+  `None` outside `[0, 1]`. `CatmullRom3::control_bounds()` is the union of the
+  segments' control boxes, not the box of the points. Closes
+  flyingrobots/bunny#152.
+
 * `bunny-geom`: box helpers on `FixedAabb3` under `bunny-bounds/1`
   (`BOUNDS_CONTRACT_ID`). `from_points(&[FixedVec3])` and `from_triangle` are
   each axis's exact minimum and maximum (no points is `BoundsError::NoPoints`);

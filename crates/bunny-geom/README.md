@@ -13,10 +13,10 @@ queries, collision detection, and ray-casting.
   and maximum bounds through `Aabb3::try_new`.
 * **Sphere3**: Represents spheres with finite centers and finite non-negative
   radii through `Sphere3::try_new`.
-* **FixedPlane3 / FixedSegment3**: Checked plane classification, segment
-  clipping and convex polygon clipping (`clip_polygon`, into a caller buffer)
-  to the closed front half-space; see
-  `docs/topics/plane-clipping/README.md`.
+* **FixedPlane3 / FixedSegment3**: Checked plane classification of points,
+  segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
+  polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
+  half-space; see `docs/topics/plane-clipping/README.md`.
 * **Bounds helpers** (`bunny-bounds/1`): `FixedAabb3::from_points`,
   `from_triangle`, `merge`, `expand`, `expand_axes`, `from_sphere` and
   `bounding_sphere`, exact on raw values, with typed `BoundsError` refusals for

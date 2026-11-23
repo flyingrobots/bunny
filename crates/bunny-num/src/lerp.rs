@@ -5,8 +5,9 @@
 
 use crate::fixed_q32_32::{FixedQ32_32, FRAC_BITS};
 
-/// Stable contract identifier for [`FixedQ32_32::lerp`], [`FixedQ32_32::from_ratio`] and the
-/// component-wise lerps built on them in `bunny-linalg`.
+/// Stable contract identifier for [`FixedQ32_32::lerp`], [`FixedQ32_32::from_ratio`], the
+/// component-wise lerps built on them in `bunny-linalg`, and [`FixedQ32_32::inverse_lerp`],
+/// [`FixedQ32_32::remap`] and [`FixedQ32_32::checked_clamp`].
 pub const LERP_CONTRACT_ID: &str = "bunny-lerp/1";
 
 impl FixedQ32_32 {
