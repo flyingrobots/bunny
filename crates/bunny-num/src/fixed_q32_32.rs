@@ -265,7 +265,7 @@ impl TryFrom<f32> for FixedQ32_32 {
     }
 }
 
-const fn round_shift_right_u128(value: u128, shift: u32) -> u128 {
+pub(crate) const fn round_shift_right_u128(value: u128, shift: u32) -> u128 {
     if shift == 0 {
         return value;
     }

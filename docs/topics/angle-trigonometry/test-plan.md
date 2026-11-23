@@ -237,7 +237,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_010_turns_and_degrees_are_rounded_once_to_nearest_even"
 oracle = "Exact rational rounded by u128 quotient and remainder, over seeded angles and every tie with one unit either side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-011"
@@ -246,7 +246,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_011_radians_are_within_half_a_unit_and_two_to_the_minus_thirty"
 oracle = "Independent 124-bit oracle with pi by Machin's formula."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-012"
@@ -255,7 +255,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_012_turn_round_trips_are_exact"
 oracle = "rem_euclid of the turns and the exactly rounded multiple of 2^32 units."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-013"
@@ -264,7 +264,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_013_atan2_is_within_half_a_unit_and_two_to_the_minus_nine"
 oracle = "Independent 124-bit oracle (Machin pi, Taylor atan) over seeded and boundary directions."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-014"
@@ -273,7 +273,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_014_atan2_axes_diagonals_branch_and_origin"
 oracle = "Hand-derived exact angles, None at the origin, one raw unit either side of the x axis."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-015"
@@ -282,7 +282,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_015_atan2_symmetries_and_scale_are_bit_exact"
 oracle = "Bit equality with the wrapped conjugate, mirror, swap and doubled results."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-016"
@@ -291,7 +291,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_016_golden_vectors_are_bit_exact"
 oracle = "Correctly rounded raw values from a 60-digit decimal model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "AT-TP-017"
@@ -300,14 +300,51 @@ evidence = "manual-audit"
 artifact = "docs/topics/angle-trigonometry/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rounding rule, the CORDIC step count, the octant reconstruction and the
-origin rule of `atan2` is broken on purpose and AT-TP-010 to AT-TP-016 are run; the results
-will be recorded here.
+Each rule below was broken on purpose in a local copy of
+`crates/bunny-num/src/fixed_angle/conversions_out.rs` or `fixed_angle/atan2.rs`, and
+`cargo test --locked --no-fail-fast -p bunny-num --test fixed_angle_inverse_tests` was run;
+the source was restored after each. The unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `to_turns` floors | Round to nearest | 010, 012, 016 |
+| A `to_turns` tie goes half up | Ties to even | 010, 016 |
+| A `to_degrees` tie goes half up | Ties to even | 010, 016 |
+| A `to_degrees` tie goes down | Ties to even | 010, 016 |
+| `to_radians` floors | Round to nearest | 011, 016 |
+| `to_radians` uses `2 pi` with 32 fractional bits | `2 pi` with 61 fractional bits | 011, 016 |
+| `atan2` runs 64 CORDIC steps | 72 steps | 013, 016 |
+| `atan2` runs 70 CORDIC steps | 72 steps | 013 |
+| `atan2` floors the sum of step angles | Round to nearest | 013, 016 |
+| The first step angle is a sixteenth turn | `atan(1)` is an eighth turn | 013, 014, 015, 016 |
+| A swapped octant is added to the quarter turn | `QUARTER_TURN - a` | 013, 015, 016 |
+| A mirrored quadrant is added to the half turn | `HALF_TURN - a` | 013, 014, 015, 016 |
+| The sign of `y` is ignored | Conjugation | 013, 014, 015, 016 |
+| The origin gives `ZERO` | `None` at the origin | 014, 015 |
+
+## Oracles For The Conversions Out And Atan2
+
+`crates/bunny-num/tests/angle_oracle/mod.rs` is unsigned fixed point with 124 fractional
+bits in `u128`. It derives `pi` by Machin's formula, `16 atan(1/5) - 4 atan(1/239)`, and
+`atan(n / d)` by its Taylor series, reducing arguments above `1/2` by
+`atan(z) = pi/4 - atan((1 - z) / (1 + z))`; division is binary long division. It shares no
+algorithm, constant or helper with the kernel, which uses CORDIC, a compile-time step table
+scaled by `round(2^127 / 2 pi)`, and `round(2 pi 2^61)`. Its own error is below `2^-100` of
+an output unit; the tests allow two units of `2^-32` of an output unit for it. `to_turns`
+and `to_degrees` are checked against the exact rational rounded by `u128` quotient and
+remainder (the kernel rounds by a shift and a mask).
+
+The golden vectors of AT-TP-016 are inline in
+`crates/bunny-num/tests/fixed_angle_inverse_tests.rs`. Each is the correctly rounded value
+from a separate 60-digit Python `decimal` model (Machin `pi`, Taylor `atan`), which is not
+committed; it is posted on the pull request. For every `atan2` and `to_radians` golden the
+exact value is at least 0.02 raw units from a rounding boundary, so the kernel's bound
+forces the nearest value.
 
 ## Determinism Obligations And Evidence
 
@@ -320,6 +357,9 @@ result.
 
 ## Gaps
 
+- AT-TP-010, AT-TP-011 and AT-TP-013 sample inputs; they are not exhaustive. The bounds of
+  `to_radians` and `atan2` rest on the error analyses in the living reference, which the
+  samples check.
 - AT-TP-004 samples angles; it is not exhaustive over all `2^64` angles. The interpolation
   error analysis (cubic Hermite error at most `h^4 / 384` for segment width
   `h = π / 2048`, about `1.4e-14`) is the argument for angles between samples.

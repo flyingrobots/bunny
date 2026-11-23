@@ -212,7 +212,7 @@ const CONVERSION_GOLDEN: &[(u64, i64, i64, i64)] = &[
 ];
 
 /// `(y raw, x raw, angle raw)`, each the correctly rounded angle from the same model; the
-/// exact value is at least 0.15 units from a rounding boundary in every case.
+/// exact value is at least 0.07 units from a rounding boundary in every case.
 const ATAN2_GOLDEN: &[(i64, i64, u64)] = &[
     (ONE_RAW, 2 * ONE_RAW, 1_361_218_612_134_873_190), // atan(1/2), +0.338
     (3 * ONE_RAW, 4 * ONE_RAW, 1_889_248_794_157_641_523), // 3-4-5, +0.324

@@ -34,7 +34,10 @@ ecosystem to guarantee bit-level CPU determinism.
 * **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
   arithmetic, exact or symmetric-rounding conversions from turns, degrees and
   radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
-  unit of the exact value.
+  unit of the exact value. Conversions out: `to_turns` and `to_degrees` are
+  correctly rounded and `to_radians` is within `1/2 + 2^-30` raw units;
+  `FixedAngle::atan2(y, x)` is within `1/2 + 2^-9` angle units of the exact angle
+  of `(x, y)` by integer CORDIC, `None` only at the origin.
 * **Zero Dependency & No-Unsafe**: Compiled under `#![deny(unsafe_code)]` with
   zero external runtime dependencies.
 * **`no_std`**: With default features off the crate is `#![no_std]` and needs

@@ -16,6 +16,9 @@ flyingrobots/bunny#287.
 | `FixedQ32_32::from_ratio` | `n * 2^32 / d`, from the exact `u64` quotient and remainder (a tie cannot occur) | ties to even |
 | `from_f32`, `try_from_f32` | the float's exact value times `2^32` | ties to even |
 | `to_f32` | the raw value to a 24-bit significand | ties to even |
+| `FixedAngle::to_turns`, `to_degrees` | `raw / 2^32` and `raw * 45 / 2^29`, from the exact `u128` product ([angles](../angle-trigonometry/README.md#conversions-out)) | ties to even |
+| `FixedAngle::to_radians` | `raw * round(2 pi 2^61) / 2^93`, from the exact `u128` product; within `1/2 + 2^-30` of the exact radians | ties to even |
+| `FixedAngle::atan2` | the CORDIC sum of step angles in `2^-96` turn, to one angle unit ([angles](../angle-trigonometry/README.md#atan2)) | ties to even |
 
 Each site rounds the magnitude and then applies the sign, except the lerp step, which rounds
 the signed value through its floor; the two give the same result. Because being even does not
