@@ -126,7 +126,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_001_closed_tetrahedron_has_no_findings"
 oracle = "Hand-checked closed outward tetrahedron and the empty mesh; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-002"
@@ -135,7 +135,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_002_open_mesh_has_boundary_edges_only"
 oracle = "Hand-listed boundary edges; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-003"
@@ -144,7 +144,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_003_repeated_indices_are_index_degenerate_only"
 oracle = "Hand-listed index-degenerate records; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-004"
@@ -153,7 +153,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_004_collinear_face_in_a_closed_mesh_is_geometrically_degenerate_only"
 oracle = "Hand-built collinear face in a closed mesh; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-005"
@@ -162,7 +162,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_005_the_zero_area_test_is_exact_at_the_coordinate_extremes"
 oracle = "Hand-derived cross products on and one unit either side of collinearity at the u16 extremes; i128 oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-006"
@@ -171,7 +171,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_006_exact_duplicates_compare_rotated_keys"
 oracle = "Hand-listed duplicate and implied edge records; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-007"
@@ -180,7 +180,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_007_flipped_duplicates_are_reported_against_the_first_face"
 oracle = "Hand-listed duplicate records against the lowest-indexed face; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-008"
@@ -189,7 +189,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_008_one_reversed_face_gives_winding_inconsistent_edges_only"
 oracle = "Hand-listed winding-inconsistent edges; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-009"
@@ -198,7 +198,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_009_two_tetrahedra_sharing_an_edge_give_one_non_manifold_edge"
 oracle = "Hand-listed non-manifold edge; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-010"
@@ -207,7 +207,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_010_records_come_in_kind_then_field_order_with_fixed_severities"
 oracle = "Hand-written record sequence and severity table; brute-force oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-011"
@@ -216,7 +216,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_011_a_short_output_buffer_keeps_the_ordered_prefix_and_reports_the_total"
 oracle = "Prefixes of the hand-written record sequence at every output length."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-012"
@@ -225,7 +225,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_012_invalid_input_is_refused_in_a_fixed_order"
 oracle = "Hand-derived refusals at and one slot below each documented size."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-013"
@@ -234,7 +234,7 @@ evidence = "property"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_013_seeded_meshes_match_the_oracle_bit_for_bit"
 oracle = "Independent BTreeMap, permutation-parity and i128 oracle over 2 000 seeded meshes."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-014"
@@ -243,7 +243,7 @@ evidence = "property"
 test = "crates/bunny-mesh/tests/topology_tests.rs::mtopo_tp_014_output_does_not_depend_on_scratch_contents_on_entry"
 oracle = "Bit equality with a fresh-scratch run over 300 seeded meshes on dirty, permuted scratch."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-015"
@@ -252,7 +252,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/ply_ascii_stanford_topology_tests.rs::mtopo_tp_015_stanford_bunny_findings_match_the_oracle_and_pinned_counts"
 oracle = "Independent brute-force oracle on the committed Stanford asset; counts matched by a separate Python count."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "MTOPO-TP-016"
@@ -261,7 +261,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/mesh-topology/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations

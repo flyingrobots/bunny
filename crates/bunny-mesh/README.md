@@ -14,6 +14,11 @@ layout, and quantization bounds cannot collide.
 * Wide-intermediate quantization and dequantization at raw Q32.32 extremes, so
   full-span bounds clamp or reconstruct without host-width overflow.
 * 16-bit and 32-bit triangle index layout validation.
+* Allocation-free topology validation (`validate_topology`, `bunny-mesh-topology/1`):
+  index-degenerate and exactly decided zero-area triangles, exact and flipped duplicate
+  faces, and boundary, winding-inconsistent and non-manifold edges, as records in one
+  total order, using caller-provided scratch. See
+  [`docs/topics/mesh-topology`](../../docs/topics/mesh-topology/README.md).
 * SHA-256 mesh hashes with domain, bounds, vertex, and face framing
   (`compute_mesh_hash`, `mesh-hash` feature).
 

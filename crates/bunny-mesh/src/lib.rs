@@ -232,3 +232,11 @@ impl IndexBufferLayout<'_> {
         self.len() == 0
     }
 }
+
+mod topology;
+
+pub use topology::{
+    edge_scratch_len, face_scratch_len, validate_topology, EdgeSlot, FaceSlot, TopologyError,
+    TopologyFinding, TopologyKind, TopologyReport, TopologyScratch, TopologySeverity,
+    MESH_TOPOLOGY_CONTRACT_ID,
+};

@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-mesh`: topology validation under the contract identity
+  `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
+  reports index-degenerate triangles, geometrically degenerate triangles
+  (collinear or coincident positions, decided exactly in `i64` on the `u16`
+  coordinates with no tolerance), exact and flipped duplicate faces, and
+  boundary, winding-inconsistent and non-manifold edges. It returns them as
+  `TopologyFinding` records in one total order (kind, then fields), each kind
+  with a fixed `TopologySeverity`. It does not allocate: the caller provides
+  `n` `FaceSlot`s and `3 n` `EdgeSlot`s of scratch and an output slice, and a
+  `TopologyReport` counts every finding, so a short output is detectable.
+  Refusals (`TopologyError`) reuse `IndexBufferLayout::is_valid` unchanged.
+  The Stanford bunny fixture has 10 exact and 73 flipped duplicate faces, 60
+  boundary edges and 141 non-manifold edges. `docs/topics/mesh-topology/`
+  (MTOPO-REQ-001 to -007, MTOPO-TP-001 to -016). Closes
+  flyingrobots/bunny#122.
+
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;
