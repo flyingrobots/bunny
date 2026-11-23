@@ -126,5 +126,5 @@ fn optics_tp_272_the_bounce_direction_pins_every_knot_of_the_sine_table() {
         }
     }
     assert_eq!(cases, 16_388);
-    assert_eq!(digest, 0x67F149E2DD7352C3, "pinned digest");
+    assert_eq!(digest, 0x67F1_49E2_DD73_52C3, "pinned digest");
 }
