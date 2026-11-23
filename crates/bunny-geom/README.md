@@ -17,6 +17,13 @@ queries, collision detection, and ray-casting.
   segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
   polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
   half-space; see `docs/topics/plane-clipping/README.md`.
+* **Exact predicates** (`bunny-predicates/1`): `orientation2` and
+  `orientation3` return the exact sign of the 2D and 3D orientation
+  determinants for every representable input; `doubled_signed_area2` and
+  `sextupled_signed_volume3` return the exact values, and the `_rounded` forms
+  round them once to Q32.32. `barycentric2` and `barycentric3_coplanar` return
+  exact barycentric numerators with an exact inside, on-edge, on-vertex or
+  outside classification; see `docs/topics/predicates/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects

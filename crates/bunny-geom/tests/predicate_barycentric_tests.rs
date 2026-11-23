@@ -1,6 +1,9 @@
 //! Golden vectors for the exact barycentric numerators, the location classification and the
 //! rounded weights (`bunny-predicates/1`, `docs/topics/predicates/`).
 
+// The predicates name their points `a` to `c` and `p` as the chapter does.
+#![allow(clippy::many_single_char_names)]
+
 mod predicates_oracle;
 
 use bunny_geom::{
@@ -15,6 +18,9 @@ use wasm_bindgen_test::wasm_bindgen_test;
 const MIN: i64 = i64::MIN;
 const MAX: i64 = i64::MAX;
 const U: i64 = 1 << 32;
+
+/// A triangle, a point in its plane, and the projection that keeps two axes.
+type Plane = ([FixedVec3; 4], fn(FixedVec3) -> FixedVec2);
 
 fn v2(x: i64, y: i64) -> FixedVec2 {
     FixedVec2::new(FixedQ32_32::from_raw(x), FixedQ32_32::from_raw(y))
@@ -123,6 +129,19 @@ fn pred_tp_006_coplanar_3d_barycentrics() {
     assert_eq!(Some(got), barycentric2(yz(p), yz(a), yz(b), yz(c)));
     assert_eq!(numerators(&got), [Some(8), Some(4), Some(4), Some(16)]);
     assert_eq!(got.location(), TriangleLocation::Inside);
+    // The plane z = 2x + 3y has n = (-2, -3, 1): the (y, z) projection's doubled area is 2
+    // where (x, y) would give 1, so the stated axis order is visible in the denominator.
+    let (b2, c2, p2) = (v3(1, 0, 2), v3(0, 1, 3), v3(1, 1, 5));
+    let got2 = barycentric3_coplanar(p2, a, b2, c2).expect("coplanar");
+    assert_eq!(Some(got2), barycentric2(yz(p2), yz(a), yz(b2), yz(c2)));
+    assert_eq!(numerators(&got2), [Some(-2), Some(2), Some(2), Some(2)]);
+    // The plane z = 3y contains the x axis, n = (0, -6, 2): the (z, x) projection is used,
+    // denominator 6 where (x, y) would give 2.
+    let zx = |q: FixedVec3| FixedVec2::new(q.z, q.x);
+    let (b3, c3, p3) = (v3(2, 0, 0), v3(0, 1, 3), v3(1, 1, 3));
+    let got3 = barycentric3_coplanar(p3, a, b3, c3).expect("coplanar");
+    assert_eq!(Some(got3), barycentric2(zx(p3), zx(a), zx(b3), zx(c3)));
+    assert_eq!(got3.denominator().to_i128(), Some(6));
     // One raw unit off the plane, and a point off the plane over an edge: refused.
     assert_eq!(barycentric3_coplanar(v3(1, 1, 3), a, b, c), None);
     assert_eq!(barycentric3_coplanar(v3(2, 0, 3), a, b, c), None);
@@ -131,9 +150,8 @@ fn pred_tp_006_coplanar_3d_barycentrics() {
 
     // Each axis plane uses its own projection: x = 0 keeps (y, z), y = 0 keeps (z, x) and
     // z = 0 keeps (x, y).
-    let zx = |q: FixedVec3| FixedVec2::new(q.z, q.x);
     let xy = |q: FixedVec3| FixedVec2::new(q.x, q.y);
-    let planes: [([FixedVec3; 4], fn(FixedVec3) -> FixedVec2); 3] = [
+    let planes: [Plane; 3] = [
         ([v3(0, 0, 0), v3(0, 5, 0), v3(0, 0, 5), v3(0, 1, 2)], |q| FixedVec2::new(q.y, q.z)),
         ([v3(0, 0, 0), v3(0, 0, 5), v3(5, 0, 0), v3(2, 0, 9)], zx),
         ([v3(MIN, MIN, 7), v3(MAX, MIN, 7), v3(MIN, MAX, 7), v3(0, -1, 7)], xy),

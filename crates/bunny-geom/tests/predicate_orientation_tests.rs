@@ -4,6 +4,9 @@
 //! Every value is a raw Q32.32 integer with its derivation, and each is also checked against
 //! the independent big-integer oracle in `predicates_oracle`.
 
+// The predicates name their points `a` to `d` as the chapter does.
+#![allow(clippy::many_single_char_names)]
+
 mod predicates_oracle;
 
 use bunny_geom::{
@@ -24,6 +27,12 @@ const L2_LIMBS: [u64; 4] = [1, 0xFFFF_FFFF_FFFF_FFFE, 0, 0];
 /// `2 (2^64 - 1)^3`, the largest `|D3|`: `2^193 - 6 2^128 + 6 2^64 - 2`.
 const TWO_L3_LIMBS: [u64; 4] = [0xFFFF_FFFF_FFFF_FFFE, 5, 0xFFFF_FFFF_FFFF_FFFA, 1];
 
+/// `b`, `c`, the exact `D2` and the rounded area, with `a` at the origin.
+type AreaCase = (FixedVec2, FixedVec2, i128, Option<i64>);
+/// `b`, `c`, `d`, the exact `D3` when it fits `i128`, and the rounded volume, with `a` at the
+/// origin.
+type VolumeCase = (FixedVec3, FixedVec3, FixedVec3, Option<i128>, Option<i64>);
+
 fn v2(x: i64, y: i64) -> FixedVec2 {
     FixedVec2::new(FixedQ32_32::from_raw(x), FixedQ32_32::from_raw(y))
 }
@@ -34,7 +43,8 @@ fn v3(x: i64, y: i64, z: i64) -> FixedVec3 {
 
 /// Asserts the orientation, the exact `D2` (as an `i128` when it fits) and agreement with the
 /// oracle.
-fn check2(a: FixedVec2, b: FixedVec2, c: FixedVec2, expected: Orientation2, d2: Option<i128>) {
+fn check2(points: [FixedVec2; 3], expected: Orientation2, d2: Option<i128>) {
+    let [a, b, c] = points;
     let context = format!("{a:?} {b:?} {c:?}");
     assert_eq!(orientation2(a, b, c), expected, "{context}");
     let exact = doubled_signed_area2(a, b, c);
@@ -44,7 +54,8 @@ fn check2(a: FixedVec2, b: FixedVec2, c: FixedVec2, expected: Orientation2, d2: 
     }
 }
 
-fn check3(a: FixedVec3, b: FixedVec3, c: FixedVec3, d: FixedVec3, expected: Orientation3) {
+fn check3(points: [FixedVec3; 4], expected: Orientation3) {
+    let [a, b, c, d] = points;
     let context = format!("{a:?} {b:?} {c:?} {d:?}");
     assert_eq!(orientation3(a, b, c, d), expected, "{context}");
     let exact = sextupled_signed_volume3(a, b, c, d);
@@ -59,32 +70,32 @@ fn pred_tp_001_collinear_and_one_raw_unit_off_in_2d() {
     // Small: (0, 0), (1, 1), (2, 2) raw lie on y = x. Moving c by one raw unit gives
     // D2 = 1 * cy - 1 * cx = +-1 raw squared, which a Q32.32-rounded product loses.
     let (a, b) = (v2(0, 0), v2(1, 1));
-    check2(a, b, v2(2, 2), Collinear, Some(0));
-    check2(a, b, v2(2, 3), CounterClockwise, Some(1));
-    check2(a, b, v2(2, 1), Clockwise, Some(-1));
-    check2(a, b, v2(3, 2), Clockwise, Some(-1));
-    check2(a, b, v2(1, 2), CounterClockwise, Some(1));
+    check2([a, b, v2(2, 2)], Collinear, Some(0));
+    check2([a, b, v2(2, 3)], CounterClockwise, Some(1));
+    check2([a, b, v2(2, 1)], Clockwise, Some(-1));
+    check2([a, b, v2(3, 2)], Clockwise, Some(-1));
+    check2([a, b, v2(1, 2)], CounterClockwise, Some(1));
 
     // The diagonal of the whole raw range: e1 = (2^63, 2^63), e2 = (2^64 - 1, 2^64 - 1).
     // The products are near 2^127 and the one-raw-unit changes are 2^63 or 2^64 - 1.
     let a = v2(MIN, MIN);
-    check2(a, v2(0, 0), v2(MAX, MAX), Collinear, Some(0));
-    check2(a, v2(0, 0), v2(MAX, MAX - 1), Clockwise, Some(-(1 << 63)));
-    check2(a, v2(0, 0), v2(MAX - 1, MAX), CounterClockwise, Some(1 << 63));
+    check2([a, v2(0, 0), v2(MAX, MAX)], Collinear, Some(0));
+    check2([a, v2(0, 0), v2(MAX, MAX - 1)], Clockwise, Some(-(1 << 63)));
+    check2([a, v2(0, 0), v2(MAX - 1, MAX)], CounterClockwise, Some(1 << 63));
     let l = (1_i128 << 64) - 1;
-    check2(a, v2(0, 1), v2(MAX, MAX), Clockwise, Some(-l));
-    check2(a, v2(1, 0), v2(MAX, MAX), CounterClockwise, Some(l));
+    check2([a, v2(0, 1), v2(MAX, MAX)], Clockwise, Some(-l));
+    check2([a, v2(1, 0), v2(MAX, MAX)], CounterClockwise, Some(l));
 
     // The anti-diagonal x + y = -1 through (MAX, MIN), (MIN, MAX) and (0, -1).
     let (a, b) = (v2(MAX, MIN), v2(MIN, MAX));
-    check2(a, b, v2(0, -1), Collinear, Some(0));
-    check2(a, b, v2(0, 0), Clockwise, Some(-l));
-    check2(a, b, v2(0, -2), CounterClockwise, Some(l));
+    check2([a, b, v2(0, -1)], Collinear, Some(0));
+    check2([a, b, v2(0, 0)], Clockwise, Some(-l));
+    check2([a, b, v2(0, -2)], CounterClockwise, Some(l));
 
     // Repeated points are collinear, at either end of the range.
-    check2(v2(MIN, MAX), v2(MIN, MAX), v2(MIN, MAX), Collinear, Some(0));
-    check2(v2(MAX, MAX), v2(MAX, MAX), v2(MIN, 7), Collinear, Some(0));
-    check2(v2(MIN, MIN), v2(5, -3), v2(MIN, MIN), Collinear, Some(0));
+    check2([v2(MIN, MAX), v2(MIN, MAX), v2(MIN, MAX)], Collinear, Some(0));
+    check2([v2(MAX, MAX), v2(MAX, MAX), v2(MIN, 7)], Collinear, Some(0));
+    check2([v2(MIN, MIN), v2(5, -3), v2(MIN, MIN)], Collinear, Some(0));
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -92,7 +103,7 @@ fn pred_tp_002_doubled_and_rounded_signed_area() {
     // With a = 0, b = (bx, by) and c = (cx, cy): D2 = bx cy - by cx, and the rounded area is
     // round_half_even(D2 / 2^33) raw.
     let o = v2(0, 0);
-    let cases: [(FixedVec2, FixedVec2, i128, Option<i64>); 16] = [
+    let cases: [AreaCase; 16] = [
         // D2 = 1: a positive orientation whose rounded area is zero.
         (v2(1, 0), v2(0, 1), 1, Some(0)),
         (v2(0, 1), v2(1, 0), -1, Some(0)),
@@ -144,35 +155,35 @@ fn pred_tp_003_coplanar_and_one_raw_unit_off_in_3d() {
 
     // Small: the plane z = 0 with the right-hand normal +Z of (0, x, y); one raw unit of z.
     let (a, b, c) = (v3(0, 0, 0), v3(1, 0, 0), v3(0, 1, 0));
-    check3(a, b, c, v3(5, 7, 0), Coplanar);
-    check3(a, b, c, v3(5, 7, 1), Front);
-    check3(a, b, c, v3(5, 7, -1), Behind);
+    check3([a, b, c, v3(5, 7, 0)], Coplanar);
+    check3([a, b, c, v3(5, 7, 1)], Front);
+    check3([a, b, c, v3(5, 7, -1)], Behind);
     assert_eq!(sextupled_signed_volume3(a, b, c, v3(5, 7, 1)).to_i128(), Some(1));
 
     // The face z = MIN of the raw cube, normal +Z; then d, or c, one raw unit off it.
     let (a, b, c) = (v3(MIN, MIN, MIN), v3(MAX, MIN, MIN), v3(MIN, MAX, MIN));
-    check3(a, b, c, v3(MAX, MAX, MIN), Coplanar);
-    check3(a, b, c, v3(MAX, MAX, MIN + 1), Front);
-    check3(a, b, v3(MIN, MAX, MIN + 1), v3(MAX, MAX, MIN), Behind);
-    check3(a, b, c, v3(0, 0, MIN + 1), Front);
+    check3([a, b, c, v3(MAX, MAX, MIN)], Coplanar);
+    check3([a, b, c, v3(MAX, MAX, MIN + 1)], Front);
+    check3([a, b, v3(MIN, MAX, MIN + 1), v3(MAX, MAX, MIN)], Behind);
+    check3([a, b, c, v3(0, 0, MIN + 1)], Front);
 
     // The tilted plane x = y across the whole range: n = (L^2, -L^2, 0) with L = 2^64 - 1.
     let (a, b, c) = (v3(MIN, MIN, MIN), v3(MAX, MAX, MIN), v3(MIN, MIN, MAX));
-    check3(a, b, c, v3(0, 0, 5), Coplanar);
-    check3(a, b, c, v3(MAX, MAX, MAX), Coplanar);
-    check3(a, b, c, v3(1, 0, 5), Front);
-    check3(a, b, c, v3(0, 1, 5), Behind);
-    check3(a, b, c, v3(MAX, MAX - 1, MAX), Front);
-    check3(a, b, c, v3(MAX - 1, MAX, MAX), Behind);
+    check3([a, b, c, v3(0, 0, 5)], Coplanar);
+    check3([a, b, c, v3(MAX, MAX, MAX)], Coplanar);
+    check3([a, b, c, v3(1, 0, 5)], Front);
+    check3([a, b, c, v3(0, 1, 5)], Behind);
+    check3([a, b, c, v3(MAX, MAX - 1, MAX)], Front);
+    check3([a, b, c, v3(MAX - 1, MAX, MAX)], Behind);
 
     // Repeated points are coplanar.
-    check3(a, a, b, c, Coplanar);
-    check3(a, b, c, c, Coplanar);
+    check3([a, a, b, c], Coplanar);
+    check3([a, b, c, c], Coplanar);
 
     // The largest |D3| = 2 L^3: the regular tetrahedron on alternate corners of the cube.
     let (b, c, d) = (v3(MAX, MAX, MIN), v3(MAX, MIN, MAX), v3(MIN, MAX, MAX));
-    check3(a, b, c, d, Behind);
-    check3(a, b, d, c, Front);
+    check3([a, b, c, d], Behind);
+    check3([a, b, d, c], Front);
     let exact = sextupled_signed_volume3(a, b, c, d);
     assert_eq!((exact.magnitude(), exact.is_negative()), (TWO_L3_LIMBS, true));
     assert_eq!(signed_volume3_rounded(a, b, c, d), None);
@@ -184,7 +195,7 @@ fn pred_tp_004_sextupled_and_rounded_signed_volume() {
     // round_half_even(D3 / (6 2^64)) raw.
     let o = v3(0, 0, 0);
     let half = 1_i64 << 31;
-    let cases: [(FixedVec3, FixedVec3, FixedVec3, Option<i128>, Option<i64>); 11] = [
+    let cases: [VolumeCase; 11] = [
         // D3 = 1: Front, rounded volume zero.
         (v3(1, 0, 0), v3(0, 1, 0), v3(0, 0, 1), Some(1), Some(0)),
         // D3 = 3 2^64: half a raw unit of volume, a tie to 0; and its negative.

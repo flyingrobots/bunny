@@ -25,9 +25,9 @@ change to `FixedPlane3::classify`, `BarycentricNumerators` or the trace kernels.
 | ID | Requirement | Current Source |
 | --- | --- | --- |
 | PRED-REQ-001 | `orientation2(a, b, c)` is the sign of the exact `D2 = (b - a) x (c - a)` on raw values for every representable input, `CounterClockwise` when positive (canonical `+Y` up), `Clockwise` when negative and `Collinear` when exactly zero. | `README.md#2d-orientation` |
-| PRED-REQ-002 | `doubled_signed_area2` returns `D2` exactly (`\|D2\| < 2^129`, raw squared units); `signed_area2_rounded` is `round_half_even(D2 / 2^33)` as Q32.32 raw, `None` outside `i64`; it is zero exactly when `\|D2\| <= 2^32` and otherwise has the sign of `orientation2`. | `README.md#signed-area` |
+| PRED-REQ-002 | `doubled_signed_area2` returns `D2` exactly (`\|D2\| <= (2^64 - 1)^2`, raw squared units); `signed_area2_rounded` is `round_half_even(D2 / 2^33)` as Q32.32 raw, `None` outside `i64`; it is zero exactly when `\|D2\| <= 2^32` and otherwise has the sign of `orientation2`. | `README.md#signed-area` |
 | PRED-REQ-003 | `orientation3(a, b, c, d)` is the sign of the exact `D3 = (d - a) . ((b - a) x (c - a))` for every representable input, `Front` when positive (on the side the right-hand normal of `(a, b, c)` points to), `Behind` when negative and `Coplanar` when exactly zero. | `README.md#3d-orientation` |
-| PRED-REQ-004 | `sextupled_signed_volume3` returns `D3` exactly (`\|D3\| < 6 2^192`, raw cubed units); `signed_volume3_rounded` is `round_half_even(D3 / (6 2^64))` as Q32.32 raw, `None` outside `i64`; it is zero exactly when `\|D3\| <= 3 2^64` and otherwise has the sign of `orientation3`. | `README.md#signed-volume` |
+| PRED-REQ-004 | `sextupled_signed_volume3` returns `D3` exactly (`\|D3\| <= 2 (2^64 - 1)^3`, raw cubed units); `signed_volume3_rounded` is `round_half_even(D3 / (6 2^64))` as Q32.32 raw, `None` outside `i64`; it is zero exactly when `\|D3\| <= 3 2^64` and otherwise has the sign of `orientation3`. | `README.md#signed-volume` |
 | PRED-REQ-005 | `barycentric2(p, a, b, c)` is `None` exactly when `D2(a, b, c) = 0`; otherwise its numerators are `D2(p, b, c)`, `D2(a, p, c)`, `D2(a, b, p)` and its denominator `D2(a, b, c)`, all negated together when the denominator is negative, so the denominator is positive and the numerators sum to it exactly. | `README.md#barycentric-numerators` |
 | PRED-REQ-006 | `location()` is exact: `Outside` when any numerator is negative, otherwise `OnVertex` when two are zero, `OnEdge` when one is zero and `Inside` when none is, naming the vertex or edge; `contains_closed` is "not `Outside`" and `contains_open` is "`Inside`". | `README.md#location` |
 | PRED-REQ-007 | `barycentric3_coplanar(p, a, b, c)` is `None` when the triangle has zero area or `orientation3(a, b, c, p)` is not `Coplanar`; otherwise it equals `barycentric2` of the projection that drops the first axis (`x`, `y`, `z`) in which the normal is nonzero. | `README.md#coplanar-3d-points` |
@@ -108,7 +108,7 @@ crates/bunny-geom`) runs the goldens and sweeps as well as the native run.
 | PRED-TP-003 | PRED-REQ-003 | Constructed goldens: four coplanar points give `Coplanar`, and one raw unit off the plane gives `Front` and `Behind`, at small magnitudes and at the ends of the raw range, on an axis plane and on the tilted plane `x = y`; the largest `D3 = (2^64 - 1)^3`. | `crates/bunny-geom/tests/predicate_orientation_tests.rs::pred_tp_003_coplanar_and_one_raw_unit_off_in_3d` |
 | PRED-TP-004 | PRED-REQ-004 | Hand-derived rounded volumes: `D3 = 1`, `3 2^64` (a tie to 0), `3 2^64 + 1`, `9 2^64` (a tie to 2), their negatives, and the `i64` refusal at the largest volumes. | `crates/bunny-geom/tests/predicate_orientation_tests.rs::pred_tp_004_sextupled_and_rounded_signed_volume` |
 | PRED-TP-005 | PRED-REQ-005, PRED-REQ-006 | Constructed goldens: a point on each vertex and on each edge, one raw unit inside and outside each edge, a point on an edge's extension beyond a vertex (`Outside`), a clockwise triangle normalized to a positive denominator, a zero-area triangle refused, and the same at the ends of the raw range; exact numerators pinned. | `crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_005_barycentric_locations_on_and_off_the_boundary` |
-| PRED-TP-006 | PRED-REQ-007 | A tilted triangle with a coplanar point equal to `barycentric2` of its projection, a point one raw unit off the plane refused, triangles in each axis plane (each projection used), and a zero-area triangle refused. | `crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_006_coplanar_3d_barycentrics` |
+| PRED-TP-006 | PRED-REQ-007 | Tilted triangles with a coplanar point equal to `barycentric2` of the stated projection, including planes whose projections give different denominators (`z = 2x + 3y`, `z = 3y`), a point one raw unit off the plane refused, triangles in each axis plane (each projection used), and a zero-area triangle refused. | `crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_006_coplanar_3d_barycentrics` |
 | PRED-TP-007 | PRED-REQ-008 | Hand-derived rounded weights: thirds summing to `2^32 - 1`, `(2/3, 1/6, 1/6)` summing to `2^32 + 1`, ties of half a raw unit going to even, a vertex exactly `(1.0, 0, 0)`, and a weight on and past `2^63` refused. | `crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_007_rounded_weights_and_their_sum` |
 | PRED-TP-008 | PRED-REQ-001, PRED-REQ-002 | 60 000 seeded triples (seed printed) built deliberately: exactly collinear, one raw unit off collinear, small, and of every magnitude up to the ends of the raw range; the exact `D2` and the rounded area equal the oracle, and the outcome counts are pinned. | `crates/bunny-geom/tests/predicate_sweep_tests.rs::pred_tp_008_seeded_2d_orientations_match_the_oracle` |
 | PRED-TP-009 | PRED-REQ-003, PRED-REQ-004 | 40 000 seeded quadruples (seed printed) built the same way (exactly coplanar, one raw unit off, every magnitude); the exact `D3` and the rounded volume equal the oracle, and the outcome counts are pinned. | `crates/bunny-geom/tests/predicate_sweep_tests.rs::pred_tp_009_seeded_3d_orientations_match_the_oracle` |
@@ -124,7 +124,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_orientation_tests.rs::pred_tp_001_collinear_and_one_raw_unit_off_in_2d"
 oracle = "Constructed raw goldens, each also checked against the independent big-integer oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-002"
@@ -133,7 +133,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_orientation_tests.rs::pred_tp_002_doubled_and_rounded_signed_area"
 oracle = "Hand-derived raw values at each rounding and range threshold, each also checked against the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-003"
@@ -142,7 +142,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_orientation_tests.rs::pred_tp_003_coplanar_and_one_raw_unit_off_in_3d"
 oracle = "Constructed raw goldens, each also checked against the independent big-integer oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-004"
@@ -151,7 +151,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_orientation_tests.rs::pred_tp_004_sextupled_and_rounded_signed_volume"
 oracle = "Hand-derived raw values at each rounding and range threshold, each also checked against the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-005"
@@ -160,7 +160,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_005_barycentric_locations_on_and_off_the_boundary"
 oracle = "Constructed raw goldens on and one raw unit either side of each edge and vertex."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-006"
@@ -169,7 +169,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_006_coplanar_3d_barycentrics"
 oracle = "barycentric2 of the stated projection, and constructed refusals."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-007"
@@ -178,7 +178,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_barycentric_tests.rs::pred_tp_007_rounded_weights_and_their_sum"
 oracle = "Hand-derived raw weights, each also checked against the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-008"
@@ -187,7 +187,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_sweep_tests.rs::pred_tp_008_seeded_2d_orientations_match_the_oracle"
 oracle = "Independent big-integer oracle over 60 000 seeded, deliberately near-degenerate triples."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-009"
@@ -196,7 +196,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_sweep_tests.rs::pred_tp_009_seeded_3d_orientations_match_the_oracle"
 oracle = "Independent big-integer oracle over 40 000 seeded, deliberately near-coplanar quadruples."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-010"
@@ -205,7 +205,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_sweep_tests.rs::pred_tp_010_seeded_barycentrics_match_the_oracle"
 oracle = "Independent big-integer oracle over 40 000 seeded point and triangle pairs."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-011"
@@ -214,7 +214,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/predicate_sweep_tests.rs::pred_tp_011_orientations_are_consistent_under_permutation"
 oracle = "Permutation identities of the determinant over seeded near-degenerate inputs."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PRED-TP-012"
@@ -223,13 +223,45 @@ evidence = "manual-audit"
 artifact = "docs/topics/predicates/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule of `crates/bunny-geom/src/predicates.rs`,
-`crates/bunny-geom/src/predicates/barycentric.rs` and
-`crates/bunny-geom/src/predicates/wide.rs` broken on purpose in a local copy, the
-predicate tests run, and the source restored. The first mutation replaces the exact sign
-with one computed from Q32.32-rounded products.
+Each rule below was broken on purpose in a local copy of
+`crates/bunny-geom/src/predicates.rs`, `crates/bunny-geom/src/predicates/barycentric.rs`
+or `crates/bunny-geom/src/predicates/wide.rs`, and `cargo test --locked --no-fail-fast -p
+bunny-geom --test predicate_orientation_tests --test predicate_barycentric_tests --test
+predicate_sweep_tests` was run; the source was restored after each. The unmutated source
+passed every case. The first three replace the exact sign with a rounded computation.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `orientation2` reads the sign of `signed_area2_rounded` | Exact sign | 001 (`D2 = +-1`), 008, 011 |
+| `orientation2` reads the sign of an `f64` cross product | Exact sign | 001 (the range's diagonal), 008, 011 |
+| `orientation3` reads the sign of `signed_volume3_rounded` | Exact sign | 003, 009 |
+| Differences wrap in `i64` | Differences exact in 65 bits | 001, 002, 003, 005, 008, 009, 010, 011 |
+| Products drop the carry between limbs | Products exact | 001, 002, 003, 004, 005, 007, 008, 009, 010, 011 |
+| A sum of opposite signs keeps the left operand's sign | Sums exact | 001 to 011 |
+| Ties go away from zero | Ties to even | 002, 004, 007, 009 |
+| Ties go toward zero | Ties to even | 002, 004, 007, 009 |
+| Ties go to the odd neighbour | Ties to even | 002, 004, 007, 009 |
+| The quotient is truncated, not rounded | Round to nearest | 002, 004, 007, 008, 009, 010 |
+| The `i64` range check wraps instead of refusing | `None` outside `i64` | 002, 004, 007, 008, 009, 010 |
+| The area divisor is `2^32` | Area is `D2 / 2^33` | 002, 008 |
+| The volume divisor is `3 2^64` | Volume is `D3 / (6 2^64)` | 004, 009 |
+| One term of the 3D determinant has the wrong sign | `D3` definition | 003, 004, 006, 009, 011 |
+| A negative denominator is not normalized | Denominator positive | 005, 006, 010, 011 |
+| Zero numerators are read before negative ones | `Outside` first | 005, 010 |
+| Vertices `A` and `B` swapped | Vertex naming | 005, 010 |
+| Edges `BC` and `CA` swapped | Edge naming | 005, 010 |
+| `contains_closed` excludes the boundary | Closed form includes it | 005, 010 |
+| The coplanarity check is skipped | `None` off the plane | 006 |
+| The projection drops `z` first | Axis order `x`, `y`, `z` | 006 |
+| Weights scaled by `2^31` | Weight is `n 2^32 / d` | 007, 010 |
+| A refused weight is replaced by zero | `None` when any is outside `i64` | 007, 010 |
+| The numerator of `b` uses `(p, a, c)` | Numerator definitions | 005, 006, 007, 010, 011 |
+
+The projection mutation first survived: the only tilted golden had a normal whose
+components were equal in magnitude, so every projection gave the same numerators. The
+planes `z = 2x + 3y` and `z = 3y` were added to PRED-TP-006 and the mutation now fails.

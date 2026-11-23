@@ -6,6 +6,8 @@
 //! multiplying back, never by dividing.
 
 #![allow(dead_code)]
+// The determinants name their points `a` to `c` and `p` as the chapter does.
+#![allow(clippy::many_single_char_names)]
 
 use core::cmp::Ordering;
 
@@ -14,17 +16,17 @@ use bunny_linalg::{FixedVec2, FixedVec3};
 
 /// A sign and a magnitude in little-endian base-2^32 digits with no trailing zero digit.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Big {
+pub(crate) struct Big {
     negative: bool,
     digits: Vec<u32>,
 }
 
 impl Big {
-    pub fn zero() -> Self {
+    pub(crate) fn zero() -> Self {
         Self { negative: false, digits: Vec::new() }
     }
 
-    pub fn from_i128(value: i128) -> Self {
+    pub(crate) fn from_i128(value: i128) -> Self {
         let mut magnitude = value.unsigned_abs();
         let mut digits = Vec::new();
         while magnitude != 0 {
@@ -34,7 +36,7 @@ impl Big {
         Self::signed(value < 0, digits)
     }
 
-    pub fn from_i64(value: i64) -> Self {
+    pub(crate) fn from_i64(value: i64) -> Self {
         Self::from_i128(i128::from(value))
     }
 
@@ -46,11 +48,11 @@ impl Big {
         Self { negative, digits }
     }
 
-    pub fn is_zero(&self) -> bool {
+    pub(crate) fn is_zero(&self) -> bool {
         self.digits.is_empty()
     }
 
-    pub fn signum(&self) -> i32 {
+    pub(crate) fn signum(&self) -> i32 {
         if self.is_zero() {
             0
         } else if self.negative {
@@ -60,15 +62,15 @@ impl Big {
         }
     }
 
-    pub fn neg(&self) -> Self {
+    pub(crate) fn neg(&self) -> Self {
         Self::signed(!self.negative, self.digits.clone())
     }
 
-    pub fn abs(&self) -> Self {
+    pub(crate) fn abs(&self) -> Self {
         Self::signed(false, self.digits.clone())
     }
 
-    pub fn add(&self, rhs: &Self) -> Self {
+    pub(crate) fn add(&self, rhs: &Self) -> Self {
         if self.negative == rhs.negative {
             return Self::signed(self.negative, add_digits(&self.digits, &rhs.digits));
         }
@@ -78,11 +80,11 @@ impl Big {
         }
     }
 
-    pub fn sub(&self, rhs: &Self) -> Self {
+    pub(crate) fn sub(&self, rhs: &Self) -> Self {
         self.add(&rhs.neg())
     }
 
-    pub fn mul(&self, rhs: &Self) -> Self {
+    pub(crate) fn mul(&self, rhs: &Self) -> Self {
         let mut out = vec![0_u64; self.digits.len() + rhs.digits.len() + 1];
         for (i, &x) in self.digits.iter().enumerate() {
             let mut carry = 0_u64;
@@ -98,7 +100,7 @@ impl Big {
     }
 
     /// `self * 2^k`.
-    pub fn shl(&self, k: u32) -> Self {
+    pub(crate) fn shl(&self, k: u32) -> Self {
         let mut factor = Self::from_i128(1);
         for _ in 0..k {
             factor = factor.add(&factor);
@@ -106,7 +108,7 @@ impl Big {
         self.mul(&factor)
     }
 
-    pub fn cmp(&self, rhs: &Self) -> Ordering {
+    pub(crate) fn cmp(&self, rhs: &Self) -> Ordering {
         match (self.negative, rhs.negative) {
             (false, true) => Ordering::Greater,
             (true, false) => Ordering::Less,
@@ -116,7 +118,7 @@ impl Big {
     }
 
     /// The magnitude as four little-endian 64-bit limbs, or `None` above `2^256`.
-    pub fn limbs(&self) -> Option<[u64; 4]> {
+    pub(crate) fn limbs(&self) -> Option<[u64; 4]> {
         if self.digits.len() > 8 {
             return None;
         }
@@ -127,7 +129,7 @@ impl Big {
         Some(limbs)
     }
 
-    pub fn is_even(&self) -> bool {
+    pub(crate) fn is_even(&self) -> bool {
         self.digits.first().is_none_or(|d| d % 2 == 0)
     }
 }
@@ -169,14 +171,14 @@ fn d(a: i64, b: i64) -> Big {
 }
 
 /// `(b - a) x (c - a)` on raw values.
-pub fn det2(a: FixedVec2, b: FixedVec2, c: FixedVec2) -> Big {
+pub(crate) fn det2(a: FixedVec2, b: FixedVec2, c: FixedVec2) -> Big {
     let (ex, ey) = (d(b.x.raw(), a.x.raw()), d(b.y.raw(), a.y.raw()));
     let (fx, fy) = (d(c.x.raw(), a.x.raw()), d(c.y.raw(), a.y.raw()));
     ex.mul(&fy).sub(&ey.mul(&fx))
 }
 
 /// `(d - a) . ((b - a) x (c - a))` on raw values.
-pub fn det3(a: FixedVec3, b: FixedVec3, c: FixedVec3, p: FixedVec3) -> Big {
+pub(crate) fn det3(a: FixedVec3, b: FixedVec3, c: FixedVec3, p: FixedVec3) -> Big {
     let e = [d(b.x.raw(), a.x.raw()), d(b.y.raw(), a.y.raw()), d(b.z.raw(), a.z.raw())];
     let f = [d(c.x.raw(), a.x.raw()), d(c.y.raw(), a.y.raw()), d(c.z.raw(), a.z.raw())];
     let g = [d(p.x.raw(), a.x.raw()), d(p.y.raw(), a.y.raw()), d(p.z.raw(), a.z.raw())];
@@ -187,7 +189,7 @@ pub fn det3(a: FixedVec3, b: FixedVec3, c: FixedVec3, p: FixedVec3) -> Big {
 }
 
 /// Whether the kernel's exact value equals the oracle's, sign and magnitude.
-pub fn same(kernel: ExactDeterminant, oracle: &Big) -> bool {
+pub(crate) fn same(kernel: ExactDeterminant, oracle: &Big) -> bool {
     let sign = match kernel.sign() {
         Ordering::Less => -1,
         Ordering::Equal => 0,
@@ -198,7 +200,7 @@ pub fn same(kernel: ExactDeterminant, oracle: &Big) -> bool {
 
 /// Whether `result` is `round_half_even(num / den)` as an `i64`, or `None` exactly when that
 /// quotient is outside `i64`. `den` must be nonzero.
-pub fn rounds_to(num: &Big, den: &Big, result: Option<i64>) -> bool {
+pub(crate) fn rounds_to(num: &Big, den: &Big, result: Option<i64>) -> bool {
     let (num, den) = if den.negative { (num.neg(), den.neg()) } else { (num.clone(), den.clone()) };
     let twice = num.add(&num);
     let above = twice.cmp(&den.mul(&Big::from_i128(2 * i128::from(i64::MAX) + 1))).is_ge();

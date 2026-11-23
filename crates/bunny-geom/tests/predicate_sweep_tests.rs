@@ -7,6 +7,9 @@
 //! raw range. The outcome counts of each sweep are pinned, so a generator that stops
 //! producing degenerate cases fails the test.
 
+// The predicates name their points `a` to `d` and `p` as the chapter does.
+#![allow(clippy::many_single_char_names)]
+
 mod predicates_oracle;
 
 use core::cmp::Ordering;
@@ -26,7 +29,7 @@ const SEED_3D: u64 = 0x0145_0001_0000_0003;
 const SEED_BARY: u64 = 0x0145_0001_0000_0005;
 const EXTREMES: [i64; 8] = [i64::MIN, i64::MIN + 1, -2, -1, 0, 1, i64::MAX - 1, i64::MAX];
 
-/// SplitMix64.
+/// The `SplitMix64` generator.
 fn next(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
@@ -72,7 +75,7 @@ fn nudge<const N: usize>(state: &mut u64, points: &mut [[i64; N]]) {
     let point = usize::try_from(next(state) % points.len() as u64).expect("index");
     let axis = usize::try_from(next(state) % N as u64).expect("index");
     let value = &mut points[point][axis];
-    let moved = if next(state) % 2 == 0 {
+    let moved = if next(state).is_multiple_of(2) {
         value.checked_add(1).or_else(|| value.checked_sub(1))
     } else {
         value.checked_sub(1).or_else(|| value.checked_add(1))
@@ -83,14 +86,14 @@ fn nudge<const N: usize>(state: &mut u64, points: &mut [[i64; N]]) {
 }
 
 /// Lattice points `base + s u + t v` with the steps halved until every point fits.
+/// `count` points with coefficients in `-bound..=bound`.
 fn lattice<const N: usize>(
     state: &mut u64,
     base: [i64; N],
-    mut u: [i64; N],
-    mut v: [i64; N],
-    count: usize,
-    bound: u64,
+    steps: [[i64; N]; 2],
+    (count, bound): (usize, u64),
 ) -> Vec<[i64; N]> {
+    let [mut u, mut v] = steps;
     let coefficients: Vec<(i64, i64)> =
         (0..count).map(|_| (small(state, bound), small(state, bound))).collect();
     loop {
@@ -114,13 +117,13 @@ fn points<const N: usize>(state: &mut u64, count: usize, flat: usize) -> (u64, V
             let base = [0; N].map(|_| small(state, 1 << 10));
             let u = [0; N].map(|_| small(state, 64));
             let v = if flat == 1 { u } else { [0; N].map(|_| small(state, 64)) };
-            lattice(state, base, u, v, count, 8)
+            lattice(state, base, [u, v], (count, 8))
         }
         1 | 3 => {
             let base = [0; N].map(|_| spread(state));
             let u = [0; N].map(|_| spread(state));
             let v = if flat == 1 { u } else { [0; N].map(|_| spread(state)) };
-            lattice(state, base, u, v, count, 3)
+            lattice(state, base, [u, v], (count, 3))
         }
         4 => (0..count).map(|_| [0; N].map(|_| spread(state))).collect(),
         _ => (0..count).map(|_| [0; N].map(|_| extreme(state))).collect(),
@@ -191,7 +194,7 @@ fn pred_tp_008_seeded_2d_orientations_match_the_oracle() {
         counts[5] += u32::from((kind == 2 || kind == 3) && sign != 0);
     }
     println!("pred_tp_008 collinear,ccw,cw,refused,rounded_zero,nudged={counts:?}");
-    assert_eq!(counts, [0; 6], "seed={SEED_2D:#018x}");
+    assert_eq!(counts, [22_413, 18_897, 18_690, 9_327, 14_559, 18_463], "seed={SEED_2D:#018x}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -226,18 +229,18 @@ fn pred_tp_009_seeded_3d_orientations_match_the_oracle() {
         counts[5] += u32::from((kind == 2 || kind == 3) && sign != 0);
     }
     println!("pred_tp_009 coplanar,front,behind,refused,rounded_zero,nudged={counts:?}");
-    assert_eq!(counts, [0; 6], "seed={SEED_3D:#018x}");
+    assert_eq!(counts, [14_273, 12_749, 12_978, 8_753, 8_820, 12_595], "seed={SEED_3D:#018x}");
 }
 
 /// A triangle with one lattice edge and a point on a vertex, on that edge, one raw unit off
 /// it, or anywhere; a tenth of the triangles are collinear.
 fn triangle_and_point(state: &mut u64) -> [[i64; 2]; 4] {
-    let wide = next(state) % 2 == 0;
+    let wide = next(state).is_multiple_of(2);
     let pick = |state: &mut u64| if wide { spread(state) } else { small(state, 1 << 12) };
     let a = [pick(state), pick(state)];
     let (e, f) = ([pick(state), pick(state)], [pick(state), pick(state)]);
     let m = small(state, 4).abs() + 1;
-    let collinear = next(state) % 10 == 0;
+    let collinear = next(state).is_multiple_of(10);
     let third = if collinear { e } else { f };
     let mut tri = lattice_triangle(a, e, third, m);
     let j = i64::try_from(next(state) % u64::try_from(m + 1).expect("m")).expect("j");
@@ -246,7 +249,7 @@ fn triangle_and_point(state: &mut u64) -> [[i64; 2]; 4] {
         1 | 2 => along(tri[0], &[(j, tri[3])]).unwrap_or(tri[0]),
         _ => [pick(state), pick(state)],
     };
-    if next(state) % 3 == 0 {
+    if next(state).is_multiple_of(3) {
         let mut one = [p];
         nudge(state, &mut one);
         p = one[0];
@@ -322,23 +325,20 @@ fn pred_tp_010_seeded_barycentrics_match_the_oracle() {
             TriangleLocation::Outside => 4,
         }] += 1;
         let scaled = n.map(|x| x.shl(32));
-        match bary.weights_rounded() {
-            Some(w) => {
-                let w = w.map(FixedQ32_32::raw);
-                for (num, w) in scaled.iter().zip(w) {
-                    assert!(rounds_to(num, &den.abs(), Some(w)), "{context}");
-                }
-                let sum: i128 = w.iter().map(|&x| i128::from(x)).sum();
-                assert!((sum - (1 << 32)).abs() <= 1, "{context}: {w:?}");
+        if let Some(w) = bary.weights_rounded() {
+            let w = w.map(FixedQ32_32::raw);
+            for (num, w) in scaled.iter().zip(w) {
+                assert!(rounds_to(num, &den.abs(), Some(w)), "{context}");
             }
-            None => {
-                assert!(scaled.iter().any(|x| rounds_to(x, &den.abs(), None)), "{context}");
-                counts[5] += 1;
-            }
+            let sum: i128 = w.iter().map(|&x| i128::from(x)).sum();
+            assert!((sum - (1 << 32)).abs() <= 1, "{context}: {w:?}");
+        } else {
+            assert!(scaled.iter().any(|x| rounds_to(x, &den.abs(), None)), "{context}");
+            counts[5] += 1;
         }
     }
     println!("pred_tp_010 degenerate,inside,edge,vertex,outside,refused={counts:?}");
-    assert_eq!(counts, [0; 6], "seed={SEED_BARY:#018x}");
+    assert_eq!(counts, [3_981, 2_610, 5_697, 12_380, 15_332, 1_177], "seed={SEED_BARY:#018x}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
