@@ -62,7 +62,7 @@ pub(super) fn commands() -> Vec<Vec<String>> {
 /// cases. The workspace denies warnings, so a helper left behind by a group is a build error.
 pub(super) fn perf_group_commands(manifest: &str) -> Vec<Vec<String>> {
     let groups = crate::perf::feature_groups(manifest);
-    let mut sets: Vec<String> = groups.iter().cloned().collect();
+    let mut sets: Vec<String> = groups.clone();
     sets.push(groups.join(","));
     sets.into_iter()
         .map(|features| {

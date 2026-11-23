@@ -45,6 +45,8 @@ Checks run:
 - `cargo run --locked -p xtask -- topic-docs`
 - `cargo run --locked -p xtask -- repo-respect check --branch`
 
+- Follow-up: `cargo clippy` on the pinned toolchain flagged `iter_cloned_collect` in `perf_group_commands` (CI Dojo); fixed with `clone()`. Local clippy cannot confirm the pinned lint set (1.100.0 vs 1.96.0).
+
 Known risks:
 - `cargo clippy` on the local 1.100.0 toolchain reports lints that exist only on that toolchain (for example `chunks_exact`); the pinned 1.96.0 toolchain runs in CI.
 - `scene.rs` keeps its existing crate-level `allow(dead_code)` for the shared scene helpers; only its imports were gated here.
