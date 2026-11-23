@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: translate, rotate and scale composition under the contract
+  identity `bunny-transform/1` (`TRANSFORM_CONTRACT_ID`).
+  `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S`: a point
+  is scaled, then rotated, then translated, and each linear entry `R_ij s_j` is
+  rounded once to nearest, ties to even, within 1/2 raw unit.
+  `rotate_about_point(pivot, rotation)` and `scale_about_point(pivot, scale)`
+  are `T(p) * R * T(-p)` and `T(p) * S * T(-p)`: the translation `p - R p` is
+  within 3/2 raw units (1/2 for a scale) and the pivot maps onto itself
+  exactly. Each returns `None` on overflow and has no other refusal; zero and
+  negative scales are accepted. The chapter also bounds both groupings of a
+  product of three transforms by the existing `checked_mul_affine`. Normals
+  under a non-uniform scale are out of scope. Closes flyingrobots/bunny#312.
+
 * `bunny-linalg`: cubic Bezier curves under the contract identity
   `bunny-curve/1` (`CURVE_CONTRACT_ID`), part 1. `CubicBezier3 { p0, p1, p2,
   p3 }` has `at(t)`, the de Casteljau recurrence over `FixedVec3::lerp`

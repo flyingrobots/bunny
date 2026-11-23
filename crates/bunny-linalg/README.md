@@ -43,6 +43,12 @@ math for graphics pipelines.
   quarter turns), and `rotation_axis_angle(axis, angle)` evaluates Rodrigues'
   formula on a `FixedUnitVec3` axis with one ties-to-even rounding per entry.
   Right-hand rule, column vectors; bounds in `docs/topics/rotation/`.
+* **Transform Composition (`bunny-transform/1`)**:
+  `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S` (scale,
+  then rotate, then translate), and `rotate_about_point` and
+  `scale_about_point` are `T(p) * R * T(-p)` and `T(p) * S * T(-p)`, the pivot
+  fixed exactly. One ties-to-even rounding per product; `None` on overflow;
+  bounds in `docs/topics/transform/`.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Exact Lerp (`bunny-lerp/1`)**: `FixedVec3::lerp(a, b, t)` and
