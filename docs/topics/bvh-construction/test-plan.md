@@ -54,6 +54,10 @@ topic-docs`.
 | BVH-REQ-009 | On the seeded quality scenes, the SAH tree's SAH cost is below the quartile tree's. | `README.md#costs` |
 | BVH-REQ-010 | build_bvh_sah builds no tree deeper than 60 (the root at depth 0), so its trees need at most 61 of the traversals' 64 stack entries: a node at depth 60 is a leaf of whatever size (a capped leaf, which can hold more than SAH_MAX_LEAF_SIZE primitives), and an input inside the trace domain reaches it. | `README.md#depth-and-stack` |
 | BVH-REQ-011 | build_bvh has no depth cap: inputs inside the trace domain build trees deeper than 63, on which a traversal returns its complete answer or StackOverflow, never another answer. | `README.md#depth` |
+| BVH-REQ-012 | try_build_bvh_sah returns Ok with the node count of the same build, or, from the lengths alone and before writing anything, the first failing of NodeBufferTooSmall (fewer than 2n - 1 nodes), IndexBufferTooSmall (fewer than n indices) and TooManyPrimitives (n > 2^31), each with the lengths it saw; InternalCheckFailed is a defensive refusal no input is known to reach. | `README.md#typed-refusals` |
+| BVH-REQ-013 | build_bvh_sah, whose body is unchanged, returns Some(n) exactly when try_build_bvh_sah returns Ok(n), and the two leave equal buffers equal. | `README.md#typed-refusals` |
+| BVH-REQ-014 | After a build_bvh_sah build of n primitives, prim_indices[..n] holds each index 0..n exactly once, entries from n on and nodes past the returned count are untouched, and a refused build writes nothing. | `README.md#the-primitive-index-buffer` |
+| BVH-REQ-015 | BvhBuildError is #[non_exhaustive] and implements Display, with a message that states the condition and the lengths, and core::error::Error with no source, using only core. | `README.md#typed-refusals` |
 
 ```toml
 [[requirement]]
@@ -110,6 +114,26 @@ status = "active"
 id = "BVH-REQ-011"
 summary = "build_bvh has no depth cap: inputs inside the trace domain build trees deeper than 63, on which a traversal returns its complete answer or StackOverflow, never another answer."
 status = "active"
+
+[[requirement]]
+id = "BVH-REQ-012"
+summary = "try_build_bvh_sah returns Ok with the node count of the same build, or, from the lengths alone and before writing anything, the first failing of NodeBufferTooSmall (fewer than 2n - 1 nodes), IndexBufferTooSmall (fewer than n indices) and TooManyPrimitives (n > 2^31), each with the lengths it saw; InternalCheckFailed is a defensive refusal no input is known to reach."
+status = "active"
+
+[[requirement]]
+id = "BVH-REQ-013"
+summary = "build_bvh_sah, whose body is unchanged, returns Some(n) exactly when try_build_bvh_sah returns Ok(n), and the two leave equal buffers equal."
+status = "active"
+
+[[requirement]]
+id = "BVH-REQ-014"
+summary = "After a build_bvh_sah build of n primitives, prim_indices[..n] holds each index 0..n exactly once, entries from n on and nodes past the returned count are untouched, and a refused build writes nothing."
+status = "active"
+
+[[requirement]]
+id = "BVH-REQ-015"
+summary = "BvhBuildError is #[non_exhaustive] and implements Display, with a message that states the condition and the lengths, and core::error::Error with no source, using only core."
+status = "active"
 ```
 
 ## Fixtures
@@ -151,6 +175,13 @@ constant. The structural checker, fingerprint and SAH cost live in
 | BVH-TP-028 | Measurement rule | BVH-REQ-001 | The measuring thread's own allocation is counted: one `Vec` with capacity is one block. | `crates/bunny-broadphase/tests/thread_scoped_allocation_tests.rs::tscope_tp_002_own_thread_allocations_are_counted` |
 | BVH-TP-025 | Depth mutations | BVH-REQ-010 | `SAH_MAX_DEPTH = 64` fails BVH-TP-022 and a build stack of `SAH_MAX_DEPTH` entries fails BVH-TP-026. | [Mutation checks](#mutation-checks) |
 | BVH-TP-026 | Build stack at the cap | BVH-REQ-010 | The review's chains extended to `17^k` raw for `k` from 0 to 15 on each axis in turn (outside the trace domain), plus 2^14 identical boxes at the origin (16 432 boxes): every chain point is split off to the right and every halving keeps the second half waiting, so 59 right children wait above the deepest interior node and the build needs all 61 entries of its work stack. The tree is well formed and 60 deep (literals), and a box query reaches every primitive. About 0.9 s in a debug build. | `crates/bunny-broadphase/tests/bvh_depth_tests.rs::bvh_tp_026_a_left_spine_to_the_cap_fills_the_sah_build_stack` |
+| BVH-TP-029 | Node buffer boundary | BVH-REQ-012, BVH-REQ-013, BVH-REQ-014 | Five primitives into 2n - 2, 2n - 1 and 2n nodes, and one primitive into zero and one node: the shorter buffers give NodeBufferTooSmall with both lengths, the others build; both forms agree and leave identical buffers, and a refusal writes nothing. | `crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_029_a_node_buffer_below_two_n_minus_one_is_named` |
+| BVH-TP-030 | Index buffer boundary | BVH-REQ-012, BVH-REQ-013 | n - 1, n and n + 1 indices with 2n - 1 nodes: only n - 1 is refused, as IndexBufferTooSmall; with both buffers one short the node buffer is named; no primitives give Ok(0) with empty buffers. | `crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_030_an_index_buffer_below_n_is_named_after_the_node_buffer` |
+| BVH-TP-031 | Primitive count boundary | BVH-REQ-012, BVH-REQ-013 | On lengths alone (no test can allocate 2^31 boxes): 2^31 - 1 and 2^31 primitives with 2n - 1 nodes pass, 2^31 + 1 and 2^31 + 2 with the largest buffers give TooManyPrimitives, usize::MAX gives NodeBufferTooSmall (no buffer holds 2n - 1), a short node buffer is named before the count; every one agrees with the builders' own length check, as does every triple of up to 11 primitives, 25 nodes and 13 indices. | `crates/bunny-broadphase/src/bvh/refusal/tests.rs::bvh_tp_031_too_many_primitives_is_named_and_agrees_with_the_builders` |
+| BVH-TP-032 | Generated equivalence | BVH-REQ-012, BVH-REQ-013, BVH-REQ-014 | 4 000 builds from seed 0xB002_0445_0000_00B0 (1 527 built, 1 526 node and 947 index refusals; each at least 500) of 0 to 39 seeded boxes into buffers within two of 2n - 1 nodes and n indices: try_build_bvh_sah equals the length rule written in the test, build_bvh_sah equals its ok(), and every word of both buffers is equal afterwards. The seed and case are printed on failure. | `crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_032_option_and_result_forms_agree_on_generated_buffers` |
+| BVH-TP-033 | Index buffer rule | BVH-REQ-014 | 36 boxes, six identical, into buffers filled with a sentinel that names no primitive, both exact and longer than needed: the first n entries are 0..n each once, the rest keep the sentinel, unused nodes keep their stale value, and every leaf entry is below n. | `crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_033_the_index_buffer_holds_only_indices_of_the_input` |
+| BVH-TP-034 | Display and Error | BVH-REQ-015 | The exact message of each BvhBuildError variant, written in the test with its lengths; each is a core::error::Error with no source. | `crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_034_buffer_refusals_display_their_lengths_and_are_errors` |
+| BVH-TP-035 | Refusal mutations | BVH-REQ-012, BVH-REQ-013 | Each rule of the buffer checks broken on purpose makes a case above fail. | [Typed refusal mutation checks](#typed-refusal-mutation-checks) |
 
 ```toml
 [[case]]
@@ -404,6 +435,69 @@ test = "crates/bunny-broadphase/tests/thread_scoped_allocation_tests.rs::tscope_
 oracle = "A deliberate allocation inside the scope on the measuring thread is counted exactly once."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "BVH-TP-029"
+requirements = ["BVH-REQ-012", "BVH-REQ-013", "BVH-REQ-014"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_029_a_node_buffer_below_two_n_minus_one_is_named"
+oracle = "Five primitives into 2n - 2, 2n - 1 and 2n nodes, and one primitive into zero and one node: the shorter buffers give NodeBufferTooSmall with both lengths, the others build; both forms agree and leave identical buffers, and a refusal writes nothing."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-030"
+requirements = ["BVH-REQ-012", "BVH-REQ-013"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_030_an_index_buffer_below_n_is_named_after_the_node_buffer"
+oracle = "n - 1, n and n + 1 indices with 2n - 1 nodes: only n - 1 is refused, as IndexBufferTooSmall; with both buffers one short the node buffer is named; no primitives give Ok(0) with empty buffers."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-031"
+requirements = ["BVH-REQ-012", "BVH-REQ-013"]
+evidence = "test"
+test = "crates/bunny-broadphase/src/bvh/refusal/tests.rs::bvh_tp_031_too_many_primitives_is_named_and_agrees_with_the_builders"
+oracle = "On lengths alone (no test can allocate 2^31 boxes): 2^31 - 1 and 2^31 primitives with 2n - 1 nodes pass, 2^31 + 1 and 2^31 + 2 with the largest buffers give TooManyPrimitives, usize::MAX gives NodeBufferTooSmall (no buffer holds 2n - 1), a short node buffer is named before the count; every one agrees with the builders' own length check, as does every triple of up to 11 primitives, 25 nodes and 13 indices."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-032"
+requirements = ["BVH-REQ-012", "BVH-REQ-013", "BVH-REQ-014"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_032_option_and_result_forms_agree_on_generated_buffers"
+oracle = "4 000 builds from seed 0xB002_0445_0000_00B0 (1 527 built, 1 526 node and 947 index refusals; each at least 500) of 0 to 39 seeded boxes into buffers within two of 2n - 1 nodes and n indices: try_build_bvh_sah equals the length rule written in the test, build_bvh_sah equals its ok(), and every word of both buffers is equal afterwards. The seed and case are printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-033"
+requirements = ["BVH-REQ-014"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_033_the_index_buffer_holds_only_indices_of_the_input"
+oracle = "36 boxes, six identical, into buffers filled with a sentinel that names no primitive, both exact and longer than needed: the first n entries are 0..n each once, the rest keep the sentinel, unused nodes keep their stale value, and every leaf entry is below n."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-034"
+requirements = ["BVH-REQ-015"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/bvh_refusal_tests.rs::bvh_tp_034_buffer_refusals_display_their_lengths_and_are_errors"
+oracle = "The exact message of each BvhBuildError variant, written in the test with its lengths; each is a core::error::Error with no source."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-035"
+requirements = ["BVH-REQ-012", "BVH-REQ-013"]
+evidence = "manual-audit"
+artifact = "docs/topics/bvh-construction/test-plan.md#typed-refusal-mutation-checks"
+oracle = "Each rule of the buffer checks broken on purpose makes a case above fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Allocation Measurement Rule
@@ -438,6 +532,19 @@ cases that failed were recorded.
 | `SAH_MAX_DEPTH = 64` | BVH-TP-022 (the tree is 64 deep). The independent review found that no earlier case failed. |
 | The SAH build stack of `SAH_MAX_DEPTH` entries instead of `SAH_MAX_DEPTH + 1` | BVH-TP-026 (the build returns `None`). The independent review found that no earlier case failed. |
 | Leaf rule: nodes up to twice the leaf size may stay leaves | BVH-TP-006 and BVH-TP-007. |
+
+## Typed Refusal Mutation Checks
+
+Each rule below was broken in the working tree (flyingrobots/bunny#445),
+`cargo test --locked -q --no-fail-fast -p bunny-broadphase --test bvh_refusal_tests --lib`
+run, and the file restored from git.
+
+| Mutation | Cases that fail |
+| --- | --- |
+| Exactly `2n - 1` nodes refused (`<` to `<=`) | BVH-TP-029, 030, 031, 032, 033. |
+| The index buffer checked before the node buffer | BVH-TP-030, 032. |
+| One index fewer than `n` accepted | BVH-TP-030, 031, 032. |
+| The primitive limit `2^31 - 1` | BVH-TP-031, 034. |
 
 ## Depth Cap Evidence
 

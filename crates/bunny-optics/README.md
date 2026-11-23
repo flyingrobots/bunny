@@ -28,6 +28,11 @@ every buffer.
   normalized; a construction-time scale keeps every component at most 1.0, as
   the trace kernels require, and each component is within one raw unit plus
   `(width + height) / 2^33` of the exact image-plane point.
+* `PinholeCamera::try_ray` and `Albedo::try_reflect`: the diagnostic paths of
+  `PinholeCamera::ray` and `Albedo::reflect`, returning the same value or a
+  `CameraRayError` (the column, row or sub-pixel offset outside the image) or
+  an `AlbedoReflectError` (the first channel whose radiance sum leaves
+  Q32.32). The `Option` forms are unchanged.
 * `ThinLensCamera` (`bunny-thin-lens/1`): a `CameraSpec` plus an aperture
   radius and a focus distance. Each ray starts at a lens-disc point chosen by
   one sampler pair (`lens_disc_point`, polar and area-preserving) and passes

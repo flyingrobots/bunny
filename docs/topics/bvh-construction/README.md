@@ -13,7 +13,7 @@ This is a living topic chapter, not a proposal.
 
 Both builders are implemented in `crates/bunny-broadphase/src/bvh/` and
 exported from `bunny_broadphase` as `build_bvh` and `build_bvh_sah`, with
-`BvhNode`. The SAH builder's parameters are public constants in
+`BvhNode`, and the diagnostic `try_build_bvh_sah` with its `BvhBuildError`. The SAH builder's parameters are public constants in
 `bunny_broadphase::bvh`: `SAH_BIN_COUNT`, `SAH_MAX_LEAF_SIZE`,
 `SAH_MAX_DEPTH`, `SAH_TRAVERSAL_COST` and `SAH_INTERSECTION_COST`.
 
@@ -192,6 +192,43 @@ hold 8 primitives each (BVH-TP-023). The build's work stack fills only on a
 left spine, where every level leaves its right child waiting: the review's
 chains extended to `k` = 15, plus `2^14` identical boxes, need all 61 entries
 (BVH-TP-026).
+
+### The Primitive-Index Buffer
+
+After `build_bvh_sah` builds `n` primitives, `prim_indices[..n]` holds each
+index `0..n` of `primitives` exactly once, so every entry a leaf lists is an
+index of the input. Whatever the buffer held before is overwritten; entries
+from `n` on are left as they were, and so are nodes past the count returned.
+A refused build writes nothing to either buffer (BVH-TP-033).
+
+### Typed Refusals
+
+`build_bvh_sah` is the fast path: it returns `None` for buffers that are too
+small. `try_build_bvh_sah`, with the same arguments, is its diagnostic path: it
+returns `Ok` with the same node count after the same build, or a
+`BvhBuildError` that names the refused buffer and carries the lengths the check
+saw. `build_bvh_sah` returns `Some(n)` exactly when `try_build_bvh_sah` returns
+`Ok(n)`, and both leave the buffers identical; `build_bvh_sah`'s body is
+unchanged. The checks read only the three lengths and run before anything is
+written, in this order (`n = primitives.len()`; no primitives build zero nodes
+whatever the buffers):
+
+| Order | Refused when | Error |
+| --- | --- | --- |
+| 1 | `nodes.len() < 2n - 1` | `NodeBufferTooSmall { nodes, primitives }` |
+| 2 | `prim_indices.len() < n` | `IndexBufferTooSmall { indices, primitives }` |
+| 3 | `n > 2^31` (the `2n - 1` node indices would not fit `u32`) | `TooManyPrimitives { primitives }` |
+| defensive | a step of the build fails one of its own checks | `InternalCheckFailed` |
+
+The comparisons are made in `u128`, so the order and the variant are the same
+on every target. `TooManyPrimitives` needs more than `2^31` boxes and a node
+buffer of more than `2^32` nodes, so it is checked on lengths alone
+(BVH-TP-031) against the builders' own length check. `InternalCheckFailed`
+stands for the overflow and index checks that [the bounds above](#arithmetic-and-overflow)
+rule out; no input is known to reach it, and the buffers could then be partly
+written. `BvhBuildError` is `#[non_exhaustive]`, implements `Display` and
+`core::error::Error` with no source, and is exported from `bunny_broadphase`.
+`build_bvh` has no `try_` form.
 
 ### Cost
 

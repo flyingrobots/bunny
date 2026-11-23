@@ -27,6 +27,12 @@ targets.
 * Ray-tracing kernels (`TraceRay`, `TraceTriangle`): a division-free
   conservative ray-box test and an exact integer ray-triangle test with
   inclusive edges; see `docs/topics/ray-tracing/`.
+* `TraceRay::try_new` and `TraceTriangle::try_new`: the diagnostic paths of
+  `TraceRay::new` and `TraceTriangle::new`, returning the same value or a
+  `TraceRayError` / `TraceTriangleError` that names the refused condition
+  (origin or vertex outside the trace domain, a direction component above 1.0,
+  a zero direction) with the values it saw. The `Option` forms are unchanged
+  and return `None` exactly when these return an error.
 * `TraceSphere` and `TraceRay::hit_sphere` (contract `bunny-ray-sphere/1`): the
   exact ray-sphere test, returning the rounded-down distance, facing and the
   outward unit normal (a `FixedUnitVec3` at the exact hit point) in the form of

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Typed `try_` forms of five entry points that refuse with `None`, each the
+  diagnostic path of its unchanged `Option` form (which returns `None` exactly
+  when the `try_` form returns an error), after the pattern of
+  `SurfaceHit::try_new`: `TraceRay::try_new` (`TraceRayError`),
+  `TraceTriangle::try_new` (`TraceTriangleError`), `try_build_bvh_sah`
+  (`BvhBuildError`), `PinholeCamera::try_ray` (`CameraRayError`) and
+  `Albedo::try_reflect` (`AlbedoReflectError`). Each error is
+  `#[non_exhaustive]`, names the first refused condition in the order the
+  `Option` form checks it, carries the values it saw, and implements `Display`
+  and `core::error::Error`. `TraversalError` and `CompactError` now implement
+  `Display` and `core::error::Error`. `build_bvh_sah` documents its
+  primitive-index buffer rule. TRACE-REQ-070 to -073, BVH-REQ-012 to -015,
+  OPTICS-REQ-170 to -172. Closes flyingrobots/bunny#445.
+
 * `cargo xtask perf --evidence <file>` writes every round of both sides (case,
   side, round, p50, p95, p99) and the build identity (base reference, full base
   and candidate SHAs, target triple, flags, and whether the working tree was

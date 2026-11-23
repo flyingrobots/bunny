@@ -258,6 +258,32 @@ with `a_raw` and `b_raw` the raw Q32.32 values of `a` and `b`. The division by
 `2^65` is an arithmetic shift, so the floor is toward negative infinity. Every
 rounding in ray generation is a floor.
 
+### Typed Camera Ray Refusals
+
+`PinholeCamera::ray` is the fast path; `PinholeCamera::try_ray(sample)` is its
+diagnostic path, after the pattern of [`SurfaceHit::try_new`](#inputs-and-refusals):
+the same ray, or a `CameraRayError` that names the refused coordinate and
+carries the values the check saw. `ray` returns `Some(r)` exactly when
+`try_ray` returns `Ok(r)` (OPTICS-TP-335); its body is unchanged. The checks
+are those of the image-plane offset, in its order:
+
+| Order | Refused when | Error |
+| --- | --- | --- |
+| 1 | `x >= width` | `ColumnOutsideImage { column, width }` |
+| 2 | `sub_x` outside raw `0..2^32` | `SubXOutsideUnitInterval { sub_x }` |
+| 3 | `y >= height` | `RowOutsideImage { row, height }` |
+| 4 | `sub_y` outside raw `0..2^32` | `SubYOutsideUnitInterval { sub_y }` |
+| defensive | a direction component does not fit Q32.32 | `DirectionUnrepresentable` |
+| defensive | `TraceRay::try_new` refuses the ray | `RayRefused { reason }` |
+
+No input is known to reach the two defensive variants: every in-range sample
+of a constructed camera has direction components of at most 1.0 and a
+nonzero forward part, from a position inside the trace domain. `RayRefused`
+reports the trace kernel's `TraceRayError` as its `source()`.
+`CameraRayError` is `#[non_exhaustive]`, implements `Display` and
+`core::error::Error`, and is exported from `bunny_optics`. The thin-lens
+camera's `ray` has no `try_` form.
+
 ## Direction Scaling
 
 The direction is not normalized; that is what keeps square roots and divisions
@@ -1456,6 +1482,18 @@ Lambertian BRDF is `albedo / pi`, the bounce direction's density is
 cosine and `1 / pi` cancel exactly, and the function does not compute them.
 Because each albedo channel is at most 1.0, the product is never larger than
 the sum; the sum is checked, and `None` when it is not representable.
+
+### Typed Reflection Refusals
+
+`Albedo::try_reflect(direct, indirect)` is the diagnostic path of
+`Albedo::reflect`: the same radiance, or
+`AlbedoReflectError::SumUnrepresentable { channel, direct, indirect }` naming
+the first channel (0, 1, 2) whose exact sum `direct_c + indirect_c` is above
+raw `i64::MAX` or below raw `i64::MIN`, with that channel's two terms. A sum of
+exactly `i64::MAX` or `i64::MIN` raw is reflected. `reflect` returns `Some(r)`
+exactly when `try_reflect` returns `Ok(r)` (OPTICS-TP-336); its body is
+unchanged. `AlbedoReflectError` is `#[non_exhaustive]`, implements `Display`
+and `core::error::Error` with no source, and is exported from `bunny_optics`.
 
 ### Order Of Operations
 

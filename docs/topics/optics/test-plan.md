@@ -164,6 +164,9 @@ formatting.
 | OPTICS-REQ-041 | `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction` name each refusal with a `SecondaryRayError` variant carrying the observed values, checked in this order: `HitPointUnrepresentable { distance }` when `point_at(ray, hit.distance)` is not representable, `HitPointOutsideTraceDomain { point }` when a coordinate of that point is more than two raw units outside the trace domain, `NotOnArrivalSide { point }` when no step of at most two raw units reaches the arrival side, `StartOutsideTraceDomain { start }` when the stepped start point is outside the trace domain, `SampleOutsideUnitInterval { sample }` when a sample coordinate is outside `[0, 1)`, and the defensive `BounceRayRefused { origin, direction }` when `TraceRay::new` refuses the bounce ray. | `README.md#inputs-and-refusals` |
 | OPTICS-REQ-042 | `SurfaceHit::new`, `SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction` keep every output of 0.7.1: each returns `Some(x)` exactly when its `try_` form returns `Ok(x)`, with the same value, and agrees with the 0.7.1 code on every input, except that a hit point far enough outside the trace domain to overflow the 0.7.1 plane test in `i128` (a panic in debug builds) returns `None`, as 0.7.1 release builds did. | `README.md#inputs-and-refusals` |
 | OPTICS-REQ-043 | The fast path and the diagnostic path agree: `SurfaceHit::new`, `SurfaceHit::bounce_ray` and `ShadingFrame::cosine_direction` (the fast path, the 0.7.1 bodies plus the plane-test overflow guard) return `Some(x)` exactly when `SurfaceHit::try_new`, `SurfaceHit::try_bounce_ray` and `ShadingFrame::try_cosine_direction` (the diagnostic path) return `Ok(x)`, with equal values, on generated inputs from a fixed and a fresh seed and on the constructed refusals; a change to either side alone breaks it. | `README.md#inputs-and-refusals` |
+| OPTICS-REQ-170 | PinholeCamera::try_ray returns Ok with the ray PinholeCamera::ray gives, or the first failing of, in this order: ColumnOutsideImage { column, width } when x >= width, SubXOutsideUnitInterval { sub_x } when sub_x is outside raw 0..2^32, RowOutsideImage { row, height } when y >= height, SubYOutsideUnitInterval { sub_y } when sub_y is outside raw 0..2^32; DirectionUnrepresentable and RayRefused { reason } are defensive refusals no input is known to reach. | `README.md#typed-camera-ray-refusals` |
+| OPTICS-REQ-171 | Albedo::try_reflect returns Ok with the radiance Albedo::reflect gives, or SumUnrepresentable { channel, direct, indirect } naming the first channel whose exact sum direct_c + indirect_c is outside raw i64; an accepted channel is albedo_c times the sum, rounded to nearest, ties to even. | `README.md#typed-reflection-refusals` |
+| OPTICS-REQ-172 | PinholeCamera::ray and Albedo::reflect, whose bodies are unchanged, return Some(x) exactly when try_ray and try_reflect return Ok(x), with equal values; CameraRayError and AlbedoReflectError are #[non_exhaustive] and implement Display and core::error::Error, with RayRefused's TraceRayError as its source and no source otherwise. | `README.md#typed-camera-ray-refusals` |
 | OPTICS-REQ-044 | `VertexNormals::new` (`bunny-vertex-normals/1`, `VERTEX_NORMALS_ID`) gives each vertex the exact `i128` sum of the cross products `(p[b] - p[a]) x (p[c] - p[a])` of the triangles `[a, b, c]` that list it (area weighting), normalized as `TriangleSurface::new` normalizes a face normal; each component is within one raw unit of the exact unit vector along the sum. | `README.md#vertex-normals` |
 | OPTICS-REQ-045 | A vertex normal depends only on the mesh: the same faces in any order, with any corner of each face listed first, give the same bits, and relabelling the vertices relabels the normals. | `README.md#vertex-normals` |
 | OPTICS-REQ-046 | A vertex with no face, or whose faces sum to exactly zero, has no normal (`None`); vertices are never welded. `VertexNormals::new` refuses, in this order, more than `MAX_NORMAL_TRIANGLES` (`2^32`) triangles (`TooManyTriangles`), a position with a coordinate magnitude of at least `TRACE_COORD_LIMIT_RAW` (`PositionOutsideTraceDomain`, the first such vertex), and an index not below the number of positions (`IndexOutOfRange`, the first such triangle and corner). | `README.md#vertex-normals` |
@@ -412,6 +415,21 @@ status = "active"
 [[requirement]]
 id = "OPTICS-REQ-043"
 summary = "The fast path and the diagnostic path agree: SurfaceHit::new, SurfaceHit::bounce_ray and ShadingFrame::cosine_direction (the fast path, the 0.7.1 bodies plus the plane-test overflow guard) return Some(x) exactly when SurfaceHit::try_new, SurfaceHit::try_bounce_ray and ShadingFrame::try_cosine_direction (the diagnostic path) return Ok(x), with equal values, on generated inputs from a fixed and a fresh seed and on the constructed refusals; a change to either side alone breaks it."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-170"
+summary = "PinholeCamera::try_ray returns Ok with the ray PinholeCamera::ray gives, or the first failing of, in this order: ColumnOutsideImage { column, width } when x >= width, SubXOutsideUnitInterval { sub_x } when sub_x is outside raw 0..2^32, RowOutsideImage { row, height } when y >= height, SubYOutsideUnitInterval { sub_y } when sub_y is outside raw 0..2^32; DirectionUnrepresentable and RayRefused { reason } are defensive refusals no input is known to reach."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-171"
+summary = "Albedo::try_reflect returns Ok with the radiance Albedo::reflect gives, or SumUnrepresentable { channel, direct, indirect } naming the first channel whose exact sum direct_c + indirect_c is outside raw i64; an accepted channel is albedo_c times the sum, rounded to nearest, ties to even."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-172"
+summary = "PinholeCamera::ray and Albedo::reflect, whose bodies are unchanged, return Some(x) exactly when try_ray and try_reflect return Ok(x), with equal values; CameraRayError and AlbedoReflectError are #[non_exhaustive] and implement Display and core::error::Error, with RayRefused's TraceRayError as its source and no source otherwise."
 status = "active"
 
 [[requirement]]
@@ -1045,6 +1063,15 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-062 | Fast and diagnostic paths agree | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | Seeded triangles and rays, each hit also given seeded distances (full raw range, large positive and negative, near either end of the raw range, within two raw units of the domain's boundary on the ray's dominant axis, a few raw units from the reported one) and the other face, and seeded samples inside and outside `[0, 1)`: the 0.7.1 code retained in the test (`tests/shading_reference/mod.rs`) gives the same start point, frame, direction and bounce ray as the `Option` form, the fast (`Option`) form is `Some` exactly when the diagnostic (`try_`) form is `Ok` with the same value, and every `Err` is the variant and values the reference names, except that a hit point beyond reach of the domain is expected as `HitPointOutsideTraceDomain` (where the 0.7.1 plane test overflows there, the reference checks the arithmetic instead). Witness counts require every reachable outcome, and at least ten overflowing inputs, to occur and `BounceRayRefused` never to. The seed and case are printed on failure. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_062_option_and_result_forms_agree_with_the_released_code` |
 | OPTICS-TP-063 | Refusal mutations | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | Each side of the fast/diagnostic pair broken alone (the stepped-point domain check of either, the overflow guard of the fast path, the beyond-reach check of the diagnostic path), the stepped start point reported as the unstepped one, and a sample coordinate of exactly 1.0 accepted, each make at least one case above fail. | [Shading mutation checks](#shading-mutation-checks) |
 | OPTICS-TP-064 | Agreement from a fresh seed | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The check of OPTICS-TP-062 from a seed drawn per run (`RandomState`), printed in every failure message, so coverage accumulates across runs; 30 consecutive runs passed. On `wasm32-unknown-unknown` the standard library's hash keys are fixed, so there the seed repeats. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed` |
+| OPTICS-TP-330 | Column boundary | OPTICS-REQ-170, OPTICS-REQ-172 | A 64 by 48 camera: column 63 gives a ray, columns 64, 65 and u32::MAX give ColumnOutsideImage with the column and width; ray is None exactly then and equal to try_ray's ray otherwise. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_330_a_column_outside_the_image_is_named` |
+| OPTICS-TP-331 | Row boundary | OPTICS-REQ-170, OPTICS-REQ-172 | The same camera: row 47 gives a ray, rows 48, 49 and u32::MAX give RowOutsideImage with the row and height. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_331_a_row_outside_the_image_is_named` |
+| OPTICS-TP-332 | Sub-pixel boundary | OPTICS-REQ-170, OPTICS-REQ-172 | sub_x and sub_y of raw 0, 1 and 2^32 - 1 are accepted; -1, 2^32, 2^32 + 1 and the i64 extremes give SubXOutsideUnitInterval or SubYOutsideUnitInterval with the offset as given. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_332_a_sub_pixel_offset_outside_the_unit_interval_is_named` |
+| OPTICS-TP-333 | Check order | OPTICS-REQ-170 | With several conditions failing, the column is named before sub_x, sub_x before the row, and the row before sub_y. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_333_the_first_failing_sample_condition_is_reported` |
+| OPTICS-TP-334 | Channel sum boundary | OPTICS-REQ-171, OPTICS-REQ-172 | On each channel: sums of exactly i64::MAX and i64::MIN raw are reflected (equal to the exact i128 product rounded half to even, written in the test), one and two raw units past either end give SumUnrepresentable with that channel and its two terms; with every channel overflowing the first is named. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_334_a_channel_sum_outside_q32_32_is_named_by_channel` |
+| OPTICS-TP-335 | Generated equivalence, camera | OPTICS-REQ-170, OPTICS-REQ-172 | 200 cameras of 1 to 4 096 pixels a side and 500 samples each from seed 0xB002_0445_0000_0C0A (100 000 samples: 57 943 rays; 14 680 column, 8 783 sub_x, 11 851 row and 6 743 sub_y refusals; each at least 1 000), indices and offsets often on or one either side of each bound: try_ray equals the rule written in the test, and ray equals try_ray(..).ok(). The seed, camera and draw are printed on failure. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_335_camera_option_and_result_forms_agree_on_generated_samples` |
+| OPTICS-TP-336 | Generated equivalence, reflection | OPTICS-REQ-171, OPTICS-REQ-172 | 200 000 reflections from seed 0xB002_0445_0000_0611 (45 274 reflected; 78 178, 47 657 and 28 891 naming channel 0, 1 and 2), albedos across 0..=1.0 and radiance of every magnitude, often within 255 raw units of either end of i64: try_reflect equals the exact i128 rule and product written in the test, and reflect equals try_reflect(..).ok(). | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_336_reflect_option_and_result_forms_agree_on_generated_radiance` |
+| OPTICS-TP-337 | Display and Error | OPTICS-REQ-172 | The exact message of each CameraRayError and AlbedoReflectError variant, the two defensive camera variants built directly; RayRefused's source is its TraceRayError, and every other variant has none. | `crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_337_optics_refusals_display_their_values_and_are_errors` |
+| OPTICS-TP-338 | Refusal mutations | OPTICS-REQ-170, OPTICS-REQ-171, OPTICS-REQ-172 | Each rule of try_ray and try_reflect broken on purpose, and each fast path broken alone, makes a case above fail. | [Typed refusal mutation checks](#typed-refusal-mutation-checks) |
 | OPTICS-TP-065 | Defensive bounce refusal | OPTICS-REQ-041 | `BounceRayRefused` built directly (no input reaches it through the public API; OPTICS-TP-062 and OPTICS-TP-064 count zero occurrences): its values and `Display` text. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_defensive_bounce_refusal_names_its_ray` |
 | OPTICS-TP-270 | Facing sign | OPTICS-REQ-032 | The grazing witness of flyingrobots/bunny#299 (raw triangle, origin and direction in the case): a front-face hit whose exact `d . N` is in `-6e21..-5.5e21` raw squared (`i128`, negative as claimed) while `d . n` with the frame's rounded unit normal is exactly `+65 823 548` raw squared, so the README's guarantee is about `N`, not `n`. | `crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_270_the_facing_sign_is_exact_for_the_plane_normal_not_the_rounded_unit_normal` |
 | OPTICS-TP-271 | Changed distance | OPTICS-REQ-033, OPTICS-REQ-041 | A ground hit from `(0, 2, 0)` along `(0, -1, 0)`: the reported hit starts at `(0, 1, 0)` raw; the distance changed to 1.0 gives `Some` (start `(0, 1.0, 0)`, equal to `try_new`'s value); changed to 3.0 (1.0 below the plane) gives `None`. So `new` refuses a hit off the arrival side, not a hit the kernel did not report. | `crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_271_a_changed_distance_is_refused_only_off_the_arrival_side` |
@@ -1713,6 +1740,87 @@ evidence = "test"
 test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed"
 oracle = "The cross-version differential and fast/diagnostic agreement of OPTICS-TP-062, from a per-run seed printed on failure."
 tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-330"
+requirements = ["OPTICS-REQ-170", "OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_330_a_column_outside_the_image_is_named"
+oracle = "A 64 by 48 camera: column 63 gives a ray, columns 64, 65 and u32::MAX give ColumnOutsideImage with the column and width; ray is None exactly then and equal to try_ray's ray otherwise."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-331"
+requirements = ["OPTICS-REQ-170", "OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_331_a_row_outside_the_image_is_named"
+oracle = "The same camera: row 47 gives a ray, rows 48, 49 and u32::MAX give RowOutsideImage with the row and height."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-332"
+requirements = ["OPTICS-REQ-170", "OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_332_a_sub_pixel_offset_outside_the_unit_interval_is_named"
+oracle = "sub_x and sub_y of raw 0, 1 and 2^32 - 1 are accepted; -1, 2^32, 2^32 + 1 and the i64 extremes give SubXOutsideUnitInterval or SubYOutsideUnitInterval with the offset as given."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-333"
+requirements = ["OPTICS-REQ-170"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_333_the_first_failing_sample_condition_is_reported"
+oracle = "With several conditions failing, the column is named before sub_x, sub_x before the row, and the row before sub_y."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-334"
+requirements = ["OPTICS-REQ-171", "OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_334_a_channel_sum_outside_q32_32_is_named_by_channel"
+oracle = "On each channel: sums of exactly i64::MAX and i64::MIN raw are reflected (equal to the exact i128 product rounded half to even, written in the test), one and two raw units past either end give SumUnrepresentable with that channel and its two terms; with every channel overflowing the first is named."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-335"
+requirements = ["OPTICS-REQ-170", "OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_335_camera_option_and_result_forms_agree_on_generated_samples"
+oracle = "200 cameras of 1 to 4 096 pixels a side and 500 samples each from seed 0xB002_0445_0000_0C0A (100 000 samples: 57 943 rays; 14 680 column, 8 783 sub_x, 11 851 row and 6 743 sub_y refusals; each at least 1 000), indices and offsets often on or one either side of each bound: try_ray equals the rule written in the test, and ray equals try_ray(..).ok(). The seed, camera and draw are printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-336"
+requirements = ["OPTICS-REQ-171", "OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_336_reflect_option_and_result_forms_agree_on_generated_radiance"
+oracle = "200 000 reflections from seed 0xB002_0445_0000_0611 (45 274 reflected; 78 178, 47 657 and 28 891 naming channel 0, 1 and 2), albedos across 0..=1.0 and radiance of every magnitude, often within 255 raw units of either end of i64: try_reflect equals the exact i128 rule and product written in the test, and reflect equals try_reflect(..).ok()."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-337"
+requirements = ["OPTICS-REQ-172"]
+evidence = "test"
+test = "crates/bunny-optics/tests/typed_refusal_tests.rs::optics_tp_337_optics_refusals_display_their_values_and_are_errors"
+oracle = "The exact message of each CameraRayError and AlbedoReflectError variant, the two defensive camera variants built directly; RayRefused's source is its TraceRayError, and every other variant has none."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-338"
+requirements = ["OPTICS-REQ-170", "OPTICS-REQ-171", "OPTICS-REQ-172"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#typed-refusal-mutation-checks"
+oracle = "Each rule of try_ray and try_reflect broken on purpose, and each fast path broken alone, makes a case above fail."
+tier = "manual"
 status = "implemented"
 
 [[case]]
@@ -3169,6 +3277,22 @@ shared Q32.32 multiplication, whose ties are pinned in `bunny-num`. The
 combination site has exact ties but no case one raw unit either side of one:
 its radius moves in steps of several raw units near a tie, so such an input
 was not constructed; OPTICS-TP-043's goldens fail when it floors.
+
+## Typed Refusal Mutation Checks
+
+Each rule below was broken in the working tree (flyingrobots/bunny#445),
+`cargo test --locked -q --no-fail-fast -p bunny-optics --test typed_refusal_tests`
+run, and the file restored from git; the restored source passes all eight tests.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `try_ray` accepts the column equal to the width | The column bound is exclusive | OPTICS-TP-330, 333, 335 |
+| `try_ray` accepts a sub-pixel offset of exactly 1.0 | The offset interval is half-open | OPTICS-TP-332, 333, 335 |
+| `try_ray` checks the row before `sub_x` | Check order | OPTICS-TP-333, 335 |
+| The fast path `PinholeCamera::ray` accepts the row equal to the height, `try_ray` unchanged | The two paths agree | OPTICS-TP-330, 331, 335 |
+| `try_reflect` skips the albedo multiplication | The accepted value is the product | OPTICS-TP-334, 336 |
+| `try_reflect` names the last overflowing channel | The first channel is named | OPTICS-TP-334, 336 |
+| The fast path `Albedo::reflect` keeps the first channel's direct term when its sum overflows, `try_reflect` unchanged | The two paths agree | OPTICS-TP-334, 336 |
 
 ## Vertex-Normal Mutation Checks
 

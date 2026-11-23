@@ -14,6 +14,12 @@ buffer is large enough for the requested operation.
   `build_bvh_sah` (binned surface area heuristic, integer costs, stated tie
   rules, a depth cap and no recursion). See `docs/topics/bvh-construction/` in
   the repository.
+* `try_build_bvh_sah`: the diagnostic path of `build_bvh_sah`, the same build
+  or a `BvhBuildError` naming the buffer that is too small (or a primitive
+  count past `2^31`). After a build, the first `n` primitive indices are each
+  input index once; the rest of both buffers is untouched.
+* `TraversalError`, `CompactError` and `BvhBuildError` implement `Display` and
+  `core::error::Error`.
 * Stack-bounded BVH traversal for AABB and ray queries.
 * Front-to-back closest-hit and any-hit ray traversal (`closest_hit`,
   `any_hit`) over the same trees, with a caller-supplied primitive test.

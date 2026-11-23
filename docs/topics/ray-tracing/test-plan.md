@@ -112,6 +112,10 @@ formatting.
 | TRACE-REQ-061 | TraceRay::hit_disc (contract bunny-ray-disc/1) returns, for every ray and disc in the trace domain with a nonzero direction z, the floor in raw units of the true distance to the plane z = height when that rounded distance is in t_min..=t_max and the exact point where the ray meets the plane is at most the radius from the axis (the rim is inside), else None; the radius test is decided on the exact meeting point, not the rounded one. | `README.md#ray-disc` |
 | TRACE-REQ-062 | A ray whose direction has z = 0 misses every disc, including a ray that lies in the plane of the disc. | `README.md#ray-disc` |
 | TRACE-REQ-063 | DiscHit::front_face is true exactly when the direction has a negative z; DiscHit::normal is (0, 0, 1) on both sides; a ray whose origin is on the disc has distance 0; a disc whose rounded distance is below t_min is not hit. | `README.md#ray-disc` |
+| TRACE-REQ-070 | TraceRay::try_new returns Ok with the ray TraceRay::new builds, or the first failing of, in this order: OriginOutsideTraceDomain { origin } when an origin coordinate has abs(raw) >= 2^40, DirectionComponentTooLarge { direction } when a direction component has abs(raw) > 2^32, ZeroDirection when the direction is (0, 0, 0); each carries the values as given. | `README.md#typed-ray-and-triangle-refusals` |
+| TRACE-REQ-071 | TraceTriangle::try_new returns Ok with the triangle TraceTriangle::new builds, or VertexOutsideTraceDomain { index, vertex } naming the first vertex in argument order with a coordinate of abs(raw) >= 2^40. | `README.md#typed-ray-and-triangle-refusals` |
+| TRACE-REQ-072 | TraceRay::new and TraceTriangle::new, whose bodies are unchanged, return Some(x) exactly when their try_new forms return Ok(x), with equal values, for every input. | `README.md#typed-ray-and-triangle-refusals` |
+| TRACE-REQ-073 | TraceRayError and TraceTriangleError (#[non_exhaustive]), TraversalError and CompactError implement Display, with a message that states the condition and the raw values it saw, and core::error::Error with no source, using only core. | `README.md#malformed-buffers` |
 
 ```toml
 [[requirement]]
@@ -343,6 +347,26 @@ status = "active"
 id = "TRACE-REQ-063"
 summary = "DiscHit::front_face is true exactly when the direction has a negative z; DiscHit::normal is (0, 0, 1) on both sides; a ray whose origin is on the disc has distance 0; a disc whose rounded distance is below t_min is not hit."
 status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-070"
+summary = "TraceRay::try_new returns Ok with the ray TraceRay::new builds, or the first failing of, in this order: OriginOutsideTraceDomain { origin } when an origin coordinate has abs(raw) >= 2^40, DirectionComponentTooLarge { direction } when a direction component has abs(raw) > 2^32, ZeroDirection when the direction is (0, 0, 0); each carries the values as given."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-071"
+summary = "TraceTriangle::try_new returns Ok with the triangle TraceTriangle::new builds, or VertexOutsideTraceDomain { index, vertex } naming the first vertex in argument order with a coordinate of abs(raw) >= 2^40."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-072"
+summary = "TraceRay::new and TraceTriangle::new, whose bodies are unchanged, return Some(x) exactly when their try_new forms return Ok(x), with equal values, for every input."
+status = "active"
+
+[[requirement]]
+id = "TRACE-REQ-073"
+summary = "TraceRayError and TraceTriangleError (#[non_exhaustive]), TraversalError and CompactError implement Display, with a message that states the condition and the raw values it saw, and core::error::Error with no source, using only core."
+status = "active"
 ```
 
 ## Fixtures
@@ -539,6 +563,17 @@ Regenerating them is a contract change.
 | TRACE-TP-569 | Distance limits | TRACE-REQ-061 | Constructed: a ray falling 2.0 onto the disc hits at exactly 2 * 2^32 raw; a range with t_min equal to it, t_max equal to it, both equal to it, hits; t_min one raw unit above or t_max one raw unit below misses. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_569_the_distance_limits_are_inclusive_at_both_ends` |
 | TRACE-TP-570 | Contract identity | TRACE-REQ-061 | The public constant RAY_DISC_ID is the string bunny-ray-disc/1. | `crates/bunny-query/tests/trace_disc_tests.rs::trace_tp_570_the_contract_identity_is_public` |
 | TRACE-TP-568 | Deliberate mutations of the disc test | TRACE-REQ-060, TRACE-REQ-061, TRACE-REQ-062, TRACE-REQ-063 | Each rule broken on purpose makes a case above fail. | [Disc mutation checks](#disc-mutation-checks) |
+| TRACE-TP-720 | Origin boundary | TRACE-REQ-070, TRACE-REQ-072 | Constructed, on each axis and sign: an origin coordinate of 2^40 - 1 raw is accepted and round-trips, 2^40 and 2^40 + 1 raw and the i64 extremes give OriginOutsideTraceDomain with the origin as given; the Option form is None exactly then. The limit is a literal, checked equal to TRACE_COORD_LIMIT_RAW. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_720_an_origin_outside_the_domain_is_named` |
+| TRACE-TP-721 | Direction boundary | TRACE-REQ-070, TRACE-REQ-072 | Constructed, on each axis and sign: direction components of 2^32 - 1 and 2^32 raw are accepted (and all three at 2^32 at once), 2^32 + 1 raw and i64::MIN give DirectionComponentTooLarge with the direction as given; the Option form is None exactly then. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_721_a_direction_component_above_one_is_named` |
+| TRACE-TP-722 | Zero direction | TRACE-REQ-070, TRACE-REQ-072 | Constructed: (0, 0, 0) gives ZeroDirection; one raw unit of either sign on each axis is accepted. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_722_a_zero_direction_is_named` |
+| TRACE-TP-723 | Check order | TRACE-REQ-070 | Constructed: an origin outside the domain with a direction that is too large or zero gives OriginOutsideTraceDomain; a too-large direction gives DirectionComponentTooLarge. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_723_the_first_failing_ray_condition_is_reported` |
+| TRACE-TP-724 | Vertex boundary | TRACE-REQ-071, TRACE-REQ-072 | Constructed, for each vertex, axis and sign: 2^40 - 1 raw is accepted and the vertices round-trip, 2^40 and 2^40 + 1 raw give VertexOutsideTraceDomain with that index and vertex; with several vertices outside, the first in argument order is named. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_724_a_triangle_vertex_outside_the_domain_is_named_by_index` |
+| TRACE-TP-725 | Generated equivalence, rays | TRACE-REQ-070, TRACE-REQ-072 | 200 000 rays from seed 0xB002_0445_0000_0001 (134 691 accepted, 31 182 origin, 23 410 direction, 10 717 zero refusals; each at least 1 000), coordinates mostly in the domain and often on, or one raw unit either side of, each limit or at the i64 extremes: try_new equals the rule written in the test from the raw values, and new equals try_new(..).ok(). The seed and case are printed on failure. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_725_ray_option_and_result_forms_agree_on_generated_inputs` |
+| TRACE-TP-726 | Generated equivalence, triangles | TRACE-REQ-071, TRACE-REQ-072 | 200 000 triangles from seed 0xB002_0445_0000_07A0 (155 152 accepted; 16 299, 14 909 and 13 640 naming vertex 0, 1 and 2): try_new equals the rule written in the test, and new equals try_new(..).ok(). | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_726_triangle_option_and_result_forms_agree_on_generated_inputs` |
+| TRACE-TP-727 | Display and Error | TRACE-REQ-073 | The exact message of each TraceRayError and TraceTriangleError variant, written in the test with its raw values; each is a core::error::Error with no source. | `crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_727_trace_refusals_display_their_raw_values_and_are_errors` |
+| TRACE-TP-728 | Display and Error | TRACE-REQ-073 | The exact message of each TraversalError variant, written in the test; each is a core::error::Error with no source. | `crates/bunny-broadphase/tests/traversal_error_display_tests.rs::trace_tp_728_traversal_errors_display_their_condition_and_are_errors` |
+| TRACE-TP-729 | Display and Error | TRACE-REQ-073 | The exact message of each CompactError variant, written in the test; each is a core::error::Error with no source. | `crates/bunny-broadphase/tests/traversal_error_display_tests.rs::trace_tp_729_compact_errors_display_their_condition_and_are_errors` |
+| TRACE-TP-730 | Refusal mutations | TRACE-REQ-070, TRACE-REQ-071, TRACE-REQ-072 | Each rule of the try_ forms broken on purpose, and the fast path's direction bound broken alone, makes a case above fail. | [Typed refusal mutation checks](#typed-refusal-mutation-checks) |
 
 ```toml
 [[case]]
@@ -1728,6 +1763,105 @@ artifact = "docs/topics/ray-tracing/test-plan.md#disc-mutation-checks"
 oracle = "Each rule broken on purpose makes a case above fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRACE-TP-720"
+requirements = ["TRACE-REQ-070", "TRACE-REQ-072"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_720_an_origin_outside_the_domain_is_named"
+oracle = "Constructed, on each axis and sign: an origin coordinate of 2^40 - 1 raw is accepted and round-trips, 2^40 and 2^40 + 1 raw and the i64 extremes give OriginOutsideTraceDomain with the origin as given; the Option form is None exactly then. The limit is a literal, checked equal to TRACE_COORD_LIMIT_RAW."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-721"
+requirements = ["TRACE-REQ-070", "TRACE-REQ-072"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_721_a_direction_component_above_one_is_named"
+oracle = "Constructed, on each axis and sign: direction components of 2^32 - 1 and 2^32 raw are accepted (and all three at 2^32 at once), 2^32 + 1 raw and i64::MIN give DirectionComponentTooLarge with the direction as given; the Option form is None exactly then."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-722"
+requirements = ["TRACE-REQ-070", "TRACE-REQ-072"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_722_a_zero_direction_is_named"
+oracle = "Constructed: (0, 0, 0) gives ZeroDirection; one raw unit of either sign on each axis is accepted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-723"
+requirements = ["TRACE-REQ-070"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_723_the_first_failing_ray_condition_is_reported"
+oracle = "Constructed: an origin outside the domain with a direction that is too large or zero gives OriginOutsideTraceDomain; a too-large direction gives DirectionComponentTooLarge."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-724"
+requirements = ["TRACE-REQ-071", "TRACE-REQ-072"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_724_a_triangle_vertex_outside_the_domain_is_named_by_index"
+oracle = "Constructed, for each vertex, axis and sign: 2^40 - 1 raw is accepted and the vertices round-trip, 2^40 and 2^40 + 1 raw give VertexOutsideTraceDomain with that index and vertex; with several vertices outside, the first in argument order is named."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-725"
+requirements = ["TRACE-REQ-070", "TRACE-REQ-072"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_725_ray_option_and_result_forms_agree_on_generated_inputs"
+oracle = "200 000 rays from seed 0xB002_0445_0000_0001 (134 691 accepted, 31 182 origin, 23 410 direction, 10 717 zero refusals; each at least 1 000), coordinates mostly in the domain and often on, or one raw unit either side of, each limit or at the i64 extremes: try_new equals the rule written in the test from the raw values, and new equals try_new(..).ok(). The seed and case are printed on failure."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-726"
+requirements = ["TRACE-REQ-071", "TRACE-REQ-072"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_726_triangle_option_and_result_forms_agree_on_generated_inputs"
+oracle = "200 000 triangles from seed 0xB002_0445_0000_07A0 (155 152 accepted; 16 299, 14 909 and 13 640 naming vertex 0, 1 and 2): try_new equals the rule written in the test, and new equals try_new(..).ok()."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-727"
+requirements = ["TRACE-REQ-073"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_refusal_tests.rs::trace_tp_727_trace_refusals_display_their_raw_values_and_are_errors"
+oracle = "The exact message of each TraceRayError and TraceTriangleError variant, written in the test with its raw values; each is a core::error::Error with no source."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-728"
+requirements = ["TRACE-REQ-073"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/traversal_error_display_tests.rs::trace_tp_728_traversal_errors_display_their_condition_and_are_errors"
+oracle = "The exact message of each TraversalError variant, written in the test; each is a core::error::Error with no source."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-729"
+requirements = ["TRACE-REQ-073"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/traversal_error_display_tests.rs::trace_tp_729_compact_errors_display_their_condition_and_are_errors"
+oracle = "The exact message of each CompactError variant, written in the test; each is a core::error::Error with no source."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-730"
+requirements = ["TRACE-REQ-070", "TRACE-REQ-071", "TRACE-REQ-072"]
+evidence = "manual-audit"
+artifact = "docs/topics/ray-tracing/test-plan.md#typed-refusal-mutation-checks"
+oracle = "Each rule of the try_ forms broken on purpose, and the fast path's direction bound broken alone, makes a case above fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -2022,6 +2156,22 @@ all ten tests.
 | `radius <= 0` made `radius < 0` | A zero radius is refused | TRACE-TP-566 |
 | `t_min` made exclusive | The limits are inclusive | TRACE-TP-560, 564, 565, 569 |
 | `t_max` made exclusive (`..=` made `..`) | The upper limit is inclusive | TRACE-TP-569 only (generated ranges never end exactly on a hit) |
+
+### Typed Refusal Mutation Checks
+
+Each rule below was broken in the working tree (flyingrobots/bunny#445),
+`cargo test --locked -q --no-fail-fast -p bunny-query --test trace_refusal_tests`
+run, and the file restored from git; the restored source passes all eight tests.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `try_new` accepts an origin coordinate of `2^40` | The domain bound is exclusive | TRACE-TP-720, 723, 725 |
+| `try_new` refuses a direction component of exactly `2^32` | The direction bound is inclusive | TRACE-TP-720, 721, 725 |
+| `try_new` drops the zero-direction check | A zero direction is refused | TRACE-TP-722, 725 |
+| `try_new` checks the direction before the origin | Check order | TRACE-TP-723, 725 |
+| `TraceTriangle::try_new` names the last vertex outside | The first vertex is named | TRACE-TP-724, 726 |
+| `TraceTriangle::try_new` ignores the third vertex | Every vertex is checked | TRACE-TP-724, 726 |
+| The fast path `TraceRay::new` (through `prepare`) refuses a direction component of exactly `2^32`, `try_new` unchanged | The two paths agree | TRACE-TP-720, 721, 725 |
 
 ## Determinism Obligations And Evidence
 

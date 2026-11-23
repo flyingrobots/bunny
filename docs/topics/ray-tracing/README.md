@@ -137,6 +137,30 @@ The direction need not be a unit vector. Every distance in this chapter is a
 multiple of the direction: the point at distance `t` is
 `origin + direction * t`, and distances are raw Q32.32 values of `t`.
 
+### Typed Ray And Triangle Refusals
+
+`TraceRay::new` and `TraceTriangle::new` are the fast paths: they say only
+whether the input was refused. `TraceRay::try_new` and `TraceTriangle::try_new`
+are their diagnostic paths, after the pattern of `SurfaceHit::try_new`
+([optics chapter](../optics/README.md#inputs-and-refusals)): the same value,
+or an error that names the refused condition and carries the values the check
+saw. The `Option` form returns `Some(x)` exactly when the `try_` form returns
+`Ok(x)`; the `Option` bodies are unchanged. A renderer calls the fast path and
+calls the `try_` form only after a `None`.
+
+| Function | Checked in order | Refused when (raw) | Error |
+| --- | --- | --- | --- |
+| `TraceRay::try_new` | 1 | an origin coordinate has `abs(raw) >= 2^40` | `TraceRayError::OriginOutsideTraceDomain { origin }` |
+| `TraceRay::try_new` | 2 | a direction component has `abs(raw) > 2^32` | `TraceRayError::DirectionComponentTooLarge { direction }` |
+| `TraceRay::try_new` | 3 | the direction is `(0, 0, 0)` | `TraceRayError::ZeroDirection` |
+| `TraceTriangle::try_new` | 1 | a coordinate of vertex `index` (the first such, in argument order) has `abs(raw) >= 2^40` | `TraceTriangleError::VertexOutsideTraceDomain { index, vertex }` |
+
+Both error types are `#[non_exhaustive]`, implement `Display` (the message
+gives the raw values) and `core::error::Error` with no source, and are
+exported from `bunny_query`. A direction component above the limit is never
+zero, so the zero check cannot be reached before it. `TraceRay::from_ray` has
+no `try_` form.
+
 ## Conservative Box Test
 
 `TraceRay::box_entry(aabb, t_max)` returns a lower bound on the distance at
@@ -730,6 +754,13 @@ work; it is not a check that the buffer is a tree, and it does not inspect
 nodes the search does not reach. `InvalidNodeIndex` does not say whether the
 index was out of range or the bound ran out.
 
+`TraversalError` implements `Display` and `core::error::Error` (no source;
+nothing `std`-only). The messages state the condition: `StackOverflow` is
+"traversal needed more than its 64 stack entries", `InvalidNodeIndex` "a node
+names a child outside the node buffer, or a node is reached twice", and
+`InvalidPrimitiveRange` "a leaf names primitives outside the primitive-index
+buffer" (TRACE-TP-728).
+
 ### Depth And The Traversal Stack
 
 The depth of a tree is the number of edges from the root to its deepest leaf:
@@ -866,6 +897,13 @@ converts although its searches may overflow; the conversion does not check
 that the searches hold the tree. Leaf primitive ranges are copied
 unchecked and are checked by the search when it reaches them, as
 `closest_hit` checks them.
+
+`CompactError` implements `Display` and `core::error::Error` (no source;
+nothing `std`-only): `InvalidNodeIndex` is "an interior node names children
+outside the node buffer", `OutputTooSmall` "the output buffer holds fewer
+nodes than the tree's interior", `NotATree` "more interior nodes are reached
+than a tree of this size has" and `TooDeep` "more than 64 interior subtrees
+would wait at once" (TRACE-TP-729).
 
 `compact_closest_hit` and `compact_any_hit` take a `CompactView` (the root,
 the compact nodes and the source tree's primitive-index buffer) and run the
