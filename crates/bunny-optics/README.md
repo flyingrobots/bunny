@@ -33,6 +33,14 @@ every buffer.
   one sampler pair (`lens_disc_point`, polar and area-preserving) and passes
   its sample's focus-plane point within a stated bound; aperture 0 gives the
   pinhole's rays bit for bit. Invalid lenses return a typed `ThinLensError`.
+* `OrthographicCamera` (`bunny-orthographic-camera/1`): a `CameraSpec` with
+  the tangent replaced by half the view rectangle's height. Every ray looks
+  along `forward` from its sample's point on the rectangle, rounded once per
+  component to nearest, ties to even: within half a raw unit. A view that
+  leaves the trace domain, and every other invalid input, returns a typed
+  `OrthographicError`. Points along both cameras' rays land on their samples
+  through `FixedMat4::try_look_at`, the projection matrices and `Viewport`,
+  within a bound derived for each case.
 * `point_at`: the point at a trace distance along an unnormalized ray.
 * `PixelStream` (`bunny-sample-hash/1`): 64 mixed bits per (seed, pixel,
   sample, dimension) from a chain of SplitMix64 mixes, with no state;

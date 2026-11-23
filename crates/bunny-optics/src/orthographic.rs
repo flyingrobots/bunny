@@ -156,8 +156,10 @@ impl OrthographicCamera {
         let half = i128::from(self.half_height_raw);
         let (a, b) = (i128::from(a) * half, i128::from(b) * half);
         let divisor = i128::from(self.height) << (2 * FixedQ32_32::FRACTIONAL_BITS);
-        let (right, up, p) = (wide(self.basis.right), wide(self.basis.up), raw3(self.position));
-        [0, 1, 2].map(|i| p[i] + round_div(a * right[i] + b * up[i], divisor))
+        let [[r0, r1, r2], [u0, u1, u2]] = [wide(self.basis.right), wide(self.basis.up)];
+        let [p0, p1, p2] = raw3(self.position);
+        let axis = |p: i128, r: i128, u: i128| p + round_div(a * r + b * u, divisor);
+        [axis(p0, r0, u0), axis(p1, r1, u1), axis(p2, r2, u2)]
     }
 
     /// Refuses a view whose rounded corners leave the trace domain. Each origin component is

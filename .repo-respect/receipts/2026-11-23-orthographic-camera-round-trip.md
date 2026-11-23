@@ -46,10 +46,18 @@ None.
 
 Checks run:
 First commit (tests only): the new tests fail to compile, the camera does not exist.
-Kernel and docs commits: see the pull request for the gate commands and their results.
+Kernel and docs commits, each its own command on the host (local Rust 1.100.0; CI uses the
+pinned 1.96.0): cargo fmt --all --check; cargo test --locked --workspace --all-targets
+--all-features (123 test result lines, every one `ok`); cargo run --locked -p xtask --
+code-dojo-generated; code-dojo-rust --all; code-dojo-determinism --enforce;
+code-dojo-perf-groups; topic-docs; repo-respect check --branch; git diff --check. All clean.
+cargo clippy --locked -p bunny-optics --lib and the three new test targets with -D warnings:
+clean.
 Mutations: fourteen, each applied to the source, run with cargo test --locked -q -p
 bunny-optics --no-fail-fast over the orthographic, round-trip, safeguard, camera and thin-lens
 tests, and restored; each failed at least one case (the test plan's table).
+Not run locally: wasm-pack (CI's WebAssembly job runs it), cargo deny and markdownlint-cli2
+(not installed; CI's Dojo job runs them), the no_std gate (bunny-num is not touched).
 
 Known risks:
 The round-trip bound is proven per case, from each step's stated rounding and the exact
