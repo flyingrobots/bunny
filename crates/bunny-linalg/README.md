@@ -34,6 +34,10 @@ math for graphics pipelines.
   exactly parallel or antiparallel to the view direction, returns a typed
   `LookAtError` (`ParallelUp`). A translation entry whose finished value is
   representable is never refused because an intermediate term overflowed.
+* **Look Rotation**: `FixedMat3::try_look_rotation(forward, up)` builds the
+  rotation that maps local `-Z` onto `forward` (columns right, true up, back),
+  with the look-at basis, rounding and `LookAtError` refusals. Columns are
+  orthonormal within 2 raw units, rows within 3 (length) and 4 (dot).
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix

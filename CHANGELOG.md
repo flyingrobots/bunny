@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: `FixedMat3::try_look_rotation(forward, up)`
+  (`bunny-look-rotation/1`), the rotation whose columns are right, true up and
+  back, so an object's local `-Z` maps onto `forward` in the right-handed frame
+  of the coordinate law. It shares the look-at basis with `try_look_at`: exact
+  `i128` cross products, each component normalized to within `1/2 + 2^-26` raw
+  units (half away from zero), columns orthonormal within 2 raw units and rows
+  within 3 (length) and 4 (dot). A zero `forward` returns `CoincidentEyeTarget`;
+  a zero `up`, or one exactly parallel to `forward` or to its rounded
+  direction, returns `ParallelUp`. `try_look_at` is unchanged. Closes
+  flyingrobots/bunny#310.
 * `bunny-query`: `ShapeFrame`, the rigid frame an analytic shape is placed
   with, under the contract identity `bunny-shape-frame/1`
   (`SHAPE_FRAME_ID`). `ShapeFrame::new` takes three right-handed unit axes
