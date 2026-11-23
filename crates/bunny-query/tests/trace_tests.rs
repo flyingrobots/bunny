@@ -506,3 +506,23 @@ fn trace_tp_314_numerators_off_the_triangle_are_refused() {
     let n = new(3, 4, 7).expect("on the triangle");
     assert_eq!((n.u(), n.v(), n.det()), (3, 4, 7));
 }
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_317_box_entry_on_an_inverted_box_is_defined_per_axis() {
+    // A ray from the origin along +x at 2^32 raw per unit of distance, so a distance in raw
+    // units equals the x offset in raw units.
+    let ray = TraceRay::new(vec3([0; 3]), vec3([ONE_RAW, 0, 0])).expect("in the domain");
+    let around = |min_x: i64, max_x: i64| {
+        let aabb = FixedAabb3::new(vec3([min_x, -1, -1]), vec3([max_x, 1, 1]));
+        ray.box_entry(&aabb, FAR).map(FixedQ32_32::raw)
+    };
+    // The test does not check that min <= max: an inverted x interval 6..5 still returns the
+    // slab entry computed from the minimum plane, as a lower bound, exactly as a box 6..7.
+    assert_eq!(around(6, 5), Some(6));
+    assert_eq!(around(6, 7), Some(6));
+    // The slab behind the ray rejects an inverted interval whose far plane is behind it.
+    assert_eq!(around(-5, -6), None);
+    // An inverted interval on a parallel axis rejects, since no origin coordinate is in it.
+    let parallel = FixedAabb3::new(vec3([6, 1, -1]), vec3([7, -1, 1]));
+    assert_eq!(ray.box_entry(&parallel, FAR), None);
+}

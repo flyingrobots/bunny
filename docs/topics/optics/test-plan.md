@@ -8,8 +8,9 @@ radiance samples into output codes.
 
 ## Scope
 
-This plan covers `PinholeCamera`, `CameraSpec`, `PixelSample`, `CameraError`
-and `point_at`:
+This plan covers `PinholeCamera`, `CameraSpec`, `PixelSample`, `CameraError`,
+`point_at`, and the thin-lens camera `bunny-thin-lens/1` (`ThinLensCamera`,
+`ThinLensSpec`, `ThinLensError`, `lens_disc_point`):
 
 - construction refusals for every degenerate input;
 - the camera basis and its agreement with the coordinate law;
@@ -175,6 +176,12 @@ formatting.
 | OPTICS-REQ-053 | `schlick_fresnel(f0, cosine)` clamps both inputs to `0..=1.0`, rounds the exact `(1 - cosine)^5` once to nearest and `f0 + (1 - f0) w` once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is `schlick_fresnel(F0_c, c)` per channel with `c` the incidence cosine rounded once, within three raw units of the exact `-(d . n) / \|d\|`. | `README.md#specular-reflection` |
 | OPTICS-REQ-054 | At normal incidence (`d` along `-n`) the throughput is the base reflectance exactly; at `cosine = 1.0` `schlick_fresnel` is `f0` exactly and at `cosine = 0` it is 1.0. | `README.md#specular-reflection` |
 | OPTICS-REQ-055 | `try_specular_reflection` refuses, in this order, a ray with `d . N >= 0` against the exact facing normal (`SecondaryRayError::ArrivesBelowSurface`) and a reflected direction with `r' . N <= 0` (`SecondaryRayError::ReflectionBelowSurface`), each carrying the direction it saw. | `README.md#specular-reflection` |
+| OPTICS-REQ-070 | With aperture 0, `ThinLensCamera` has the pinhole camera's scale shift and every ray equals `PinholeCamera::ray` bit for bit, for every focus distance and lens sample, by the same arithmetic on a zero lens offset. | `README.md#thin-lens-camera` |
+| OPTICS-REQ-071 | Each thin-lens ray has origin `position + o` and direction `d - c` with `o_i = round(a (x R_i + y U_i) / 2^64)` and `c_i = round(o_i 2^32 / (f 2^k))`, ties to even, and passes, at parameter `tau = f 2^k / 2^32`, within `-tau (3/2 + 2^-17)` to `tau (1/2 + 2^-17)` raw units of the exact focus-plane point `position + tau 2^-k P` on each axis. | `README.md#thin-lens-camera` |
+| OPTICS-REQ-072 | `lens_disc_point([u, v])` returns `None` outside `[0, 1)^2`, and otherwise `x = round(r cos)`, `y = round(r sin)` with `r = isqrt(u_raw (2^32 - 16))` and the angle `v` turns from `FixedAngle::sin_cos`: strictly inside the unit disc (`x^2 + y^2 < 2^64` raw squared), with `x^2 + y^2` within `2^35` raw squared of `u_raw (2^32 - 16)` and the point in the octant of its angle unless that angle is within `2^31 / r` raw turns of an octant boundary, `r` the raw radius, where the rounding may cross it. | `README.md#thin-lens-camera` |
+| OPTICS-REQ-073 | An aligned block of `2^m` sampler points of one pair maps to one lens point in each of `2^m` equal-area rings and each of `2^m` equal sectors, up to the sector-boundary rounding of OPTICS-REQ-072 (tested for 16 rings and 8 octants). | `README.md#thin-lens-camera` |
+| OPTICS-REQ-074 | Every in-image sample with a lens sample in `[0, 1)^2` of an accepted thin-lens camera has a ray whose direction components are at most 1.0 in magnitude and whose `direction . forward` is positive. | `README.md#thin-lens-camera` |
+| OPTICS-REQ-075 | `ThinLensCamera::new` refuses, in this order, a refused pinhole spec (`ThinLensError::Camera`), a focus distance of zero or below (`FocusDistanceNotPositive`), a negative aperture (`ApertureNegative`), a position coordinate whose magnitude plus twice the aperture reaches `2^40` raw (`LensOutsideTraceDomain`) and a lens no shift up to 32 fits (`Unrepresentable`); `ray` returns `None` for a sample outside the image or a lens coordinate outside `[0, 1)`. | `README.md#thin-lens-camera` |
 | OPTICS-REQ-091 | `SurfaceHit::dielectric_reflectance` (`bunny-dielectric/1`, `DIELECTRIC_ID`) reports `Total` exactly when `K = b^2 (d.d)(n.n) - a^2 ((d.d)(n.n) - (d.n)^2) <= 0` for the incoming direction `d`, the facing frame normal `n`, the index `a` the ray arrives through and the other index `b`, decided in exact integers: the critical direction itself is total, and a direction one raw unit steeper is not. `a` is `outside` for a front-face hit and `inside` for a back-face hit. | `README.md#smooth-dielectric` |
 | OPTICS-REQ-092 | Otherwise the reflectance is `Partial(R)` with `R` the exact unpolarized Fresnel formula `(r_s^2 + r_p^2) / 2` on `d`, `n`, `a`, `b`, rounded once to nearest: within half a raw unit plus `2^-8` of the exact value, in `0..=1.0`. When `d . n >= 0` (the ray arrives against the exact face but along or behind the plane of the rounded normal) the reflectance is exactly 1.0 and no refraction is computed, whatever the indices; otherwise it is exactly zero for equal indices. | `README.md#smooth-dielectric` |
 | OPTICS-REQ-093 | The refracted direction is the unit vector along `T = a (d (n.n) - (d.n) n) - q n`, `q = floor(sqrt(K))`: each component within one raw unit (plus `2^-26`) of the exact refracted unit vector, so it satisfies Snell's law `a sin_i = b sin_t` in the plane of incidence, on the far side of `n`. | `README.md#smooth-dielectric` |
@@ -455,6 +462,36 @@ status = "active"
 [[requirement]]
 id = "OPTICS-REQ-055"
 summary = "try_specular_reflection refuses, in this order, a ray with d . N >= 0 against the exact facing normal (SecondaryRayError::ArrivesBelowSurface) and a reflected direction with r' . N <= 0 (SecondaryRayError::ReflectionBelowSurface), each carrying the direction it saw."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-070"
+summary = "With aperture 0, ThinLensCamera has the pinhole camera's scale shift and every ray equals PinholeCamera::ray bit for bit, for every focus distance and lens sample, by the same arithmetic on a zero lens offset."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-071"
+summary = "Each thin-lens ray has origin position + o and direction d - c with o_i = round(a (x R_i + y U_i) / 2^64) and c_i = round(o_i 2^32 / (f 2^k)), ties to even, and passes, at parameter tau = f 2^k / 2^32, within -tau (3/2 + 2^-17) to tau (1/2 + 2^-17) raw units of the exact focus-plane point position + tau 2^-k P on each axis."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-072"
+summary = "lens_disc_point([u, v]) returns None outside [0, 1)^2, and otherwise x = round(r cos), y = round(r sin) with r = isqrt(u_raw (2^32 - 16)) and the angle v turns from FixedAngle::sin_cos: strictly inside the unit disc (x^2 + y^2 < 2^64 raw squared), with x^2 + y^2 within 2^35 raw squared of u_raw (2^32 - 16) and the point in the octant of its angle unless that angle is within 2^31 / r raw turns of an octant boundary, r the raw radius, where the rounding may cross it."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-073"
+summary = "An aligned block of 2^m sampler points of one pair maps to one lens point in each of 2^m equal-area rings and each of 2^m equal sectors, up to the sector-boundary rounding of OPTICS-REQ-072 (tested for 16 rings and 8 octants)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-074"
+summary = "Every in-image sample with a lens sample in [0, 1)^2 of an accepted thin-lens camera has a ray whose direction components are at most 1.0 in magnitude and whose direction . forward is positive."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-075"
+summary = "ThinLensCamera::new refuses, in this order, a refused pinhole spec (ThinLensError::Camera), a focus distance of zero or below (FocusDistanceNotPositive), a negative aperture (ApertureNegative), a position coordinate whose magnitude plus twice the aperture reaches 2^40 raw (LensOutsideTraceDomain) and a lens no shift up to 32 fits (Unrepresentable); ray returns None for a sample outside the image or a lens coordinate outside [0, 1)."
 status = "active"
 
 [[requirement]]
@@ -754,6 +791,23 @@ image-plane point. The case passes when `-D - slack < d_i * D - S_i <= slack`
 for each component, which is `OPTICS-REQ-005` multiplied through by `D`. All
 products are checked; an overflow fails the case.
 
+### The Focus-Plane Oracle
+
+The oracle shares no code or rounding with the camera. It extends
+[the image-plane oracle](#the-image-plane-oracle): with `S_i`, `D` and
+`slack` as there (at the thin-lens camera's shift `k`), the ray's origin
+`L` and direction `t`, the position `p` and `tau' = f 2^k` (raw focus times
+`2^k`), it forms in exact big integers
+
+```text
+e_i = (L_i - p_i) * 2^32 * D + tau' * (t_i * D - S_i)
+```
+
+which is `2^32 D` times the raw error of the ray's point at parameter
+`f 2^k / 2^32` against the exact focus-plane point. The case passes when
+`-tau' (3 D + 2 slack) <= 2 e_i <= tau' (D + 2 slack)` on each axis, which is
+`OPTICS-REQ-071` multiplied through by `2^33 D`.
+
 ### The GGX Oracles
 
 The cases for `bunny-ggx-conductor/1` use no floating point. Their expected
@@ -948,6 +1002,14 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
 | OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
 | OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
+| OPTICS-TP-130 | Aperture 0 is the pinhole | OPTICS-REQ-070 | 1 000 seeded cameras (positions anywhere in the trace domain), each with a seeded focus distance up to 256 units and aperture 0, eight seeded samples and seeded lens samples each: the scale shift equals the pinhole's and every ray equals `PinholeCamera::ray` bit for bit; at least 7 900 rays (8 000 on the committed seed); the seed is printed. | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_130_aperture_zero_gives_the_pinhole_rays_bit_for_bit` |
+| OPTICS-TP-131 | Focus-plane oracle | OPTICS-REQ-071, OPTICS-REQ-074 | 1 000 seeded cameras with apertures up to 4 units and focus distances from `2^-8` to 64 units, eight seeded samples each: every ray exists and lies within the bound of the [focus-plane oracle](#the-focus-plane-oracle), decided in exact big integers; at least 7 900 rays (8 000 on the committed seed); the seed is printed. | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_131_every_ray_passes_its_focus_plane_point` |
+| OPTICS-TP-132 | Disc points: inside, radius, angle | OPTICS-REQ-072 | 64 edge inputs (`u`, `v` in 0, 1 raw, 1/8, 1/4, 1/2, 3/4 and the two largest fractions), 42 small-radius points 256 raw turns either side of each of the seven inner octant boundaries (`u` = 1, 4 and 64 raw) and 20 000 seeded ones: `x^2 + y^2 < 2^64` exactly, within `2^35` of `u_raw (2^32 - 16)`, and, except within `2^31 / r` raw turns of an octant boundary (`r` the floor root of `u_raw (2^32 - 16)`), in the octant `floor(8 v)` decided by exact sign and magnitude comparisons; the seed is printed. | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_132_disc_points_lie_inside_the_unit_disc_at_their_radius_and_angle` |
+| OPTICS-TP-133 | Stratification on the disc | OPTICS-REQ-073 | 200 seeded pixel samplers and aligned 16-sample blocks of pair 2: the 16 lens points fall one in each ring `floor(16 (x^2 + y^2) / (2^32 (2^32 - 16)))`, and the first 8 one in each octant; the seed is printed. | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_133_sampler_blocks_stratify_the_disc_into_rings_and_octants` |
+| OPTICS-TP-134 | Extreme lenses | OPTICS-REQ-074 | 300 seeded cameras with apertures up to 64 times the focus distance: at two opposite image corners, both sub-pixel extremes, the two largest `u` and five angles, every ray exists and has `direction . forward > 0`; at least 5 000 rays; the seed is printed. | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_134_extreme_lenses_give_a_forward_ray_for_every_sample` |
+| OPTICS-TP-135 | Refusals | OPTICS-REQ-075 | Focus 0 and -1 raw, aperture -1 raw, an empty image with both lens inputs invalid (the pinhole error first), a lens reaching `2^40` raw (refused) next to one reaching `2^40 - 2` (accepted), aperture `2^38` raw over focus 1 raw (`Unrepresentable`), and lens samples and a column outside their ranges (`None`). | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_135_invalid_lenses_and_lens_samples_are_refused` |
+| OPTICS-TP-136 | Hand-computed level camera | OPTICS-REQ-071, OPTICS-REQ-072 | Aperture 1, focus 1, a 4 by 4 image with tangent 1 looking down `-z`: shift 2 (hand: the margin `2^33 / 2^k` raw fits first at `k = 2`, the pinhole's is 0); the lens centre gives a quarter of the pinhole direction; `u = 1/4` along `right` and along `up` gives origin `r = 2^31 - 5` raw and correction `2^29 - 1` raw on that axis (hand: `isqrt(2^62 - 2^34)` and `round(r / 4)`). | `crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_136_golden_lens_rays_of_a_level_camera` |
+| OPTICS-TP-137 | Thin-lens mutations | OPTICS-REQ-070, OPTICS-REQ-071, OPTICS-REQ-072, OPTICS-REQ-073, OPTICS-REQ-074, OPTICS-REQ-075 | Each rule broken on purpose fails at least one case above, except the forward margin (recorded). | [Thin-lens mutation checks](#thin-lens-mutation-checks) |
 | OPTICS-TP-183 | Hand-derived boundaries | OPTICS-REQ-091, OPTICS-REQ-092, OPTICS-REQ-093, OPTICS-REQ-094, OPTICS-REQ-095 | The identity string. Straight down into glass (1.0 to 1.5): `R = 0.04`, raw 171 798 691.84 rounded to ..692 (a floor gives ..691); the choice `R` refracts straight on from one raw unit below the plane and the choice `R - 1` reflects straight back from one raw unit above. Straight up through the back face: the same `R`, `front_face()` false, a start one raw unit above. From 1.5 into 2.0 along `(4, -3) / 5`, Brewster's angle: `r_p = 0`, `R = 0.0392`, raw 168 362 718.0032 rounded to ..718 (a ceiling gives ..719), and the refracted direction is `(0.6, -0.8, 0)`, raw (2 576 980 377.6, 3 435 973 836.8) rounded to (..378, ..837) (a floor gives ..377, ..836). Every sample's throughput is 1.0. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_183_hand_derived_boundaries_reflect_and_refract` |
 | OPTICS-TP-184 | Equal indices and the index range | OPTICS-REQ-092, OPTICS-REQ-093, OPTICS-REQ-097 | With equal indices 1.0, 1.5 and 8.0, `R` is exactly zero and the refracted direction is the unit vector along `d` (a model value, and within one raw unit by the exact oracle). `DielectricBoundary::new` accepts 1.0 and 8.0 on either side and refuses `1.0 - 1`, `8.0 + 1` raw, zero and a negative index, naming the first refused index; the `Display` text. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_184_equal_indices_pass_straight_through_and_the_range_is_inclusive` |
 | OPTICS-TP-185 | Snell's law on seeded hits | OPTICS-REQ-093, OPTICS-REQ-094 | 3 000 seeded triangles, rays (the trace kernel's hits; one in four with the direction shortened by `2^8`, `2^20` or `2^31`) and boundaries (named indices, seeded indices, one in eight a raw unit apart), with the last choice value. Each refracted direction is within one raw unit plus `2^-26` of the unit vector along the oracle's exact `T`, and, from the direction alone: `\|a^2 sin_i^2 - b^2 sin_t^2\| <= 4 b^2 2^-32`, it is within `2 * 2^-32` of the plane of incidence, on the far side of `n`, and its part along the surface points as that of `d`. A reflection happens only at a reflectance of 1.0. On the committed seed: 1 933 refracted, 964 reflected, none refused; 1 433 entering, 1 464 leaving, 326 with indices exactly one raw unit apart, 183 with equal indices, 182 with an incidence cosine below 1/16, 683 short directions (each kind at least 50, asserted). | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_185_refracted_directions_satisfy_snells_law_on_seeded_hits` |
@@ -1939,6 +2001,78 @@ tier = "manual"
 status = "implemented"
 
 [[case]]
+id = "OPTICS-TP-130"
+requirements = ["OPTICS-REQ-070"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_130_aperture_zero_gives_the_pinhole_rays_bit_for_bit"
+oracle = "1 000 seeded cameras (positions anywhere in the trace domain), each with a seeded focus distance up to 256 units and aperture 0, eight seeded samples and seeded lens samples each: the scale shift equals the pinhole's and every ray equals PinholeCamera::ray bit for bit; at least 7 900 rays (8 000 on the committed seed); the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-131"
+requirements = ["OPTICS-REQ-071", "OPTICS-REQ-074"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_131_every_ray_passes_its_focus_plane_point"
+oracle = "1 000 seeded cameras with apertures up to 4 units and focus distances from 2^-8 to 64 units, eight seeded samples each: every ray exists and lies within the bound of the focus-plane oracle, decided in exact big integers; at least 7 900 rays (8 000 on the committed seed); the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-132"
+requirements = ["OPTICS-REQ-072"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_132_disc_points_lie_inside_the_unit_disc_at_their_radius_and_angle"
+oracle = "64 edge inputs (u, v in 0, 1 raw, 1/8, 1/4, 1/2, 3/4 and the two largest fractions), 42 small-radius points 256 raw turns either side of each of the seven inner octant boundaries (u = 1, 4 and 64 raw) and 20 000 seeded ones: x^2 + y^2 < 2^64 exactly, within 2^35 of u_raw (2^32 - 16), and, except within 2^31 / r raw turns of an octant boundary (r the floor root of u_raw (2^32 - 16)), in the octant floor(8 v) decided by exact sign and magnitude comparisons; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-133"
+requirements = ["OPTICS-REQ-073"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_133_sampler_blocks_stratify_the_disc_into_rings_and_octants"
+oracle = "200 seeded pixel samplers and aligned 16-sample blocks of pair 2: the 16 lens points fall one in each ring floor(16 (x^2 + y^2) / (2^32 (2^32 - 16))), and the first 8 one in each octant; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-134"
+requirements = ["OPTICS-REQ-074"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_134_extreme_lenses_give_a_forward_ray_for_every_sample"
+oracle = "300 seeded cameras with apertures up to 64 times the focus distance: at two opposite image corners, both sub-pixel extremes, the two largest u and five angles, every ray exists and has direction . forward > 0; at least 5 000 rays; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-135"
+requirements = ["OPTICS-REQ-075"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_135_invalid_lenses_and_lens_samples_are_refused"
+oracle = "Focus 0 and -1 raw, aperture -1 raw, an empty image with both lens inputs invalid (the pinhole error first), a lens reaching 2^40 raw (refused) next to one reaching 2^40 - 2 (accepted), aperture 2^38 raw over focus 1 raw (Unrepresentable), and lens samples and a column outside their ranges (None)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-136"
+requirements = ["OPTICS-REQ-071", "OPTICS-REQ-072"]
+evidence = "test"
+test = "crates/bunny-optics/tests/thin_lens_tests.rs::optics_tp_136_golden_lens_rays_of_a_level_camera"
+oracle = "Aperture 1, focus 1, a 4 by 4 image with tangent 1 looking down -z: shift 2 (hand: the margin 2^33 / 2^k raw fits first at k = 2, the pinhole's is 0); the lens centre gives a quarter of the pinhole direction; u = 1/4 along right and along up gives origin r = 2^31 - 5 raw and correction 2^29 - 1 raw on that axis (hand: isqrt(2^62 - 2^34) and round(r / 4))."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-137"
+requirements = ["OPTICS-REQ-070", "OPTICS-REQ-071", "OPTICS-REQ-072", "OPTICS-REQ-073", "OPTICS-REQ-074", "OPTICS-REQ-075"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#thin-lens-mutation-checks"
+oracle = "Eleven rules of thin_lens.rs broken on purpose; ten fail at least one case, and the defensive forward margin is recorded as not reached."
+tier = "manual"
+status = "implemented"
+
+[[case]]
 id = "OPTICS-TP-183"
 requirements = ["OPTICS-REQ-091", "OPTICS-REQ-092", "OPTICS-REQ-093", "OPTICS-REQ-094", "OPTICS-REQ-095"]
 evidence = "test"
@@ -2821,6 +2955,32 @@ The first attempt at the `FRAC_1_PI` and normalization mutants did not
 compile (an unused import and an unused function under `-D warnings`); they
 were rewritten to keep the names in use and then failed as listed.
 
+## Thin-Lens Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/thin_lens.rs` and the tests were run with
+`cargo test --locked -p bunny-optics --test thin_lens_tests --test
+camera_tests` per mutation; the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Correction added, `d + c` | The ray converges on the focus point | OPTICS-TP-131, OPTICS-TP-136 |
+| Correction floored | Rounded to nearest | OPTICS-TP-131, OPTICS-TP-136 |
+| Disc factor `1 - 2^-28` removed | Strictly inside the disc | OPTICS-TP-132, OPTICS-TP-136 |
+| Component margin set to 0 | Every direction within 1.0 | OPTICS-TP-131, OPTICS-TP-134, OPTICS-TP-135, OPTICS-TP-136 |
+| Lens reach `a` instead of `2a` | The domain refusal | OPTICS-TP-135 |
+| Angle `v` half turns | Angle `v` turns | OPTICS-TP-132, OPTICS-TP-133, OPTICS-TP-136 |
+| Radius `u` instead of `sqrt(u)` | Area-preserving | OPTICS-TP-132, OPTICS-TP-133, OPTICS-TP-136 |
+| Lens offset `+ 1` raw | Aperture 0 is the pinhole | OPTICS-TP-130, OPTICS-TP-136 |
+| Cosine and sine swapped | `v = 0` lies along `right` | OPTICS-TP-132, OPTICS-TP-136 |
+| Margins ignore the shift | The margin halves with `k` | OPTICS-TP-131, OPTICS-TP-134, OPTICS-TP-135, OPTICS-TP-136 |
+| Forward margin set to 0 | `direction . forward > 0` | none |
+
+The forward margin is defensive, like the pinhole's own forward check: the
+correction is nearly orthogonal to `forward` (`R . F` and `U . F` are a few
+raw-squared units), so no camera the tests build comes near it. It is an open
+gap below.
+
 ## Dielectric Mutation Checks
 
 Each rule below was broken on purpose in a container copy of
@@ -3190,3 +3350,5 @@ case with a stable test name.
 | A case where normalizing the incoming direction without the prescale changes the throughput (OPTICS-TP-182): the pinned and seeded specular directions have a component of exactly 1.0, except OPTICS-TP-104's, whose cosine is near 1.0 where the weight rounds to zero. | None; a constructed direction whose largest component is below 1.0. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |
+| A thin-lens camera whose forward margin is load-bearing: without it `OPTICS-TP-134` still passes, since `R . F` and `U . F` are tiny for every derived basis. | None; a constructed case if one is found. |
+| A choice of sampler pair for the lens in a renderer (the camera takes any pair; pair 0 is the sub-pixel offset). | None; the renderer decides. |

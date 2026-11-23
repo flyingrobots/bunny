@@ -40,6 +40,10 @@ math for graphics pipelines.
   orthonormal within 2 raw units, rows within 3 (length) and 4 (dot).
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
+* **Exact Lerp (`bunny-lerp/1`)**: `FixedVec3::lerp(a, b, t)` and
+  `lerp_channels(a, b, t)` for `[FixedQ32_32; 3]` colour channels apply
+  `FixedQ32_32::lerp` to each component; `None` when any component is out of
+  range. No colour space is assumed.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
   multiplication, determinant, and inverse APIs return `None` for singular or
   overflowing cases; transpose is infallible and returns a matrix directly.

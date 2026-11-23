@@ -6,7 +6,7 @@ use bunny_num::FixedQ32_32;
 use bunny_query::{TraceRay, TRACE_COORD_LIMIT_RAW};
 
 use crate::basis::Basis;
-use crate::plane::{Lens, Offset, Plane};
+use crate::plane::{Lens, Offset, Plane, Wide3};
 use crate::CameraError;
 
 /// The largest accepted image width or height, in pixels (32 768).
@@ -110,11 +110,13 @@ impl PinholeCamera {
     /// at most 1.0 in magnitude and the direction points ahead of the camera.
     #[must_use]
     pub fn ray(&self, sample: PixelSample) -> Option<TraceRay> {
-        let x = doubled_offset(sample.x, sample.sub_x, self.lens.width)?;
-        // Rows grow downward, against `up`.
-        let y = -doubled_offset(sample.y, sample.sub_y, self.lens.height)?;
-        let [dx, dy, dz] = self.plane.direction(Offset { x, y }).map(narrow);
+        let [dx, dy, dz] = sample_direction(&self.plane, &self.lens, sample)?.map(narrow);
         TraceRay::new(self.position, FixedVec3::new(dx?, dy?, dz?))
+    }
+
+    /// The position and the image-plane inputs, for the thin-lens camera built on this one.
+    pub(crate) const fn parts(&self) -> (FixedVec3, Lens) {
+        (self.position, self.lens)
     }
 
     /// The eye point, the origin of every ray.
@@ -196,6 +198,14 @@ const fn check_tangent(tan: FixedQ32_32) -> Result<(), CameraError> {
     }
 }
 
+/// The raw direction of `sample` on `plane`, before narrowing, or `None` outside the image.
+pub fn sample_direction(plane: &Plane, lens: &Lens, sample: PixelSample) -> Option<Wide3> {
+    let x = doubled_offset(sample.x, sample.sub_x, lens.width)?;
+    // Rows grow downward, against `up`.
+    let y = -doubled_offset(sample.y, sample.sub_y, lens.height)?;
+    Some(plane.direction(Offset { x, y }))
+}
+
 /// The raw Q32.32 value of `2 * (index + sub) - size`, or `None` outside the image.
 fn doubled_offset(index: u32, sub: FixedQ32_32, size: u32) -> Option<i64> {
     let sub = sub.raw();
@@ -203,6 +213,7 @@ fn doubled_offset(index: u32, sub: FixedQ32_32, size: u32) -> Option<i64> {
     inside.then(|| (2 * i64::from(index) - i64::from(size)) * ONE_RAW + 2 * sub)
 }
 
-fn narrow(component: i128) -> Option<FixedQ32_32> {
+/// The component as Q32.32, or `None` outside `i64`.
+pub fn narrow(component: i128) -> Option<FixedQ32_32> {
     i64::try_from(component).ok().map(FixedQ32_32::from_raw)
 }

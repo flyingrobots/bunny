@@ -107,6 +107,18 @@ impl Signed {
         }
     }
 
+    /// The sign: `Less` below zero, `Equal` at zero, `Greater` above.
+    #[allow(dead_code, reason = "used by the thin-lens tests only")]
+    pub(crate) fn sign(&self) -> Ordering {
+        if self.magnitude == Big::new(0) {
+            Ordering::Equal
+        } else if self.negative {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    }
+
     pub(crate) fn square(&self) -> Big {
         self.magnitude.mul(&self.magnitude)
     }
