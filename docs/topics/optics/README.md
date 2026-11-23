@@ -104,8 +104,9 @@ field of view given by its tangent, aspect `width / height`) and `Viewport`
 matrices; that is an open gap in the test plan.
 
 All arithmetic is integer arithmetic on raw Q32.32 values (`i64`, widened to
-`i128`). There is no floating point, no trigonometry, no `unsafe` code and no
-target-specific path. The camera's part of generating a ray takes no square
+`i128`). There is no floating point, no `unsafe` code and no target-specific path, and
+the only trigonometry is the integer table lookup `FixedAngle::sin_cos`, used by
+the cosine-weighted bounce, the lens disc and the specular lobes. The camera's part of generating a ray takes no square
 root and no division: six `i128` multiplications, additions and shifts. The
 `TraceRay::new` call that follows computes the ray's three reciprocals, as for
 any trace ray.
@@ -218,6 +219,17 @@ where `a` and `b` are the doubled offsets from the image centre in pixels.
 Both are exact in Q32.32 for every sample.
 
 ## Ray Generation
+
+**Identity.** The pinhole camera has no identity string or constant, unlike the
+sample hash, the sampler, the tone curves and the [thin-lens
+camera](#thin-lens-camera) (`bunny-thin-lens/1`). What defines its bits today
+is this chapter: the basis ([Camera Frame](#camera-frame)), the floors below,
+the [direction scaling](#direction-scaling) and the golden rays of
+`OPTICS-TP-001` and `OPTICS-TP-002`. A second implementation can be written
+from those. The camera's pixels also depend on `PixelSampler::camera_sample`
+(`bunny-sobol-owen/1`), which is named by its own identity. Naming the camera
+would be a new public constant (for example `bunny-pinhole-camera/1`), which
+this chapter does not add.
 
 `PinholeCamera::ray(sample)` returns a `TraceRay` from the position toward the
 sample's point, or `None` when the sample is outside the image: `x >= width`,
@@ -690,6 +702,29 @@ Any change to an output bit of any of these is a new version (`/2`) with new
 functions or types; under the Fidelity Rule the existing ones keep their
 output. The golden vectors in the [test plan](test-plan.md) define version 1.
 
+**What the identity does not name.** The steps above call four functions of
+other crates that have no version string of their own. Their bits are part of
+the bits of `bunny-diffuse-shading/1`, because the shading steps compose them,
+but the identity string does not name them and nothing here versions them. A
+second implementation needs all four:
+
+| Dependency | Rule it must reproduce | Where it is defined |
+| --- | --- | --- |
+| `FixedQ32_32::sqrt` | the floor of the exact square root, in raw units (the cosine map's two roots) | [fixed-point rounding](../fixed-point-rounding/README.md) |
+| `Mul` on `FixedQ32_32` | `lhs * rhs / 2^32` from the exact `i128` product, to nearest, ties to even, saturating | [fixed-point rounding](../fixed-point-rounding/README.md) |
+| `FixedAngle::sin_cos` | the 1 024-segment quarter-wave table with its interpolation, each of sine and cosine within one raw unit | [angles and trigonometry](../angle-trigonometry/README.md), golden bits `AT-TP-001` |
+| `FixedUnitVec3::new` | the length is the floor of the exact square root of the sum of the three squared raw components (`None` if it is zero or does not fit `i64`); each component is `component / length` by `Div` (to nearest, ties to even); the result is accepted only when its own length, computed the same way, is within one raw unit of 1.0, else `None` | the rustdoc of `FixedUnitVec3::new` and `FixedVec3::length`; no topic page |
+
+These are pinned from the optics side only by what the cases here exercise. A
+change that moves a table entry by more than the one-raw-unit bound is caught
+by the accuracy cases (`OPTICS-TP-044`); a change that moves any output bit of
+the bounce direction at a knot of the table is caught by `OPTICS-TP-272`, which
+pins the direction at every knot of the table. A change of one of the other
+three that moves a bit in a golden case of this chapter is caught by that case.
+Whether a change is a new version of those functions, or of this identity, is
+decided by the owner of the function; until they carry identities, treat any
+change to their output bits as a change to this identity.
+
 | Constant | Raw value | Meaning |
 | --- | --- | --- |
 | `PI` | 13 493 037 705 | The nearest raw value to `pi * 2^32` (13 493 037 704.522), 0.478 raw units above pi. |
@@ -1024,9 +1059,23 @@ other side, still right-handed, with no arithmetic but negation.
 
 **Facing.** The hit's frame is `surface.facing_frame(hit.front_face)`: the
 surface frame for a front-face hit and its flipped form for a back-face hit.
-So the normal always points to the side the ray arrived from, and
-`ray.direction() . normal < 0` for every hit (the exact test reports no hit
-on a ray parallel to the plane).
+So the frame is the one of the side the ray arrived from. The guarantee is
+about the exact plane normal `N` (the `i128` cross product of
+[Geometric Normal](#geometric-normal)), not about the frame's rounded unit
+normal `n`:
+
+- **Exact.** For a hit the trace kernel reported, `d . N < 0` for a front-face
+  hit and `d . N > 0` for a back-face hit, in exact `i128` (the exact test
+  reports no hit on a ray parallel to the plane). The start-point rule below
+  and the light's arrival test use `N`, so they hold exactly.
+- **Not exact for `n`.** `n` is `N / |N|` rounded to a raw unit per component,
+  so at a grazing angle (`|d . N|` within the rounding of `n`) the dot product
+  of `d` with `n` can have the wrong sign, or be zero. The witness in the
+  test plan (`OPTICS-TP-270`) has `d . N` about `-5.8e21` and `d . n` equal to
+  `+65 823 548` raw squared. A renderer must not use `d . n < 0` as a test
+  of facing; the facing it needs is `hit.front_face`, or `d . N` from the
+  plane. The bounce direction's `MIN_BOUNCE_COSINE_RAW` margin is far larger
+  than this rounding, so no secondary ray is affected.
 
 **Start point (the self-intersection rule).** Every secondary ray (the
 shadow ray and the bounce ray) starts at the same point:
@@ -1062,9 +1111,14 @@ on general triangles 36 687, 12 960 and 8; none needed three and none was
 refused.
 
 `SurfaceHit::new` returns `None` when the point is not representable or the step leaves the
-trace domain (possible only for a point on its boundary), and for a hit that
-the trace kernel did not report for this ray and face, as when a caller
-changes `hit.distance` or `hit.front_face`. `SurfaceHit::try_new`, the
+trace domain (possible only for a point on its boundary), and for a hit whose point is not within two
+raw units of the arrival side of the exact plane, as when a caller changes
+`hit.front_face` (the arrival side is then the other one) or moves
+`hit.distance` to the far side of the plane. It does not check that the hit is the one the trace kernel reported: a
+changed `hit.distance` that still lands on the arrival side returns `Some`,
+with a start point that follows the changed distance (`OPTICS-TP-271`: the
+ground hit from `(0, 2, 0)` along `(0, -1, 0)` with the distance changed from
+2.0 to 1.0 starts at `(0, 1, 0)`; 3.0 is refused). `SurfaceHit::try_new`, the
 diagnostic path, gives the reason; see [Inputs And Refusals](#inputs-and-refusals). A hit point
 more than two raw units outside the trace domain is refused before the plane
 test, which keeps that test inside `i128`. The bound is exact and refuses no
@@ -2223,6 +2277,17 @@ gets stratified positions, and its mean is the rounded shift described under
 rule, but their positions are a partial block. Both the sample values and the
 sums are independent of evaluation order, so tiles and threads cannot change a
 pixel.
+
+**Sample indices past 1 023.** `PixelSampler` is defined for every `u32` index,
+and its stratification holds for every aligned block of `2^k` indices up to
+`k = 32` (`OPTICS-TP-012` checks block 3 of every size and the last block below
+`2^32`). The accumulator is what caps the count, and `merge` refuses to hold
+more than 1 024. The rule for a renderer: use indices `0..count` with
+`count <= 1 024` for one pixel, and stop there. A renderer that wants more
+samples can draw them from further aligned blocks of the sampler (`1 024..2 048`
+is a stratified block of its own) and resolve each block of at most 1 024 into
+its own mean, but combining those means is outside this chapter: no accumulator
+here holds them, and a mean of means is not the rounded mean `Resolve` defines.
 
 Radiance is linear light per channel (red, green, blue, in that order) as a
 `FixedQ32_32`. Display values are `FixedQ32_32` in `[0, 1]`. Every rounding is
