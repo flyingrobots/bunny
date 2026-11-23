@@ -171,10 +171,14 @@ entries and every product are exact, as for power-of-two scales and signed permu
 result is exact.
 
 The result is **not renormalised**; its length changes with the scale. `None` when
-`try_inverse` is `None` (the rounded determinant is zero, which includes every singular matrix
-and some nonsingular ones: `diag(1, 1, 1)` raw has a minor that rounds to zero; or the inverse
-overflows: the entry `1 / (2 raw)` is `2^63` raw) or when a rounded product or partial sum
-leaves the range.
+`try_inverse` is `None` (its rounded determinant is exactly zero, or the inverse overflows: the
+entry `1 / (2 raw)` is `2^63` raw) or when a rounded product or partial sum leaves the range.
+The rounded determinant is not the exact one, in both directions. Some nonsingular matrices are
+refused: `diag(1, 1, 1)` raw has a minor that rounds to zero. Some exactly singular matrices
+are not: raw rows `(2^32, 2^32, 2^32)`, `(2^31, 2^30, 2^29)` and `(12, 10, 9)` have a third
+row equal to `8 / 2^32` times the sum of the first two, a rounded determinant of 1 raw, and an
+inverse that `try_inverse` returns. A result is therefore not proof that the linear part is
+invertible.
 
 ## Non-Uniform Scale
 

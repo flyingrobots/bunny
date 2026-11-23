@@ -23,9 +23,12 @@ impl FixedAffine3 {
     /// entries and every product are exact (power-of-two scales, signed permutations), the
     /// result is exact and `n' . (L t)` equals `n . t` exactly.
     ///
-    /// Returns `None` when `try_inverse` is `None` (the rounded determinant is zero, which
-    /// includes every singular matrix and some nonsingular ones with a tiny determinant, or the
-    /// inverse overflows) or when a rounded product or partial sum is outside the Q32.32 range.
+    /// Returns `None` when `try_inverse` is `None` (its rounded determinant is exactly zero, or
+    /// the inverse overflows) or when a rounded product or partial sum is outside the Q32.32
+    /// range. The rounded determinant is not the exact one: some nonsingular matrices with a
+    /// tiny determinant round to zero and are refused, and some exactly singular matrices round
+    /// to a nonzero determinant and are NOT refused, so a result is not proof that the linear
+    /// part is invertible.
     #[must_use]
     pub fn checked_transform_normal(self, normal: FixedVec3) -> Option<FixedVec3> {
         self.linear.try_inverse()?.transpose().checked_mul_vec3(normal)
