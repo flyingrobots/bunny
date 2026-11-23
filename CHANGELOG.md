@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-geom`: classify a segment, a triangle or an AABB against a
+  `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
+  return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
+  each defined by the existing point rule `classify` at the endpoints, vertices
+  or eight corners; a shape touching the plane from one side takes that side,
+  and `None` means a vertex's signed distance overflows. `classify_aabb`
+  evaluates two corners, chosen per axis by the sign of the normal component,
+  and equals the eight-corner result bit for bit, `None` included (seeded
+  sweeps of 70 000 boxes, ends of the range included). Inverted boxes are the
+  box with the same corners; degenerate triangles are classified, not refused.
+  Additive: `classify`, `clip_segment` and `clip_polygon` are unchanged. See
+  `docs/topics/plane-clipping/` (PC-REQ-014 to -019, PC-TP-025 to -037). Closes
+  flyingrobots/bunny#162.
+
+* `bunny-num`: inverse lerp, remap and an exact checked clamp under
+  `bunny-lerp/1`. `FixedQ32_32::inverse_lerp(a, b, x)` is
+  `round_half_even((x - a) * 2^32 / (b - a))` on raw values: exactly `0` at
+  `a` and `1.0` at `b`, extrapolating, `None` for `a == b` or a result outside
+  Q32.32. `lerp(a, b, inverse_lerp(a, b, x))` is exactly `x` when
+  `|b - a| <= 1.0` and `inverse_lerp(a, b, lerp(a, b, t))` exactly `t` when
+  `|b - a| >= 1.0`, each within a stated bound otherwise.
+  `FixedQ32_32::remap(x, [in_lo, in_hi], [out_lo, out_hi])` rounds its exact
+  step once from a `u128` product (within half a raw unit whatever the
+  ranges), is exact at both ends, equals `lerp` and `inverse_lerp` on unit
+  ranges, and is `None` for `in_lo == in_hi` or a result outside Q32.32.
+  `x.checked_clamp(lo, hi)` is exact and `None` when `lo > hi`. Refs
+  flyingrobots/bunny#111.
+
 * `bunny-linalg`: conservative bounds for `bunny-curve/1`. `CurveBounds3 {
   min, max }` is a closed box with `contains`. `CubicBezier3::control_bounds()`
   is the per-axis minimum and maximum of the control points, exact, and
@@ -40,6 +68,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   units of the exact spline, exactly every point at whole `u`, tangents
   bit-equal at joints where defined, `None` outside the range. Closes
   flyingrobots/bunny#309.
+
+* `bunny-optics`: an orthographic camera under the identity
+  `bunny-orthographic-camera/1` (`ORTHOGRAPHIC_CAMERA_ID`).
+  `OrthographicCamera::new(&OrthographicSpec)` takes the pinhole camera's
+  inputs with the tangent replaced by `half_height`, half the view
+  rectangle's height in `(0, 256]` (`ORTHOGRAPHIC_HALF_HEIGHT_LIMIT_RAW`), and
+  derives the pinhole camera's basis bit for bit. `ray(sample)` looks along
+  the unit `forward` from `position + o`, with
+  `o_i = round((a h R_i + b h U_i) / (height 2^64))` to nearest, ties to even,
+  from the exact numerator: within half a raw unit. Each invalid input is its
+  own `OrthographicError`, including a view whose rounded corner leaves the
+  trace domain. A projection round-trip check carries points along pinhole
+  and orthographic rays through `FixedMat4::try_look_at`, `try_perspective`
+  or `try_orthographic` and `Viewport` back to their samples, within a bound
+  derived for each case and below `2^-10` pixel; the conventions agree. The
+  optics chapter now proves the camera basis orthogonal within
+  `2.6 * 2^32` raw-squared units and the pinhole camera's forward corner check
+  unreachable, and shows the thin-lens forward check deciding an extreme
+  aperture. No existing output changes. The thin lens was already done
+  (flyingrobots/bunny#364). Closes flyingrobots/bunny#257.
 
 * `cargo xtask perf --evidence <file>` writes every round of both sides (case,
   side, round, p50, p95, p99) and the build identity (base reference, full base

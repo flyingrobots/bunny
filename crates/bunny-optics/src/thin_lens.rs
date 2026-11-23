@@ -8,7 +8,7 @@ use bunny_query::{TraceRay, TRACE_COORD_LIMIT_RAW};
 
 use crate::camera::{narrow, neighbour_directions, sample_direction};
 use crate::footprint::{measure, RayFootprint, RayFootprintError, TexturedTriangle};
-use crate::plane::{dot, l1, wide, Lens, Margin, Plane, Wide3};
+use crate::plane::{dot, l1, round_div, wide, Lens, Margin, Plane, Wide3};
 use crate::{CameraError, CameraSpec, PinholeCamera, PixelSample};
 
 /// The versioned name of [`ThinLensCamera::ray`] and [`lens_disc_point`]. Any change to their
@@ -242,17 +242,6 @@ fn lens_margin(lens: &Lens, aperture_raw: i64, focus_raw: i64, shift: u32) -> Ma
     Margin {
         component: ceil_div((2 * aperture) << FRACTIONAL_BITS, divisor),
         forward: ceil_div(scaled, divisor) + rounding,
-    }
-}
-
-/// `numerator / denominator` rounded to nearest, ties to even, for `denominator > 0`.
-const fn round_div(numerator: i128, denominator: i128) -> i128 {
-    let (floor, remainder) = (numerator.div_euclid(denominator), numerator.rem_euclid(denominator));
-    let twice = 2 * remainder;
-    if twice > denominator || (twice == denominator && floor & 1 == 1) {
-        floor + 1
-    } else {
-        floor
     }
 }
 

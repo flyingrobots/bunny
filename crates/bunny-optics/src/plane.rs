@@ -140,6 +140,17 @@ fn map3(a: Wide3, b: Wide3, c: Wide3, f: impl Fn(i128, i128, i128) -> i128) -> W
     [f(a0, b0, c0), f(a1, b1, c1), f(a2, b2, c2)]
 }
 
+/// `numerator / denominator` rounded to nearest, ties to even, for `denominator > 0`.
+pub const fn round_div(numerator: i128, denominator: i128) -> i128 {
+    let (floor, remainder) = (numerator.div_euclid(denominator), numerator.rem_euclid(denominator));
+    let twice = 2 * remainder;
+    if twice > denominator || (twice == denominator && floor & 1 == 1) {
+        floor + 1
+    } else {
+        floor
+    }
+}
+
 /// The exact dot product.
 pub const fn dot(lhs: Wide3, rhs: Wide3) -> i128 {
     let ([a0, a1, a2], [b0, b1, b2]) = (lhs, rhs);

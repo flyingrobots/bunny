@@ -8,10 +8,11 @@ living verification design.
 
 ## Scope
 
-This plan covers `FixedPlane3`, `PlaneSide`, `FixedSegment3`, and `SegmentClip`
-in `bunny-geom`:
+This plan covers `FixedPlane3`, `PlaneSide`, `PlaneSpan`, `FixedSegment3`,
+`SegmentClip` and `PolygonClip` in `bunny-geom`:
 
 - signed distance and three-way point classification;
+- classification of a segment, a triangle and a box against a plane;
 - the rule for a point exactly on the plane;
 - clipping one segment to the closed front half-space;
 - the rounding of the clipped endpoint;
@@ -51,6 +52,12 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PC-REQ-011 | The output buffer holds a convex polygon's result when it has n + 1 slots; a smaller buffer reports OutputTooSmall. | `README.md#buffer-size` |
 | PC-REQ-012 | Each cut is computed in the canonical edge direction, so adjacent polygons agree bit for bit and the cut equals clip_segment of the canonical segment, within the stated bound. | `README.md#cut-points-and-shared-edges` |
 | PC-REQ-013 | Polygon overflow returns Overflow. | `README.md#overflow` |
+| PC-REQ-014 | A segment, triangle or box is classified as a PlaneSpan: Coplanar when every vertex is On, Front when every vertex is Front or On and one is Front, Behind when every vertex is Behind or On and one is Behind, Straddling when one is Front and one Behind; a shape touching the plane from one side takes that side. | `README.md#shape-classification` |
+| PC-REQ-015 | Segment and triangle classification apply the existing point rule to the endpoints or vertices; a degenerate triangle is classified, not refused; overflow at any vertex returns None. | `README.md#segments-and-triangles` |
+| PC-REQ-016 | Box classification equals the classification of its eight corners under the existing point rule, None included, bit for bit, and is computed from two corners. | `README.md#boxes` |
+| PC-REQ-017 | An inverted box is classified as the box with the same eight corners; a zero-extent box gets the point rule's answer for its one point. | `README.md#inverted-and-zero-extent-boxes` |
+| PC-REQ-018 | A zero-normal plane classifies every shape by the sign of -offset, and returns None only when -offset overflows. | `README.md#zero-normal-plane` |
+| PC-REQ-019 | Triangle and segment classification agree with clipping: Front and Coplanar clip to the input unchanged, Behind clips to Outside (a segment touching from behind to its touching point), and None means the clip overflows too. | `README.md#agreement-with-clipping` |
 
 ```toml
 [[requirement]]
@@ -117,6 +124,36 @@ status = "active"
 id = "PC-REQ-013"
 summary = "Polygon overflow returns Overflow."
 status = "active"
+
+[[requirement]]
+id = "PC-REQ-014"
+summary = "A segment, triangle or box is classified as a PlaneSpan: Coplanar when every vertex is On, Front when every vertex is Front or On and one is Front, Behind when every vertex is Behind or On and one is Behind, Straddling when one is Front and one Behind; a shape touching the plane from one side takes that side."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-015"
+summary = "Segment and triangle classification apply the existing point rule to the endpoints or vertices; a degenerate triangle is classified, not refused; overflow at any vertex returns None."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-016"
+summary = "Box classification equals the classification of its eight corners under the existing point rule, None included, bit for bit, and is computed from two corners."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-017"
+summary = "An inverted box is classified as the box with the same eight corners; a zero-extent box gets the point rule's answer for its one point."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-018"
+summary = "A zero-normal plane classifies every shape by the sign of -offset, and returns None only when -offset overflows."
+status = "active"
+
+[[requirement]]
+id = "PC-REQ-019"
+summary = "Triangle and segment classification agree with clipping: Front and Coplanar clip to the input unchanged, Behind clips to Outside (a segment touching from behind to its touching point), and None means the clip overflows too."
+status = "active"
 ```
 
 ## Fixtures
@@ -153,6 +190,19 @@ intersection is representable.
 | PC-TP-022 | Seeded sweep | PC-REQ-008, PC-REQ-009, PC-REQ-011, PC-REQ-012 | 2000 convex polygons against an independent Sutherland-Hodgman and exact i128 cut bound; at most n + 1 vertices. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_022_seeded_sweep_matches_reference` |
 | PC-TP-023 | Sweep, reversed polygon | PC-REQ-012 | A polygon and its reverse clip to the same point set. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_023_sweep_reversed_polygon_gives_the_same_points` |
 | PC-TP-024 | Rounding tie asymmetry | PC-REQ-012 | Constructed tie: clip_segment differs by direction, polygons both emit the canonical cut. | `crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_024_rounding_tie_makes_clip_segment_asymmetric_but_polygons_agree` |
+| PC-TP-025 | Triangle, constructed | PC-REQ-014, PC-REQ-015 | Plane z = 1, vertices on it and one raw unit either side: crossing, wholly front, wholly behind, coplanar, touching at a vertex and at an edge from each side; all six vertex orders agree. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_025_triangle_crossing_coplanar_touching_and_outside` |
+| PC-TP-026 | Segment, constructed | PC-REQ-014, PC-REQ-015 | Plane z = 1: crossing by one raw unit, coplanar, touching from each side, wholly front and behind, both endpoint orders. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_026_segment_crossing_coplanar_touching_and_outside` |
+| PC-TP-027 | Box, constructed | PC-REQ-014, PC-REQ-016 | Plane z = 1: boxes crossing by one raw unit, flat in the plane, touching a face from each side and one raw unit clear; the eight-corner classification agrees. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_027_box_crossing_coplanar_touching_and_outside` |
+| PC-TP-028 | Box, oblique and negative normals | PC-REQ-014, PC-REQ-016 | x + y + z = 3 touching a corner from each side and one raw unit past it; -x + y = 0 touching an edge from each side, where the corner most along the normal has the smaller x. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_028_box_against_oblique_and_negative_normals` |
+| PC-TP-029 | Degenerate triangles | PC-REQ-015 | Collinear vertices crossing and in the plane, three coincident vertices one raw unit either side and on (the point rule), two coincident on-plane vertices with the third behind. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_029_degenerate_triangles_are_classified_by_their_vertices` |
+| PC-TP-030 | Inverted box | PC-REQ-017 | Boxes with min > max on one or more axes classify as the box with min and max swapped and as their eight corners, for an axis and a negative normal. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_030_inverted_box_is_the_box_with_the_same_corners` |
+| PC-TP-031 | Zero-extent box | PC-REQ-017 | A box and a triangle at one point get classify's answer (On maps to Coplanar) for points on and one raw unit either side, under two planes. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_031_zero_extent_box_follows_the_point_rule` |
+| PC-TP-032 | Zero-normal plane | PC-REQ-018 | Offsets -1, 0 and 1 raw give Front, Coplanar and Behind for a full-range box, triangle and segment; offset i64::MIN gives None. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_032_zero_normal_plane_uses_the_sign_of_the_offset` |
+| PC-TP-033 | Overflow | PC-REQ-015, PC-REQ-016 | A product overflowing at some corners, and a partial sum x + y overflowing at one corner, give None as the eight-corner definition does; one raw unit narrower gives Front. | `crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_033_overflow_returns_none_as_the_point_rule_does` |
+| PC-TP-034 | Seeded boxes | PC-REQ-014, PC-REQ-016, PC-REQ-017 | 20 000 boxes (seed 0xA076_1D64_78BD_642F, wide random and unit-grid modes, inverted axes included) equal the eight-corner classification through classify and an independent i128 model, and four representable interior points per box agree with its class. | `crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_034_seeded_boxes_match_the_eight_corner_definition` |
+| PC-TP-035 | Boxes at the ends of the range | PC-REQ-016, PC-REQ-017 | 50 000 boxes and planes (seed 0xE703_7ED1_A0B4_28DB) whose every coordinate, normal component and offset is within two raw units of i64::MIN, -2^62, -2^32, -1, 0, 1, 2^32, 2^62 or i64::MAX equal the eight-corner classification and the model, None included. | `crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_035_boxes_at_the_ends_of_the_range_match_the_eight_corner_definition` |
+| PC-TP-036 | Seeded triangles and segments | PC-REQ-014, PC-REQ-015, PC-REQ-019 | 30 000 triangles and segments (seed 0x8EBC_6AF0_9C88_C6E3, three modes) equal their vertex classification through classify and the model, and agree with clip_polygon and clip_segment. | `crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_036_seeded_triangles_and_segments_match_their_vertices` |
+| PC-TP-037 | Mutation | PC-REQ-014, PC-REQ-015, PC-REQ-016, PC-REQ-017 | Each rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -370,12 +420,152 @@ test = "crates/bunny-geom/tests/polygon_clip_tests.rs::pc_tp_024_rounding_tie_ma
 oracle = "Constructed tie: clip_segment differs by direction, polygons both emit the canonical cut."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "PC-TP-025"
+requirements = ["PC-REQ-014", "PC-REQ-015"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_025_triangle_crossing_coplanar_touching_and_outside"
+oracle = "Plane z = 1, vertices on it and one raw unit either side: crossing, wholly front, wholly behind, coplanar, touching at a vertex and at an edge from each side; all six vertex orders agree."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-026"
+requirements = ["PC-REQ-014", "PC-REQ-015"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_026_segment_crossing_coplanar_touching_and_outside"
+oracle = "Plane z = 1: crossing by one raw unit, coplanar, touching from each side, wholly front and behind, both endpoint orders."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-027"
+requirements = ["PC-REQ-014", "PC-REQ-016"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_027_box_crossing_coplanar_touching_and_outside"
+oracle = "Plane z = 1: boxes crossing by one raw unit, flat in the plane, touching a face from each side and one raw unit clear; the eight-corner classification agrees."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-028"
+requirements = ["PC-REQ-014", "PC-REQ-016"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_028_box_against_oblique_and_negative_normals"
+oracle = "x + y + z = 3 touching a corner from each side and one raw unit past it; -x + y = 0 touching an edge from each side, where the corner most along the normal has the smaller x."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-029"
+requirements = ["PC-REQ-015"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_029_degenerate_triangles_are_classified_by_their_vertices"
+oracle = "Collinear vertices crossing and in the plane, three coincident vertices one raw unit either side and on (the point rule), two coincident on-plane vertices with the third behind."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-030"
+requirements = ["PC-REQ-017"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_030_inverted_box_is_the_box_with_the_same_corners"
+oracle = "Boxes with min > max on one or more axes classify as the box with min and max swapped and as their eight corners, for an axis and a negative normal."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-031"
+requirements = ["PC-REQ-017"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_031_zero_extent_box_follows_the_point_rule"
+oracle = "A box and a triangle at one point get classify's answer (On maps to Coplanar) for points on and one raw unit either side, under two planes."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-032"
+requirements = ["PC-REQ-018"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_032_zero_normal_plane_uses_the_sign_of_the_offset"
+oracle = "Offsets -1, 0 and 1 raw give Front, Coplanar and Behind for a full-range box, triangle and segment; offset i64::MIN gives None."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-033"
+requirements = ["PC-REQ-015", "PC-REQ-016"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_033_overflow_returns_none_as_the_point_rule_does"
+oracle = "A product overflowing at some corners, and a partial sum x + y overflowing at one corner, give None as the eight-corner definition does; one raw unit narrower gives Front."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-034"
+requirements = ["PC-REQ-014", "PC-REQ-016", "PC-REQ-017"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_034_seeded_boxes_match_the_eight_corner_definition"
+oracle = "20 000 boxes (seed 0xA076_1D64_78BD_642F, wide random and unit-grid modes, inverted axes included) equal the eight-corner classification through classify and an independent i128 model, and four representable interior points per box agree with its class."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-035"
+requirements = ["PC-REQ-016", "PC-REQ-017"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_035_boxes_at_the_ends_of_the_range_match_the_eight_corner_definition"
+oracle = "50 000 boxes and planes (seed 0xE703_7ED1_A0B4_28DB) whose every coordinate, normal component and offset is within two raw units of i64::MIN, -2^62, -2^32, -1, 0, 1, 2^32, 2^62 or i64::MAX equal the eight-corner classification and the model, None included."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-036"
+requirements = ["PC-REQ-014", "PC-REQ-015", "PC-REQ-019"]
+evidence = "test"
+test = "crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_036_seeded_triangles_and_segments_match_their_vertices"
+oracle = "30 000 triangles and segments (seed 0x8EBC_6AF0_9C88_C6E3, three modes) equal their vertex classification through classify and the model, and agree with clip_polygon and clip_segment."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PC-TP-037"
+requirements = ["PC-REQ-014", "PC-REQ-015", "PC-REQ-016", "PC-REQ-017"]
+evidence = "manual-audit"
+artifact = "docs/topics/plane-clipping/test-plan.md#mutation-checks"
+oracle = "Each rule broken on purpose fails at least one case above."
+tier = "manual"
+status = "implemented"
 ```
+
+## Mutation Checks
+
+Each mutation was applied to `crates/bunny-geom/src/plane/span.rs`, the tests
+`plane_span_tests`, `plane_span_sweep_tests`, `plane_clip_tests` and
+`polygon_clip_tests` run with `cargo test --locked -q -p bunny-geom
+--no-fail-fast`, and the kernel restored. Each fails the named cases except the
+one marked equivalent.
+
+| Mutation | Fails |
+| --- | --- |
+| Axis ends ignore the sign of the normal component | PC-TP-028, 030, 034, 035 |
+| Axis ends not ordered (an inverted axis read as given) | PC-TP-030, 034, 035 |
+| `On` counted as `Front` | PC-TP-025 to 032, 034 to 036 |
+| `On` counted as `Behind` | PC-TP-025 to 036 |
+| Box reads only the corner most along the normal | PC-TP-027, 028, 030, 034, 035 |
+| Box reads only the corner least along the normal | PC-TP-027, 028, 030, 033, 034, 035 |
+| Triangle ignores its third vertex | PC-TP-025, 029, 033, 036 |
+| `Straddling` reported as `Front` | PC-TP-025 to 030, 034 to 036 |
+| An overflowing vertex skipped instead of returning `None` | PC-TP-032, 033, 035, 036 |
+| Segment ignores its end point | PC-TP-026, 036 |
+| Sign test `>= 0` made `> 0` | none: equivalent, a zero component gives a zero product at both ends |
 
 ## Determinism Obligations And Evidence
 
 Tests use only integer raw construction, checked Q32.32 operations and exact
-equality. The sweep uses a fixed-seed xorshift generator; there is no time,
+equality. The sweeps use fixed-seed xorshift generators, the seeds named in the
+case table and in every assertion message; there is no time,
 filesystem, locale or logging in any oracle.
 
 ## Known Failures
@@ -383,6 +573,10 @@ filesystem, locale or logging in any oracle.
 - The clipped endpoint can lie behind the plane by rounding error (PC-TP-006
   shows one raw unit). Clipping does not repair it; the stated bound is the
   contract.
+- `clip_segment` on a segment with one end exactly on the plane and the other
+  behind still interpolates, so it returns `None` when `end - start` overflows
+  on an axis, although the answer is the touching point. PC-TP-036 states this
+  rule in its oracle; the kernel is unchanged.
 
 ## Edge Cases And Unusual Inputs
 
@@ -390,11 +584,21 @@ filesystem, locale or logging in any oracle.
 - A segment touching the plane at one end returns a degenerate segment.
 - A polygon touching the plane at a vertex or an edge is Outside.
 - Minimum and maximum raw coordinates overflow into `None`.
+- A box with `min > max` on an axis is classified as the box with the same
+  corners; a box with `min == max` is one point.
+- A triangle with collinear or coincident vertices is classified by its
+  vertices.
 
 ## Stress And Fuzz
 
 PC-TP-009 runs 2000 seeded segments and PC-TP-022 and PC-TP-023 run 2000 and
-1000 seeded convex polygons against exact references. Any failure
+1000 seeded convex polygons against exact references. PC-TP-034 runs 20 000
+boxes (observed: 5171 Front, 5098 Behind, 9678 Straddling, 53 Coplanar),
+PC-TP-035 50 000 boxes at the ends of the range (1902 Front, 1969 Behind, 3631
+Straddling, 9 Coplanar, 42 489 None) and PC-TP-036 30 000 triangles with their
+first edge as a segment (5128 Front, 5279 Behind, 10 675 Straddling, 52
+Coplanar, 8866 None for the triangles). Each asserts a lower bound on its
+counts. Any failure
 must be minimized into a named regression case.
 
 ## Open Gaps
