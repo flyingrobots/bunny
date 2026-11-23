@@ -38,6 +38,7 @@ evidence exist.
 | [`topics/repo-respect/`](topics/repo-respect/) | Receipt files, commit trailers, staged and branch gate behavior, and Git index isolation for auditability. |
 | [`topics/rotation/`](topics/rotation/) | `FixedMat3::rotation_x`, `rotation_y`, `rotation_z` and `rotation_axis_angle` (`bunny-rotation/1`): the right-hand sign convention, the exact cardinal and unit-axis cases, the single ties-to-even rounding of Rodrigues' formula, and the entry, orthonormality and determinant bounds in raw units. |
 | [`topics/shape-frame/`](topics/shape-frame/) | `ShapeFrame` (`bunny-shape-frame/1`): the rigid frame an analytic shape is traced in, its axis and domain refusals, rays mapped into object space and normals back with one ties-to-even rounding per component. |
+| [`topics/transform/`](topics/transform/) | `FixedAffine3::from_trs`, `rotate_about_point` and `scale_about_point` (`bunny-transform/1`): the scale, rotate, translate order with a worked example, the single ties-to-even rounding of each product, the exactly fixed pivot, the overflow thresholds in raw units, and the bound on both groupings of a composed product. |
 | [`NUMERIC_CONSTITUTION.md`](NUMERIC_CONSTITUTION.md) | Q32.32 arithmetic law, construction policy, rounding, overflow, and numeric golden-vector expectations. |
 | [`MATH_GEOMETRY_CAPABILITY_MAP.md`](MATH_GEOMETRY_CAPABILITY_MAP.md) | Bunny's durable math/geometry ownership boundary, non-goals, missing surface, and build order. |
 | [`CODE_DOJO.md`](CODE_DOJO.md) | Local and CI quality gate behavior. |

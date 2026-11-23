@@ -60,7 +60,7 @@ one exact `i128` numerator over `2^64`:
 | `m12`, `m21` | `t y z - s x 2^32`, `t y z + s x 2^32` |
 
 Each is rounded once to nearest, ties to even (the
-[numeric constitution's rule](../NUMERIC_CONSTITUTION.md#rounding-policy)). With `|c|, |s|
+[numeric constitution's rule](../../NUMERIC_CONSTITUTION.md#rounding-policy)). With `|c|, |s|
 <= 2^32`, `t <= 2^33` and every axis component below `2^32 + 2` raw, every term is below
 `2^99`, so the sum fits `i128`; every entry is below `2^35` raw, so nothing overflows and the
 function has no error: every `FixedUnitVec3` and every angle give a matrix.
