@@ -49,6 +49,10 @@
 //! [`interpolate_uv`] gives a triangle's texture coordinates at a hit from its barycentric
 //! numerators, and [`bilinear`] the four texels and weights of a bilinear lookup, with
 //! [`TextureWrap`] repeat or clamp (`bunny-texture-bilinear/1`).
+//! [`PinholeCamera::footprint`] and [`ThinLensCamera::footprint`] (`bunny-ray-footprint/1`)
+//! give how far those coordinates change across one pixel to the right and one pixel down, from
+//! the camera's neighbouring rays met with the triangle's plane ([`TexturedTriangle`]), or a
+//! typed [`RayFootprint::Unbounded`] result when a neighbouring ray does not meet it ahead.
 //!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
@@ -70,6 +74,12 @@ mod camera;
     reason = "`CameraError` is the public name; the module is private"
 )]
 mod error;
+#[allow(
+    clippy::module_name_repetitions,
+    unreachable_pub,
+    reason = "`RayFootprint` and its parts are the public names; the module is private"
+)]
+mod footprint;
 #[allow(unreachable_pub)]
 mod hash;
 #[allow(unreachable_pub)]
@@ -88,6 +98,10 @@ pub use camera::{
     CameraSpec, PinholeCamera, PixelSample, MAX_IMAGE_DIMENSION, TAN_HALF_FOV_LIMIT_RAW,
 };
 pub use error::CameraError;
+pub use footprint::{
+    FootprintAxis, RayFootprint, RayFootprintError, TextureDerivatives, TexturedTriangle,
+    UnboundedReason, RAY_FOOTPRINT_ID,
+};
 pub use hash::{fraction_from_bits, PixelStream, SAMPLE_HASH_ID};
 pub use pixel::{
     quantize_16, quantize_8, srgb8_to_linear, write_rgba8, PixelAccumulator, PixelError, ToneCurve,

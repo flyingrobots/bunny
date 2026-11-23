@@ -6,7 +6,8 @@ use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::{FixedAngle, FixedQ32_32};
 use bunny_query::{TraceRay, TRACE_COORD_LIMIT_RAW};
 
-use crate::camera::{narrow, sample_direction};
+use crate::camera::{narrow, neighbour_directions, sample_direction};
+use crate::footprint::{measure, RayFootprint, RayFootprintError, TexturedTriangle};
 use crate::plane::{dot, l1, wide, Lens, Margin, Plane, Wide3};
 use crate::{CameraError, CameraSpec, PinholeCamera, PixelSample};
 
@@ -109,17 +110,46 @@ impl ThinLensCamera {
     /// and the direction points ahead of the camera.
     #[must_use]
     pub fn ray(&self, sample: PixelSample, lens_sample: [FixedQ32_32; 2]) -> Option<TraceRay> {
+        let (origin, correction) = self.lens_point(lens_sample)?;
+        let pinhole = sample_direction(&self.plane, &self.lens, sample)?;
+        let direction = map2(pinhole, correction, |d, c| d - c);
+        TraceRay::new(vec3(origin)?, vec3(direction)?)
+    }
+
+    /// The texture-coordinate footprint of `sample`'s pixel on `surface` with the lens point of
+    /// `lens_sample` held fixed (`bunny-ray-footprint/1`): the rule of
+    /// [`PinholeCamera::footprint`], with this camera's three rays from the one lens point.
+    /// With aperture 0 it is the pinhole camera's footprint, bit for bit.
+    ///
+    /// # Errors
+    /// In this order: [`RayFootprintError::SampleOutsideImage`],
+    /// [`RayFootprintError::LensSampleOutsideUnitSquare`], then the refusals of
+    /// [`PinholeCamera::footprint`] for `sample`'s own ray.
+    pub fn footprint(
+        &self,
+        sample: PixelSample,
+        lens_sample: [FixedQ32_32; 2],
+        surface: &TexturedTriangle,
+    ) -> Result<RayFootprint, RayFootprintError> {
+        let rays = neighbour_directions(&self.plane, &self.lens, sample)
+            .ok_or(RayFootprintError::SampleOutsideImage)?;
+        let (origin, correction) =
+            self.lens_point(lens_sample).ok_or(RayFootprintError::LensSampleOutsideUnitSquare)?;
+        measure(origin, rays.map(|d| map2(d, correction, |d, c| d - c)), surface)
+    }
+
+    /// The ray origin `position + o` and the lens correction `c` of `lens_sample`, or `None`
+    /// when a coordinate is outside `[0, 1)`; see the README's Thin-Lens Camera steps.
+    fn lens_point(&self, lens_sample: [FixedQ32_32; 2]) -> Option<(Wide3, Wide3)> {
         let [x, y] = lens_disc_point(lens_sample)?.map(|c| i128::from(c.raw()));
         let basis = self.lens.basis;
         let along = |axis| wide(axis).map(|c| c * i128::from(self.aperture_raw));
         let offset = map2(along(basis.right), along(basis.up), |r, u| {
             round_div(x * r + y * u, 1 << (2 * FRACTIONAL_BITS))
         });
-        let pinhole = sample_direction(&self.plane, &self.lens, sample)?;
         let divisor = i128::from(self.focus_raw) << self.scale_shift;
-        let direction = map2(pinhole, offset, |d, o| d - round_div(o << FRACTIONAL_BITS, divisor));
-        let origin = map2(raw3(self.position), offset, |p, o| p + o);
-        TraceRay::new(vec3(origin)?, vec3(direction)?)
+        let correction = offset.map(|o| round_div(o << FRACTIONAL_BITS, divisor));
+        Some((map2(raw3(self.position), offset, |p, o| p + o), correction))
     }
 
     /// The lens centre.
