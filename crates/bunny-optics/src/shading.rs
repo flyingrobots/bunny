@@ -16,10 +16,16 @@
 //! [`SurfaceHit::specular_reflection`] (`bunny-specular-reflection/1`) gives the continuation
 //! ray of a perfect mirror and its [`schlick_fresnel`] throughput as a [`SpecularSample`].
 //!
+//! [`SurfaceHit::dielectric_scatter`] (`bunny-dielectric/1`) reflects or refracts a ray at a
+//! smooth boundary between two refractive indices ([`DielectricBoundary`]), chosen by one
+//! sampler value with the exact Fresnel reflectance as the probability, as a
+//! [`DielectricScatter`].
+//!
 //! [`SurfaceHit::ggx_reflection`] (`bunny-ggx-conductor/1`) samples a rough conductor: a GGX
 //! microfacet normal visible from the incoming ray, the mirror about it, and the weight
 //! `F G2 / G1`, as a [`GgxScatter`].
 
+mod dielectric;
 mod frame;
 mod ggx;
 mod hit;
@@ -28,12 +34,18 @@ mod refusal;
 mod smith;
 mod smooth_hit;
 mod smooth_normal;
+mod snell;
 mod specular;
 mod surface;
 mod vertex_normals;
 mod visible_normal;
 mod wide;
+mod wide256;
 
+pub use dielectric::{
+    DielectricBoundary, DielectricReflectance, DielectricScatter, RefractiveIndexError,
+    DIELECTRIC_ID, MAX_REFRACTIVE_INDEX_RAW,
+};
 pub use frame::ShadingFrame;
 pub use ggx::{
     GgxConductor, GgxRoughnessError, GgxScatter, GGX_CONDUCTOR_ID, MIN_GGX_ROUGHNESS_RAW,
