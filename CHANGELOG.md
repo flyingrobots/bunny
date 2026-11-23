@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-geom`: classify a segment, a triangle or an AABB against a
+  `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
+  return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
+  each defined by the existing point rule `classify` at the endpoints, vertices
+  or eight corners; a shape touching the plane from one side takes that side,
+  and `None` means a vertex's signed distance overflows. `classify_aabb`
+  evaluates two corners, chosen per axis by the sign of the normal component,
+  and equals the eight-corner result bit for bit, `None` included (seeded
+  sweeps of 70 000 boxes, ends of the range included). Inverted boxes are the
+  box with the same corners; degenerate triangles are classified, not refused.
+  Additive: `classify`, `clip_segment` and `clip_polygon` are unchanged. See
+  `docs/topics/plane-clipping/` (PC-REQ-014 to -019, PC-TP-025 to -037). Closes
+  flyingrobots/bunny#162.
+
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
   `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI
