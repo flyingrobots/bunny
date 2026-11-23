@@ -45,6 +45,13 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | AT-REQ-012 | `to_turns(from_turns(t))` is exactly the fractional part of `t` in `[0, 1)`, and `from_turns(to_turns(a))` is `a` rounded to the nearest multiple of `2^32` units, ties to even, wrapping. | `README.md#conversions-out` |
 | AT-REQ-013 | `atan2(y, x)` is within `1/2 + 2^-9` angle units of the exact angle of `(x, y)`, and `None` only at the origin. | `README.md#atan2` |
 | AT-REQ-014 | `atan2` gives exact results on the axes and diagonals, a half turn on the negative x axis, and is bit for bit symmetric under conjugation, mirroring and swapping, and invariant under doubling both inputs. | `README.md#atan2` |
+| AT-REQ-020 | `atan(x)` is `atan2(x, 1.0)` bit for bit, within `1/2 + 2^-9` angle units of the exact angle, strictly inside a quarter turn either side of zero read as a signed `i64`, exact at `0` and `±1.0`, and odd: `atan(-x)` is `atan(x).wrapping_neg()`. | `README.md#single-ratio-atan` |
+| AT-REQ-021 | `asin(x)` and `acos(x)` accept exactly `\|x\| <= 1.0` (raw `[-2^32, 2^32]`) and return `None` for every other input. | `README.md#asin-and-acos` |
+| AT-REQ-022 | `asin` and `acos` are within `2/3` of an angle unit of the exact angle. | `README.md#asin-and-acos` |
+| AT-REQ-023 | `asin(0)`, `asin(±1.0)`, `acos(1.0)`, `acos(0)` and `acos(-1.0)` are exactly `0`, `±1/4`, `0`, `1/4` and `1/2` turn. | `README.md#asin-and-acos` |
+| AT-REQ-024 | `asin(x) + acos(x)` is exactly a quarter turn, `asin(-x)` is `asin(x).wrapping_neg()` and `acos(-x)` is `HALF_TURN - acos(x)`, bit for bit; `asin` is in `[-1/4, 1/4]` turn read as signed and `acos` in `[0, 1/2]`. | `README.md#asin-and-acos` |
+| AT-REQ-025 | `to_turns_signed`, `to_degrees_signed` and `to_radians_signed` read the raw angle as a signed `i64`, turn `[-1/2, 1/2)`, and round the exact signed value once to Q32.32 with ties to even: turns and degrees correctly rounded, radians within `1/2 + 2^-30` raw units. | `README.md#signed-conversions-out` |
+| AT-REQ-026 | Below a half turn each signed conversion equals the unsigned one bit for bit; from a half turn up, turns and degrees are exactly `1.0` and `360` less and radians `26_986_075_409` or `26_986_075_410` raw units less; and each signed conversion of `a.wrapping_neg()` is the negation of that of `a`, except at the half turn. | `README.md#signed-conversions-out` |
 
 ```toml
 [[requirement]]
@@ -116,6 +123,41 @@ status = "active"
 id = "AT-REQ-014"
 summary = "atan2 is exact on the axes and diagonals, a half turn on the negative x axis, bit-exact symmetric under conjugation, mirroring and swapping, and invariant under doubling."
 status = "active"
+
+[[requirement]]
+id = "AT-REQ-020"
+summary = "atan(x) is atan2(x, 1.0) bit for bit, within 1/2 + 2^-9 angle units, strictly inside a quarter turn either side of zero, exact at 0 and +-1.0, and odd."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-021"
+summary = "asin and acos accept exactly |x| <= 1.0 (raw [-2^32, 2^32]) and return None otherwise."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-022"
+summary = "asin and acos are within 2/3 of an angle unit of the exact angle."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-023"
+summary = "asin(0), asin(+-1.0), acos(1.0), acos(0) and acos(-1.0) are exact multiples of a quarter turn."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-024"
+summary = "asin(x) + acos(x) is exactly a quarter turn; asin is odd and acos(-x) is HALF_TURN - acos(x), bit for bit."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-025"
+summary = "The signed conversions out read the angle as a signed i64 and round the exact signed value once, ties to even; radians within 1/2 + 2^-30 raw units."
+status = "active"
+
+[[requirement]]
+id = "AT-REQ-026"
+summary = "The signed conversions equal the unsigned ones below a half turn, differ by one full turn from it up (radians by 26 986 075 409 or 26 986 075 410 raw), and are odd except at the half turn."
+status = "active"
 ```
 
 ## Fixtures
@@ -147,6 +189,16 @@ an independent high-precision oracle when you do.
 | AT-TP-015 | Symmetry | AT-REQ-014 | Bit equality of `atan2(-y, x)`, `atan2(y, -x)`, `atan2(x, y)` and `atan2(2y, 2x)` with the wrapped transforms of `atan2(y, x)` over 20 000 seeded directions. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_015_atan2_symmetries_and_scale_are_bit_exact` |
 | AT-TP-016 | Golden vectors | AT-REQ-008, AT-REQ-010, AT-REQ-011, AT-REQ-013 | Raw conversions of 11 angles and 12 `atan2` angles, each the correctly rounded value from a 60-digit decimal model. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_016_golden_vectors_are_bit_exact` |
 | AT-TP-017 | Mutation | AT-REQ-010, AT-REQ-011, AT-REQ-013, AT-REQ-014 | Each rule broken on purpose makes at least one of AT-TP-010 to AT-TP-016 fail. | [Mutation checks](#mutation-checks) |
+| AT-TP-030 | Error bound | AT-REQ-020 | Bit equality with `atan2(x, 1.0)` and the independent 124-bit oracle, over 4 000 seeded ratios of every magnitude and the ratios on and one raw unit either side of `0`, `±1`, `±2` and the extremes. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_030_atan_is_atan2_over_one_and_within_its_bound` |
+| AT-TP-031 | Exact values and range | AT-REQ-020 | Hand-derived exact angles at `0` and `±1`, the signed range and sign of every case, odd symmetry bit for bit, and the extremes at least `2^30` units inside the quarter turns. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_031_atan_exact_values_range_and_odd_symmetry` |
+| AT-TP-032 | Domain | AT-REQ-021 | `None` one raw unit outside `±1.0` and at the extremes; an angle at `±1.0`, one unit inside and `0`. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_032_asin_and_acos_refuse_ratios_outside_minus_one_to_one` |
+| AT-TP-033 | Error bound | AT-REQ-022 | Independent oracle (integer Newton square root of a 248-bit number, Taylor `atan`) over every `2^18`-th ratio of the domain (32 769), the 2 048 ratios at each end, the 128 around zero and 4 000 seeded ratios; the largest error is printed, not asserted. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_033_asin_and_acos_are_within_two_thirds_of_a_unit` |
+| AT-TP-034 | Exact values | AT-REQ-023, AT-REQ-021 | Exact angles at `0` and `±1.0`, and one raw unit inside each end and either side of zero lands on the expected side by the expected margin. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_034_asin_and_acos_exact_cases_and_one_unit_inside_each_end` |
+| AT-TP-035 | Identity | AT-REQ-024 | Bit equality of `asin + acos` with a quarter turn, `asin(-x)` with the negation and `acos(-x)` with `HALF_TURN - acos(x)`, and the ranges, over the AT-TP-033 ratios. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_035_asin_and_acos_identities_are_bit_exact` |
+| AT-TP-036 | Conversion out | AT-REQ-025 | The exact signed rational rounded by `i128` Euclidean quotient and remainder (turns, degrees) and the 124-bit oracle (radians), over 20 000 seeded angles and the ties of both signs, each with one unit either side. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_036_signed_conversions_round_once_within_their_bounds` |
+| AT-TP-037 | Relation | AT-REQ-026, AT-REQ-025 | Bit equality with the unsigned conversions below a half turn and with them less a full turn from it up, negation symmetry, and the half turn reading as `-1/2` while one unit below it rounds to `+1/2`. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_037_signed_conversions_match_the_unsigned_ones_and_negation` |
+| AT-TP-038 | Golden vectors | AT-REQ-020, AT-REQ-022, AT-REQ-025, AT-REQ-008 | Raw results of `atan`, `asin`, `acos` and the signed conversions for listed inputs, each the correctly rounded value from a 60-digit decimal model. | `crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_038_golden_vectors_are_bit_exact` |
+| AT-TP-039 | Mutation | AT-REQ-020, AT-REQ-021, AT-REQ-022, AT-REQ-024, AT-REQ-025 | Each rule broken on purpose makes at least one of AT-TP-030 to AT-TP-038 fail. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -301,6 +353,96 @@ artifact = "docs/topics/angle-trigonometry/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "AT-TP-030"
+requirements = ["AT-REQ-020"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_030_atan_is_atan2_over_one_and_within_its_bound"
+oracle = "Bit equality with atan2(x, 1.0) and the 124-bit oracle over seeded and boundary ratios."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-031"
+requirements = ["AT-REQ-020"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_031_atan_exact_values_range_and_odd_symmetry"
+oracle = "Exact angles at 0 and +-1, signed range, odd symmetry, extremes inside the quarter turns."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-032"
+requirements = ["AT-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_032_asin_and_acos_refuse_ratios_outside_minus_one_to_one"
+oracle = "None one raw unit outside +-1.0 and at the extremes; Some at and inside them."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-033"
+requirements = ["AT-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_033_asin_and_acos_are_within_two_thirds_of_a_unit"
+oracle = "Independent oracle with a Newton square root over a dense sweep, both ends and seeded ratios."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-034"
+requirements = ["AT-REQ-023", "AT-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_034_asin_and_acos_exact_cases_and_one_unit_inside_each_end"
+oracle = "Exact quarter-turn multiples at 0 and +-1.0, and one raw unit inside each end."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-035"
+requirements = ["AT-REQ-024"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_035_asin_and_acos_identities_are_bit_exact"
+oracle = "Bit equality of the complement, odd and mirror identities over the sweep."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-036"
+requirements = ["AT-REQ-025"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_036_signed_conversions_round_once_within_their_bounds"
+oracle = "Exact signed rational by Euclidean division, and the 124-bit oracle for radians."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-037"
+requirements = ["AT-REQ-026", "AT-REQ-025"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_037_signed_conversions_match_the_unsigned_ones_and_negation"
+oracle = "Bit equality with the unsigned forms and with negation; the half-turn ends."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-038"
+requirements = ["AT-REQ-020", "AT-REQ-022", "AT-REQ-025", "AT-REQ-008"]
+evidence = "test"
+test = "crates/bunny-num/tests/fixed_angle_inverse_ratio_tests.rs::at_tp_038_golden_vectors_are_bit_exact"
+oracle = "Correctly rounded raw values from a 60-digit decimal model."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "AT-TP-039"
+requirements = ["AT-REQ-020", "AT-REQ-021", "AT-REQ-022", "AT-REQ-024", "AT-REQ-025"]
+evidence = "manual-audit"
+artifact = "docs/topics/angle-trigonometry/test-plan.md#mutation-checks"
+oracle = "Each rule broken on purpose makes at least one of AT-TP-030 to AT-TP-038 fail."
+tier = "manual"
+status = "planned"
 ```
 
 ## Mutation Checks
