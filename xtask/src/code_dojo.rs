@@ -247,7 +247,17 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     for command in crate::feature_configs::commands() {
         run_command_strings(&command)?;
     }
+    handle_perf_groups()?;
     println!("Code Dojo: full gate clean");
+    Ok(())
+}
+
+/// Builds the timing harness once per feature group alone, then with every group.
+pub(super) fn handle_perf_groups() -> Result<(), DynError> {
+    let manifest = std::fs::read_to_string(git_root()?.join("crates/bunny-perf/Cargo.toml"))?;
+    for command in crate::feature_configs::perf_group_commands(&manifest) {
+        run_command_strings(&command)?;
+    }
     Ok(())
 }
 

@@ -54,6 +54,27 @@ pub(super) fn commands() -> Vec<Vec<String>> {
     ]
 }
 
+/// One `cargo check` of the timing harness per feature group alone, then one with every group.
+///
+/// `cargo xtask perf` falls back to building each group alone when the base revision cannot
+/// build them all, and reports a group it cannot build as new. A helper that only some groups
+/// use must therefore compile away with the others, or that fallback silently stops comparing
+/// cases. The workspace denies warnings, so a helper left behind by a group is a build error.
+pub(super) fn perf_group_commands(manifest: &str) -> Vec<Vec<String>> {
+    let groups = crate::perf::feature_groups(manifest);
+    let mut sets: Vec<String> = groups.iter().cloned().collect();
+    sets.push(groups.join(","));
+    sets.into_iter()
+        .map(|features| {
+            ["cargo", "check", "--locked", "-p", "bunny-perf", "--no-default-features"]
+                .into_iter()
+                .map(str::to_owned)
+                .chain(["--features".to_owned(), features])
+                .collect()
+        })
+        .collect()
+}
+
 /// `cargo <head> -p bunny-mesh -p bunny-codec --no-default-features <tail>`.
 fn command(head: &[&str], tail: &[&str]) -> Vec<String> {
     let mut args = vec!["cargo".to_owned()];
@@ -114,7 +135,41 @@ fn is_path_package(line: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::third_party_packages;
+    use super::{perf_group_commands, third_party_packages};
+
+    fn features_of(command: &[String]) -> &str {
+        let at = command.iter().position(|arg| arg == "--features").expect("a --features flag");
+        &command[at + 1]
+    }
+
+    #[test]
+    fn perf_harness_is_checked_once_per_group_alone_and_once_with_all() {
+        let manifest = "[features]\ndefault = [\"num\"]\n# note\nnum = []\nangle = []\n";
+        let commands = perf_group_commands(manifest);
+        let features: Vec<&str> = commands.iter().map(|c| features_of(c)).collect();
+        assert_eq!(features, ["num", "angle", "num,angle"]);
+        for command in &commands {
+            assert!(command.iter().any(|arg| arg == "--no-default-features"));
+            assert!(command.windows(2).any(|pair| pair == ["-p", "bunny-perf"]));
+        }
+    }
+
+    #[test]
+    fn perf_gate_covers_every_group_the_harness_manifest_declares() {
+        // Normalise CRLF checkouts: the parser reads lines, so a trailing CR must not leak
+        // into a group name.
+        let manifest = include_str!("../../crates/bunny-perf/Cargo.toml").replace("\r\n", "\n");
+        let groups = crate::perf::feature_groups(&manifest);
+        assert!(groups.len() > 10, "the harness declares its groups: {groups:?}");
+        let commands = perf_group_commands(&manifest);
+        assert_eq!(commands.len(), groups.len() + 1);
+        for group in &groups {
+            assert!(
+                commands.iter().any(|c| features_of(c) == group),
+                "group {group} has no build of its own"
+            );
+        }
+    }
 
     #[test]
     fn registry_and_git_crates_are_reported() {

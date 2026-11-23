@@ -245,7 +245,7 @@ fn rustflags(align_code: bool) -> String {
 }
 
 /// The feature groups declared in the harness manifest (everything but `default`).
-fn feature_groups(manifest: &str) -> Vec<String> {
+pub(crate) fn feature_groups(manifest: &str) -> Vec<String> {
     manifest
         .lines()
         .skip_while(|line| line.trim() != "[features]")
