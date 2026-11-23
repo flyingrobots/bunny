@@ -40,6 +40,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "code-dojo-rust" => code_dojo::handle_rust(args),
         "code-dojo-determinism" => code_dojo::handle_determinism(args),
         "code-dojo-commit-msg" => code_dojo::handle_commit_msg(args),
+        "code-dojo-perf-groups" => code_dojo::handle_perf_groups(),
         "code-dojo-generated" => code_dojo::handle_generated(),
         "repo-respect" => repo_respect::handle(args),
         "topic-docs" => topic_docs::handle(),
@@ -74,6 +75,8 @@ fn print_help() {
     println!("                  Check a commit message file");
     println!("  code-dojo-generated");
     println!("                  Check the committed contract artifacts against bunny-wesley");
+    println!("  code-dojo-perf-groups");
+    println!("                  Build the timing harness with each feature group alone");
     println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
     println!(

@@ -182,6 +182,130 @@ Still unverified:
 - rust-gpu behaviour was read from source at a commit, not built or run.
 - The effort and speedup estimates are unchanged estimates.
 
+---
+
+## Amendment 1 (2026-11-21): Narrow Shared Unsigned Division Slice (`bunny-u32-div-round-even/1`)
+
+**Status:** proposal amendment (tracked in `#427`; implementation slice tracked in `#428`). Nothing in `crates/bunny-gpu` is implemented yet.
+
+Rather than duplicating reusable deterministic GPU arithmetic inside downstream renderers or blocking early GPU consumers (`flyingrobots/geordi` for `bijou-surface-gpu/1`) on the full Q32.32 limb library, this amendment establishes a small, self-contained, independently verifiable first shared GPU slice in Bunny.
+
+### Ownership split and Q32.32 non-equivalence
+
+| Responsibility | Owner |
+| --- | --- |
+| Reusable deterministic arithmetic definitions and CPU references | Bunny |
+| Equivalent reusable portable WGSL shader math and golden conformance vectors | Bunny |
+| Cell packing, glyph selection, placement, joins, and endpoint-specific raster choices | Downstream renderer (e.g., Geordi) |
+| Final shader assembly, GPU resources, presentation, and frame receipts | Downstream renderer |
+| Verification that downstream shaders use Bunny primitives correctly | Downstream renderer |
+
+This amendment strictly distinguishes two uses of `u32` on GPUs:
+
+1. **Q32.32 via `u32` limbs:** Holding a signed `FixedQ32_32` value as two `u32` words preserves the exact same Q32.32 semantics only when carry propagation, wider intermediates, rounding, and checked/saturating overflow rules match `bunny-num`.
+2. **Bounded unsigned-integer operations:** Operations such as `bunny-u32-div-round-even/1` have their own explicit domain, rounding, and error contract. **Passing `bunny-u32-div-round-even/1` conformance makes no claim of Q32.32 GPU conformance.**
+
+### Contract: `bunny-u32-div-round-even/1`
+
+#### Inputs and mathematical result
+
+| Item | Contract |
+| --- | --- |
+| Numerator `n` | Integer in `0..=4,294,967,295` (`u32`). |
+| Denominator `d` | Integer in `0..=4,294,967,295` (`u32`). |
+| Successful result (`d > 0`) | Integer nearest to the exact rational `n / d`. |
+| Exact halfway case | Choose the even integer (ties to even / Banker's rounding). |
+| Zero divisor (`d == 0`) | Return `DivisionByZero`, including when `n == 0`. |
+| Overflow | Successful results never wrap or saturate. |
+| Out-of-domain host values | Negative, fractional, non-finite, or `> u32::MAX` host inputs MUST be rejected at the host boundary before casting or packing. |
+
+#### Canonical output and wire format
+
+Every execution path MUST serialize each result as two canonical `u32` words `[value, status]` (8 bytes total: little-endian `value` followed by little-endian `status`):
+
+| `status` | Meaning | `value` |
+| --- | --- | --- |
+| `0` | Success | Rounded quotient in `0..=4,294,967,295` |
+| `1` | `DivisionByZero` | Always `0` |
+
+Rust APIs may expose an ergonomic `Result<u32, DivisionByZero>`, paired with an explicit adapter that produces `[value, status]`. Native Rust enum layout is never the interchange format.
+
+#### Normative overflow-safe algorithm
+
+```text
+if d == 0:
+    return [0, 1]
+
+q = n / d
+r = n % d
+s = d - r
+
+increment =
+    (r > s) ||
+    ((r == s) && ((q & 1) != 0))
+
+return [q + (increment ? 1 : 0), 0]
+```
+
+- **Branch-first zero guard:** The `d == 0` check MUST execute as a real control-flow branch before `/` or `%` (never a branchless `select()` that evaluates both operands).
+- **Complete overflow proof over `0..=u32::MAX`:**
+  - Since `0 <= r < d`, `s = d - r` lies in `1..=d` (zero underflow, zero overflow).
+  - Comparing `r` with `d - r` is mathematically equivalent to comparing `2 * r` with `d`, without forming `2 * r` (which wraps in `u32` for large remainders such as `n = 3,000,000,000, d = 4,000,000,000`).
+  - When `d == 1`, `r == 0`, so `increment` is `false` and `q = n <= u32::MAX`.
+  - When `d >= 2`, `q <= floor(u32::MAX / 2) = 2,147,483,647`, so `q + 1 <= 2,147,483,648 <= u32::MAX`.
+
+#### Core golden vectors
+
+Every CPU, WGSL, and translated-GLSL harness MUST consume the same ordered vector fixture containing at minimum these 15 readable core vectors, plus generated boundary cases and reproducible seeded randomized cases:
+
+| `n` | `d` | `value` | `status` | Purpose |
+| ---: | ---: | ---: | ---: | --- |
+| `0` | `1` | `0` | `0` | Zero numerator |
+| `4,294,967,295` | `1` | `4,294,967,295` | `0` | Maximum result |
+| `4,294,967,295` | `4,294,967,295` | `1` | `0` | Maximum exact division |
+| `1` | `4` | `0` | `0` | Below half |
+| `3` | `4` | `1` | `0` | Above half |
+| `1` | `2` | `0` | `0` | Tie to even zero |
+| `3` | `2` | `2` | `0` | Odd quotient rounds upward |
+| `5` | `2` | `2` | `0` | Even quotient stays |
+| `7` | `2` | `4` | `0` | Another odd-quotient tie |
+| `4,294,967,295` | `2` | `2,147,483,648` | `0` | Rounded result crosses signed `i32` boundary |
+| `3,000,000,000` | `4,000,000,000` | `1` | `0` | Doubled-remainder `2 * r` overflow counterexample |
+| `2,147,483,647` | `4,294,967,295` | `0` | `0` | Immediately below half |
+| `2,147,483,648` | `4,294,967,295` | `1` | `0` | Immediately above half |
+| `0` | `0` | `0` | `1` | Zero divided by zero |
+| `4,294,967,295` | `0` | `0` | `1` | Nonzero divided by zero |
+
+### Four-layer evidence model and content-addressed manifest
+
+Kernel conformance, canonical frame equality, and presentation conversion MUST remain separate verification layers connected by one content-addressed implementation manifest:
+
+| Layer | What executes or gets checked | What a pass establishes |
+| --- | --- | --- |
+| **1. Build and adoption** | Pinned Bunny inputs, shader assembly, translation (e.g., pinned `naga`), compilation, and linking | Identified artifacts were assembled and accepted by the declared toolchain. |
+| **2. Kernel conformance** | Shared ordered vector fixture on CPU reference, executed WGSL (storage buffer), and downstream translated GLSL in WebGL2 | Each executed backend returned the exact specified output words for those inputs. |
+| **3. Canonical frame equality** | Complete downstream compositor (geometry, atlas, flags, blending) read back from an exact integer target | The canonical frame bytes match the reference oracle (`frameRgbaSha256`). |
+| **4. Presentation conversion** | Canonical image path to the display framebuffer (including validated drawing-buffer dimensions) | The measured display path satisfies its declared conversion policy. |
+
+#### Implementation manifest identities
+
+A content-addressed manifest hashes exact artifact bytes and binds:
+
+- Math contract ID (`bunny-u32-div-round-even/1`) and contract digest
+- Bunny revision and adopted shader-source artifact digest (consumable by downstream builds without linking Bunny's Rust `wgpu` host)
+- CPU reference artifact digest
+- Final assembled WGSL digest (after downstream integration)
+- Per-stage generated GLSL digests (explicit stage map, never unspecified string concatenation) and generator identity/options
+- Backend execution artifact digest (for Canvas 2D / JS CPU paths, `shaderSha256` remains `null` and the actual executed JS implementation artifact digest is recorded)
+
+#### Kernel conformance receipt and integer readback
+
+Each kernel conformance run MUST emit a structured receipt containing at least:
+`implementationManifestSha256`, `executionArtifactSha256`, `vectorsSha256`, `expectedResultsSha256`, `actualResultsSha256`, `vectorCount`, `outcome` (`pass` | `fail` | `unavailable` | `not-run`), `executionClass` (`CPU` | `software GPU` | `hardware GPU` | `unknown`), and `environment` (runtime/browser, OS, backend, adapter).
+
+- **WGSL compute harness (Bunny `#428`):** Writes `[value, status]` words into a `u32` storage buffer and compares serialized little-endian bytes bit-for-bit against the CPU reference.
+- **Translated WebGL2 harness (downstream `geordi#170`):** Uses a thin fragment wrapper writing `[value, status]` into a single-sample `RGBA32UI` attachment and reads back via `readPixels(..., RGBA_INTEGER, UNSIGNED_INT, Uint32Array)` — never through an 8-bit normalized channel. Runs a full-width integer transport canary before division to separate transport bugs from arithmetic bugs. Compilation, linking, transport, and arithmetic outcomes are recorded separately; an unavailable WebGL2 context MUST report `unavailable` (never `pass`).
+
 [^wgsl-types]: W3C, WebGPU Shading Language, Candidate Recommendation Draft of 6 November
     2026 (CRD-WGSL-20261106), section 6.2.5 "Scalar Types": "The scalar types are bool,
     AbstractInt, AbstractFloat, i32, u32, f32, and f16." <https://www.w3.org/TR/WGSL/>,

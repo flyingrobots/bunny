@@ -213,6 +213,13 @@ impl Line {
     }
 }
 
+/// The floors of the two roots in raw distance units, near first, or `None` when the line
+/// misses the sphere. The ray–cylinder kernel uses it for its side in the plane across the
+/// axis.
+pub(super) fn roots(offset: Wide3, direction: Wide3, radius: i64) -> Option<(i128, i128)> {
+    Line::new(offset, direction, radius)?.roots()
+}
+
 /// The exact square of an `i128` below `2^128` in magnitude.
 fn square(value: i128) -> U256 {
     U256::product(value.unsigned_abs(), value.unsigned_abs())

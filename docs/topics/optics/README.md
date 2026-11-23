@@ -1275,7 +1275,7 @@ rule), each step and its rounding:
 | Reflection | `r = d (n . n) - 2 (d . n) n`, the exact reflection of `d` about the line of `n`, scaled by `n . n` | exact (`i128`, every term below `2^99`) |
 | Direction | `r'`, the unit vector along `r`, normalized as `TriangleSurface::new` normalizes a face normal, then clamped to `-1.0..=1.0` | the prescale floors (below `2^-27` raw units); each component within one raw unit of the exact unit vector along the prescaled `r` |
 | Leaving test | `r' . N > 0`, else `ReflectionBelowSurface` | exact |
-| Cosine | `c = -(u . n)`, with `u` the unit vector along `d` (normalized the same way), clamped to `0..=1.0` | once, to nearest, ties to even; within three raw units of the exact `-(d . n) / \|d\|` |
+| Cosine | `c = -(u . n)`, with `u` the unit vector along `d` (normalized the same way), clamped to `0..=1.0` | the exact `i128` dot product (units of `2^-64`) rounded once to nearest raw unit, ties to even; within three raw units of the exact `-(d . n) / \|d\|` |
 | Weight | `w = (1 - c)^5` | the exact 160-bit product, rounded once to nearest; no tie can occur (one needs `(1 - c)^5` raw to be an odd multiple of `2^127`, and 127 is not a multiple of five) |
 | Throughput | `schlick_fresnel(F0_c, c) = F0_c + (1 - F0_c) w` per channel | exact in units of `2^-64`, rounded once to nearest, ties to even |
 
@@ -1283,6 +1283,17 @@ rule), each step and its rounding:
 both inputs are clamped to `0..=1.0`, the result is in `0..=1.0` and within
 one raw unit of Schlick's exact `f0 + (1 - f0)(1 - cosine)^5` on the clamped
 inputs, `f0` exactly at `cosine = 1.0` and 1.0 exactly at `cosine = 0`.
+
+**The cosine's rounding.** The dot product `-(u . n)` is exact: both
+vectors are raw Q32.32, so it is an integer in units of `2^-64`, below `2^66`.
+It is divided by `2^32` once. A remainder above half a raw unit rounds up, a
+remainder below it rounds down, and a remainder of exactly half goes to the
+even raw value. The result is then clamped to `0..=1.0`. No product is rounded
+before the sum, and nothing rounds the cosine again before `schlick_fresnel`.
+At low cosines one raw unit of `c` changes the throughput, so the rule is
+observable there. The test plan pins it with kernel hits one `2^-64` unit
+under a tie, on ties above even and odd floors, and one unit over a tie
+(OPTICS-REQ-090).
 
 **Normal incidence.** For `d` along `-n`, `u` is within a raw unit of `-n`,
 `c` within a few raw units of 1.0 and `w` rounds to zero, so the throughput is

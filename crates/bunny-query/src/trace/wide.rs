@@ -1,4 +1,4 @@
-//! Unsigned 256-bit integers for the exact sphere discriminant.
+//! Unsigned 256-bit integers for the exact sphere discriminant and the disc radius test.
 //!
 //! The quarter discriminant of a trace-domain sphere test is below `2^147` and its square
 //! root is taken after a further `2^64` scale (`docs/topics/ray-tracing/README.md#ray-sphere`),
