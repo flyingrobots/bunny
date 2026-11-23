@@ -186,6 +186,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused with `PointLightError::TooNear`, not divided by zero. No existing
   output changes. Closes flyingrobots/bunny#365.
 
+* `ThinLensCamera` (`bunny-thin-lens/1`, `THIN_LENS_ID`) in `bunny-optics`:
+  a `ThinLensSpec` (a pinhole `CameraSpec`, an aperture radius and a focus
+  distance) gives rays from a point of the lens disc through each sample's
+  focus-plane point. `ray(sample, lens_sample)` takes the lens point from one
+  sampler pair the caller chooses, mapped by `lens_disc_point` (radius
+  `sqrt(u (1 - 2^-28))`, angle `v` turns; strictly inside the unit disc). The
+  direction is the pinhole direction minus the lens offset over
+  `focus * 2^k`, rounded once, so each ray passes its focus-plane point within
+  `focus * 2^k * (3/2 + 2^-17)` raw units on each axis; with aperture 0 every
+  ray equals `PinholeCamera::ray` bit for bit by the same arithmetic.
+  A non-positive focus distance, a negative aperture, a lens reaching outside
+  the trace domain and an unrepresentable lens are refused with
+  `ThinLensError`. `PinholeCamera` output is unchanged. Closes
+  flyingrobots/bunny#364.
+
 * `bunny-query`: `TraceCylinder` and `TraceRay::hit_cylinder`, the
   trace-domain ray-cylinder kernel under the contract `bunny-ray-cylinder/1`
   (`RAY_CYLINDER_ID`).

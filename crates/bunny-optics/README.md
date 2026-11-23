@@ -28,6 +28,11 @@ every buffer.
   normalized; a construction-time scale keeps every component at most 1.0, as
   the trace kernels require, and each component is within one raw unit plus
   `(width + height) / 2^33` of the exact image-plane point.
+* `ThinLensCamera` (`bunny-thin-lens/1`): a `CameraSpec` plus an aperture
+  radius and a focus distance. Each ray starts at a lens-disc point chosen by
+  one sampler pair (`lens_disc_point`, polar and area-preserving) and passes
+  its sample's focus-plane point within a stated bound; aperture 0 gives the
+  pinhole's rays bit for bit. Invalid lenses return a typed `ThinLensError`.
 * `point_at`: the point at a trace distance along an unnormalized ray.
 * `PixelStream` (`bunny-sample-hash/1`): 64 mixed bits per (seed, pixel,
   sample, dimension) from a chain of SplitMix64 mixes, with no state;

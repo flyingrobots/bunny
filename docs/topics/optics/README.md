@@ -21,6 +21,10 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - `CameraError`;
 - `point_at`;
 - `MAX_IMAGE_DIMENSION` and `TAN_HALF_FOV_LIMIT_RAW`;
+- for the [thin-lens camera](#thin-lens-camera) (`bunny-thin-lens/1`):
+  `ThinLensCamera` (`new`, `ray`, `position`, `forward`, `right`, `up`,
+  `aperture_radius`, `focus_distance`, `scale_shift`), `ThinLensSpec`,
+  `ThinLensError`, `lens_disc_point` and `THIN_LENS_ID`;
 - `PixelStream` (`new`, `bits`, `fraction`), `fraction_from_bits` and
   `SAMPLE_HASH_ID`, the counter-based [sample hash](#sample-hash);
 - `PixelSampler` (`new`, `point`, `camera_sample`, `x`, `y`) and `SAMPLER_ID`,
@@ -325,6 +329,96 @@ lengths. What a renderer can rely on:
 Narrow fields of view are accepted down to a tangent of one raw unit. The ray
 is still exact to the bound above, but the per-pixel step can shrink below one
 raw unit of direction, so neighbouring pixels may share a ray.
+
+## Thin-Lens Camera
+
+A `ThinLensCamera` adds depth of field to the pinhole camera. Its identity is
+`bunny-thin-lens/1` (`THIN_LENS_ID`); it names the bits of
+`ThinLensCamera::ray` and `lens_disc_point`. It is built from a
+`ThinLensSpec`: a pinhole `CameraSpec`, an `aperture_radius` (the lens
+radius, at least zero) and a `focus_distance` (positive, along `forward`).
+The position is the lens centre; the lens disc is spanned by `right` and
+`up`.
+
+**The ray.** `ray(sample, lens_sample)` returns the ray from a lens point
+through the sample's focus-plane point, or `None` when the sample is outside
+the image (as for `PinholeCamera::ray`) or a lens coordinate is outside
+`[0, 1)`. `lens_sample` is one sampler pair, `PixelSampler::point(sample,
+pair)`; the camera does not choose the pair. Pair 0 is the sub-pixel offset,
+so the lens needs a pair the integrator does not otherwise use.
+
+**The disc mapping.** `lens_disc_point([u, v])` is the polar,
+area-preserving map, each step rounded as stated:
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Radius | `r = sqrt(u (1 - 2^-28))`, the integer square root of `u_raw (2^32 - 16)` | floor |
+| Angle | `v` turns counter-clockwise from the first coordinate: `FixedAngle::from_raw(v_raw << 32)` | exact |
+| Coordinates | `x = r cos`, `y = r sin`, with `FixedAngle::sin_cos` (each within one raw unit) | once each, to nearest, ties to even |
+
+The factor `1 - 2^-28` keeps the rounded point strictly inside the unit disc:
+`x^2 + y^2 < 1` exactly for every input, which the rounding of `sin_cos` and
+of the coordinates would otherwise not guarantee at `u` near 1. It scales the
+whole disc uniformly, so the map stays area-preserving: the samples with `u`
+in an interval of length `2^-m` land in a ring of `2^-m` of the disc's area,
+and those with `v` in an interval of length `2^-m` in a sector of that
+fraction. An aligned block of `2^m` sampler points therefore puts one lens
+point in each of `2^m` equal-area rings and in each of `2^m` equal sectors.
+That holds for the exact map; the rounded point can cross a sector boundary.
+Each coordinate is within 3/2 raw units of the exact point (`sin_cos` within
+one raw unit, times a radius below 1.0, then one rounding), so a point of raw
+radius `r` whose angle is within `2^31 / r` raw turns (units of `2^-32` turn)
+of a boundary may land on its other side. At `u` = 1 raw (`r` = 65 535) that
+is up to `2^-16` turn; near the rim it is under one raw turn.
+
+**Each step and its rounding.** With `a` the raw aperture, `f` the raw focus
+distance, `k` the scale shift, `R`, `U` the raw basis and `d` the pinhole
+direction of the sample at shift `k` (the formula of
+[Ray Generation](#ray-generation)):
+
+```text
+o_i   = round(a * (x * R_i + y * U_i) / 2^64)        // lens offset, raw
+c_i   = round(o_i * 2^32 / (f * 2^k))                 // lens correction, raw
+origin    = position + o                              // exact
+direction = d - c                                     // exact
+```
+
+Both rounds are to nearest, ties to even, in `i128`. The ray reaches, at the
+parameter `tau = f * 2^k / 2^32` (the focus distance times `2^k`), the point
+`position + tau * d`: the pinhole ray's point on the focus plane. On each
+axis, against the intended focus-plane point
+`position + tau * 2^-k * P` (`P` the exact image-plane offset of
+[Accuracy](#accuracy)), the error is between `-tau * (3/2 + 2^-17)` and
+`tau * (1/2 + 2^-17)` raw units: the pinhole bound times `tau`, plus half a
+raw unit of correction times `tau`.
+
+**Aperture 0.** Then `o` is exactly zero, `c` is exactly zero and both lens
+margins below are zero, so the scale shift is the pinhole's and every ray is
+`PinholeCamera::ray`'s, bit for bit. No branch tests the aperture: the same
+arithmetic runs, on a zero offset.
+
+**Direction scaling.** The scale shift is chosen by the pinhole rule with two
+margins, so that every accepted sample has a ray. The lens offset is at most
+`2a` raw on each axis (by Cauchy-Schwarz `|x R_i + y U_i| < 1.5 * 2^64`, and
+the rounding adds at most half a raw unit), so the correction is at most
+`m_k = ceil(2a * 2^32 / (f * 2^k))` raw: `k` is the smallest shift whose
+corner directions stay within `1.0 - m_k` on every component. The corners
+must also have `d . F > 2 |F|_1 + s_k`, where `s_k` bounds `|c . F|` from the
+exact `R . F` and `U . F` and the roundings; then `direction . F > 0` for every
+sample. With an aperture of 0 both margins are 0. A larger aperture for the
+same focus distance may need a larger `k`, so the pinhole part of each
+direction is shorter; `scale_shift()` reports it.
+
+**Refusals.** Checked in this order: the pinhole spec
+(`ThinLensError::Camera`, with the `CameraError`), a focus distance of zero
+or below (`FocusDistanceNotPositive`), a negative aperture
+(`ApertureNegative`), a position coordinate whose magnitude plus `2a` reaches
+`2^40` raw (`LensOutsideTraceDomain`), and no shift up to 32 that fits the
+margins (`Unrepresentable`: an aperture far larger than the focus distance,
+such as `2^38` raw over one raw unit).
+
+**Cost.** A thin-lens ray adds one square root, one `sin_cos`, and a dozen
+`i128` multiplications and divisions to the pinhole ray.
 
 ## Sampling
 
