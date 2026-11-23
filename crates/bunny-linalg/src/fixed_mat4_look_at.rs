@@ -12,7 +12,7 @@
 //! units of one and each pairwise dot product is within 2 raw units of zero.
 //! See `docs/topics/matrix-types/README.md#look-at-view-matrix`.
 
-use std::fmt;
+use core::fmt;
 
 use bunny_num::FixedQ32_32;
 
@@ -44,7 +44,7 @@ impl fmt::Display for LookAtError {
     }
 }
 
-impl std::error::Error for LookAtError {}
+impl core::error::Error for LookAtError {}
 
 /// An exact integer vector in raw Q32.32 units, wide enough for cross products.
 #[derive(Clone, Copy)]

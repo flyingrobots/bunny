@@ -75,6 +75,13 @@ math for graphics pipelines.
   15/8 raw units of the exact spline and exact at every point, `derivative_at(u)`
   within 9/2 and continuous bit for bit at joints; `None` for `u` outside
   `[0, segment_count]`.
+* **Curve Bounds (`bunny-curve/1`)**: `CurveBounds3 { min, max }` with
+  `contains`. `CubicBezier3::control_bounds()` (the exact control box, proven to
+  contain every rounded `at(t)` with no widening), `split_bounds(t)` (each
+  half's control box widened by 3 raw units and clipped, proven to contain the
+  original on that half's range) and `CatmullRom3::control_bounds()` (the
+  union of the segments' control boxes, which covers the overshoot past the
+  points).
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
   multiplication, determinant, and inverse APIs return `None` for singular or
   overflowing cases; transpose is infallible and returns a matrix directly.
@@ -85,6 +92,20 @@ math for graphics pipelines.
   convenience conversion.
 * **Safe & Portable**: Declares `#![deny(unsafe_code)]` and compiles cleanly on
   all platforms including WebAssembly (`wasm32-unknown-unknown`).
+
+## Features
+
+| Feature | Default | Effect |
+| --- | --- | --- |
+| `std` | on | Links `std` and turns on the `std` feature of `bunny-num`. Off, the crate is `no_std` and needs only `core` (no `alloc`); no public item is removed. |
+
+```toml
+[dependencies]
+bunny-linalg = { version = "0.7", default-features = false }
+```
+
+See [`docs/topics/no-std/`](../../docs/topics/no-std/README.md) for the gate
+that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
 
 ## Usage
 

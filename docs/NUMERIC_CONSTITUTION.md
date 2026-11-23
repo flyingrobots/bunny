@@ -137,6 +137,8 @@ the geometric predicate.
 | `FixedQ32_32::checked_mul` | Checked | Uses Q64.64 intermediate math, ties-to-even rounding, then rejects out-of-range results. |
 | `FixedQ32_32::checked_div` | Checked | Returns `None` for division by zero or out-of-range quotient. |
 | `FixedDivisor::new` / `FixedDivisor::checked_div` | Checked | `new` returns `None` for a zero divisor; `checked_div` returns exactly the bits of `FixedQ32_32::checked_div`, ties to even. |
+| `FixedQ32_32::lerp` / `inverse_lerp` / `remap` / `from_ratio` | Checked | One rounding of an exact wide intermediate, ties to even; `None` for a degenerate range (`inverse_lerp`, `remap`), a zero denominator (`from_ratio`) or a result outside Q32.32 (`docs/topics/lerp/`). |
+| `FixedQ32_32::checked_clamp` | Checked | Exact; `None` when `lo > hi`. `Ord::clamp` panics on that input, and `Ord::min` / `Ord::max` are exact. |
 | `FixedQ32_32::to_f32` / `to_f32` | Proven-infallible | Lossy egress to the nearest `f32`, ties to even; every `i64` is in `f32` range. |
 | `Add` / `Sub` / `Neg` / `Mul` / `Div` operators | Saturating | Clamp to `MIN_RAW` or `MAX_RAW`; division by zero saturates by sign, with `0 / 0 = 0`. |
 | `FixedVec2` / `FixedVec3` arithmetic operators | Saturating | Compose saturating scalar operators component-wise. |

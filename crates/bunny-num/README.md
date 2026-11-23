@@ -30,7 +30,13 @@ ecosystem to guarantee bit-level CPU determinism.
   `t = 0` and `t = 1.0`, monotone in `t`, extrapolating outside `[0, 1]`, and
   `None` only outside Q32.32; `FixedQ32_32::from_ratio(n, d)` is the nearest
   Q32.32 value to `n / d` for `u32` operands, `None` for `d = 0` or a result
-  of `2^31` or more.
+  of `2^31` or more. `FixedQ32_32::inverse_lerp(a, b, x)` is
+  `round_half_even((x - a) * 2^32 / (b - a))` and
+  `FixedQ32_32::remap(x, [in_lo, in_hi], [out_lo, out_hi])` is `out_lo` plus
+  the exact step rounded once, within half a raw unit whatever the ranges;
+  both are exact at the ends, extrapolate, and are `None` for a degenerate
+  input range or a result outside Q32.32. `x.checked_clamp(lo, hi)` is exact
+  and `None` when `lo > hi`, where `Ord::clamp` would panic.
 * **Power Eases and Steps (`bunny-ease/1`)**: `ease::power_in`, `power_out`
   and `power_in_out` (`t^n`, `1 - (1 - t)^n` and the two-halved in-out curve,
   `n` in `2..=5`) are each exact value rounded once to nearest, ties to even,

@@ -31,6 +31,7 @@ pub mod fixed_angle;
 pub mod fixed_divisor;
 pub mod fixed_q32_32;
 pub mod lerp;
+pub mod remap;
 pub mod u32_div_round_even;
 pub mod u32_ellipse_classify;
 

@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
+  `bunny-num` has. With default features off each crate is `#![no_std]` and
+  needs only `core` (no `alloc`), with every public item and the same bits;
+  the default build is unchanged. Each depends on the Bunny crates below it
+  with `default-features = false`, and its `std` feature turns theirs on. The
+  error types implement `core::error::Error`, which `std::error::Error`
+  re-exports. `docs/topics/no-std/` lists every `std` use the three crates had
+  (all `core` items under the same name: `fmt`, `ops`, `cmp`, `error`,
+  `array::from_fn`), and `code-dojo-no-std` builds, lints and tests each with
+  default features off for `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`
+  and the host (NOSTD-REQ-010 to -013, NOSTD-TP-010 to -017). Closes
+  flyingrobots/bunny#156.
+
 * `bunny-linalg`: matrix-side unprojection under `bunny-unproject/1`.
   `Viewport::try_unproject(coordinate, clip_from_view, view_from_world)` maps a
   continuous viewport coordinate in the closed viewport to a world-space
@@ -40,6 +53,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Additive: `classify`, `clip_segment` and `clip_polygon` are unchanged. See
   `docs/topics/plane-clipping/` (PC-REQ-014 to -019, PC-TP-025 to -037). Closes
   flyingrobots/bunny#162.
+
+* `bunny-num`: inverse lerp, remap and an exact checked clamp under
+  `bunny-lerp/1`. `FixedQ32_32::inverse_lerp(a, b, x)` is
+  `round_half_even((x - a) * 2^32 / (b - a))` on raw values: exactly `0` at
+  `a` and `1.0` at `b`, extrapolating, `None` for `a == b` or a result outside
+  Q32.32. `lerp(a, b, inverse_lerp(a, b, x))` is exactly `x` when
+  `|b - a| <= 1.0` and `inverse_lerp(a, b, lerp(a, b, t))` exactly `t` when
+  `|b - a| >= 1.0`, each within a stated bound otherwise.
+  `FixedQ32_32::remap(x, [in_lo, in_hi], [out_lo, out_hi])` rounds its exact
+  step once from a `u128` product (within half a raw unit whatever the
+  ranges), is exact at both ends, equals `lerp` and `inverse_lerp` on unit
+  ranges, and is `None` for `in_lo == in_hi` or a result outside Q32.32.
+  `x.checked_clamp(lo, hi)` is exact and `None` when `lo > hi`. Refs
+  flyingrobots/bunny#111.
+
+* `bunny-linalg`: conservative bounds for `bunny-curve/1`. `CurveBounds3 {
+  min, max }` is a closed box with `contains`. `CubicBezier3::control_bounds()`
+  is the per-axis minimum and maximum of the control points, exact, and
+  contains every `at(t)` as rounded, with no widening (a lerp with `t` in
+  `[0, 1]` cannot round outside its ends). `CubicBezier3::split_bounds(t)`
+  widens each half's control box by a derived 3 raw units and clips it to the
+  control box, so it contains the original's evaluations on that half's range;
+  `None` outside `[0, 1]`. `CatmullRom3::control_bounds()` is the union of the
+  segments' control boxes, not the box of the points. Closes
+  flyingrobots/bunny#152.
 
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
