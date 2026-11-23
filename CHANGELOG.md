@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-perf` builds with each feature group alone. Helpers shared by several
+  groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
+  now gated on the groups that use them, so the `cargo xtask perf` per-group
+  fallback no longer reports a buildable group as new. The full gate runs the
+  new `code-dojo-perf-groups` check, which builds the harness once per group
+  alone and once with all groups. Closes flyingrobots/bunny#272.
+
 * Code Dojo's dependency check holds every crate a deterministic crate
   depends on (normal and build edges, workspace and all features) to the
   scanned set: another deterministic crate at its own directory, or a
