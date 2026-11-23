@@ -9,6 +9,7 @@ This plan covers:
 
 - parsing, aggregation and comparison of `bunny-perf` output in `cargo xtask perf`
 - the `bunny-perf-evidence/1` file written by `--evidence`, and recomputing the report from it
+- the JSON Schemas that define each evidence line kind, and the writer's agreement with them
 - the regression threshold used by CI
 - building the harness against a revision that lacks newer feature groups
 - the fidelity rule that every optimization must satisfy
@@ -50,6 +51,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-011 | With `--evidence <file>`, `cargo xtask perf` writes every round of both sides (case, side, round, p50, p95, p99) as `bunny-perf-evidence/1` JSON Lines, from which the report table and the gate's floor p50s are recomputed exactly; the file is the same for the same rounds whatever order they were recorded in, and non-finite numbers are refused. | `README.md#evidence-files` |
 | PERF-REQ-012 | The evidence file names the base reference, the full base and candidate SHAs, the target triple, the flags (rounds, code alignment, `RUSTFLAGS`, harness arguments, runner, threshold) and whether the working tree was dirty by `git status --porcelain`. | `README.md#evidence-files` |
 | PERF-REQ-013 | Evidence is opt-in: without `--evidence` the command prints the same table, appends the same summary and exits with the same status as before, and an existing evidence file is never overwritten. | `README.md#evidence-files` |
+| PERF-REQ-014 | Each line kind of `bunny-perf-evidence/1` is defined by a JSON Schema (draft 2020-12) under `schemas/bunny/perf-evidence/v1/`: every line the writer produces validates against the schema for its kind, deliberately wrong lines do not, and the fields the writer emits are exactly the fields each schema requires, in the same order. | `README.md#evidence-files` |
 
 ```toml
 [[requirement]]
@@ -116,6 +118,11 @@ status = "active"
 id = "PERF-REQ-013"
 summary = "Evidence is opt-in: without `--evidence` the command prints the same table, appends the same summary and exits with the same status as before, and an existing evidence file is never overwritten."
 status = "active"
+
+[[requirement]]
+id = "PERF-REQ-014"
+summary = "Each line kind of `bunny-perf-evidence/1` is defined by a JSON Schema (draft 2020-12) under `schemas/bunny/perf-evidence/v1/`: every line the writer produces validates against the schema for its kind, deliberately wrong lines do not, and the fields the writer emits are exactly the fields each schema requires, in the same order."
+status = "active"
 ```
 
 Each optimization adds its equivalence or error-bound cases under PERF-REQ-001.
@@ -125,7 +132,12 @@ Each optimization adds its equivalence or error-bound cases under PERF-REQ-001.
 No external fixtures. Tests build synthetic `bunny-perf` output and manifests in memory. The
 evidence tests record constructed rounds through `Measured::record`, the same seam
 `run_interleaved` uses, so no harness is built or timed; the dirty flag is tested on
-constructed `git status --porcelain` text, never by dirtying the real tree.
+constructed `git status --porcelain` text, never by dirtying the real tree. The schema tests read the two
+committed schema files under `schemas/bunny/perf-evidence/v1/` and validate with a test-only
+validator for the subset of JSON Schema those files use (listed at the top of
+`xtask/src/perf_evidence/tests/schema.rs`), which refuses any other keyword instead of
+ignoring it. Both test files parse JSON with the test-only reader in
+`xtask/src/perf_evidence/json.rs`, which shares nothing with the writer.
 
 ## Test Cases
 
@@ -190,6 +202,10 @@ constructed `git status --porcelain` text, never by dirtying the real tree.
 | PERF-TP-063 | Evidence | PERF-REQ-012 | The host triple is the `host:` line of `rustc -vV`, with or without a carriage return; no line, no triple. | `xtask/src/perf_evidence/tests.rs::the_host_triple_comes_from_rustc_verbose_version` |
 | PERF-TP-064 | Evidence | PERF-REQ-013 | No `--evidence`, no evidence path; the option takes a value; an existing file is refused and a missing one accepted. | `xtask/src/perf.rs::tests::the_evidence_option_is_opt_in` |
 | PERF-TP-065 | Evidence | PERF-REQ-013 | Recording rounds accumulates the same runs as `add_run` did, and the report is `render` of `compare` with the heading labels `handle` used before; a malformed line is still an error. | `xtask/src/perf.rs::tests::the_report_is_rendered_as_before` |
+| PERF-TP-066 | Schema | PERF-REQ-014 | Every line the writer produces for the constructed cases (1, 2, 4, 5 and 7 rounds; clean, dirty and cross-target identities with `null` runner or threshold) validates against the schema for its `kind`: 15 build lines and more than 300 round lines. | `xtask/src/perf_evidence/tests/schema.rs::every_line_the_writer_produces_validates_against_its_kind_schema` |
+| PERF-TP-067 | Schema | PERF-REQ-014 | Real lines with one fault each fail with a violation naming the field: a missing field, an extra field, `side` = `head`, a string `p50`, a wrong `schema` id, a wrong `kind`, `round` 0 and 1.5, string `rounds`, a number in `harness_args`, a boolean `runner`, a string `max_regression`, a string `candidate_dirty`. | `xtask/src/perf_evidence/tests/schema.rs::deliberately_wrong_lines_fail_their_schema` |
+| PERF-TP-068 | Schema | PERF-REQ-014 | Each schema file parses, names draft 2020-12, is an object schema with `additionalProperties: false`, requires every property in property order, describes every property, and fixes `schema` and `kind` with `const`; every real line of the kind has exactly the required keys, in that order. Removing a field from `required`, or renaming or adding a field in the writer, fails this case. | `xtask/src/perf_evidence/tests/schema.rs::the_schema_files_are_well_formed_and_match_the_writer_fields` |
+| PERF-TP-069 | Schema | PERF-REQ-014 | The test validator refuses, rather than ignores, a keyword or form outside its stated subset: `pattern`, `format`, an unknown type, `additionalProperties: true`, a numeric `const`, `$ref`. | `xtask/src/perf_evidence/tests/schema.rs::the_validator_refuses_keywords_it_does_not_implement` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -729,6 +745,42 @@ requirements = ["PERF-REQ-013"]
 evidence = "test"
 test = "xtask/src/perf.rs::tests::the_report_is_rendered_as_before"
 oracle = "Recording rounds accumulates the same runs as `add_run` did, and the report is `render` of `compare` with the heading labels `handle` used before; a malformed line is still an error."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-066"
+requirements = ["PERF-REQ-014"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests/schema.rs::every_line_the_writer_produces_validates_against_its_kind_schema"
+oracle = "Every line the writer produces for the constructed cases (1, 2, 4, 5 and 7 rounds; clean, dirty and cross-target identities with `null` runner or threshold) validates against the schema for its `kind`: 15 build lines and more than 300 round lines."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-067"
+requirements = ["PERF-REQ-014"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests/schema.rs::deliberately_wrong_lines_fail_their_schema"
+oracle = "Real lines with one fault each fail with a violation naming the field: a missing field, an extra field, `side` = `head`, a string `p50`, a wrong `schema` id, a wrong `kind`, `round` 0 and 1.5, string `rounds`, a number in `harness_args`, a boolean `runner`, a string `max_regression`, a string `candidate_dirty`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-068"
+requirements = ["PERF-REQ-014"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests/schema.rs::the_schema_files_are_well_formed_and_match_the_writer_fields"
+oracle = "Each schema file parses, names draft 2020-12, is an object schema with `additionalProperties: false`, requires every property in property order, describes every property, and fixes `schema` and `kind` with `const`; every real line of the kind has exactly the required keys, in that order. Removing a field from `required`, or renaming or adding a field in the writer, fails this case."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-069"
+requirements = ["PERF-REQ-014"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests/schema.rs::the_validator_refuses_keywords_it_does_not_implement"
+oracle = "The test validator refuses, rather than ignores, a keyword or form outside its stated subset: `pattern`, `format`, an unknown type, `additionalProperties: true`, a numeric `const`, `$ref`."
 tier = "fast"
 status = "implemented"
 ```

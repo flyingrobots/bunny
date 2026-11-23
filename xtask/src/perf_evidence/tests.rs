@@ -1,15 +1,18 @@
 //! Tests for the `bunny-perf-evidence/1` file.
 //!
 //! The reader at the bottom of this file is written for these tests only. It parses the JSON
-//! Lines itself and recomputes the report table with no helper from `perf_report` (no shared
+//! Lines with the test-only `json` reader and recomputes the report table with no helper from `perf_report` (no shared
 //! median, minimum, floor, change, speedup or formatting code), so a table it reproduces byte
 //! for byte is a table any reader of the file could rebuild.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::json::{self, Json};
 use super::*;
 use crate::perf::{report, ReportScope};
 use crate::perf_report::Row;
+
+mod schema;
 
 const BASE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const CANDIDATE_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
@@ -404,115 +407,28 @@ fn number_of(value: &Value) -> &str {
     }
 }
 
-/// Parses one flat JSON object whose values are strings, numbers, booleans, `null` or arrays of
-/// strings: everything `bunny-perf-evidence/1` writes.
+/// Reads one evidence line, a flat JSON object whose values are strings, numbers, booleans,
+/// `null` or arrays of strings: everything `bunny-perf-evidence/1` writes.
 fn parse_object(line: &str) -> BTreeMap<String, Value> {
-    let mut reader = Reader { chars: line.chars().peekable() };
-    reader.expect('{');
-    let mut object = BTreeMap::new();
-    loop {
-        let key = reader.string();
-        reader.expect(':');
-        let value = reader.value();
-        assert!(object.insert(key, value).is_none(), "duplicate key in {line}");
-        match reader.next() {
-            ',' => {}
-            '}' => break,
-            other => panic!("unexpected {other:?} in {line}"),
-        }
-    }
-    assert!(reader.chars.next().is_none(), "trailing text in {line}");
-    object
-}
-
-struct Reader<'a> {
-    chars: std::iter::Peekable<std::str::Chars<'a>>,
-}
-
-impl Reader<'_> {
-    fn next(&mut self) -> char {
-        self.chars.next().expect("unexpected end of line")
-    }
-
-    fn expect(&mut self, wanted: char) {
-        assert_eq!(self.next(), wanted);
-    }
-
-    fn string(&mut self) -> String {
-        self.expect('"');
-        let mut text = String::new();
-        loop {
-            match self.next() {
-                '"' => return text,
-                '\\' => text.push(self.escape()),
-                c => {
-                    assert!(c >= ' ', "raw control character");
-                    text.push(c);
-                }
-            }
-        }
-    }
-
-    fn escape(&mut self) -> char {
-        match self.next() {
-            '"' => '"',
-            '\\' => '\\',
-            '/' => '/',
-            'n' => '\n',
-            'r' => '\r',
-            't' => '\t',
-            'b' => '\u{8}',
-            'f' => '\u{c}',
-            'u' => {
-                let hex: String = (0..4).map(|_| self.next()).collect();
-                char::from_u32(u32::from_str_radix(&hex, 16).expect("hex")).expect("a char")
-            }
-            other => panic!("bad escape \\{other}"),
-        }
-    }
-
-    fn value(&mut self) -> Value {
-        match self.chars.peek().copied() {
-            Some('"') => Value::Str(self.string()),
-            Some('[') => {
-                self.expect('[');
-                let mut items = Vec::new();
-                if self.chars.peek() == Some(&']') {
-                    self.expect(']');
-                    return Value::List(items);
-                }
-                loop {
-                    items.push(self.string());
-                    match self.next() {
-                        ',' => {}
-                        ']' => return Value::List(items),
-                        other => panic!("unexpected {other:?} in a list"),
-                    }
-                }
-            }
-            Some(_) => {
-                let mut word = String::new();
-                while let Some(&c) = self.chars.peek() {
-                    if c == ',' || c == '}' {
-                        break;
-                    }
-                    word.push(c);
-                    self.chars.next();
-                }
-                match word.as_str() {
-                    "true" => Value::Bool(true),
-                    "false" => Value::Bool(false),
-                    "null" => Value::Null,
-                    number => {
-                        assert!(
-                            number.chars().all(|c| c.is_ascii_digit() || "+-.eE".contains(c)),
-                            "not a number: {number}"
-                        );
-                        Value::Num(number.to_owned())
-                    }
-                }
-            }
-            None => panic!("missing value"),
-        }
-    }
+    let Json::Object(members) = json::parse(line).unwrap_or_else(|err| panic!("{err}: {line}"))
+    else {
+        panic!("not an object: {line}");
+    };
+    let flat = |value: Json| match value {
+        Json::String(text) => Value::Str(text),
+        Json::Number(text) => Value::Num(text),
+        Json::Bool(flag) => Value::Bool(flag),
+        Json::Null => Value::Null,
+        Json::Array(items) => Value::List(
+            items
+                .into_iter()
+                .map(|item| match item {
+                    Json::String(text) => text,
+                    other => panic!("a non-string list item {other:?} in {line}"),
+                })
+                .collect(),
+        ),
+        Json::Object(_) => panic!("a nested object in {line}"),
+    };
+    members.into_iter().map(|(key, value)| (key, flat(value))).collect()
 }

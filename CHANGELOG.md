@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an existing path and non-finite numbers. The performance chapter documents
   every field and says evidence lives under `docs/topics/performance/evidence/`,
   linked from each new ledger entry; existing entries are unchanged. Without
-  the option the command prints, appends and exits as before.
+  the option the command prints, appends and exits as before. Each line kind
+  is defined by a JSON Schema (draft 2020-12) in
+  `schemas/bunny/perf-evidence/v1/build.schema.json` and `round.schema.json`;
+  the tests validate every line the writer produces against them.
   Closes flyingrobots/bunny#238.
 
 * `bunny-linalg`: translate, rotate and scale composition under the contract

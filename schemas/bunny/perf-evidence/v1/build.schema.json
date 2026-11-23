@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bunny:perf-evidence:1:build",
+  "title": "bunny-perf-evidence/1 build line",
+  "description": "The first line of a cargo xtask perf --evidence file: the identity of the two builds and the options of the run. Properties are listed in the order the writer emits them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "base_ref",
+    "base_revision",
+    "candidate_revision",
+    "candidate_dirty",
+    "target",
+    "target_is_host",
+    "platform",
+    "rounds",
+    "align_code",
+    "rustflags",
+    "harness_args",
+    "runner",
+    "max_regression"
+  ],
+  "properties": {
+    "schema": {
+      "description": "The format identifier and version, carried by every line.",
+      "const": "bunny-perf-evidence/1"
+    },
+    "kind": {
+      "description": "The line kind: this is the build line.",
+      "const": "build"
+    },
+    "base_ref": {
+      "description": "The --base revision as given, such as origin/main.",
+      "type": "string"
+    },
+    "base_revision": {
+      "description": "The full commit SHA that base_ref resolved to; the report heading shows its first 12 digits.",
+      "type": "string"
+    },
+    "candidate_revision": {
+      "description": "The full commit SHA of HEAD of the working tree that was measured.",
+      "type": "string"
+    },
+    "candidate_dirty": {
+      "description": "Whether git status --porcelain --untracked-files=normal printed anything before the build (a tracked change or an untracked, unignored file).",
+      "type": "boolean"
+    },
+    "target": {
+      "description": "The --target triple as given, or the host triple from rustc -vV when none was given.",
+      "type": "string"
+    },
+    "target_is_host": {
+      "description": "True when no --target was given and target is the host triple.",
+      "type": "boolean"
+    },
+    "platform": {
+      "description": "The platform as the report heading names it.",
+      "type": "string"
+    },
+    "rounds": {
+      "description": "Interleaved rounds per side, as the report heading states.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "align_code": {
+      "description": "Whether --align-code was given.",
+      "type": "boolean"
+    },
+    "rustflags": {
+      "description": "The exact RUSTFLAGS both harness builds received, recorded as given.",
+      "type": "string"
+    },
+    "harness_args": {
+      "description": "The arguments passed through to every harness run (--filter, --samples and their values), in order.",
+      "type": "array",
+      "items": {
+        "description": "One argument.",
+        "type": "string"
+      }
+    },
+    "runner": {
+      "description": "The --runner command as given, or null when the harness ran directly.",
+      "type": ["string", "null"]
+    },
+    "max_regression": {
+      "description": "The --max-regression threshold in percent as given, or null when the gate was off.",
+      "type": ["number", "null"]
+    }
+  }
+}

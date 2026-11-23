@@ -242,4 +242,6 @@ pub(crate) fn host_triple(verbose_version: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+mod json;
+#[cfg(test)]
 mod tests;

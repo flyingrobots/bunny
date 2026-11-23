@@ -233,6 +233,17 @@ exponent, so a reader recovers the exact value the report used; a timing or thre
 not finite is refused rather than written. The file holds no clock time and no path the
 command adds itself. For the same rounds and identity the file is byte-for-byte the same.
 
+**The schemas are the definition.** Each line kind has a JSON Schema (draft 2020-12) in
+[`schemas/bunny/perf-evidence/v1/`](../../../schemas/bunny/perf-evidence/v1/):
+[`build.schema.json`](../../../schemas/bunny/perf-evidence/v1/build.schema.json) and
+[`round.schema.json`](../../../schemas/bunny/perf-evidence/v1/round.schema.json). They list
+every field as required, allow no others (`additionalProperties: false`), fix `schema` and
+`kind` with `const`, and distinguish integers from numbers. The tables below explain those
+fields; where they and the schema files disagree, the schema files are right. Tests validate
+every line the writer produces against them (`PERF-TP-066` to `PERF-TP-069`). A later
+incompatible change gets a new identifier (`bunny-perf-evidence/2`) and a new `v2` directory
+beside `v1`.
+
 The `build` line:
 
 | Key | Type | Meaning |
