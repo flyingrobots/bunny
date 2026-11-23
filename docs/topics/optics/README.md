@@ -1423,12 +1423,22 @@ throughput is the share divided by the probability, exactly 1.0 in every
 channel, and no rounding enters the weights. Total internal reflection
 reflects for every choice value. A reflectance that rounds to 1.0 short of
 the critical angle also reflects for every choice value (the refracted share
-is below `2^-33`).
+is below `2^-33`), and so does a ray that arrives against the exact face but
+along or behind the plane of the rounded normal (`m <= 0`, the grazing row
+above), for which no refraction is computed. A `Partial` reflectance below
+1.0 always has a refracted ray that some choice value takes.
 
-Radiance, as opposed to power, is multiplied by `(b / a)^2` when it enters a
-medium. That factor is not applied here: on a path that returns to the medium
-it started in, as a camera path through a closed glass object does, the
-factors cancel. A renderer that ends paths inside a medium must apply it.
+**The radiance factor is not applied.** The throughput of 1.0 is a weight for
+power. Radiance also changes with the index: a path traced from the camera
+that refracts from the medium of index `a` into the medium of index `b` must
+multiply its throughput by `(a / b)^2` to carry radiance. From air into glass
+(`a = 1.0`, `b = 1.5`) that is `4 / 9`, and from glass back into air `9 / 4`.
+Over a whole path the factors multiply to `(first index / last index)^2`, so
+they cancel on a path that enters a medium and leaves it again, as a camera
+path through a closed glass object does; a renderer needs the factor only
+when a path's two ends lie in media of different index. For light, which
+travels the other way, the factor is the reciprocal, `(b / a)^2` on entering
+index `b` from index `a`. `DielectricScatter::Refracted` states the same rule.
 
 **Reflected branch.** `try_specular_reflection(incoming, white)` with a base
 reflectance of 1.0 in every channel, for which Schlick's term is exactly 1.0
@@ -1453,13 +1463,19 @@ the ray never meets the plane of the triangle it left: not its own triangle,
 a coplanar neighbour or a coincident duplicate.
 
 For a hit the trace kernel reported, `j` is at most five. The floored
-distance puts the exact point at `hit.distance` less than one raw unit per
-axis before the true hit point, so less than `|N|_1` above the plane;
-`point_at` adds at most `|N|_1 / 2`; so the unstepped point is below
-`3 |N|_1 / 2 <= 9 |N_k| / 2` above the plane, and a stepped one at most
-`|N_k|`. The far-side start is therefore within 1.5 raw units of the true hit
-point on the other two axes and within 6.5 on the dominant axis (1.5 plus up
-to five steps). A surface closer than that behind the one hit may be skipped.
+distance is less than `2^-32` short of the true one, so with every direction
+component at most `2^32` raw (as `TraceRay::new` admits) the exact point at
+`hit.distance` is less than one raw unit per axis before the true hit point,
+so less than `|N|_1` above the plane; `point_at` adds at most `|N|_1 / 2`; so
+the unstepped point is below `3 |N|_1 / 2 <= 9 |N_k| / 2` above the plane,
+and a stepped one at most `|N_k|`. The far-side start is therefore within 1.5
+raw units of the true hit point on the other two axes and within 6.5 on the
+dominant axis (1.5 plus up to five steps). `TraceRay::from_ray` also admits a
+component of `2^32 + 1` raw; the per-axis gap is then below `1 + 2^-32`, the
+unstepped point below `(9 / 2 + 3 / 2^32) |N_k|` above the plane, still below
+`5 |N_k|`, so `j` is still at most five, and the 1.5 and 6.5 distances each
+grow by less than `2^-31`. A surface closer than that behind the one hit may
+be skipped.
 The rule uses only the hit's exact plane, its point and a step count, so it
 does not depend on the triangle.
 

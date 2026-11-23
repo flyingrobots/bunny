@@ -232,9 +232,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw-unit steps from the hit's start point. A slab with parallel faces
   returns the original direction within `1 + 6 h / c` raw units (index ratio
   `h`, rarer-side cosine `c`). Two new `SecondaryRayError` variants,
-  `ChoiceOutsideUnitInterval` and `RefractionAboveSurface`. Radiance scaling
-  on entering a medium, rough transmission, dispersion and absorption are not
-  modelled. No existing output changes. Closes flyingrobots/bunny#372.
+  `ChoiceOutsideUnitInterval` and `RefractionAboveSurface`. The radiance
+  factor of a refraction is not applied: a camera path that refracts from
+  index `a` into index `b` multiplies its throughput by `(a / b)^2` to carry
+  radiance, and the factors cancel on a path that enters a medium and leaves
+  it. Rough transmission, dispersion and absorption are not modelled. No
+  existing output changes. Closes flyingrobots/bunny#372.
 
 * `bunny-broadphase`: `compact_closest_hit_counted` and
   `compact_any_hit_counted` return the result of `compact_closest_hit` and

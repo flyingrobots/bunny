@@ -86,7 +86,11 @@ every buffer.
   reflection, so each branch's throughput is exactly 1.0; the refracted
   direction is within one raw unit of Snell's law about the frame normal, and
   its ray starts at the nearest point strictly on the far side of the exact
-  plane. The result is a `DielectricScatter` holding a `SpecularSample`.
+  plane. The result is a `DielectricScatter` holding a `SpecularSample`. The
+  throughput of 1.0 is a weight for power: a camera path that refracts from
+  index `a` into index `b` must multiply it by `(a / b)^2` to carry radiance
+  (`4 / 9` from air into glass at 1.5); the factors cancel on a path that
+  enters a medium and leaves it.
 * `interpolate_uv` and `bilinear` (`bunny-texture-bilinear/1`): a
   triangle's texture coordinates at a hit, rounded once from the exact
   barycentric interpolation, and the four texels and weights of a bilinear
