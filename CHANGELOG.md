@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`: the ray footprint at a triangle hit under the contract
+  identity `bunny-ray-footprint/1` (`RAY_FOOTPRINT_ID`).
+  `PinholeCamera::footprint(sample, surface)` and
+  `ThinLensCamera::footprint(sample, lens_sample, surface)` return
+  `(du/dx, dv/dx)` and `(du/dy, dv/dy)` as `TextureDerivatives`: the change
+  of the texture coordinates of a `TexturedTriangle` from where the sample's
+  ray meets the triangle's plane to where the camera's rays through the same
+  sub-pixel offset one column right and one row down meet it (past the image
+  edge by the same image-plane formula; the thin lens holds its lens point
+  fixed). Each component is the exact difference, computed in 320-bit
+  integers, rounded once to nearest with ties to even. A neighbouring ray
+  parallel to the plane, meeting it behind the origin or giving a derivative
+  outside Q32.32 returns `RayFootprint::Unbounded` with its `FootprintAxis`
+  and `UnboundedReason`; a degenerate triangle, a sample or lens sample
+  outside its range, and a hit ray parallel to the plane or with the plane
+  not ahead return a `RayFootprintError`. Closes flyingrobots/bunny#383.
+
 * `bunny-num`: a default `std` feature. With default features off the crate is
   `#![no_std]` and needs only `core`, with every public item and the same
   bits; the default build is unchanged. `FloatConversionError` implements

@@ -6,6 +6,7 @@ use bunny_num::FixedQ32_32;
 use bunny_query::{TraceRay, TRACE_COORD_LIMIT_RAW};
 
 use crate::basis::Basis;
+use crate::footprint::{measure, RayFootprint, RayFootprintError, TexturedTriangle};
 use crate::plane::{Lens, Offset, Plane, Wide3};
 use crate::CameraError;
 
@@ -114,6 +115,35 @@ impl PinholeCamera {
         TraceRay::new(self.position, FixedVec3::new(dx?, dy?, dz?))
     }
 
+    /// The texture-coordinate footprint of `sample`'s pixel on `surface`
+    /// (`bunny-ray-footprint/1`): how far the texture coordinates change from where `sample`'s
+    /// ray meets the triangle's plane to where the ray one pixel to the right, and the ray one
+    /// pixel down, meet it.
+    ///
+    /// The three rays are this camera's: `sample`'s and those through the same sub-pixel offset
+    /// in the next column and the next row (for [`PixelSample::centre`], the neighbouring pixel
+    /// centres). Past the last column or row the neighbour follows the same image-plane formula
+    /// and floor. Each meets the triangle's plane, not only the triangle. Each derivative is the
+    /// exact difference of the exact texture coordinates, rounded once to nearest raw unit, ties
+    /// to even: within half a raw unit. See `docs/topics/optics/README.md#ray-footprint`.
+    ///
+    /// # Errors
+    /// In this order: [`RayFootprintError::SampleOutsideImage`] when [`Self::ray`] would give
+    /// `None`; [`RayFootprintError::RayParallelToPlane`] and
+    /// [`RayFootprintError::PlaneNotAhead`] when `sample`'s ray does not meet the plane ahead.
+    /// A neighbouring ray that is parallel, meets the plane behind, or gives a derivative
+    /// outside Q32.32 is a [`RayFootprint::Unbounded`] result, not an error.
+    pub fn footprint(
+        &self,
+        sample: PixelSample,
+        surface: &TexturedTriangle,
+    ) -> Result<RayFootprint, RayFootprintError> {
+        let rays = neighbour_directions(&self.plane, &self.lens, sample)
+            .ok_or(RayFootprintError::SampleOutsideImage)?;
+        let [x, y, z] = [self.position.x, self.position.y, self.position.z];
+        measure([x, y, z].map(|c| i128::from(c.raw())), rays, surface)
+    }
+
     /// The position and the image-plane inputs, for the thin-lens camera built on this one.
     pub(crate) const fn parts(&self) -> (FixedVec3, Lens) {
         (self.position, self.lens)
@@ -204,6 +234,18 @@ pub fn sample_direction(plane: &Plane, lens: &Lens, sample: PixelSample) -> Opti
     // Rows grow downward, against `up`.
     let y = -doubled_offset(sample.y, sample.sub_y, lens.height)?;
     Some(plane.direction(Offset { x, y }))
+}
+
+/// The raw directions of `sample` and of the same sub-pixel offset one column right and one
+/// row down, before narrowing, or `None` when `sample` is outside the image. A neighbour past
+/// the last column or row follows the same formula: its doubled offset is `2^33` raw on. Every
+/// component is below `2^34` in magnitude (`docs/topics/optics/README.md#ray-footprint`).
+pub fn neighbour_directions(plane: &Plane, lens: &Lens, sample: PixelSample) -> Option<[Wide3; 3]> {
+    let x = doubled_offset(sample.x, sample.sub_x, lens.width)?;
+    let y = -doubled_offset(sample.y, sample.sub_y, lens.height)?;
+    let pixel = 2 * ONE_RAW;
+    // Rows grow downward, against `up`, so the next row is one pixel lower along `up`.
+    Some([(x, y), (x + pixel, y), (x, y - pixel)].map(|(x, y)| plane.direction(Offset { x, y })))
 }
 
 /// The raw Q32.32 value of `2 * (index + sub) - size`, or `None` outside the image.

@@ -107,6 +107,16 @@ every buffer.
   barycentric interpolation, and the four texels and weights of a bilinear
   lookup (texel centres at `(i + 1/2) / size`, `TextureWrap::Repeat` or
   `Clamp` per axis, weights summing to exactly 1.0), as a `BilinearTaps`.
+* `PinholeCamera::footprint` and `ThinLensCamera::footprint`
+  (`bunny-ray-footprint/1`): how far the texture coordinates of a
+  `TexturedTriangle` change across one pixel to the right and one pixel down,
+  from the camera's rays through the same sub-pixel offset in the next column
+  and row (the thin lens holding its lens point fixed) met with the
+  triangle's plane. Each derivative is the exact difference rounded once to
+  nearest, within half a raw unit. A neighbouring ray parallel to the plane,
+  meeting it behind the origin, or giving a derivative outside Q32.32 is a
+  typed `RayFootprint::Unbounded` result; invalid inputs return a
+  `RayFootprintError`.
 * `SurfaceHit::ggx_reflection` (`bunny-ggx-conductor/1`): one sample of a
   rough metal. A GGX microfacet normal visible from the incoming ray (Heitz
   2018) from one sampler pair, the reflection about it (`reflect`, shared with
