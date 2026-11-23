@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `xtask`: the `repo_respect` tests no longer read `GITHUB_BASE_REF` or
+  `CODE_DOJO_BASE_REF` through the code under test. The base ref is resolved
+  once at the entry points and passed down, so the tests pass on a stacked pull
+  request whose base branch is absent from their temporary repository.
 * `bunny-perf` builds with each feature group alone. Helpers shared by several
   groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
   now gated on the groups that use them, so the `cargo xtask perf` per-group
