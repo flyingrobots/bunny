@@ -115,7 +115,7 @@ impl Signed {
     }
 
     /// The sign: `Less` below zero, `Equal` at zero, `Greater` above.
-    #[allow(dead_code, reason = "used by the thin-lens tests only")]
+    #[allow(dead_code, reason = "used by the thin-lens and ray-footprint tests only")]
     pub(crate) fn sign(&self) -> Ordering {
         if self.magnitude == Big::new(0) {
             Ordering::Equal

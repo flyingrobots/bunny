@@ -85,7 +85,13 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - for the [point light](#point-light) (`bunny-point-light/1`): `PointLight`
   (`new`, `position`, `intensity`, `irradiance`), `SurfaceHit`
   (`point_light_sample`), `LightSample::shadow_t_max`, `PointLightError`,
-  `MIN_LIGHT_DISTANCE_RAW` and `POINT_LIGHT_ID`.
+  `MIN_LIGHT_DISTANCE_RAW` and `POINT_LIGHT_ID`;
+- for the [ray footprint](#ray-footprint) (`bunny-ray-footprint/1`):
+  `PinholeCamera::footprint`, `ThinLensCamera::footprint`,
+  `TexturedTriangle` (`new`, `triangle`, `uvs`), `TextureDerivatives`
+  (`new`, `dx`, `dy`), `RayFootprint` (`Bounded`, `Unbounded`),
+  `FootprintAxis` (`Right`, `Down`), `UnboundedReason` (`Parallel`, `Behind`,
+  `TooLarge`), `RayFootprintError` and `RAY_FOOTPRINT_ID`.
 
 Evidence is listed in the [test plan](test-plan.md). Rough (frosted)
 transmission, dispersion, absorption inside a medium, the evaluation of a
@@ -1776,6 +1782,138 @@ is not part of this identity.
 
 **Refusals.** `bilinear` returns `None` when `width` or `height` is zero.
 Any `uv`, negative or far outside `[0, 1)`, is accepted.
+
+## Ray Footprint
+
+`PinholeCamera::footprint(sample, surface)` and
+`ThinLensCamera::footprint(sample, lens_sample, surface)` give how far the
+texture coordinates at a triangle hit change across one pixel to the right
+and one pixel down: `dx = (du/dx, dv/dx)` and `dy = (du/dy, dv/dy)` in raw
+Q32.32 texture units per pixel. Their identity is `bunny-ray-footprint/1`
+(`RAY_FOOTPRINT_ID`). Choosing a mip level or filtering a pattern from the
+footprint is not part of this identity, and neither are footprints after a
+bounce or on the analytic shapes.
+
+**The surface.** `TexturedTriangle::new(triangle, uvs)` pairs a
+`TraceTriangle` with the texture coordinates of `v0`, `v1` and `v2` (each a
+`FixedVec2`, `x` is `u` and `y` is `v`). It refuses a triangle whose
+`N = (v1 - v0) x (v2 - v0)` is exactly zero
+(`RayFootprintError::DegenerateTriangle`): collinear or coincident vertices
+span no plane. Any texture coordinates are accepted: equal or collinear ones
+give zero or parallel derivatives, which are values, not refusals.
+
+**The three rays.** The hit is named by the sample whose ray met the
+triangle, not by a `TriangleHit`. The kernel uses three of the camera's rays:
+
+- the sample's own ray, the one `ray` returns;
+- the ray through the same sub-pixel offset in the next column, `x + 1`;
+- the ray through the same sub-pixel offset in the next row, `y + 1`.
+
+For `PixelSample::centre(x, y)` the neighbours are the rays through the
+centres of the neighbouring pixels. Each direction is the camera's, bit for
+bit: the floor formula of [Ray Generation](#ray-generation) at the
+neighbour's doubled offset, `2^33` raw (one pixel, doubled) on from the
+sample's. Past the last column or row the neighbour follows the same formula
+and the same floor, beyond the image rectangle; no `TraceRay` is built for
+it. A thin-lens camera holds the lens point fixed: all three rays start at
+the lens point of `lens_sample`, `position + o`, and each direction is its
+pinhole direction minus the same correction `c`
+([Thin-Lens Camera](#thin-lens-camera)). With aperture 0 the thin-lens
+footprint is the pinhole camera's, bit for bit.
+
+**The definition.** Each ray `(O, D)`'s line meets the triangle's plane, not
+only the triangle, at `t = ((v0 - O) . N) / (D . N)`. The point has
+barycentric weights `(u, v)` on the plane (negative outside the triangle) and
+texture coordinates `T = t0 + u (t1 - t0) + v (t2 - t0)`, all exact
+rationals. Then
+
+```text
+dx = T(right) - T(hit)        dy = T(down) - T(hit)
+```
+
+and each of the four components is that exact difference rounded once to
+nearest raw unit, ties to even. **Bound:** every component is within half a
+raw unit of the exact difference for the camera's three rays. The footprint
+is a difference across one pixel, not a derivative at a point: on a plane
+facing the camera the two agree, and on a tilted plane it is the secant from
+the hit to the neighbour.
+
+**The computation.** With `w = O - v0`, `e1 = v1 - v0`, `e2 = v2 - v0`,
+`A = e2 x w`, `B = w x e1` and `C = e2 x e1 = -N`, each ray has
+`u = (D . A) / (D . C)` and `v = (D . B) / (D . C)` (the numerators of the
+exact triangle test). For the hit ray `D` and a neighbour `D'`, each
+component of the difference is
+
+```text
+((t1 - t0) PA + (t2 - t0) PB) / ((D' . C) (D . C))
+PA = (D' . A)(D . C) - (D . A)(D' . C)
+PB = (D' . B)(D . C) - (D . B)(D' . C)
+```
+
+with `t1 - t0` and `t2 - t0` that component's texture-coordinate
+differences. Every value is exact: the vectors and the projections in
+`i128`, the rest in 320-bit two's complement integers, and the quotient by
+exact binary long division of the magnitude, 64 steps, then the one
+rounding. The denominator is positive whenever a quotient is formed.
+
+**Widths.** No intermediate wraps, for every accepted camera, sample,
+triangle and texture coordinates:
+
+| Value | Bound | Held in |
+| --- | --- | --- |
+| Direction components of all three rays | below `2^34` (shown below the table) | `i128` |
+| `w`, `e1`, `e2` components | below `2^41` (trace domain) | `i128` |
+| `A`, `B`, `C` components | below `2^83` | `i128` |
+| `D . A`, `D . B`, `D . C` | below `2^119` | `i128` |
+| `w . C` | below `2^126` | `i128` |
+| `PA`, `PB` | below `2^239` | 320 bits |
+| Texture-coordinate differences | below `2^64` | `i128` |
+| Numerator | below `2^304` | 320 bits |
+| Denominator times `2^64` | below `2^302` | 320 bits |
+
+The direction bound: the scale rule keeps every corner direction of the
+image rectangle within 1.0 per component (`2^32` raw; for a thin lens
+within `1.0 - m_k`). Before its floor a direction is an affine function of
+the doubled offset, so along one axis its change over one pixel is its
+change from one edge of the rectangle to the other divided by the image
+size: at most `2^33 + 1` raw. A neighbour is at most one pixel past the
+rectangle, so it is within `3 * 2^32 + 2` raw on each component; a thin
+lens's correction (at most `m_k`) keeps it there. That is below `2^34`.
+
+**Refusals.** Errors (`RayFootprintError`), checked in this order:
+
+| Refusal | When, exactly |
+| --- | --- |
+| `SampleOutsideImage` | the camera's `ray` would return `None` for the sample: a column or row at or past the image size, or a sub-pixel offset outside `[0, 1)` |
+| `LensSampleOutsideUnitSquare` | a thin-lens camera's lens-sample coordinate is outside `[0, 1)` |
+| `RayParallelToPlane` | the sample's own ray has `D . N` exactly zero |
+| `PlaneNotAhead` | `(v0 - O) . N` is zero (the ray origin is on the plane) or has the sign opposite to `D . N`, so `t <= 0` |
+
+`DegenerateTriangle` is returned by `TexturedTriangle::new`.
+
+**Unbounded footprints.** A neighbouring ray that does not meet the plane
+ahead gives `Ok(RayFootprint::Unbounded { axis, reason })`, a result and not
+an error: the footprint is wider than any finite one, and a caller filters
+with the widest it has. The right neighbour (`FootprintAxis::Right`) is
+checked first, then the down neighbour (`FootprintAxis::Down`); for each:
+
+| Reason | When, exactly |
+| --- | --- |
+| `Parallel` | `D' . N` is exactly zero |
+| `Behind` | `D' . N` has the sign opposite to `D . N`: the neighbour's line meets the plane behind the origin (`t' < 0`; `t' = 0` cannot happen once the origin is off the plane) |
+| `TooLarge` | `D' . N` has the sign of `D . N`, but a component rounds outside `i64` (`u` checked before `v`) |
+
+The thresholds are exact integers. One raw unit of sub-pixel offset either
+side of a neighbour parallel to the plane gives, in turn, a bounded (or
+`TooLarge`) footprint, `Parallel` and `Behind` (OPTICS-TP-217). On the
+plane `z = -2 + g y` seen from pixel `(1, 1)` of a 4 by 4 camera with
+tangent 1 looking down `-z`, the down neighbour has slope `-1/4`: the long
+axis `dv/dy = -1 / ((1 - g/4)(1 + g/4))` grows without bound as `g` nears 4,
+the footprint is `TooLarge` once it no longer fits, `Parallel` at `g = 4`
+and `Behind` past it (OPTICS-TP-212).
+
+**Cost.** Six `i128` cross products, nine dot products and four 320-bit
+quotients of 64 steps each. No timing is claimed.
 
 ## GGX Rough Conductor
 

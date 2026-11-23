@@ -92,7 +92,8 @@ fn surface(vertices: [Raw3; 3], uvs: Uvs) -> TexturedTriangle {
     TexturedTriangle::new(triangle, uvs).expect("a triangle with a plane")
 }
 
-fn spec(position: Raw3, look: Raw3, up: Raw3, tan: i64, size: [u32; 2]) -> CameraSpec {
+/// A camera spec from `[position, look, up]`, the raw tangent and `[width, height]`.
+fn spec([position, look, up]: [Raw3; 3], tan: i64, size: [u32; 2]) -> CameraSpec {
     CameraSpec {
         position: vec3(position),
         look: vec3(look),
@@ -256,7 +257,7 @@ fn oracle(rays: [&TraceRay; 3], scene: &Scene) -> Result<RayFootprint, RayFootpr
 /// A camera at the origin looking down `-z` with up `+y` (so right is `+x`), tangent `tan`
 /// raw, a `side` by `side` image.
 fn level_camera(tan: i64, side: u32) -> PinholeCamera {
-    let camera = spec([0; 3], [0, 0, -ONE], [0, ONE, 0], tan, [side, side]);
+    let camera = spec([[0; 3], [0, 0, -ONE], [0, ONE, 0]], tan, [side, side]);
     PinholeCamera::new(&camera).expect("a valid camera")
 }
 
@@ -265,7 +266,7 @@ fn level_camera(tan: i64, side: u32) -> PinholeCamera {
 fn facing_plane(depth: i64, scale: i64) -> TexturedTriangle {
     let side = 8 * ONE;
     let corner = |x: i64, y: i64| [x, y, -depth];
-    let uv = |x: i64| i64::try_from(i128::from(x) * i128::from(scale) >> 32).expect("small");
+    let uv = |x: i64| i64::try_from((i128::from(x) * i128::from(scale)) >> 32).expect("small");
     let vertices = [corner(-side, -side), corner(side, -side), corner(-side, side)];
     surface(vertices, vertices.map(|v| [uv(v[0]), uv(v[1])]))
 }
@@ -283,7 +284,7 @@ fn optics_tp_210_a_plane_facing_the_camera_gives_the_closed_form_footprint() {
         {
             let plane = facing_plane(depth, scale);
             // Hand: d (u) / dx = scale depth 2 tan / height, exactly, at every pixel.
-            let step = i64::try_from(i128::from(depth) * i128::from(scale) >> 32).expect("fits")
+            let step = i64::try_from((i128::from(depth) * i128::from(scale)) >> 32).expect("fits")
                 >> per_pixel_shift;
             for (x, y) in (0..side).flat_map(|x| (0..side).map(move |y| (x, y))) {
                 let got = camera.footprint(PixelSample::centre(x, y), &plane).expect("a hit");
@@ -388,7 +389,7 @@ fn seeded_spec(seeds: &mut Seeds, min_side: i64) -> CameraSpec {
     let size = size.map(|s| u32::try_from(s).expect("positive"));
     let (position, look, up) =
         (seeds.triple(1 << 38), seeds.triple(1 << 36), seeds.triple(1 << 36));
-    spec(position, look, up, seeds.range(1 << 20, 4 * ONE), size)
+    spec([position, look, up], seeds.range(1 << 20, 4 * ONE), size)
 }
 
 /// A sample whose right and down neighbours are inside the image (`width, height >= 2`).
@@ -403,8 +404,9 @@ fn neighbours(sample: PixelSample) -> [PixelSample; 3] {
 }
 
 fn add_scaled(origin: Raw3, direction: Raw3, scale: i64) -> Raw3 {
-    let at =
-        |o: i64, d: i64| o + i64::try_from(i128::from(d) * i128::from(scale) >> 32).expect("near");
+    let at = |o: i64, d: i64| {
+        o + i64::try_from((i128::from(d) * i128::from(scale)) >> 32).expect("near")
+    };
     [at(origin[0], direction[0]), at(origin[1], direction[1]), at(origin[2], direction[2])]
 }
 
@@ -450,7 +452,7 @@ impl Tally {
         match outcome {
             Ok(RayFootprint::Bounded(_)) => self.bounded += 1,
             Ok(RayFootprint::Unbounded { reason: UnboundedReason::Parallel, .. }) => {
-                self.parallel += 1
+                self.parallel += 1;
             }
             Ok(RayFootprint::Unbounded { reason: UnboundedReason::Behind, .. }) => self.behind += 1,
             Ok(RayFootprint::Unbounded { reason: UnboundedReason::TooLarge, .. }) => {
@@ -551,8 +553,8 @@ fn optics_tp_216_neighbours_past_the_image_edge_follow_the_image_plane_formula()
         let (position, look, up) =
             (seeds.triple(1 << 38), seeds.triple(1 << 36), seeds.triple(1 << 36));
         let tan = |rows: u32| per_row * i64::from(rows);
-        let small = spec(position, look, up, tan(size[1]), size);
-        let large = spec(position, look, up, tan(size[1] + 2), size.map(|s| s + 2));
+        let small = spec([position, look, up], tan(size[1]), size);
+        let large = spec([position, look, up], tan(size[1] + 2), size.map(|s| s + 2));
         let (Ok(small), Ok(large)) = (PinholeCamera::new(&small), PinholeCamera::new(&large))
         else {
             continue;
@@ -584,15 +586,16 @@ fn optics_tp_216_neighbours_past_the_image_edge_follow_the_image_plane_formula()
 // --- Thresholds one raw unit either side, refusals and extremes ----------------------------
 
 /// A camera at the origin looking along `+x` with up `+z` (so right is `-y`), tangent 1 and a
-/// 2 by 2 image. Pixel (0, 0) at sub-pixel offset `(sx, sy)` has the ray
-/// `(1, 1 - sx, 1 - sy)` and pixel (0, 1) the ray `(1, 1 - sx, -sy)`, in raw units of `2^-32`.
+/// 2 by 2 image. Pixel (0, 0) at raw sub-pixel offset `(sx, sy)` has the raw direction
+/// `(2^32, 2^32 - sx, 2^32 - sy)` and pixel (0, 1) the direction `(2^32, 2^32 - sx, -sy)`.
 fn horizon_camera() -> PinholeCamera {
-    let camera = spec([0; 3], [ONE, 0, 0], [0, 0, ONE], ONE, [2, 2]);
+    let camera = spec([[0; 3], [ONE, 0, 0], [0, 0, ONE]], ONE, [2, 2]);
     PinholeCamera::new(&camera).expect("a valid camera")
 }
 
-/// The plane through `(0, 0, height)` with normal `64 L (0, 1, 2^32 - 1)` (`L` 64 units):
-/// `D . N` is `64 L ((1 - sx) + (2^32 - 1)(-sy))` raw for the ray `(1, 1 - sx, -sy)`.
+/// The plane through `(0, 0, height)` with normal `64 L (0, 1, 2^32 - 1)` (`L` 64 units raw):
+/// for the direction `(2^32, 2^32 - sx, -sy)`, `D . N = 64 L ((2^32 - sx) - (2^32 - 1) sy)`,
+/// which is `64 L (1 - sx)` at `sy = 1`.
 fn steep_plane(height: i64, uvs: Uvs) -> ([Raw3; 3], Uvs) {
     let side = 64 * ONE;
     let v0 = [0, 0, height];
@@ -668,7 +671,7 @@ fn optics_tp_218_invalid_inputs_are_refused_in_order() {
         assert_eq!(pinhole.footprint(sample, &plane), Err(RayFootprintError::SampleOutsideImage));
     }
     let lens = ThinLensSpec {
-        camera: spec([0; 3], [0, 0, -ONE], [0, ONE, 0], ONE, [4, 4]),
+        camera: spec([[0; 3], [0, 0, -ONE], [0, ONE, 0]], ONE, [4, 4]),
         aperture_radius: fixed(ONE / 4),
         focus_distance: fixed(ONE),
     };
@@ -715,19 +718,22 @@ fn optics_tp_219_extreme_cameras_triangles_and_coordinates_neither_wrap_nor_pani
     let mut seeds = Seeds(FOOTPRINT_SEED + 219);
     println!("seed {FOOTPRINT_SEED:#x} + 219");
     let corners = [-LIMIT, LIMIT];
-    let mut tally = Tally::default();
+    let (mut tally, mut lenses) = (Tally::default(), 0);
     for size in [[1, 1], [1 << 15, 1], [1, 1 << 15], [1 << 15, 1 << 15], [3, 2]] {
-        for case in 0..40 {
+        for _ in 0..40 {
             let position = [0; 3].map(|_| corners[usize::try_from(seeds.below(2)).expect("0, 1")]);
             let (look, up) = (seeds.triple(1 << 36), seeds.triple(1 << 36));
-            let spec = spec(position, look, up, bunny_optics::TAN_HALF_FOV_LIMIT_RAW, size);
+            let spec = spec([position, look, up], bunny_optics::TAN_HALF_FOV_LIMIT_RAW, size);
             let Ok(camera) = PinholeCamera::new(&spec) else { continue };
+            // The lens disc must stay inside the trace domain: pull the lens centre in by 2^31.
+            let inward = position.map(|c| c - c.signum() * (1 << 31));
             let lens = ThinLensSpec {
-                camera: spec,
+                camera: CameraSpec { position: vec3(inward), ..spec },
                 aperture_radius: fixed(seeds.range(0, 1 << 30)),
                 focus_distance: fixed(seeds.range(1, 1 << 20)),
             };
             let thin = ThinLensCamera::new(&lens).ok();
+            lenses += u32::from(thin.is_some());
             let vertices = [(); 3]
                 .map(|()| [0; 3].map(|_| corners[usize::try_from(seeds.below(2)).expect("0, 1")]));
             let extremes = [i64::MIN, i64::MAX, 0, -1];
@@ -748,12 +754,12 @@ fn optics_tp_219_extreme_cameras_triangles_and_coordinates_neither_wrap_nor_pani
                     }
                 }
             }
-            let _ = case;
         }
     }
-    println!("{tally:?}");
+    println!("{tally:?}; {lenses} thin-lens cameras");
     let total = tally.bounded + tally.parallel + tally.behind + tally.too_large + tally.refused;
     assert!(total >= 1_000 && tally.bounded > 0 && tally.too_large > 0, "{tally:?}");
+    assert!(lenses >= 50, "only {lenses} thin-lens cameras");
 }
 
 fn triangle_of(v: [Raw3; 3]) -> TraceTriangle {

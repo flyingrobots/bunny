@@ -43,7 +43,21 @@ Generated artifacts:
 None.
 
 Checks run:
-Recorded with the commit that implements the kernel.
+First commit (tests and planned cases only): cargo test --locked -q -p bunny-optics --test
+ray_footprint_tests fails to compile (the kernel does not exist); topic-docs and repo-respect
+check --staged clean.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (113 test
+result lines, every one `ok`); cargo run --locked -p xtask -- code-dojo-generated;
+code-dojo-rust --all; code-dojo-determinism --enforce; code-dojo-perf-groups; topic-docs;
+repo-respect check --branch. All clean. cargo clippy --locked -p bunny-optics --lib and --test
+ray_footprint_tests with -D warnings: clean (other test targets report lints that exist only
+on 1.100.0).
+Mutations: fifteen, each applied to the source, run with cargo test --locked -q -p
+bunny-optics --no-fail-fast --test ray_footprint_tests --test thin_lens_tests --test
+camera_tests --lib, and restored; each failed at least one case (the test plan's table).
+Not run locally: wasm-pack (not installed; CI's WebAssembly job runs it), cargo deny and
+markdownlint-cli2 (not installed; CI's Dojo job runs them).
 
 Known risks:
 The footprint is a difference across one pixel (a secant), not a derivative at the hit; the
