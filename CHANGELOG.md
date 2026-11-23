@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-num` and `bunny-linalg`: exact interpolation and ratios under the
+  contract identity `bunny-lerp/1` (`LERP_CONTRACT_ID`).
+  `FixedQ32_32::lerp(a, b, t)` is `a + round_half_even((b - a) * t / 2^32)`
+  on raw values from an exact `i128` step: exactly `a` at `t = 0` and `b` at
+  `t = 1.0`, monotone in `t` (strictly when `|b - a| >= 1.0`), extrapolating
+  outside `[0, 1]`, and `None` only when the result is outside Q32.32.
+  `FixedQ32_32::from_ratio(n, d)` rounds `n * 2^32 / d` to nearest for `u32`
+  operands, `None` for `d = 0` or a result of `2^31` or more.
+  `FixedVec3::lerp` and `lerp_channels` (three `FixedQ32_32` channels, no
+  colour space assumed) apply the scalar lerp per component. Closes
+  flyingrobots/bunny#303.
+
 * `bunny-query`: `ShapeFrame`, the rigid frame an analytic shape is placed
   with, under the contract identity `bunny-shape-frame/1`
   (`SHAPE_FRAME_ID`). `ShapeFrame::new` takes three right-handed unit axes
@@ -181,6 +193,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most 1/128 unit (`MIN_LIGHT_DISTANCE_RAW`, raw `2^25`) from the light is
   refused with `PointLightError::TooNear`, not divided by zero. No existing
   output changes. Closes flyingrobots/bunny#365.
+
+* `ThinLensCamera` (`bunny-thin-lens/1`, `THIN_LENS_ID`) in `bunny-optics`:
+  a `ThinLensSpec` (a pinhole `CameraSpec`, an aperture radius and a focus
+  distance) gives rays from a point of the lens disc through each sample's
+  focus-plane point. `ray(sample, lens_sample)` takes the lens point from one
+  sampler pair the caller chooses, mapped by `lens_disc_point` (radius
+  `sqrt(u (1 - 2^-28))`, angle `v` turns; strictly inside the unit disc). The
+  direction is the pinhole direction minus the lens offset over
+  `focus * 2^k`, rounded once, so each ray passes its focus-plane point within
+  `focus * 2^k * (3/2 + 2^-17)` raw units on each axis; with aperture 0 every
+  ray equals `PinholeCamera::ray` bit for bit by the same arithmetic.
+  A non-positive focus distance, a negative aperture, a lens reaching outside
+  the trace domain and an unrepresentable lens are refused with
+  `ThinLensError`. `PinholeCamera` output is unchanged. Closes
+  flyingrobots/bunny#364.
 
 * `bunny-query`: `TraceCylinder` and `TraceRay::hit_cylinder`, the
   trace-domain ray-cylinder kernel under the contract `bunny-ray-cylinder/1`

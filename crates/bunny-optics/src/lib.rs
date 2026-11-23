@@ -19,6 +19,11 @@
 //! ray. Directions are not normalized; every component is at most 1.0 in magnitude, as the
 //! trace kernels require. See `docs/topics/optics/README.md`.
 //!
+//! A [`ThinLensCamera`] (`bunny-thin-lens/1`) adds an aperture radius and a focus distance:
+//! each ray starts at a point of the lens disc chosen by one sampler pair
+//! ([`lens_disc_point`]) and passes the sample's point on the focus plane; with aperture 0 its
+//! rays are the pinhole camera's, bit for bit.
+//!
 //! Sample positions and random decisions come from pure functions of their key, so an image
 //! cannot depend on the order or the number of threads that compute it: [`PixelStream`]
 //! (`bunny-sample-hash/1`) gives 64 mixed bits per (seed, pixel, sample, dimension), and
@@ -56,6 +61,7 @@
 mod basis;
 #[allow(
     clippy::module_name_repetitions,
+    unreachable_pub,
     reason = "`CameraSpec` and `PinholeCamera` are the public names; the module is private"
 )]
 mod camera;
@@ -75,6 +81,7 @@ mod sampler;
 #[allow(unreachable_pub)]
 mod shading;
 mod texture;
+mod thin_lens;
 mod xoroshiro;
 
 pub use camera::{
@@ -100,4 +107,5 @@ pub use shading::{
     SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
 pub use texture::{bilinear, interpolate_uv, BilinearTaps, TextureWrap, TEXTURE_BILINEAR_ID};
+pub use thin_lens::{lens_disc_point, ThinLensCamera, ThinLensError, ThinLensSpec, THIN_LENS_ID};
 pub use xoroshiro::Xoroshiro128Plus;

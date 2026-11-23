@@ -25,6 +25,12 @@ ecosystem to guarantee bit-level CPU determinism.
 * **Deterministic Square Root**: Exact integer square root (`sqrt()`) on wide
   integers, with the same bits on every target (the implementation uses core's
   `isqrt`; the older digit-by-digit loop is kept as a test oracle).
+* **Exact Lerp and Ratios (`bunny-lerp/1`)**: `FixedQ32_32::lerp(a, b, t)` is
+  `a + round_half_even((b - a) * t / 2^32)` from an exact `i128` step, exact at
+  `t = 0` and `t = 1.0`, monotone in `t`, extrapolating outside `[0, 1]`, and
+  `None` only outside Q32.32; `FixedQ32_32::from_ratio(n, d)` is the nearest
+  Q32.32 value to `n / d` for `u32` operands, `None` for `d = 0` or a result
+  of `2^31` or more.
 * **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
   arithmetic, exact or symmetric-rounding conversions from turns, degrees and
   radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
