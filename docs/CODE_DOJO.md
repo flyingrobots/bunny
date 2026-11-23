@@ -418,6 +418,17 @@ runs Clippy (`-D warnings`), `cargo test` (doctests included) and a
 other workspace member re-enables the feature through feature unification. The
 check is `xtask/src/feature_configs.rs`.
 
+### `no_std` Check
+
+`bunny-num` builds without `std` when its default `std` feature is off. The
+full gate, and `cargo run --locked -p xtask -- code-dojo-no-std` on its own,
+installs `thumbv7em-none-eabihf` and `wasm32-unknown-unknown` with `rustup
+target add`, then builds `-p bunny-num --no-default-features` for
+`thumbv7em-none-eabihf` (a target with no `std`, so any `std` use fails), for
+`wasm32-unknown-unknown` and natively, and runs Clippy (`-D warnings`) and
+`cargo test` in that configuration. See
+[`topics/no-std/`](topics/no-std/README.md).
+
 ### Where It Runs
 
 - `cargo run --locked -p xtask -- code-dojo --all` runs the source rules on

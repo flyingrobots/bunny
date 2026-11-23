@@ -3,7 +3,7 @@
 //! The representation is an `i64` storing an integer scaled by `2^32`:
 //! `real_value = raw / 2^32`.
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 /// Floating point conversion algorithms.
 pub mod conversions;

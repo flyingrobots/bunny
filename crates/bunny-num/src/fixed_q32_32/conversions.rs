@@ -23,7 +23,7 @@ impl fmt::Display for FloatConversionError {
     }
 }
 
-impl std::error::Error for FloatConversionError {}
+impl core::error::Error for FloatConversionError {}
 
 /// Deterministically converts an `f32` to a Q32.32 raw `i64`.
 ///

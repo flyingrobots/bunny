@@ -37,6 +37,22 @@ ecosystem to guarantee bit-level CPU determinism.
   unit of the exact value.
 * **Zero Dependency & No-Unsafe**: Compiled under `#![deny(unsafe_code)]` with
   zero external runtime dependencies.
+* **`no_std`**: With default features off the crate is `#![no_std]` and needs
+  only `core` (no `alloc`), with every public item and the same bits.
+
+## Features
+
+| Feature | Default | Effect |
+| --- | --- | --- |
+| `std` | on | Links `std`. Off, the crate is `no_std`; no public item is removed. |
+
+```toml
+[dependencies]
+bunny-num = { version = "0.7", default-features = false }
+```
+
+See [`docs/topics/no-std/`](../../docs/topics/no-std/README.md) for the gate
+that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
 
 ## Usage
 

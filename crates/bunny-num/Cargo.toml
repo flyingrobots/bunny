@@ -17,5 +17,11 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[features]
+# `std` is on by default. Without it the crate is `#![no_std]` and needs only `core`;
+# every public item is available either way.
+default = ["std"]
+std = []
+
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
