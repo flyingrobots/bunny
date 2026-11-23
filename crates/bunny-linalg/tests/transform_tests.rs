@@ -279,9 +279,9 @@ fn trs_tp_005_seeded_constructors_match_the_oracle_and_fix_the_pivot() {
 
 /// Each linear entry within 1/2 raw of the exact `R_ij s_j`.
 fn assert_trs_bound(a: Affine, r: Rows, s: [i64; 3], context: &str) {
-    for i in 0..3 {
-        for j in 0..3 {
-            let exact = i128::from(r[i][j]) * i128::from(s[j]);
+    for (i, row) in r.iter().enumerate() {
+        for (j, (&entry, &scale)) in row.iter().zip(&s).enumerate() {
+            let exact = i128::from(entry) * i128::from(scale);
             let error = (i128::from(a.0[i][j]) << 32) - exact;
             assert!(2 * error.abs() <= 1 << 32, "entry {i}{j}; {context}");
         }
@@ -368,10 +368,10 @@ fn trs_tp_008_composition_is_associative_within_the_rounding_bound() {
         for i in 0..3 {
             let a_row: i128 = a.0[i].iter().map(|&e| i128::from(e).abs()).sum();
             let right_bound = 3 * unit + 3 * (a_row << 32);
-            for j in 0..3 {
+            for (j, &exact) in lin[i].iter().enumerate() {
                 let c_col: i128 = (0..3).map(|k| i128::from(c.0[k][j]).abs()).sum();
-                let left_err = (i128::from(left.0[i][j]) << 64) - lin[i][j];
-                let right_err = (i128::from(right.0[i][j]) << 64) - lin[i][j];
+                let left_err = (i128::from(left.0[i][j]) << 64) - exact;
+                let right_err = (i128::from(right.0[i][j]) << 64) - exact;
                 assert!(2 * left_err.abs() <= 3 * unit + 3 * (c_col << 32), "L{i}{j}; {context}");
                 assert!(2 * right_err.abs() <= right_bound, "R{i}{j}; {context}");
             }
