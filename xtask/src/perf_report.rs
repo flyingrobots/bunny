@@ -253,4 +253,57 @@ mod tests {
         assert_eq!(rows[0].best_change_percent(), Some(0.0));
         assert!(regressions(&rows, 15.0).is_empty());
     }
+
+    /// The shape of the false failure on pull request 252: seven rounds each, one base round
+    /// that happened to run fast, every other round on both sides within 0.5 %.
+    fn pr_252() -> (Runs, Runs) {
+        let base = [97.62, 80.69, 97.70, 97.55, 97.62, 97.80, 97.60].map(timing).to_vec();
+        let head = [97.50, 97.00, 97.60, 97.40, 97.50, 97.70, 97.45].map(timing).to_vec();
+        (
+            Runs::from([("query/ray_triangle".to_owned(), base)]),
+            Runs::from([("query/ray_triangle".to_owned(), head)]),
+        )
+    }
+
+    #[test]
+    fn one_lucky_base_round_does_not_fail_the_gate() {
+        let (base, head) = pr_252();
+        let rows = compare(&base, &head);
+        assert!(
+            rows[0].best_change_percent().expect("both sides") > 20.0,
+            "the minimum alone would trip the gate"
+        );
+        assert!(regressions(&rows, 20.0).is_empty(), "one lucky round is not a regression");
+    }
+
+    #[test]
+    fn a_regression_in_every_round_still_fails_the_gate() {
+        let base = [100.0, 101.0, 99.5, 100.5, 100.2, 99.8, 100.1].map(timing).to_vec();
+        let head = [130.0, 131.0, 129.5, 130.5, 130.2, 129.8, 130.1].map(timing).to_vec();
+        let rows =
+            compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
+        let slow: Vec<&str> = regressions(&rows, 20.0).iter().map(|r| r.case.as_str()).collect();
+        assert_eq!(slow, ["c"]);
+    }
+
+    #[test]
+    fn one_lucky_head_round_does_not_hide_a_regression() {
+        let base = [100.0, 101.0, 99.5, 100.5, 100.2, 99.8, 100.1].map(timing).to_vec();
+        let head = [130.0, 95.0, 129.5, 130.5, 130.2, 129.8, 130.1].map(timing).to_vec();
+        let rows =
+            compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
+        assert!(rows[0].best_change_percent().expect("both sides") < 0.0, "the minimum hides it");
+        assert_eq!(regressions(&rows, 20.0).len(), 1);
+    }
+
+    #[test]
+    fn a_floor_that_regresses_while_the_median_does_not_passes() {
+        // Fast mode on the base side in 3 of 7 rounds, never on the head side; medians agree.
+        let base = [40.0, 40.0, 40.0, 52.0, 52.0, 52.0, 52.0].map(timing).to_vec();
+        let head = [52.0, 52.0, 52.0, 52.0, 52.0, 52.0, 52.0].map(timing).to_vec();
+        let rows =
+            compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
+        assert!(rows[0].change_percent().expect("both sides").abs() < f64::EPSILON);
+        assert!(regressions(&rows, 20.0).is_empty());
+    }
 }
