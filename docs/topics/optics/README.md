@@ -91,7 +91,11 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   `TexturedTriangle` (`new`, `triangle`, `uvs`), `TextureDerivatives`
   (`new`, `dx`, `dy`), `RayFootprint` (`Bounded`, `Unbounded`),
   `FootprintAxis` (`Right`, `Down`), `UnboundedReason` (`Parallel`, `Behind`,
-  `TooLarge`), `RayFootprintError` and `RAY_FOOTPRINT_ID`.
+  `TooLarge`), `RayFootprintError` and `RAY_FOOTPRINT_ID`;
+- for [environment coordinates](#environment-coordinates)
+  (`bunny-environment-equirect/1`): `equirect_from_direction`,
+  `direction_from_equirect`, `EquirectError` (`ZeroDirection`,
+  `VOutsideUnitInterval`) and `ENVIRONMENT_EQUIRECT_ID`.
 
 Evidence is listed in the [test plan](test-plan.md). Rough (frosted)
 transmission, dispersion, absorption inside a medium, the evaluation of a
@@ -1914,6 +1918,152 @@ and `Behind` past it (OPTICS-TP-212).
 
 **Cost.** Six `i128` cross products, nine dot products and four 320-bit
 quotients of 64 steps each. No timing is claimed.
+
+## Environment Coordinates
+
+`equirect_from_direction(direction)` gives the coordinates `(u, v)` of a
+direction in an equirectangular (longitude-latitude) environment image, and
+`direction_from_equirect(uv)` gives the direction of a coordinate pair. Both
+use a `FixedVec2` with `x` as `u` and `y` as `v`. Their identity is
+`bunny-environment-equirect/1` (`ENVIRONMENT_EQUIRECT_ID`). Cube maps, texel
+lookup and rotating the environment are not part of it: a caller rotates the
+direction first and reads texels with the [texture rules](#texture-coordinates).
+
+**The convention.** Seen from inside the sphere, in the
+[canonical frame](../coordinate-law/README.md) (`+y` up, right-handed):
+
+| Direction | `u` | `v` |
+| --- | --- | --- |
+| `-z`, the default camera's forward | 1/2, the image centre | 1/2 |
+| `+x` | 3/4 | 1/2 |
+| `-x` | 1/4 | 1/2 |
+| `+z` | 0, the seam | 1/2 |
+| `+y`, straight up | 0 | 0, the top row |
+| `-y`, straight down | 0 | 1 |
+
+`u` is the longitude `atan2(-x, z)` in turns, so it grows from `-x` toward
+`+x` across the image centre: a camera looking down `-z` with `+x` to its
+right sees the image unmirrored. `v` is the polar angle from `+y` in half
+turns, so it grows downward, with row 0 at the top as image files store it.
+`u` is in `[0, 1)`: the seam is `u = 0`, never 1.0. `v` is in `[0, 1]`,
+closed: both poles are values.
+
+### Direction To Coordinates
+
+The direction may have any length and need not be a unit vector; only the
+zero vector is refused (`EquirectError::ZeroDirection`). Each step:
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Longitude | `a = FixedAngle::atan2(x, z).wrapping_neg()`, the angle `atan2(-x, z)` | `atan2`'s own (below) |
+| `u` | `a.to_turns()`, with 1.0 wrapped to 0 | once, to nearest, ties to even |
+| Polar pair | `R = floor(sqrt(x^2 + z^2) 2^k)`, `Y = floor(y 2^k)` | the floors, exact integers |
+| Polar angle | `t = FixedAngle::atan2(R, Y)`, in `[0, 1/2]` turn because `R >= 0` | `atan2`'s own |
+| `v` | `t.raw() / 2^31` | once, to nearest, ties to even |
+
+The scale is `k = 62 - L` with `L = max(bits(|y|), ceil(bits(x^2 + z^2) / 2))`,
+so the larger of `|y| 2^k` and `sqrt(x^2 + z^2) 2^k` is in `[2^61, 2^62)`.
+For `k >= 0`, `(x^2 + z^2) 4^k` is below `2^124` and `y 2^k` is exact; for
+`k < 0` (`L` of 63 or 64, inputs near `i64::MIN`), both are shifted right,
+and `isqrt(floor(n / 4^s)) = floor(sqrt(n) / 2^s)`. `x^2 + z^2` is at most
+`2^127`, so every value fits in `u128` and `i128`, and `R` and `|Y|` are at
+most `2^62`. The square root is `FixedQ32_32::sqrt_u128`, an exact floor.
+
+**The seam.** `x = 0` exactly with `z > 0` gives `u = 0`, since
+`atan2(0, z)` is exactly zero. A direction just toward `-x` has `u` just
+above 0 and one just toward `+x` has `u` just below 1.0, which may round to
+1.0 and wrap to 0: `u` is continuous around the circle. With `z >= 1.0`,
+one raw unit of `x` either side of the seam gives `u` within one raw unit of
+0 around the circle (OPTICS-TP-232). Below `z = 0` the plane `x = 0` is the
+image centre, `u = 1/2`.
+
+**The poles.** At `x = z = 0` exactly the longitude is undefined and `u` is
+0, a fixed value rather than an error, so every nonzero direction has
+coordinates. `v` is 0 for `y > 0` and 1 for `y < 0`. A direction one raw unit
+off a pole has its own longitude and `v` within one raw unit of the pole.
+
+**Bound.** For every nonzero direction, `u` is within `1/2 + 2^-32` raw units
+of the exact longitude, measured around the circle, and `v` within
+`1/2 + 2^-29` raw units of the exact polar angle. The derivation, in angle
+units of `2^-64` turn:
+
+- `FixedAngle::atan2` is within `1/2 + 2^-9` units of the exact angle of its
+  inputs ([Atan2](../angle-trigonometry/README.md#atan2)). `u` divides the
+  angle by `2^32` and rounds once, so its error is
+  `1/2 + (1/2 + 2^-9) 2^-32 < 1/2 + 2^-32` raw units.
+- The polar pair differs from the exact `(r 2^k, y 2^k)` by under one in
+  each coordinate, a vector shorter than `sqrt(2)`, at a point at least `2^61`
+  from the origin. That turns the angle by at most `arcsin(sqrt(2) 2^-61)`
+  radians, 1.81 units. With `atan2`'s bound the polar angle is within 2.31
+  units, and `v` divides it by `2^31` and rounds once:
+  `1/2 + 2.31 / 2^31 < 1/2 + 2^-29` raw units.
+
+The bound is the analysis; OPTICS-TP-230 checks it against an interval oracle
+on seeded directions and does not measure a tighter one.
+
+**Exact by construction.** The axes and the diagonals give multiples of an
+eighth exactly, and so does a direction whose horizontal length is an exact
+square root, like `(3, 5, 4)`. Doubling a direction, where it still fits,
+gives the same bits: `atan2` is invariant under doubling and `L` grows by
+one, so `R` and `Y` do not change. Negating `x` gives the same `v` and
+`1 - u`, mod 1.
+
+### Coordinates To Direction
+
+With `theta = v` half turns and `phi = u` turns, the direction is
+
+```text
+d = (-sin theta sin phi, cos theta, sin theta cos phi)
+```
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Polar angle | `FixedAngle::from_raw(v 2^31)` | exact: `v <= 2^32` raw, so the angle is at most a half turn |
+| Longitude | `FixedAngle::from_turns(u)` | exact; whole turns discarded |
+| Sines and cosines | `FixedAngle::sin_cos` of each | within one raw unit ([Sine And Cosine](../angle-trigonometry/README.md#sine-and-cosine)) |
+| `x`, `z` | `-(sin theta sin phi)`, `sin theta cos phi`, products in `i128` | each once, to nearest, ties to even |
+| `y` | `cos theta` | none beyond `sin_cos` |
+
+**Domain.** Any `u` is accepted: `u` and `u + n` give the same bits for
+every whole `n`, negative `u` included. `v` must be in `[0, 1]`; below 0 or
+above 1.0 (raw outside `0..=2^32`) is refused
+(`EquirectError::VOutsideUnitInterval`).
+
+**Bound.** `x` and `z` are each within `5/2` raw units and `y` within one raw
+unit of the exact direction: each sine and cosine is within one raw unit and
+at most 1.0 in magnitude, so a product of two is within two raw units before
+its rounding adds a half. The error vector is at most
+`sqrt(2.5^2 + 2.5^2 + 1) < 3.68` raw units long, so the length of the result
+is within 3.68 raw units of 1.0; the result is not a unit vector. Every
+component is in `-1.0..=1.0`. `v = 0` gives `(0, 1.0, 0)` and `v = 1` gives
+`(0, -1.0, 0)` exactly, for every `u`: the sines of zero and of a half turn
+are exactly 0.
+
+### Round Trips
+
+Neither round trip is exact; each is bounded.
+
+- **Direction, coordinates, direction.** The result is within `42/5` raw
+  units (Euclidean) of the unit vector along the original, at the seam and at
+  both poles included. The coordinates are within `1/2 + 2^-29` of `v` (a
+  polar arc of `pi` times that) and `1/2 + 2^-32` of `u` (a longitude arc of
+  at most `2 pi` times that), together under 4.72 raw units of arc, and the
+  inverse adds at most 3.68. At a pole the longitude arc is zero.
+- **Coordinates, direction, coordinates.** For `v` in `[0, 1]` and `u` in
+  `[0, 1)`: `v` returns within one raw unit (the direction turns by at most
+  3.68 raw units of arc, 1.17 raw units of `v`, and the forward map adds
+  `1/2 + 2^-29`; the difference is an integer). `u` returns within
+  `1/2 + 0.29 2^32 / m` raw units around the circle, where
+  `m = min(v, 1 - v)` in raw units is at least `2^16`: the horizontal error
+  of at most `2.5 sqrt(2)` raw units turns a horizontal vector of length
+  `sin(pi v) >= 2 m / 2^32` by at most `3.54 / (2 m)` radians. Near the poles
+  the longitude is ill-conditioned and no `u` bound is stated for
+  `m < 2^16`; at the poles themselves the result is exactly `(0, 0)` or
+  `(0, 1)`.
+
+**Cost.** The forward map is two `atan2` calls (72 CORDIC steps each) and
+one `u128` square root; the inverse is two `sin_cos` calls and two `i128`
+products. No timing is claimed.
 
 ## GGX Rough Conductor
 

@@ -54,6 +54,10 @@
 //! the camera's neighbouring rays met with the triangle's plane ([`TexturedTriangle`]), or a
 //! typed [`RayFootprint::Unbounded`] result when a neighbouring ray does not meet it ahead.
 //!
+//! [`equirect_from_direction`] maps a direction to the coordinates of an equirectangular
+//! environment image and [`direction_from_equirect`] maps them back
+//! (`bunny-environment-equirect/1`), with the seam, the poles and both error bounds stated.
+//!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
 //! maps linear radiance to a display value, and [`quantize_8`], [`quantize_16`] and
@@ -69,6 +73,8 @@ mod basis;
     reason = "`CameraSpec` and `PinholeCamera` are the public names; the module is private"
 )]
 mod camera;
+#[allow(unreachable_pub)]
+mod environment;
 #[allow(
     clippy::module_name_repetitions,
     reason = "`CameraError` is the public name; the module is private"
@@ -96,6 +102,9 @@ mod xoroshiro;
 
 pub use camera::{
     CameraSpec, PinholeCamera, PixelSample, MAX_IMAGE_DIMENSION, TAN_HALF_FOV_LIMIT_RAW,
+};
+pub use environment::{
+    direction_from_equirect, equirect_from_direction, EquirectError, ENVIRONMENT_EQUIRECT_ID,
 };
 pub use error::CameraError;
 pub use footprint::{

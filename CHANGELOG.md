@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`: equirectangular environment coordinates under the contract
+  identity `bunny-environment-equirect/1` (`ENVIRONMENT_EQUIRECT_ID`).
+  `equirect_from_direction(direction)` maps a nonzero direction of any
+  length to `(u, v)`: `u` the longitude `atan2(-x, z)` in turns, `+z` the
+  seam at `u = 0` and `-z` the image centre at 1/2, `u` in `[0, 1)` and 0 at
+  the poles; `v` the polar angle from `+y` in half turns, in `[0, 1]`. Both
+  come from `FixedAngle::atan2` and one rounding to nearest with ties to
+  even, within `1/2 + 2^-32` and `1/2 + 2^-29` raw units of the exact
+  values. `direction_from_equirect(uv)` maps back with `FixedAngle::sin_cos`
+  and two rounded products, within `5/2` raw units per horizontal component
+  and one for `y`, exact at the poles; any `u` wraps. The zero vector and a
+  `v` outside `[0, 1]` return an `EquirectError`. Closes
+  flyingrobots/bunny#394.
+
 * `bunny-linalg`: rotations from a `FixedAngle` under the contract identity
   `bunny-rotation/1` (`ROTATION_CONTRACT_ID`). `FixedMat3::rotation_x`,
   `rotation_y` and `rotation_z` copy `FixedAngle::sin_cos` into the axis
