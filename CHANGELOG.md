@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Tests: the four zero-allocation tests (`bunny-broadphase` `bvh_allocation_tests`
+  and `bvh_sah_allocation_tests`, `bunny-codec` `ply_allocation_tests` and
+  `ply_ascii_allocation_tests`) count allocations of the measuring thread only,
+  with `allocation-counter` in place of the process-wide `dhat` count, so the
+  test harness or another thread can no longer fail them by chance. Each keeps
+  its exact zero assertions. `thread_scoped_allocation_tests` proves a foreign
+  thread's allocations are ignored and the thread's own are counted. The
+  `dhat` dev-dependency is removed and `Cargo.lock` loses it and its
+  dependencies. Closes flyingrobots/bunny#439.
+
 * `bunny-perf`: the `--stats` profile takes its node, box and leaf counts from
   `compact_closest_hit_counted` and `compact_any_hit_counted` instead of
   replicating them in the harness; the replica stays for the per-stage triangle

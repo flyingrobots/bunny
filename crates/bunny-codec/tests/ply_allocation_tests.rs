@@ -2,8 +2,6 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::sync::Mutex;
-
 use bunny_codec::{decode_compressed_mesh, parse_binary_ply, parse_obj_text, ObjError};
 
 const HEADER: &str = concat!(
@@ -30,11 +28,6 @@ f 1 2 3
 ";
 const COMPRESSED_TRIANGLE_HEX: &str =
     include_str!("fixtures/canonical_compressed_triangle.bunny.hex");
-
-static MEASUREMENT_LOCK: Mutex<()> = Mutex::new(());
-
-#[global_allocator]
-static GLOBAL: dhat::Alloc = dhat::Alloc;
 
 fn canonical_triangle_ply() -> Vec<u8> {
     let mut bytes = Vec::from(HEADER.as_bytes());
@@ -67,13 +60,12 @@ fn hex_value(byte: u8) -> u8 {
     }
 }
 
-fn allocations_during<T>(operation: impl FnOnce() -> T) -> (T, dhat::HeapStats) {
-    let _measurement =
-        MEASUREMENT_LOCK.lock().expect("allocation measurement lock should not be poisoned");
-    let _profiler = dhat::Profiler::builder().testing().build();
-    let result = operation();
-    let stats = dhat::HeapStats::get();
-    (result, stats)
+/// Runs `operation` and returns its result with the number of heap blocks the calling thread
+/// allocated meanwhile. Allocations by other threads, including the test harness, are not counted.
+fn allocations_during<T>(operation: impl FnOnce() -> T) -> (T, u64) {
+    let mut result = None;
+    let counts = allocation_counter::measure(|| result = Some(operation()));
+    (result.expect("the measured operation should have run"), counts.count_total)
 }
 
 #[test]
@@ -84,25 +76,25 @@ fn parsers_allocate_zero_times_after_warm_up() {
     parse_obj_text(OBJ_TRIANGLE).expect("warm-up OBJ should parse");
     decode_compressed_mesh(&compressed_bytes).expect("warm-up compressed mesh should parse");
 
-    let (ply_mesh, ply_stats) = allocations_during(|| parse_binary_ply(&bytes));
+    let (ply_mesh, ply_blocks) = allocations_during(|| parse_binary_ply(&bytes));
 
-    assert_eq!(ply_stats.total_blocks, 0, "binary PLY parser allocated after warm-up");
+    assert_eq!(ply_blocks, 0, "binary PLY parser allocated after warm-up");
     assert_eq!(ply_mesh.expect("canonical binary PLY should parse").face_count(), 1);
 
-    let (obj_counts, obj_stats) = allocations_during(|| {
+    let (obj_counts, obj_blocks) = allocations_during(|| {
         let mesh = parse_obj_text(OBJ_TRIANGLE)?;
         let vertices = mesh.vertices().try_fold(0, count_obj_record)?;
         let triangles = mesh.triangles().try_fold(0, count_obj_record)?;
         Ok::<_, ObjError>((vertices, triangles))
     });
 
-    assert_eq!(obj_stats.total_blocks, 0, "OBJ parser allocated after warm-up");
+    assert_eq!(obj_blocks, 0, "OBJ parser allocated after warm-up");
     assert_eq!(obj_counts.expect("canonical OBJ should parse"), (3, 1));
 
-    let (compressed_mesh, compressed_stats) =
+    let (compressed_mesh, compressed_blocks) =
         allocations_during(|| decode_compressed_mesh(&compressed_bytes));
 
-    assert_eq!(compressed_stats.total_blocks, 0, "compressed mesh decoder allocated after warm-up");
+    assert_eq!(compressed_blocks, 0, "compressed mesh decoder allocated after warm-up");
     assert_eq!(
         compressed_mesh.expect("canonical compressed mesh should parse").triangle_count(),
         1
