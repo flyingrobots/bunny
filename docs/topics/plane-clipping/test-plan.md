@@ -428,7 +428,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_025_triangle_crossing_coplanar_touching_and_outside"
 oracle = "Plane z = 1, vertices on it and one raw unit either side: crossing, wholly front, wholly behind, coplanar, touching at a vertex and at an edge from each side; all six vertex orders agree."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-026"
@@ -437,7 +437,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_026_segment_crossing_coplanar_touching_and_outside"
 oracle = "Plane z = 1: crossing by one raw unit, coplanar, touching from each side, wholly front and behind, both endpoint orders."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-027"
@@ -446,7 +446,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_027_box_crossing_coplanar_touching_and_outside"
 oracle = "Plane z = 1: boxes crossing by one raw unit, flat in the plane, touching a face from each side and one raw unit clear; the eight-corner classification agrees."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-028"
@@ -455,7 +455,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_028_box_against_oblique_and_negative_normals"
 oracle = "x + y + z = 3 touching a corner from each side and one raw unit past it; -x + y = 0 touching an edge from each side, where the corner most along the normal has the smaller x."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-029"
@@ -464,7 +464,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_029_degenerate_triangles_are_classified_by_their_vertices"
 oracle = "Collinear vertices crossing and in the plane, three coincident vertices one raw unit either side and on (the point rule), two coincident on-plane vertices with the third behind."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-030"
@@ -473,7 +473,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_030_inverted_box_is_the_box_with_the_same_corners"
 oracle = "Boxes with min > max on one or more axes classify as the box with min and max swapped and as their eight corners, for an axis and a negative normal."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-031"
@@ -482,7 +482,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_031_zero_extent_box_follows_the_point_rule"
 oracle = "A box and a triangle at one point get classify's answer (On maps to Coplanar) for points on and one raw unit either side, under two planes."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-032"
@@ -491,7 +491,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_032_zero_normal_plane_uses_the_sign_of_the_offset"
 oracle = "Offsets -1, 0 and 1 raw give Front, Coplanar and Behind for a full-range box, triangle and segment; offset i64::MIN gives None."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-033"
@@ -500,7 +500,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_tests.rs::pc_tp_033_overflow_returns_none_as_the_point_rule_does"
 oracle = "A product overflowing at some corners, and a partial sum x + y overflowing at one corner, give None as the eight-corner definition does; one raw unit narrower gives Front."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-034"
@@ -509,7 +509,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_034_seeded_boxes_match_the_eight_corner_definition"
 oracle = "20 000 boxes (seed 0xA076_1D64_78BD_642F, wide random and unit-grid modes, inverted axes included) equal the eight-corner classification through classify and an independent i128 model, and four representable interior points per box agree with its class."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-035"
@@ -518,7 +518,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_035_boxes_at_the_ends_of_the_range_match_the_eight_corner_definition"
 oracle = "50 000 boxes and planes (seed 0xE703_7ED1_A0B4_28DB) whose every coordinate, normal component and offset is within two raw units of i64::MIN, -2^62, -2^32, -1, 0, 1, 2^32, 2^62 or i64::MAX equal the eight-corner classification and the model, None included."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-036"
@@ -527,7 +527,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/plane_span_sweep_tests.rs::pc_tp_036_seeded_triangles_and_segments_match_their_vertices"
 oracle = "30 000 triangles and segments (seed 0x8EBC_6AF0_9C88_C6E3, three modes) equal their vertex classification through classify and the model, and agree with clip_polygon and clip_segment."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PC-TP-037"
@@ -536,19 +536,36 @@ evidence = "manual-audit"
 artifact = "docs/topics/plane-clipping/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose fails at least one case above."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule of the shape classification broken on purpose in
-`crates/bunny-geom/src/plane/span.rs`, the plane tests run, and the kernel
-restored; each mutation must fail a named case.
+Each mutation was applied to `crates/bunny-geom/src/plane/span.rs`, the tests
+`plane_span_tests`, `plane_span_sweep_tests`, `plane_clip_tests` and
+`polygon_clip_tests` run with `cargo test --locked -q -p bunny-geom
+--no-fail-fast`, and the kernel restored. Each fails the named cases except the
+one marked equivalent.
+
+| Mutation | Fails |
+| --- | --- |
+| Axis ends ignore the sign of the normal component | PC-TP-028, 030, 034, 035 |
+| Axis ends not ordered (an inverted axis read as given) | PC-TP-030, 034, 035 |
+| `On` counted as `Front` | PC-TP-025 to 032, 034 to 036 |
+| `On` counted as `Behind` | PC-TP-025 to 036 |
+| Box reads only the corner most along the normal | PC-TP-027, 028, 030, 034, 035 |
+| Box reads only the corner least along the normal | PC-TP-027, 028, 030, 033, 034, 035 |
+| Triangle ignores its third vertex | PC-TP-025, 029, 033, 036 |
+| `Straddling` reported as `Front` | PC-TP-025 to 030, 034 to 036 |
+| An overflowing vertex skipped instead of returning `None` | PC-TP-032, 033, 035, 036 |
+| Segment ignores its end point | PC-TP-026, 036 |
+| Sign test `>= 0` made `> 0` | none: equivalent, a zero component gives a zero product at both ends |
 
 ## Determinism Obligations And Evidence
 
 Tests use only integer raw construction, checked Q32.32 operations and exact
-equality. The sweep uses a fixed-seed xorshift generator; there is no time,
+equality. The sweeps use fixed-seed xorshift generators, the seeds named in the
+case table and in every assertion message; there is no time,
 filesystem, locale or logging in any oracle.
 
 ## Known Failures
@@ -556,6 +573,10 @@ filesystem, locale or logging in any oracle.
 - The clipped endpoint can lie behind the plane by rounding error (PC-TP-006
   shows one raw unit). Clipping does not repair it; the stated bound is the
   contract.
+- `clip_segment` on a segment with one end exactly on the plane and the other
+  behind still interpolates, so it returns `None` when `end - start` overflows
+  on an axis, although the answer is the touching point. PC-TP-036 states this
+  rule in its oracle; the kernel is unchanged.
 
 ## Edge Cases And Unusual Inputs
 
@@ -563,11 +584,21 @@ filesystem, locale or logging in any oracle.
 - A segment touching the plane at one end returns a degenerate segment.
 - A polygon touching the plane at a vertex or an edge is Outside.
 - Minimum and maximum raw coordinates overflow into `None`.
+- A box with `min > max` on an axis is classified as the box with the same
+  corners; a box with `min == max` is one point.
+- A triangle with collinear or coincident vertices is classified by its
+  vertices.
 
 ## Stress And Fuzz
 
 PC-TP-009 runs 2000 seeded segments and PC-TP-022 and PC-TP-023 run 2000 and
-1000 seeded convex polygons against exact references. Any failure
+1000 seeded convex polygons against exact references. PC-TP-034 runs 20 000
+boxes (observed: 5171 Front, 5098 Behind, 9678 Straddling, 53 Coplanar),
+PC-TP-035 50 000 boxes at the ends of the range (1902 Front, 1969 Behind, 3631
+Straddling, 9 Coplanar, 42 489 None) and PC-TP-036 30 000 triangles with their
+first edge as a segment (5128 Front, 5279 Behind, 10 675 Straddling, 52
+Coplanar, 8866 None for the triangles). Each asserts a lower bound on its
+counts. Any failure
 must be minimized into a named regression case.
 
 ## Open Gaps
