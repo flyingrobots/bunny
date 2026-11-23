@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: unit quaternions under `bunny-quaternion/1`
+  (`QUATERNION_CONTRACT_ID`). `FixedUnitQuat` stores `(x, y, z, w)`, `w` the
+  scalar part, and every value has raw `x^2 + y^2 + z^2 + w^2` within
+  `[(2^32 - 1)^2, (2^32 + 1)^2]` (`QUAT_LENGTH_SQUARED_MIN_RAW` and `_MAX_RAW`).
+  `try_from_unit` accepts exactly that band (`QuatError::NotUnit` otherwise);
+  `try_normalize` rounds each exact `r / |p|` once to nearest, accepts every
+  nonzero input including the extremes of the raw range and refuses only
+  zero (`QuatError::Zero`). `a * b` is the exact Hamilton product normalised
+  in one rounding and applies `b` first. `rotate_vec3` rounds the exact
+  `q v q* / |q|^2` once per component (within 1/2 raw of the exact rotation,
+  `None` on overflow); `to_mat3` likewise, with lengths within 1, dot products
+  within 2 and the determinant within 3 raw units. `from_axis_angle(axis,
+  angle)` halves the signed angle toward zero. `conjugate`, `Neg` and
+  `canonical` are exact. No rounding of the contract can meet an exact half.
+  `docs/topics/quaternion/` (QUAT-REQ-001 to -010, QUAT-TP-001 to -017).
+  Closes flyingrobots/bunny#109.
+
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;

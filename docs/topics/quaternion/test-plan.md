@@ -158,7 +158,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_001_storage_order_and_representation_equality"
 oracle = "Hand-derived storage order and the unit rules of the quaternion basis."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-002"
@@ -167,7 +167,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_002_the_length_band_one_raw_unit_either_side"
 oracle = "Constructed sums of squares on and one raw unit either side of each end of the band."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-003"
@@ -176,7 +176,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_003_normalisation_refuses_only_zero_and_accepts_the_extremes"
 oracle = "Hand-derived normalisations at the extremes of the raw range, and the defining inequality."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-004"
@@ -185,7 +185,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_004_seeded_normalisation_matches_the_oracle"
 oracle = "The defining inequality of the nearest integer, decided exactly in arbitrary precision."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-005"
@@ -194,7 +194,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_005_products_compose_right_to_left"
 oracle = "The matrix product of bunny-rotation/1 axis rotations; exact algebraic identities."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-006"
@@ -203,7 +203,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_006_seeded_products_match_the_oracle_and_the_bounds"
 oracle = "Arbitrary-precision Hamilton product from the basis multiplication table; exact bound."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-007"
@@ -212,7 +212,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_007_drift_over_a_chain_stays_within_the_derived_bound"
 oracle = "The exact normalised product of each prefix is the start, because b b* is a positive scalar."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-008"
@@ -221,7 +221,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_008_quarter_and_half_turns_map_the_basis_exactly"
 oracle = "Hand-derived images of the basis from the coordinate law."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-009"
@@ -230,7 +230,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_009_seeded_rotations_match_the_oracle_and_overflow_at_the_range"
 oracle = "Arbitrary-precision sandwich product and exact range decision; constructed overflow boundary."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-010"
@@ -239,7 +239,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_010_no_rounding_meets_an_exact_half"
 oracle = "Exact strict inequality on the arbitrary-precision numerators."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-011"
@@ -248,7 +248,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_011_seeded_matrices_match_the_oracle_and_the_bounds"
 oracle = "Sandwich products of the basis vectors in arbitrary precision; exact length, dot and determinant."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-012"
@@ -257,7 +257,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_012_axis_angle_exact_cases"
 oracle = "Exact identities, and a constructed odd angle at a step of sin_cos."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-013"
@@ -266,7 +266,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_013_seeded_axis_angle_matches_the_oracle_and_rotation_axis_angle"
 oracle = "Defining inequality on the documented input; the shipped bunny-rotation/1 matrices."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-014"
@@ -275,7 +275,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_014_pinned_goldens_and_digest"
 oracle = "Goldens and digest from the independent Python model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-015"
@@ -284,7 +284,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/quaternion_tests.rs::quat_tp_015_conjugate_negation_and_canonical_sign"
 oracle = "Hand-derived signs and exact identities."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-016"
@@ -293,7 +293,7 @@ evidence = "test"
 test = "crates/bunny-linalg/src/fixed_quat/wide.rs::tests::quat_tp_016_wide_products_sums_and_quotients_are_exact"
 oracle = "Hand-computed 256-bit values."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "QUAT-TP-017"
@@ -302,7 +302,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/quaternion/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations

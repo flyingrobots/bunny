@@ -141,13 +141,7 @@ fn cmp_magnitudes(a: &[u32], b: &[u32]) -> Ordering {
     if la != lb {
         return la.cmp(&lb);
     }
-    for i in (0..la).rev() {
-        match a[i].cmp(&b[i]) {
-            Ordering::Equal => {}
-            other => return other,
-        }
-    }
-    Ordering::Equal
+    a[..la].iter().rev().cmp(b[..lb].iter().rev())
 }
 
 pub(crate) fn big(value: i128) -> Big {

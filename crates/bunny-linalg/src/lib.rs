@@ -35,6 +35,7 @@ mod fixed_mat4;
 mod fixed_mat4_inverse;
 mod fixed_mat4_look_at;
 mod fixed_mat4_projection;
+mod fixed_quat;
 mod fixed_vec2;
 mod fixed_vec3;
 mod lerp;
@@ -60,6 +61,11 @@ pub use lerp::lerp_channels;
 pub use matrix_common::FixedMat4Row;
 pub use unproject::{UnprojectError, ViewportRay, UNPROJECT_CONTRACT_ID};
 pub use viewport::{Viewport, ViewportError};
+
+pub use fixed_quat::{
+    FixedUnitQuat, QuatError, QUATERNION_CONTRACT_ID, QUAT_LENGTH_SQUARED_MAX_RAW,
+    QUAT_LENGTH_SQUARED_MIN_RAW,
+};
 
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;
 const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
