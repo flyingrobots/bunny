@@ -20,6 +20,11 @@ None.
 
 Checks run:
 - `cargo test --locked -p xtask repo_respect` with `GITHUB_BASE_REF=nope` (RED: four fixture tests failed) and with it unset (green), before the fix.
+- `cargo test --locked -p xtask` after the fix: 163 passed; `repo_respect` tests also pass with `GITHUB_BASE_REF=nope`.
+- `cargo fmt --all --check`
+- `cargo run --locked -p xtask -- topic-docs`
+- `cargo run --locked -p xtask -- code-dojo-rust --all`
+- `cargo run --locked -p xtask -- repo-respect check --branch`
 
 Known risks:
 - None beyond the local toolchain difference (1.100.0 here, 1.96.0 pinned in CI).

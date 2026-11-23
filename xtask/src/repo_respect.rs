@@ -169,7 +169,7 @@ fn create_receipt(topic: &str) -> Result<(), DynError> {
         std::fs::create_dir_all(parent)?;
     }
 
-    let changed_files = branch_and_worktree_paths(&root)?;
+    let changed_files = branch_and_worktree_paths(&root, &base_ref())?;
     let template = receipt_template(topic, &changed_files);
     let mut file = OpenOptions::new().write(true).create_new(true).open(&path)?;
     file.write_all(template.as_bytes())?;
@@ -184,17 +184,18 @@ fn create_receipt(topic: &str) -> Result<(), DynError> {
 
 fn check(mode: CheckMode) -> Result<(), DynError> {
     let root = git_root()?;
-    check_root(&root, mode)?;
+    let base = base_ref();
+    check_root(&root, mode, &base)?;
     if matches!(mode, CheckMode::Branch) {
-        check_branch_commit_messages(&root)?;
+        check_branch_commit_messages(&root, &base)?;
     }
     Ok(())
 }
 
-fn check_root(root: &Path, mode: CheckMode) -> Result<(), DynError> {
+fn check_root(root: &Path, mode: CheckMode, base: &str) -> Result<(), DynError> {
     let changed = match mode {
-        CheckMode::Branch => branch_paths(root)?,
-        CheckMode::Staged => branch_and_staged_paths(root)?,
+        CheckMode::Branch => branch_paths(root, base)?,
+        CheckMode::Staged => branch_and_staged_paths(root, base)?,
     };
 
     let non_receipt_changes =
@@ -230,8 +231,8 @@ fn check_root(root: &Path, mode: CheckMode) -> Result<(), DynError> {
     }
 }
 
-fn check_branch_commit_messages(root: &Path) -> Result<(), DynError> {
-    let failures = branch_commit_message_failures(root)?;
+fn check_branch_commit_messages(root: &Path, base: &str) -> Result<(), DynError> {
+    let failures = branch_commit_message_failures(root, base)?;
     if failures.is_empty() {
         println!("Repo Respect: branch commit trailers clean");
         return Ok(());
@@ -371,10 +372,9 @@ fn read_receipt_from_staged_index(root: &Path, path: &str) -> Result<String, Dyn
     Err(command_error("git show staged receipt", &output.stderr).into())
 }
 
-fn branch_commit_message_failures(root: &Path) -> Result<Vec<String>, DynError> {
-    let base = base_ref();
-    ensure_ref_exists(root, &base)?;
-    let merge_base = git_merge_base(root, &base)?;
+fn branch_commit_message_failures(root: &Path, base: &str) -> Result<Vec<String>, DynError> {
+    ensure_ref_exists(root, base)?;
+    let merge_base = git_merge_base(root, base)?;
     let range = format!("{merge_base}..HEAD");
     let commits = git_lines(root, &["rev-list", "--no-merges", "--reverse", &range])?;
     let mut failures = Vec::new();
@@ -413,33 +413,39 @@ fn git_merge_base(root: &Path, reference: &str) -> Result<String, DynError> {
     })
 }
 
-fn branch_and_worktree_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
-    let mut paths = branch_paths(root)?;
+fn branch_and_worktree_paths(root: &Path, base: &str) -> Result<BTreeSet<PathBuf>, DynError> {
+    let mut paths = branch_paths(root, base)?;
     paths.extend(git_paths(root, &["diff", "--cached", "--name-only"])?);
     paths.extend(git_paths(root, &["diff", "--name-only"])?);
     paths.extend(git_paths(root, &["ls-files", "--others", "--exclude-standard"])?);
     Ok(paths)
 }
 
-fn branch_and_staged_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
-    let mut paths = branch_paths(root)?;
+fn branch_and_staged_paths(root: &Path, base: &str) -> Result<BTreeSet<PathBuf>, DynError> {
+    let mut paths = branch_paths(root, base)?;
     paths.extend(git_paths(root, &["diff", "--cached", "--name-only"])?);
     Ok(paths)
 }
 
-fn branch_paths(root: &Path) -> Result<BTreeSet<PathBuf>, DynError> {
-    let base = base_ref();
-    ensure_ref_exists(root, &base)?;
+fn branch_paths(root: &Path, base: &str) -> Result<BTreeSet<PathBuf>, DynError> {
+    ensure_ref_exists(root, base)?;
     git_paths(root, &["diff", "--name-only", &format!("{base}...HEAD")])
 }
 
+/// Resolve the base ref from the process environment. Called once at an entry point;
+/// everything below takes the resolved ref as a parameter.
 fn base_ref() -> String {
-    if let Ok(value) = std::env::var("CODE_DOJO_BASE_REF") {
+    base_ref_from(|name| std::env::var(name).ok())
+}
+
+/// Resolve the base ref from an injected environment reader.
+fn base_ref_from(read: impl Fn(&str) -> Option<String>) -> String {
+    if let Some(value) = read("CODE_DOJO_BASE_REF") {
         if !value.trim().is_empty() {
             return value;
         }
     }
-    if let Ok(value) = std::env::var("GITHUB_BASE_REF") {
+    if let Some(value) = read("GITHUB_BASE_REF") {
         if !value.trim().is_empty() {
             return format!("origin/{value}");
         }
@@ -633,6 +639,9 @@ mod tests {
     use super::*;
 
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    /// The base ref the fixture repositories carry, independent of the process environment.
+    const TEST_BASE: &str = "origin/main";
 
     struct TempDir {
         path: PathBuf,
@@ -853,8 +862,9 @@ Fixture reviewer.
             ],
         );
 
-        let branch = branch_paths(temp.path()).expect("branch paths should load");
-        let staged = branch_and_staged_paths(temp.path()).expect("staged paths should load");
+        let branch = branch_paths(temp.path(), TEST_BASE).expect("branch paths should load");
+        let staged =
+            branch_and_staged_paths(temp.path(), TEST_BASE).expect("staged paths should load");
 
         assert!(branch.contains(Path::new("src/lib.rs")));
         assert!(staged.contains(Path::new("src/lib.rs")));
@@ -879,8 +889,9 @@ Fixture reviewer.
             ],
         );
 
-        let branch = branch_paths(temp.path()).expect("branch paths should load");
-        let staged = branch_and_staged_paths(temp.path()).expect("staged paths should load");
+        let branch = branch_paths(temp.path(), TEST_BASE).expect("branch paths should load");
+        let staged =
+            branch_and_staged_paths(temp.path(), TEST_BASE).expect("staged paths should load");
 
         assert!(branch.contains(Path::new("src/lib.rs")));
         assert!(staged.contains(Path::new("src/lib.rs")));
@@ -895,7 +906,7 @@ Fixture reviewer.
         run_git(temp.path(), &["add", "src/feature.rs", ".repo-respect/receipts/staged.md"]);
         write_file(temp.path(), ".repo-respect/receipts/staged.md", valid_receipt_text());
 
-        let result = check_root(temp.path(), CheckMode::Staged);
+        let result = check_root(temp.path(), CheckMode::Staged, TEST_BASE);
 
         assert!(result.is_err(), "staged receipt contents should be validated, not worktree edits");
     }
@@ -909,8 +920,8 @@ Fixture reviewer.
         run_git(temp.path(), &["add", "src/feature.rs", ".repo-respect/receipts/feature.md"]);
         run_git(temp.path(), &["commit", "-m", "test: add feature without trailer"]);
 
-        let failures =
-            branch_commit_message_failures(temp.path()).expect("branch messages should be checked");
+        let failures = branch_commit_message_failures(temp.path(), TEST_BASE)
+            .expect("branch messages should be checked");
 
         assert!(failures.iter().any(|failure| failure.contains("Repo-Respect-Receipt:")));
     }
@@ -943,10 +954,25 @@ Fixture reviewer.
         run_git(temp.path(), &["update-ref", "refs/remotes/origin/main", "HEAD"]);
         run_git(temp.path(), &["checkout", "feature"]);
 
-        let failures =
-            branch_commit_message_failures(temp.path()).expect("branch messages should be checked");
+        let failures = branch_commit_message_failures(temp.path(), TEST_BASE)
+            .expect("branch messages should be checked");
 
         assert!(failures.is_empty(), "base-only commits should not be checked: {failures:?}");
+    }
+
+    #[test]
+    fn base_ref_resolution_uses_the_injected_environment() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| pairs.iter().find(|(key, _)| *key == name).map(|(_, v)| v.to_string())
+        };
+
+        assert_eq!(base_ref_from(env(&[])), "origin/main");
+        assert_eq!(base_ref_from(env(&[("GITHUB_BASE_REF", "stack")])), "origin/stack");
+        assert_eq!(base_ref_from(env(&[("GITHUB_BASE_REF", "  ")])), "origin/main");
+        assert_eq!(
+            base_ref_from(env(&[("CODE_DOJO_BASE_REF", "upstream/x"), ("GITHUB_BASE_REF", "s")])),
+            "upstream/x"
+        );
     }
 
     #[test]
