@@ -42,7 +42,7 @@ mod wide;
 pub use box_hit::{BoxHit, TraceBox, TraceBoxError, RAY_BOX_ID};
 pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError, RAY_CYLINDER_ID};
 pub use disc::{DiscHit, TraceDisc, TraceDiscError, RAY_DISC_ID};
-pub use sphere::{SphereHit, TraceSphere, TraceSphereError};
+pub use sphere::{SphereHit, TraceSphere, TraceSphereError, RAY_SPHERE_ID};
 
 type Wide3 = [i128; 3];
 

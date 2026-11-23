@@ -45,12 +45,27 @@ impl U256 {
         Some(Self { hi, lo })
     }
 
-    /// `self * 2^64`, or `None` when the result is not below `2^256`.
-    pub(super) const fn checked_shl64(self) -> Option<Self> {
-        if self.hi >> 64 != 0 {
+    /// `self * 2^n`, or `None` when the result is not below `2^256`.
+    pub(super) const fn checked_shl(self, n: u32) -> Option<Self> {
+        if n < 128 {
+            return self.shl_below_128(n);
+        }
+        // Wider shifts are taken in steps of 127 bits.
+        match self.shl_below_128(127) {
+            Some(shifted) => shifted.checked_shl(n - 127),
+            None => None,
+        }
+    }
+
+    /// `self * 2^n` for `n < 128`, or `None` when the result is not below `2^256`.
+    const fn shl_below_128(self, n: u32) -> Option<Self> {
+        if n == 0 {
+            return Some(self);
+        }
+        if self.hi >> (128 - n) != 0 {
             return None;
         }
-        Some(Self { hi: (self.hi << 64) | (self.lo >> 64), lo: self.lo << 64 })
+        Some(Self { hi: (self.hi << n) | (self.lo >> (128 - n)), lo: self.lo << n })
     }
 
     /// The floor of the square root, exactly.
@@ -116,12 +131,37 @@ mod tests {
             U256 { hi: 1, lo: 0 }.checked_sub(ONE),
             ONE.checked_sub(LOW_MAX),
             top.checked_add(ONE),
-            LOW_MAX.checked_shl64(),
-            U256 { hi: 1 << 64, lo: 0 }.checked_shl64(),
+            LOW_MAX.checked_shl(64),
+            U256 { hi: 1 << 64, lo: 0 }.checked_shl(64),
         ];
         let shifted = U256 { hi: u128::MAX >> 64, lo: u128::MAX << 64 };
         let expected =
             [Some(U256 { hi: 1, lo: 0 }), Some(LOW_MAX), None, None, Some(shifted), None];
+        // dojo: allow panic-path -- test assertion against hand-computed values
+        assert_eq!(got, expected);
+    }
+
+    /// Oracle: hand-computed shifts by zero, across the limb boundary and past bit 255.
+    #[wasm_bindgen_test(unsupported = test)]
+    fn wide_shifts_keep_every_bit_or_refuse() {
+        let got = [
+            ONE.checked_shl(0),
+            ONE.checked_shl(255),
+            ONE.checked_shl(256),
+            U256 { hi: 0, lo: 2 }.checked_shl(255),
+            LOW_MAX.checked_shl(128),
+            LOW_MAX.checked_shl(129),
+            U256 { hi: 0, lo: 3 }.checked_shl(200),
+        ];
+        let expected = [
+            Some(ONE),
+            Some(U256 { hi: 1 << 127, lo: 0 }),
+            None,
+            None,
+            Some(U256 { hi: u128::MAX, lo: 0 }),
+            None,
+            Some(U256 { hi: 3 << 72, lo: 0 }),
+        ];
         // dojo: allow panic-path -- test assertion against hand-computed values
         assert_eq!(got, expected);
     }

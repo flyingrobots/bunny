@@ -96,8 +96,8 @@ formatting.
 | TRACE-REQ-034 | compact_bvh queues at most d interior subtrees on a tree of depth d, so every tree of depth at most 64 converts unless another error applies; TooDeep means more than 64 interior subtrees waiting at once, which a tree of depth 65 can need. | `README.md#compact-layout` |
 | TRACE-REQ-035 | `compact_closest_hit_counted` and compact_any_hit_counted return exactly the result or error of compact_closest_hit and compact_any_hit and make the same primitive calls in the same order on every CompactView, and on success their TraversalCounts hold, for that search, the box_entry calls, those that returned a bound, the popped entries skipped beyond the limit, the interior and leaf visits, the primitive tests and the deepest stack; TraversalCounts addition saturates and keeps the larger peak. | `README.md#counting-traversals` |
 | TRACE-REQ-040 | TraceSphere::new accepts a centre and a positive radius inside the trace domain and refuses any other with a typed TraceSphereError (CenterOutsideTraceDomain, RadiusNotPositive, RadiusOutsideTraceDomain); no input to TraceSphere::new or TraceRay::hit_sphere wraps or panics. | `README.md#ray-sphere` |
-| TRACE-REQ-041 | TraceRay::hit_sphere (contract bunny-ray-sphere/1) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None. | `README.md#ray-sphere` |
-| TRACE-REQ-042 | SphereHit::normal is floor((f * 2^32 + d * distance) / r) per component, with f = origin - center, at the rounded distance. | `README.md#ray-sphere` |
+| TRACE-REQ-041 | TraceRay::hit_sphere (contract bunny-ray-sphere/1, published as RAY_SPHERE_ID) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None. | `README.md#ray-sphere` |
+| TRACE-REQ-042 | SphereHit::normal is a FixedUnitVec3: the outward normal at the exact (unrounded) root, normalized by Bunny's unit-vector rule (prescale to [2^61, 2^62), then FixedUnitVec3::new); it is never zero and each component is within 1/2 + 2^-24 raw units of 2^32 times the exact unit normal, for every admitted radius. | `README.md#ray-sphere` |
 | TRACE-REQ-043 | A tangent ray hits at its one root with front_face true; an origin inside the sphere hits the far root from inside; a sphere whose roots are both below t_min is not hit. | `README.md#ray-sphere` |
 | TRACE-REQ-065 | TraceCylinder::new accepts a positive radius and two cap heights bottom < top, all inside the trace domain, and refuses any other with a typed TraceCylinderError (RadiusNotPositive, RadiusOutsideTraceDomain, CapOutsideTraceDomain, CapsNotOrdered, checked in that order); no input to TraceCylinder::new or TraceRay::hit_cylinder wraps or panics. | `README.md#ray-cylinder` |
 | TRACE-REQ-066 | TraceRay::hit_cylinder (contract bunny-ray-cylinder/1) returns, for every ray and cylinder about the +Y axis in the trace domain, the floor in raw units of the exact entry of the line into the closed solid when that rounded distance is in t_min..=t_max (front_face true), else that of the exact exit when it is (front_face false), else None; a cap distance is floor(n * 2^32 / q) and a side distance follows the rounding rule of bunny-ray-sphere/1. | `README.md#ray-cylinder` |
@@ -266,12 +266,12 @@ status = "active"
 
 [[requirement]]
 id = "TRACE-REQ-041"
-summary = "TraceRay::hit_sphere (contract bunny-ray-sphere/1) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None."
+summary = "TraceRay::hit_sphere (contract bunny-ray-sphere/1, published as RAY_SPHERE_ID) returns, for every ray and sphere in the trace domain, the floor in raw units of the near root of the true quadratic when that rounded distance is in t_min..=t_max (front_face true), else that of the far root when it is (front_face false), else None."
 status = "active"
 
 [[requirement]]
 id = "TRACE-REQ-042"
-summary = "SphereHit::normal is floor((f * 2^32 + d * distance) / r) per component, with f = origin - center, at the rounded distance."
+summary = "SphereHit::normal is a FixedUnitVec3: the outward normal at the exact (unrounded) root, normalized by Bunny's unit-vector rule (prescale to [2^61, 2^62), then FixedUnitVec3::new); it is never zero and each component is within 1/2 + 2^-24 raw units of 2^32 times the exact unit normal, for every admitted radius."
 status = "active"
 
 [[requirement]]
@@ -486,14 +486,21 @@ Regenerating them is a contract change.
 | TRACE-TP-419 | Adding counts | TRACE-REQ-035 | Adding two TraversalCounts sums each counter, saturating at u64::MAX, and keeps the larger peak_stack; += agrees with +. | `crates/bunny-broadphase/tests/counted_traversal_tests.rs::trace_tp_419_adding_counts_sums_saturates_and_keeps_the_peak` |
 | TRACE-TP-420 | Deliberate counting mutations | TRACE-REQ-035 | A box test not counted, a rejected box counted as entered, a skipped pop counted as a visit, a leaf counted twice, the last primitive test of a leaf not counted, the peak not tracked and the counted search pruning differently from the uncounted one (`<=` made `<` for the counting tally only) each make a case fail. | [Mutation checks](#counting-mutation-checks) |
 | TRACE-TP-421 | Compact visit bound | TRACE-REQ-028 | A three-node compact cycle with a leaf beside each node: `compact_closest_hit` and `compact_any_hit` test primitives 0, 1 and 2 and refuse the fourth interior visit with `InvalidNodeIndex`, so a bound one looser (a fourth primitive test) or one tighter (no test of primitive 2) fails. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_421_the_compact_visit_bound_allows_exactly_one_visit_per_node` |
-| TRACE-TP-501 | Generated exact oracle | TRACE-REQ-041, TRACE-REQ-042 | Exact rational oracle in independent arbitrary-precision integers: discriminant as b^2 - a c, each rounded root found by bisection on the exact predicate k <= root, no square root; 6 000 cases from seed 0x5EED_5F4E_0358_0001 (4 099 misses, 1 023 front hits, 878 back hits; floors 3 070, 765, 655), the seed and case printed on failure. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_501_hits_match_an_exact_rational_oracle_on_generated_rays` |
+| TRACE-TP-501 | Generated exact oracle | TRACE-REQ-041, TRACE-REQ-042 | Exact rational oracle in independent arbitrary-precision integers: discriminant as b^2 - a c, each rounded root found by bisection on the exact predicate k <= root, no square root; the normal checked without the kernel's formula, by exact sign decisions of p + q sqrt(disc): each component within 1/2 + 2^-24 raw units of the exact unit normal at the exact root, a positive dot product with the exact offset, and FixedUnitVec3::try_from_unit. 6 000 cases from seed 0x5EED_5F4E_0358_0001, one in three with its range moved onto its own exact roots (t_min on the near root or one past it, t_max on the near root or one before it, or both around the far root) by a second stream from seed 0x5EED_5F4E_0422_0001 (4 244 misses, 925 front hits, 831 back hits, 232 hits at a radius of at most 2^8 raw, 128 distances on t_min, 235 on t_max, 235 misses with a root one raw unit past t_max; floors 3 183, 693, 623, 174, 96, 176, 176), the seed and case printed on failure. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_501_hits_match_an_exact_rational_oracle_on_generated_rays` |
 | TRACE-TP-502 | Tangent ray | TRACE-REQ-041, TRACE-REQ-043 | Constructed: the line y = 1 touches the unit sphere at distance 4.0 with normal (0, 1, 0), front face; one raw unit further out misses; one raw unit in is checked against the oracle and lies within the hand-computed half chord. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_502_a_tangent_ray_hits_once_and_a_ray_one_raw_unit_outside_misses` |
 | TRACE-TP-503 | Origin inside | TRACE-REQ-041, TRACE-REQ-043 | Constructed: from the centre of a radius-2 sphere the hit is at 2.0, back face, normal (1, 0, 0); off-centre with a half-length direction the distance is 3.464.. (2 sqrt 3) and equals the oracle; t_min past the exit misses. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_503_an_origin_inside_the_sphere_hits_the_far_side_from_inside` |
 | TRACE-TP-504 | Sphere behind the origin | TRACE-REQ-041, TRACE-REQ-043 | Constructed: roots at -11 and -9 miss with t_min = 0 and give the near root -11.0, front face, normal (-1, 0, 0) with t_min = -20; a ray pointing away misses. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_504_a_sphere_behind_the_origin_is_not_hit` |
 | TRACE-TP-505 | Typed refusals | TRACE-REQ-040 | Constructed: each bound one raw unit past, and i64 extremes, give the stated error variant; the largest accepted sphere round-trips its centre and radius and its bounds are hand-computed. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_505_spheres_outside_the_trace_domain_are_refused_with_a_typed_error` |
 | TRACE-TP-506 | Widest inputs | TRACE-REQ-040, TRACE-REQ-041 | The exact oracle of TRACE-TP-501 on every domain corner against the largest spheres, with the longest, shortest and a 2^32 + 1 unit direction, under overflow-checked test arithmetic. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_506_the_widest_inputs_match_the_oracle_without_overflow` |
 | TRACE-TP-507 | 256-bit helper | TRACE-REQ-041 | Hand-computed: products of the largest values, carries across limbs, refused overflow, and isqrt of k^2 - 1, k^2 and k^2 + 1 up to k = 2^128 - 1. | `crates/bunny-query/src/trace/wide.rs::tests::isqrt_is_the_floor_root_around_squares` |
-| TRACE-TP-508 | Deliberate mutations of the sphere test | TRACE-REQ-040, TRACE-REQ-041 | Each rule broken on purpose makes a case above fail. | [Sphere mutation checks](#sphere-mutation-checks) |
+| TRACE-TP-508 | Deliberate mutations of the sphere test | TRACE-REQ-040, TRACE-REQ-041, TRACE-REQ-042 | Each rule broken on purpose makes a case above fail. | [Sphere mutation checks](#sphere-mutation-checks) |
+| TRACE-TP-701 | Zero-normal reproducer | TRACE-REQ-042 | Constructed (independent review of flyingrobots/bunny#375): radius 1 raw, origin at the centre, direction (1, 1, 1); distance 0, back face, each component 2479700524 or 2479700525 raw (2^32 / sqrt 3 = 2479700524.87..) and the normal oracle of TRACE-TP-501 holds. The code at the merge of flyingrobots/bunny#375 returned (0, 0, 0). | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_701_a_one_raw_unit_sphere_hit_from_its_centre_has_a_unit_normal` |
+| TRACE-TP-702 | Radius 0.01 reproducer | TRACE-REQ-042 | Constructed (same review): centre raw (12345, -777, 4242), radius raw 42949673, origin (-1, -1, -1), direction (1, 1, 1); distance raw 4270175561, front face, and the normal oracle holds. The code at the merge of flyingrobots/bunny#375 returned (-2480407998, -2479095798, -2479597698), 2^32 + 56.2 raw units long. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_702_a_sphere_of_radius_one_hundredth_has_a_unit_normal` |
+| TRACE-TP-703 | The seed's seven zero normals | TRACE-REQ-042 | Cases 22, 129, 757, 988, 1275, 1628 and 2635 of the base corpus of TRACE-TP-501 (radius 1 raw each): distance and face equal the oracle and the normal oracle holds on all seven; a failure lists every one that breaks. All seven were (0, 0, 0) at the merge of flyingrobots/bunny#375. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_703_the_seeds_seven_old_zero_normals_are_unit_normals` |
+| TRACE-TP-704 | Inclusive distance limits | TRACE-REQ-041 | Constructed: the unit sphere from (-4, 0, 0) along +x has exact roots 3.0 and 5.0; each root exactly on t_min and on t_max hits, t_min == t_max == 3.0 hits, one raw unit past t_max misses, and one raw unit above the near root moves the hit to the far root (back face, normal (1, 0, 0)). | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_704_the_distance_limits_are_inclusive_at_both_ends` |
+| TRACE-TP-705 | Normal bound across radii | TRACE-REQ-042 | Constructed: a skew direction through an off-axis centre at radius 1 raw, 0.01, 1.0 and the largest admitted, from outside (front face) and from the centre (back face), each against the distance oracle and the normal oracle of TRACE-TP-501. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_705_the_normal_bound_holds_from_the_smallest_radius_to_the_largest` |
+| TRACE-TP-706 | Public contract identity | TRACE-REQ-041 | RAY_SPHERE_ID equals bunny-ray-sphere/1. | `crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_706_the_contract_identity_is_public` |
+| TRACE-TP-707 | 256-bit shifts | TRACE-REQ-041, TRACE-REQ-042 | Hand-computed: U256::checked_shl by 0, 128, 129, 200, 255 and 256 bits keeps every bit or refuses the overflow. | `crates/bunny-query/src/trace/wide.rs::tests::wide_shifts_keep_every_bit_or_refuse` |
 | TRACE-TP-540 | Generated exact oracle | TRACE-REQ-066, TRACE-REQ-067, TRACE-REQ-068 | Exact rational oracle in independent arbitrary-precision integers that lists every point where the line meets a surface (a side root whose height is between the caps, a cap crossing inside its disc, each checked exactly) and takes the earliest and latest, a cap winning a tie; discriminant as b^2 - a c, each side root's floor by bisection on an exact predicate, no square root; each normal checked without the kernel's formula (a cap's is the exact axis; a side's has y = 0, each component within one raw unit of the exact unit normal a (o + d t) / (a r) built from the oracle's own root, and a positive dot product with the exact offset); 6 000 cases from seed 0x5EED_C71D_0360_0001, one in ten parallel to the axis, one in ten parallel to the caps (half of those in a cap's plane), one in ten through a rim point, one in five from inside (3 908 misses, 407 cap entries, 884 side entries, 441 cap exits, 360 side exits; floors 2 931, 305, 663, 330, 270), the seed and case printed on failure. | `crates/bunny-query/tests/trace_cylinder_tests.rs::trace_tp_540_hits_match_an_exact_rational_oracle_on_generated_rays` |
 | TRACE-TP-541 | Grazing ray | TRACE-REQ-066, TRACE-REQ-068 | Constructed: the line z = 1 touches the unit cylinder's side at distance 4.0 with normal (0, 0, 1), front face; one raw unit further out misses; one raw unit in is checked against the oracle and lies within the hand-computed half chord; one raw unit above the top cap's plane misses. | `crates/bunny-query/tests/trace_cylinder_tests.rs::trace_tp_541_a_grazing_ray_touches_the_side_once_and_one_raw_unit_out_misses` |
 | TRACE-TP-542 | Origin inside | TRACE-REQ-066, TRACE-REQ-068 | Constructed: from the centre the exits are at 1.0 through the side (1, 0, 0), 1.0 through the top cap and 2.0 through the bottom cap with a half-length direction, all back face; off-centre the distance is 1.732.. (sqrt 3) and is checked against the oracle; t_min past the exit misses. | `crates/bunny-query/tests/trace_cylinder_tests.rs::trace_tp_542_an_origin_inside_hits_the_exit_from_inside` |
@@ -1248,7 +1255,7 @@ id = "TRACE-TP-501"
 requirements = ["TRACE-REQ-041", "TRACE-REQ-042"]
 evidence = "property"
 test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_501_hits_match_an_exact_rational_oracle_on_generated_rays"
-oracle = "Exact rational oracle in independent arbitrary-precision integers: discriminant as b^2 - a c, each rounded root found by bisection on the exact predicate k <= root, no square root; 6 000 cases from seed 0x5EED_5F4E_0358_0001 (4 099 misses, 1 023 front hits, 878 back hits; floors 3 070, 765, 655), the seed and case printed on failure."
+oracle = "Exact rational oracle in independent arbitrary-precision integers: discriminant as b^2 - a c, each rounded root found by bisection on the exact predicate k <= root, no square root; the normal checked without the kernel's formula, by exact sign decisions of p + q sqrt(disc): each component within 1/2 + 2^-24 raw units of the exact unit normal at the exact root, a positive dot product with the exact offset, and FixedUnitVec3::try_from_unit. 6 000 cases from seed 0x5EED_5F4E_0358_0001, one in three with its range moved onto its own exact roots (t_min on the near root or one past it, t_max on the near root or one before it, or both around the far root) by a second stream from seed 0x5EED_5F4E_0422_0001 (4 244 misses, 925 front hits, 831 back hits, 232 hits at a radius of at most 2^8 raw, 128 distances on t_min, 235 on t_max, 235 misses with a root one raw unit past t_max; floors 3 183, 693, 623, 174, 96, 176, 176), the seed and case printed on failure."
 tier = "fast"
 status = "implemented"
 
@@ -1308,11 +1315,74 @@ status = "implemented"
 
 [[case]]
 id = "TRACE-TP-508"
-requirements = ["TRACE-REQ-040", "TRACE-REQ-041"]
+requirements = ["TRACE-REQ-040", "TRACE-REQ-041", "TRACE-REQ-042"]
 evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#sphere-mutation-checks"
 oracle = "Each rule broken on purpose makes a case above fail."
 tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-701"
+requirements = ["TRACE-REQ-042"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_701_a_one_raw_unit_sphere_hit_from_its_centre_has_a_unit_normal"
+oracle = "Constructed (independent review of flyingrobots/bunny#375): radius 1 raw, origin at the centre, direction (1, 1, 1); distance 0, back face, each component 2479700524 or 2479700525 raw (2^32 / sqrt 3 = 2479700524.87..) and the normal oracle of TRACE-TP-501 holds. The code at the merge of flyingrobots/bunny#375 returned (0, 0, 0)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-702"
+requirements = ["TRACE-REQ-042"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_702_a_sphere_of_radius_one_hundredth_has_a_unit_normal"
+oracle = "Constructed (same review): centre raw (12345, -777, 4242), radius raw 42949673, origin (-1, -1, -1), direction (1, 1, 1); distance raw 4270175561, front face, and the normal oracle holds. The code at the merge of flyingrobots/bunny#375 returned (-2480407998, -2479095798, -2479597698), 2^32 + 56.2 raw units long."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-703"
+requirements = ["TRACE-REQ-042"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_703_the_seeds_seven_old_zero_normals_are_unit_normals"
+oracle = "Cases 22, 129, 757, 988, 1275, 1628 and 2635 of the base corpus of TRACE-TP-501 (radius 1 raw each): distance and face equal the oracle and the normal oracle holds on all seven; a failure lists every one that breaks. All seven were (0, 0, 0) at the merge of flyingrobots/bunny#375."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-704"
+requirements = ["TRACE-REQ-041"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_704_the_distance_limits_are_inclusive_at_both_ends"
+oracle = "Constructed: the unit sphere from (-4, 0, 0) along +x has exact roots 3.0 and 5.0; each root exactly on t_min and on t_max hits, t_min == t_max == 3.0 hits, one raw unit past t_max misses, and one raw unit above the near root moves the hit to the far root (back face, normal (1, 0, 0))."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-705"
+requirements = ["TRACE-REQ-042"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_705_the_normal_bound_holds_from_the_smallest_radius_to_the_largest"
+oracle = "Constructed: a skew direction through an off-axis centre at radius 1 raw, 0.01, 1.0 and the largest admitted, from outside (front face) and from the centre (back face), each against the distance oracle and the normal oracle of TRACE-TP-501."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-706"
+requirements = ["TRACE-REQ-041"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_sphere_tests.rs::trace_tp_706_the_contract_identity_is_public"
+oracle = "RAY_SPHERE_ID equals bunny-ray-sphere/1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-707"
+requirements = ["TRACE-REQ-041", "TRACE-REQ-042"]
+evidence = "test"
+test = "crates/bunny-query/src/trace/wide.rs::tests::wide_shifts_keep_every_bit_or_refuse"
+oracle = "Hand-computed: U256::checked_shl by 0, 128, 129, 200, 255 and 256 bits keeps every bit or refuses the overflow."
+tier = "fast"
 status = "implemented"
 
 [[case]]
@@ -1850,6 +1920,17 @@ run. The restored source passes.
 | `front_face` true at the near root made false | Facing | TRACE-TP-501 to 504 |
 | `radius <= 0` made `radius < 0` | A zero radius is refused | TRACE-TP-505 |
 | `isqrt` starts its low bits at bit 62 instead of 63 | The square root is exact above `2^128` | two cases, TRACE-TP-501 among them |
+
+The normal and the range limits (flyingrobots/bunny#422) were checked the same
+way, in the working tree with the source restored after each run:
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| The old normal: the code at the merge of flyingrobots/bunny#375, the new tests run against it with `.into_inner()` and TRACE-TP-706 removed | Unit normal at the exact root | TRACE-TP-501, 503, 506, 701, 702, 703 (all seven cases), 705 |
+| `t_min..=t_max` made `t_min..t_max` | The upper limit is inclusive | TRACE-TP-501, TRACE-TP-704 |
+| The offset at the floored distance passed to `FixedUnitVec3::new` | The normal is taken at the exact root | TRACE-TP-501, 506, 701, 702, 703, 705 |
+| The near and far roots swapped in the normal | Outward normal at the reported root | TRACE-TP-501 to 504, 506, 701 to 705 |
+| The prescale made `[2^60, 2^61)` | none: every one of the 1 901 hits of the base corpus of TRACE-TP-501 and the TRACE-TP-705 normals are bit-identical under it, so no case can tell the two apart | not detected (equivalent on the corpus) |
 
 ### Cylinder Mutation Checks
 

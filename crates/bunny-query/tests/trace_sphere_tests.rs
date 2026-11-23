@@ -1,21 +1,38 @@
 //! `TraceRay::hit_sphere` (contract `bunny-ray-sphere/1`) against an independent exact
 //! oracle, and named cases for tangent rays, origins inside the sphere, spheres behind the
-//! origin and refused inputs (TRACE-TP-501 to TRACE-TP-506).
+//! origin and refused inputs (TRACE-TP-501 to TRACE-TP-506), the reviewed normal reproducers,
+//! the range limits, the normal bound across radii and the contract identity (TRACE-TP-701 to
+//! TRACE-TP-706).
 //!
 //! The oracle shares no arithmetic with the kernel. It works in its own arbitrary-precision
 //! integers ([`Big`]), takes the discriminant as `b^2 - a c` (the kernel uses Lagrange's
 //! identity), takes no square root, and finds each rounded root by bisection on the exact
-//! predicate "raw distance `k` is at most the root". The generated rays use a fixed seed;
+//! predicate "raw distance `k` is at most the root". The normal is checked by properties,
+//! never by the kernel's formula: a component bound against the exact rational offset at the
+//! exact root, a positive dot product with that offset, and unit length by
+//! `FixedUnitVec3::try_from_unit` ([`normal_holds`]). The generated rays use a fixed seed;
 //! every failure message names it and the case index.
 
-use bunny_linalg::FixedVec3;
+use bunny_linalg::{FixedUnitVec3, FixedVec3};
 use bunny_num::FixedQ32_32;
-use bunny_query::{TraceRay, TraceSphere, TraceSphereError, TRACE_COORD_LIMIT_RAW};
+use bunny_query::{TraceRay, TraceSphere, TraceSphereError, RAY_SPHERE_ID, TRACE_COORD_LIMIT_RAW};
 use std::cmp::Ordering;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const SPHERE_ORACLE_SEED: u64 = 0x5EED_5F4E_0358_0001;
 const SPHERE_ORACLE_CASES: usize = 6_000;
+/// The second stream that moves ranges onto the roots in [`limits`].
+const SPHERE_LIMIT_SEED: u64 = 0x5EED_5F4E_0422_0001;
+// Each floor is about 75 % of what the fixed seeds reach: 4 244 misses, 925 front hits,
+// 831 back hits, 232 hits at a radius of at most 2^8 raw, 128 distances on t_min, 235 on
+// t_max and 235 misses with a root one raw unit past t_max.
+const MISS_FLOOR: usize = 3_183;
+const FRONT_FLOOR: usize = 693;
+const BACK_FLOOR: usize = 623;
+const SMALL_RADIUS_FLOOR: usize = 174;
+const ON_T_MIN_FLOOR: usize = 96;
+const ON_T_MAX_FLOOR: usize = 176;
+const PAST_T_MAX_FLOOR: usize = 176;
 const ONE: i64 = 1 << 32;
 const DOMAIN: i64 = TRACE_COORD_LIMIT_RAW - 1;
 
@@ -119,8 +136,11 @@ fn big_dot(a: Raw3, b: Raw3) -> Big {
     })
 }
 
-/// What the oracle expects: raw distance, front face and raw normal.
-type Expected = Option<(i64, bool, Raw3)>;
+/// What the distance oracle expects: raw distance and front face.
+type Expected = Option<(i64, bool)>;
+
+/// What the kernel returns: raw distance, front face and the raw normal.
+type Reported = Option<(i64, bool, Raw3)>;
 
 /// One ray, one sphere and one distance range, all raw.
 #[derive(Clone, Copy, Debug)]
@@ -137,34 +157,54 @@ fn case(origin: Raw3, direction: Raw3, center: Raw3, radius: i64) -> Case {
     Case { origin, direction, center, radius, range: full() }
 }
 
-/// The exact oracle for `bunny-ray-sphere/1`.
-///
-/// With raw `f = origin - center`, the point at raw distance `k` is `(f * 2^32 + d k) / 2^32`
-/// raw. The roots `k0 <= k1` of `|f * 2^32 + d k|^2 = r^2 * 2^64` are
-/// `(-2^32 b -+ sqrt(2^64 (b^2 - a c))) / a`, with `a = d.d`, `b = f.d`, `c = f.f - r^2`.
-/// `k <= k0` holds exactly when `a k + 2^32 b <= 0` and `(a k + 2^32 b)^2 >= 2^64 disc`;
-/// `k <= k1` when `a k + 2^32 b <= 0` or `(a k + 2^32 b)^2 <= 2^64 disc`. Both predicates
-/// are monotone in `k`, so bisection finds the floors.
-fn oracle(case: Case) -> Expected {
-    let Case { origin, direction, center, radius, range } = case;
-    let offset: Raw3 = [0, 1, 2].map(|i| origin[i] - center[i]);
-    let (quad, half) = (big_dot(direction, direction), big_dot(offset, direction));
-    let radius_squared = Big::from(i128::from(radius) * i128::from(radius));
-    let constant = big_dot(offset, offset).sub(&radius_squared);
-    let disc = half.mul(&half).sub(&quad.mul(&constant));
-    if disc.signum() < 0 {
-        return None;
+/// The exact quadratic of a case, in [`Big`] integers: with raw `f = origin - center`, the
+/// point at distance `t` (in direction multiples) is on the sphere when
+/// `a t^2 + 2 b t + c = 0`, `a = d.d`, `b = f.d`, `c = f.f - r^2`, `disc = b^2 - a c`.
+struct Exact {
+    offset: Raw3,
+    a: Big,
+    b: Big,
+    disc: Big,
+}
+
+impl Exact {
+    fn new(case: Case) -> Self {
+        let Case { origin, direction, center, radius, .. } = case;
+        let offset: Raw3 = [0, 1, 2].map(|i| origin[i] - center[i]);
+        let (a, b) = (big_dot(direction, direction), big_dot(offset, direction));
+        let radius_squared = Big::from(i128::from(radius) * i128::from(radius));
+        let c = big_dot(offset, offset).sub(&radius_squared);
+        let disc = b.mul(&b).sub(&a.mul(&c));
+        Self { offset, a, b, disc }
     }
-    let scaled_disc = disc.mul(&Big::from(1 << 64));
-    let scaled_half = half.mul(&Big::from(1 << 32));
-    // `(sign of a k + 2^32 b, sign of (a k + 2^32 b)^2 - 2^64 disc)`.
-    let signs = |k: i128| {
-        let lead = quad.mul(&Big::from(k)).add(&scaled_half);
-        (lead.signum(), lead.mul(&lead).sub(&scaled_disc).signum())
-    };
-    let near = floor_root(|k| matches!(signs(k), (lead, gap) if lead <= 0 && gap >= 0));
-    let far = floor_root(|k| matches!(signs(k), (lead, gap) if lead <= 0 || gap <= 0));
-    let within = |k: i128| (i128::from(range.0)..=i128::from(range.1)).contains(&k);
+
+    /// The floors of both roots in raw units, near first, or `None` when the line misses.
+    ///
+    /// The roots `k0 <= k1` in raw units are `(-2^32 b -+ sqrt(2^64 disc)) / a`.
+    /// `k <= k0` holds exactly when `a k + 2^32 b <= 0` and `(a k + 2^32 b)^2 >= 2^64 disc`;
+    /// `k <= k1` when `a k + 2^32 b <= 0` or `(a k + 2^32 b)^2 <= 2^64 disc`. Both predicates
+    /// are monotone in `k`, so bisection finds the floors. No square root is taken.
+    fn roots(&self) -> Option<(i128, i128)> {
+        if self.disc.signum() < 0 {
+            return None;
+        }
+        let scaled_disc = self.disc.mul(&Big::from(1 << 64));
+        let scaled_b = self.b.mul(&Big::from(1 << 32));
+        let signs = |k: i128| {
+            let lead = self.a.mul(&Big::from(k)).add(&scaled_b);
+            (lead.signum(), lead.mul(&lead).sub(&scaled_disc).signum())
+        };
+        let near = floor_root(|k| matches!(signs(k), (lead, gap) if lead <= 0 && gap >= 0));
+        let far = floor_root(|k| matches!(signs(k), (lead, gap) if lead <= 0 || gap <= 0));
+        Some((near, far))
+    }
+}
+
+/// The exact distance oracle for `bunny-ray-sphere/1`: the near root's floor when it is in
+/// the range, else the far root's, else no hit.
+fn oracle(case: Case) -> Expected {
+    let (near, far) = Exact::new(case).roots()?;
+    let within = |k: i128| (i128::from(case.range.0)..=i128::from(case.range.1)).contains(&k);
     let (root, front) = if within(near) {
         (near, true)
     } else if within(far) {
@@ -172,13 +212,65 @@ fn oracle(case: Case) -> Expected {
     } else {
         return None;
     };
-    let root = i64::try_from(root).expect("within an i64 range");
-    let normal = [0, 1, 2].map(|i| {
-        let along = i128::from(direction[i]) * i128::from(root);
-        let numerator = (i128::from(offset[i]) << 32) + along;
-        i64::try_from(numerator.div_euclid(i128::from(radius))).expect("normal fits")
-    });
-    Some((root, front, normal))
+    Some((i64::try_from(root).expect("within an i64 range"), front))
+}
+
+/// The sign of `p + q sqrt(disc)` for `disc >= 0`, decided exactly by squaring.
+fn sign_with_root(p: &Big, q: &Big, disc: &Big) -> i32 {
+    let (sp, sq) = (p.signum(), if disc.signum() == 0 { 0 } else { q.signum() });
+    if sq == 0 || sp == sq {
+        return if sp == 0 { sq } else { sp };
+    }
+    if sp == 0 {
+        return sq;
+    }
+    match p.mul(p).sub(&q.mul(q).mul(disc)).signum() {
+        0 => 0,
+        1 => sp,
+        _ => sq,
+    }
+}
+
+/// The per-component bound on the normal, in raw units: `1/2 + 2^-24`, as
+/// `NORMAL_BOUND_NUMERATOR / 2^25`. It is derived in `docs/topics/ray-tracing/README.md`
+/// (Ray-Sphere, "The normal") before it is measured here.
+const NORMAL_BOUND_NUMERATOR: i128 = (1 << 24) + 2;
+
+/// Checks the kernel's normal `n` (raw) without the kernel's formula, against the exact hit
+/// point at the exact root `t = (-b -+ sqrt(disc)) / a`: the exact unit normal is
+/// `(f + d t) / r`, so `2^32 r a` times it is `2^32 (a f - b d) -+ 2^32 d sqrt(disc)`.
+///
+/// - each component is within `1/2 + 2^-24` raw units of `2^32` times the exact unit normal;
+/// - `n . (f + d t) > 0`: it points outward from the exact offset;
+/// - `FixedUnitVec3::try_from_unit` accepts `n`: unit length by the unit-vector rule.
+fn normal_holds(case: Case, front: bool, n: Raw3) -> Result<(), String> {
+    let exact = Exact::new(case);
+    let dir = case.direction.map(|c| Big::from(i128::from(c)));
+    let off = exact.offset.map(|c| Big::from(i128::from(c)));
+    let (one, scale) = (Big::from(1 << 32), Big::from(1 << 25));
+    let sign = Big::from(if front { -1 } else { 1 });
+    let ra = exact.a.mul(&Big::from(i128::from(case.radius)));
+    let bound = ra.mul(&Big::from(NORMAL_BOUND_NUMERATOR));
+    let mut dot_p = Big::from(0);
+    let mut dot_q = Big::from(0);
+    for i in 0..3 {
+        let point = exact.a.mul(&off[i]).sub(&exact.b.mul(&dir[i]));
+        let ni = Big::from(i128::from(n[i]));
+        // err * 2^25 * r a = 2^25 (n r a - 2^32 point) - (sign) 2^25 2^32 d sqrt(disc).
+        let rational = scale.mul(&ni.mul(&ra).sub(&one.mul(&point)));
+        let irrational = scale.mul(&one).mul(&dir[i]).mul(&sign).mul(&Big::from(-1));
+        let above = sign_with_root(&rational.sub(&bound), &irrational, &exact.disc);
+        let below = sign_with_root(&rational.add(&bound), &irrational, &exact.disc);
+        if above > 0 || below < 0 {
+            return Err(format!("component {i} of {n:?} is outside the bound"));
+        }
+        dot_p = dot_p.add(&ni.mul(&point));
+        dot_q = dot_q.add(&ni.mul(&dir[i]).mul(&sign));
+    }
+    if sign_with_root(&dot_p, &dot_q, &exact.disc) <= 0 {
+        return Err(format!("{n:?} does not point outward"));
+    }
+    FixedUnitVec3::try_from_unit(vec(n)).map(|_| ()).ok_or(format!("{n:?} is not unit"))
 }
 
 /// The largest `k` in `-2^110..2^110` for which `at_most(k)` holds; `at_most` is true below
@@ -206,13 +298,24 @@ fn raw(v: FixedVec3) -> Raw3 {
     [v.x.raw(), v.y.raw(), v.z.raw()]
 }
 
-fn kernel(case: Case) -> Expected {
+fn kernel(case: Case) -> Reported {
     let Case { origin, direction, center, radius, range } = case;
     let ray = TraceRay::new(vec(origin), vec(direction)).expect("ray in the trace domain");
     let sphere = TraceSphere::new(vec(center), FixedQ32_32::from_raw(radius)).expect("sphere");
     let (t_min, t_max) = (FixedQ32_32::from_raw(range.0), FixedQ32_32::from_raw(range.1));
     ray.hit_sphere(&sphere, t_min, t_max)
-        .map(|hit| (hit.distance.raw(), hit.front_face, raw(hit.normal())))
+        .map(|hit| (hit.distance.raw(), hit.front_face, raw(hit.normal().into_inner())))
+}
+
+/// The kernel's answer, after checking its distance and face against [`oracle`] and its
+/// normal with [`normal_holds`].
+fn checked(case: Case) -> Reported {
+    let got = kernel(case);
+    assert_eq!(got.map(|(t, front, _)| (t, front)), oracle(case), "{case:?}");
+    if let Some((_, front, n)) = got {
+        normal_holds(case, front, n).unwrap_or_else(|why| panic!("{why}; {case:?}"));
+    }
+    got
 }
 
 fn full() -> (i64, i64) {
@@ -278,55 +381,108 @@ fn fit_direction(aim: Raw3, seeds: &mut Seeds) -> Raw3 {
     aim.map(|c| c >> (shift + extra).min(62))
 }
 
+/// Hits counted by the generated test, per hard region.
+#[derive(Debug, Default)]
+struct Reached {
+    misses: usize,
+    front: usize,
+    back: usize,
+    /// Hits by radius: at most `2^8` raw, at most `2^24`, at most `2^32` (1.0), above.
+    by_radius: [usize; 4],
+    /// Reported distances exactly on `t_min` and on `t_max`.
+    on_limit: [usize; 2],
+    /// Misses with a root exactly one raw unit past `t_max`.
+    past_limit: usize,
+}
+
+/// One time in three, the range is moved onto a limit of the case's own exact roots (from
+/// the oracle, a second seed stream, so the base corpus stays the one of #375): `t_min` on
+/// the near root or one past it, `t_max` on the near root or one before it, or both limits
+/// around the far root.
+fn limits(case: Case, seeds: &mut Seeds) -> Case {
+    let Some((near, far)) = Exact::new(case).roots() else { return case };
+    let (Ok(near), Ok(far)) = (i64::try_from(near), i64::try_from(far)) else { return case };
+    if !seeds.next().is_multiple_of(3) || near == i64::MIN || far == i64::MAX {
+        return case;
+    }
+    let range = match seeds.next() % 6 {
+        0 => (near, i64::MAX),
+        1 => (near + 1, i64::MAX),
+        2 => (i64::MIN, near),
+        3 => (i64::MIN, near - 1),
+        4 => (near + 1, far),
+        _ => (near + 1, far - 1),
+    };
+    Case { range, ..case }
+}
+
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_501_hits_match_an_exact_rational_oracle_on_generated_rays() {
     let mut seeds = Seeds(SPHERE_ORACLE_SEED);
-    let mut reached = [0_usize; 3];
+    let mut limit_seeds = Seeds(SPHERE_LIMIT_SEED);
+    let mut r = Reached::default();
     for index in 0..SPHERE_ORACLE_CASES {
-        let case = generate(&mut seeds);
+        let case = limits(generate(&mut seeds), &mut limit_seeds);
         let context = format!("seed={SPHERE_ORACLE_SEED:#018x} case={index} {case:?}");
-        let expected = oracle(case);
-        assert_eq!(kernel(case), expected, "{context}");
-        reached[match expected {
-            None => 0,
-            Some((_, true, _)) => 1,
-            Some((_, false, _)) => 2,
-        }] += 1;
+        let got = kernel(case);
+        assert_eq!(got.map(|(t, front, _)| (t, front)), oracle(case), "{context}");
+        let Some((t, front, n)) = got else {
+            r.misses += 1;
+            let roots = Exact::new(case).roots();
+            let past = |k: i128| k == i128::from(case.range.1) + 1;
+            r.past_limit += usize::from(roots.is_some_and(|(near, far)| past(near) || past(far)));
+            continue;
+        };
+        normal_holds(case, front, n).unwrap_or_else(|why| panic!("{why}; {context}"));
+        if front {
+            r.front += 1;
+        } else {
+            r.back += 1;
+        }
+        let class = [1 << 8, 1 << 24, ONE].iter().take_while(|&&c| case.radius > c).count();
+        r.by_radius[class] += 1;
+        r.on_limit[0] += usize::from(t == case.range.0);
+        r.on_limit[1] += usize::from(t == case.range.1);
     }
-    // Each floor is about 75 % of what the fixed seed reaches (counts in the test plan).
-    let [misses, front, back] = reached;
-    let context = format!("seed={SPHERE_ORACLE_SEED:#018x} reached={reached:?}");
-    assert!(misses >= 3_070 && front >= 765 && back >= 655, "{context}");
+    let context = format!("seed={SPHERE_ORACLE_SEED:#018x} reached={r:?}");
+    let floors = [
+        (r.misses, MISS_FLOOR),
+        (r.front, FRONT_FLOOR),
+        (r.back, BACK_FLOOR),
+        (r.by_radius[0], SMALL_RADIUS_FLOOR),
+        (r.on_limit[0], ON_T_MIN_FLOOR),
+        (r.on_limit[1], ON_T_MAX_FLOOR),
+        (r.past_limit, PAST_T_MAX_FLOOR),
+    ];
+    assert!(floors.iter().all(|&(count, floor)| count >= floor), "{context}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_502_a_tangent_ray_hits_once_and_a_ray_one_raw_unit_outside_misses() {
     // Unit sphere at the origin; the ray runs along y = 1, touching it at (0, 1, 0).
-    let tangent = kernel(case([-4 * ONE, ONE, 0], [ONE, 0, 0], [0; 3], ONE));
+    let tangent = checked(case([-4 * ONE, ONE, 0], [ONE, 0, 0], [0; 3], ONE));
     assert_eq!(tangent, Some((4 * ONE, true, [0, ONE, 0])));
-    let outside = kernel(case([-4 * ONE, ONE + 1, 0], [ONE, 0, 0], [0; 3], ONE));
+    let outside = checked(case([-4 * ONE, ONE + 1, 0], [ONE, 0, 0], [0; 3], ONE));
     assert_eq!(outside, None);
     // One raw unit inside: a chord of half-length sqrt(2^33 - 1) raw, about 92682 raw units.
-    let inside = kernel(case([-4 * ONE, ONE - 1, 0], [ONE, 0, 0], [0; 3], ONE));
-    assert_eq!(inside, oracle(case([-4 * ONE, ONE - 1, 0], [ONE, 0, 0], [0; 3], ONE)));
+    let inside = checked(case([-4 * ONE, ONE - 1, 0], [ONE, 0, 0], [0; 3], ONE));
     let (distance, front, _) = inside.expect("the ray crosses the sphere");
     assert!(front && distance < 4 * ONE && distance > 4 * ONE - 92_683, "{distance}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_503_an_origin_inside_the_sphere_hits_the_far_side_from_inside() {
-    let from_center = kernel(case([0; 3], [ONE, 0, 0], [0; 3], 2 * ONE));
+    let from_center = checked(case([0; 3], [ONE, 0, 0], [0; 3], 2 * ONE));
     assert_eq!(from_center, Some((2 * ONE, false, [ONE, 0, 0])));
     // Off-centre, with a half-length direction: the exit at x = sqrt(4 - 1) = 1.732.. is at
     // distance 2 * 1.732.. = 3.464.. in direction multiples.
-    let off = kernel(case([0, ONE, 0], [ONE / 2, 0, 0], [0; 3], 2 * ONE));
-    assert_eq!(off, oracle(case([0, ONE, 0], [ONE / 2, 0, 0], [0; 3], 2 * ONE)));
+    let off = checked(case([0, ONE, 0], [ONE / 2, 0, 0], [0; 3], 2 * ONE));
     let (distance, front, _) = off.expect("an inside origin always hits");
     assert!(!front && distance / (ONE / 1000) == 3464, "{distance}");
     // With t_min past the exit there is nothing left to hit.
     let past = (3 * ONE + ONE / 2, i64::MAX);
     assert_eq!(
-        kernel(Case { range: past, ..case([0, ONE, 0], [ONE / 2, 0, 0], [0; 3], 2 * ONE) }),
+        checked(Case { range: past, ..case([0, ONE, 0], [ONE / 2, 0, 0], [0; 3], 2 * ONE) }),
         None
     );
 }
@@ -334,13 +490,15 @@ fn trace_tp_503_an_origin_inside_the_sphere_hits_the_far_side_from_inside() {
 #[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_504_a_sphere_behind_the_origin_is_not_hit() {
     // Roots at -11 and -9: both behind.
-    assert_eq!(kernel(case([0; 3], [ONE, 0, 0], [-10 * ONE, 0, 0], ONE)), None);
+    assert_eq!(checked(case([0; 3], [ONE, 0, 0], [-10 * ONE, 0, 0], ONE)), None);
     // With a negative t_min the same sphere is hit at its near root, from outside.
-    let backwards =
-        kernel(Case { range: (-20 * ONE, 0), ..case([0; 3], [ONE, 0, 0], [-10 * ONE, 0, 0], ONE) });
+    let backwards = checked(Case {
+        range: (-20 * ONE, 0),
+        ..case([0; 3], [ONE, 0, 0], [-10 * ONE, 0, 0], ONE)
+    });
     assert_eq!(backwards, Some((-11 * ONE, true, [-ONE, 0, 0])));
     // Pointing away from a sphere ahead of the origin.
-    assert_eq!(kernel(case([0; 3], [-ONE, 0, 0], [5 * ONE, 0, 0], ONE)), None);
+    assert_eq!(checked(case([0; 3], [-ONE, 0, 0], [5 * ONE, 0, 0], ONE)), None);
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -373,10 +531,7 @@ fn trace_tp_506_the_widest_inputs_match_the_oracle_without_overflow() {
         let origin = [sx * DOMAIN, sy * DOMAIN, sz * DOMAIN];
         for direction in [[-sx * ONE, -sy * ONE, -sz * ONE], [-sx, 0, 0], [-sx * ONE, -sy, 0]] {
             for (center, radius) in [([0; 3], DOMAIN), (origin.map(|c| -c), DOMAIN), ([0; 3], 1)] {
-                let context =
-                    format!("origin={origin:?} direction={direction:?} center={center:?}");
-                let widest = case(origin, direction, center, radius);
-                assert_eq!(kernel(widest), oracle(widest), "{context}");
+                checked(case(origin, direction, center, radius));
             }
         }
     }
@@ -388,6 +543,96 @@ fn trace_tp_506_the_widest_inputs_match_the_oracle_without_overflow() {
     let sphere =
         TraceSphere::new(vec([DOMAIN, 0, 0]), FixedQ32_32::from_raw(DOMAIN)).expect("sphere");
     let hit = ray.hit_sphere(&sphere, FixedQ32_32::ZERO, FixedQ32_32::from_raw(i64::MAX));
-    let expected = oracle(case([-DOMAIN, 0, 0], [ONE + 1, 0, 0], [DOMAIN, 0, 0], DOMAIN));
-    assert_eq!(hit.map(|h| (h.distance.raw(), h.front_face, raw(h.normal()))), expected);
+    let unit_case = case([-DOMAIN, 0, 0], [ONE + 1, 0, 0], [DOMAIN, 0, 0], DOMAIN);
+    let hit = hit.expect("the ray crosses the sphere");
+    assert_eq!(Some((hit.distance.raw(), hit.front_face)), oracle(unit_case));
+    let n = raw(hit.normal().into_inner());
+    normal_holds(unit_case, hit.front_face, n).expect("normal within the bound");
+}
+
+/// The seed's cases whose old floored normal was the zero vector (radius 1 raw each), from
+/// the independent review of flyingrobots/bunny#375.
+const SEED_ZERO_NORMAL_CASES: [usize; 7] = [22, 129, 757, 988, 1275, 1628, 2635];
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_701_a_one_raw_unit_sphere_hit_from_its_centre_has_a_unit_normal() {
+    // Radius 1 raw, origin at the centre, direction (1, 1, 1): the far root floors to 0 and
+    // the old normal was (0, 0, 0). The exact normal is (1, 1, 1) / sqrt 3, 2479700524.87.. raw.
+    let zero = checked(case([0; 3], [ONE, ONE, ONE], [0; 3], 1));
+    let (distance, front, n) = zero.expect("an origin inside always hits");
+    assert_eq!((distance, front), (0, false));
+    assert!(n.iter().all(|&c| (2_479_700_524..=2_479_700_525).contains(&c)), "{n:?}");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_702_a_sphere_of_radius_one_hundredth_has_a_unit_normal() {
+    // Radius 0.01, from (-1, -1, -1) along (1, 1, 1): the old normal was 2^32 + 56.2 raw
+    // units long and each component 32.4 raw units from the exact one.
+    let small = case([-ONE, -ONE, -ONE], [ONE, ONE, ONE], [12_345, -777, 4_242], 42_949_673);
+    let (distance, front, _) = checked(small).expect("the ray crosses the sphere");
+    assert_eq!((distance, front), (4_270_175_561, true));
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_703_the_seeds_seven_old_zero_normals_are_unit_normals() {
+    // The base corpus of TRACE-TP-501, unmoved by the range limits; every one of the seven
+    // is checked before the test fails, so a failure names all that break.
+    let mut seeds = Seeds(SPHERE_ORACLE_SEED);
+    let corpus: Vec<Case> = (0..=SEED_ZERO_NORMAL_CASES[6]).map(|_| generate(&mut seeds)).collect();
+    let mut broken = Vec::new();
+    for index in SEED_ZERO_NORMAL_CASES {
+        let case = corpus[index];
+        assert_eq!(case.radius, 1, "case {index}");
+        let got = kernel(case);
+        assert_eq!(got.map(|(t, front, _)| (t, front)), oracle(case), "case {index}");
+        let (_, front, n) = got.expect("each of the seven hits");
+        if let Err(why) = normal_holds(case, front, n) {
+            broken.push(format!("case {index}: {why}"));
+        }
+    }
+    assert!(broken.is_empty(), "{broken:#?}");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_704_the_distance_limits_are_inclusive_at_both_ends() {
+    // The unit sphere from (-4, 0, 0) along +x: exact roots at 3.0 (near) and 5.0 (far).
+    let hit = case([-4 * ONE, 0, 0], [ONE, 0, 0], [0; 3], ONE);
+    let at = |low: i64, high: i64| checked(Case { range: (low, high), ..hit });
+    let near = Some((3 * ONE, true, [-ONE, 0, 0]));
+    let far = Some((5 * ONE, false, [ONE, 0, 0]));
+    assert_eq!(at(3 * ONE, 4 * ONE), near, "near root exactly on t_min");
+    assert_eq!(at(3 * ONE + 1, 6 * ONE), far, "near root one raw unit below t_min");
+    assert_eq!(at(0, 3 * ONE), near, "near root exactly on t_max");
+    assert_eq!(at(0, 3 * ONE - 1), None, "near root one raw unit past t_max");
+    assert_eq!(at(3 * ONE, 3 * ONE), near, "t_min == t_max == near root");
+    assert_eq!(at(3 * ONE + 1, 5 * ONE), far, "far root exactly on t_max");
+    assert_eq!(at(3 * ONE + 1, 5 * ONE - 1), None, "far root one raw unit past t_max");
+    assert_eq!(at(5 * ONE, 6 * ONE), far, "far root exactly on t_min");
+    assert_eq!(at(5 * ONE + 1, 6 * ONE), None, "far root one raw unit below t_min");
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_705_the_normal_bound_holds_from_the_smallest_radius_to_the_largest() {
+    // A skew direction through an off-axis centre at radius 1 raw, 0.01, 1.0 and the largest,
+    // from outside (near root) and from the centre (far root). Below the largest radius the
+    // outside origin is three direction lengths back from the centre; the largest sphere is
+    // reached from the domain corner, along the offset to its centre shifted down 9 bits.
+    let skew = [ONE, -(ONE / 3), ONE / 7];
+    for radius in [1, 42_949_673, ONE, DOMAIN] {
+        let center = [radius / 5, radius / 9, -(radius / 11)];
+        let (origin, direction) = if radius < DOMAIN {
+            ([0, 1, 2].map(|i| center[i] - 3 * skew[i]), skew)
+        } else {
+            ([-DOMAIN; 3], [0, 1, 2].map(|i| (center[i] + DOMAIN) >> 9))
+        };
+        let outside = checked(case(origin, direction, center, radius));
+        assert!(outside.is_some_and(|(_, front, _)| front), "radius {radius} from outside");
+        let inside = checked(case(center, direction, center, radius));
+        assert!(inside.is_some_and(|(_, front, _)| !front), "radius {radius} from the centre");
+    }
+}
+
+#[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_706_the_contract_identity_is_public() {
+    assert_eq!(RAY_SPHERE_ID, "bunny-ray-sphere/1");
 }
