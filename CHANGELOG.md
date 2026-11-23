@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `v` outside `[0, 1]` return an `EquirectError`. Closes
   flyingrobots/bunny#394.
 
+* `bunny-linalg`: rotations from a `FixedAngle` under the contract identity
+  `bunny-rotation/1` (`ROTATION_CONTRACT_ID`). `FixedMat3::rotation_x`,
+  `rotation_y` and `rotation_z` copy `FixedAngle::sin_cos` into the axis
+  matrices: exactly `0`, `1` and `-1` at multiples of a quarter turn, zero dot
+  products, lengths within 3/2 raw units and the determinant within 3 of one.
+  `rotation_axis_angle(axis: FixedUnitVec3, angle)` evaluates Rodrigues'
+  formula on the axis as given, each entry exact in `i128` over `2^64` and
+  rounded once to nearest, ties to even: within `3/2 + 2^-30` raw units of the
+  formula and `19/2 + 2^-28` of the exact rotation, with lengths within 11,
+  dot products within 12 and the determinant within 15 raw units, dominated by
+  the axis length `FixedUnitVec3` allows. Positive angles follow the right-hand
+  rule with column vectors, as `try_look_rotation` does; angle zero is the
+  identity, the negated angle the transpose, and `rotation_axis_angle(UNIT_Y,
+  a)` is `rotation_y(a)`, exactly. Closes flyingrobots/bunny#311.
+
 * `bunny-optics`: the ray footprint at a triangle hit under the contract
   identity `bunny-ray-footprint/1` (`RAY_FOOTPRINT_ID`).
   `PinholeCamera::footprint(sample, surface)` and
