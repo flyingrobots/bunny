@@ -34,7 +34,8 @@ as:
   `barycentric_numerators`);
 - `TraceSphere` (`new`, `center`, `radius`, `bounds`), `TraceSphereError`,
   `SphereHit` (`distance`, `front_face`, `normal`) and `TraceRay::hit_sphere`,
-  in `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
+  with the identity constant `RAY_SPHERE_ID`, in
+  `crates/bunny-query/src/trace/sphere.rs` (see [Ray-Sphere](#ray-sphere));
 - `TraceCylinder` (`new`, `radius`, `bottom`, `top`, `bounds`),
   `TraceCylinderError`, `CylinderHit` (`distance`, `front_face`, `normal`) and
   `TraceRay::hit_cylinder`, with the identity constant `RAY_CYLINDER_ID`, in
@@ -270,7 +271,8 @@ vertices given to `new`, and `TraceTriangle::bounds` returns the smallest
 ## Ray-Sphere
 
 `TraceRay::hit_sphere(sphere, t_min, t_max)` is the exact ray-sphere test.
-Its contract identity is **`bunny-ray-sphere/1`**. The general-purpose
+Its contract identity is **`bunny-ray-sphere/1`**, published as
+`RAY_SPHERE_ID`. The general-purpose
 `ray_intersects_sphere` in `ray.rs` is a separate solver with its own
 contract and is unchanged.
 
@@ -291,7 +293,8 @@ across kinds directly:
 - `SphereHit::front_face` is `true` at the near root (the ray arrives from
   outside, or touches a tangent point) and `false` at the far root (the ray
   leaves from inside);
-- `SphereHit::normal` is the outward normal.
+- `SphereHit::normal` is the outward unit normal at the exact hit point, a
+  `FixedUnitVec3` (see the rounding rule below).
 
 **The arithmetic.** With `f = origin - center`, `d` the direction and `r` the
 radius, all raw, the point at distance `t` lies on the sphere when
@@ -324,10 +327,30 @@ spare.
 - The distance limits are inclusive and apply to the rounded distance. The
   near root is reported when `t_min <= near <= t_max`; otherwise the far root
   when `t_min <= far <= t_max`; otherwise there is no hit.
-- The normal is `floor((f * 2^32 + d * distance) / r)` per component: the
-  offset of the point at the rounded distance from the centre, over the
-  radius, rounded down. Its length is within a few raw units of 1.0, not
-  exactly 1.0.
+- The normal is taken at the exact root, not at the rounded distance. At the
+  root `t = (-b -+ sqrt(disc)) / a` the offset from the centre is `f + d t`,
+  and `a (f + d t) = w -+ d sqrt(disc)` with `w = a f - b d`, a vector of
+  length `a r`. With `k = 124 - bits(a r)`, so that `2^k a r` is in
+  `[2^123, 2^124)`, the kernel forms `v = 2^k w -+ d g` with
+  `g = floor(sqrt(2^2k disc))`, exactly, in `i128` and 256-bit integers. It
+  then applies Bunny's unit-vector rule, as the triangle surfaces do: `v` is
+  shifted right (flooring) until its largest component magnitude is in
+  `[2^61, 2^62)` and normalized by `FixedUnitVec3::new`. The normal is a unit
+  vector by that rule for every admitted radius, including one raw unit, and is
+  never zero: `v` is at least `2^123 - 2^34` long.
+- **Bound on the normal**, derived before it was measured: the floored root `g`
+  moves `v` by less than `abs(d_i) <= 2^32 + 1` per component against a length
+  of at least `2^123`, which turns the direction by at most `2^-89`
+  (`2^-57` raw); the shift moves each component by less than one unit against a
+  length of at least `2^61`, at most `2^-58` in direction (`2^-26` raw); the
+  floored length of `FixedVec3::normalize` adds at most `2^-29` raw; its rounded
+  division adds at most half a raw unit. Each component is therefore within
+  `1/2 + 2^-24` raw units of `2^32` times the exact unit normal.
+- The normal replaced, under the same identity, one that was the offset at the
+  rounded distance over the radius, floored. That rule was documented as
+  "within a few raw units of 1.0", which held only for a radius near 1.0 or
+  larger: at a radius of 0.01 the length was `2^32 + 56` raw units, and at a
+  radius of one raw unit it could be the zero vector (flyingrobots/bunny#422).
 
 **Cases.**
 
@@ -356,7 +379,7 @@ typed `TraceCylinderError`, checked in this order: `RadiusNotPositive`,
 Nothing wraps, saturates or panics. `TraceCylinder::bounds` is the box
 `(-r, bottom, -r)` to `(r, top, r)`.
 
-**The hit** has the form of `SphereHit`, except that its normal is a unit vector:
+**The hit** has the form of `SphereHit`, a unit normal included:
 
 - `CylinderHit::distance` is in multiples of the ray direction, rounded down;
 - `CylinderHit::front_face` is `true` at the entry (the ray arrives from

@@ -20,6 +20,10 @@ crates/bunny-query/tests/trace_box_tests.rs
 crates/bunny-optics/src/shading/wide.rs
 crates/bunny-linalg/src/lib.rs
 crates/bunny-linalg/src/fixed_vec3.rs
+crates/bunny-num/src/fixed_q32_32.rs
+crates/bunny-query/src/trace/cylinder.rs
+crates/bunny-query/src/trace/cylinder/span.rs
+crates/bunny-query/tests/trace_disc_tests.rs
 
 Files edited:
 crates/bunny-query/src/lib.rs
@@ -35,7 +39,9 @@ CHANGELOG.md
 
 Topic docs:
 `docs/topics/ray-tracing/`: the Ray-Sphere section states the corrected normal, its derived
-bound and the identity constant; the test plan gains the requirements, cases and mutations.
+bound and the identity constant; the test plan corrects TRACE-REQ-041 and TRACE-REQ-042 and TRACE-TP-501, adds
+TRACE-TP-701 to TRACE-TP-707 and records the mutations. The crate README and the changelog
+state the corrected rule and the type change.
 
 Generated artifacts:
 None.
@@ -44,7 +50,11 @@ Checks run:
 See the pull request description for the exact commands and results at the final commit.
 
 Known risks:
-The normal costs one more 256-bit square root per hit.
+The normal costs one more 256-bit square root per hit. `SphereHit::normal` changes type from
+`FixedVec3` to `FixedUnitVec3`; no caller exists in the workspace. The ray-cylinder kernel
+calls the sphere's `roots`, now a thin wrapper over the same quadratic, and its tests pass
+unchanged. A prescale of `[2^60, 2^61)` instead of `[2^61, 2^62)` is not detected: it gives
+the same normal on every generated hit.
 
 Human reviewer:
 Pending: the project lead reviews this pull request.

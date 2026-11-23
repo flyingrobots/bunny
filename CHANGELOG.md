@@ -28,17 +28,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * `bunny-query`: the sphere kernel's normal is corrected under the same
   identity, `bunny-ray-sphere/1`, now public as `RAY_SPHERE_ID`.
-  `SphereHit::normal` returns a `FixedUnitVec3`: the outward unit normal at
-  the exact (unrounded) root, normalized by Bunny's unit-vector rule (the
-  prescale to `[2^61, 2^62)` and `FixedUnitVec3::new` that triangle surfaces
-  use). Each component is within `1/2 + 2^-24` raw units of the exact unit
-  normal, for every admitted radius, and it is never zero. The rule it
+  **Breaking for the type:** `SphereHit::normal` returns a `FixedUnitVec3`, not
+  a `FixedVec3`; a caller that wants the vector calls `.into_inner()`. No crate,
+  bench or example in the workspace calls it. The value is the outward unit
+  normal at the exact (unrounded) root, normalized by Bunny's unit-vector rule
+  (the prescale to `[2^61, 2^62)` and `FixedUnitVec3::new` that triangle
+  surfaces use). Each component is within `1/2 + 2^-24` raw units of the exact
+  unit normal, for every admitted radius, and it is never zero. The rule it
   replaces (the offset at the floored distance over the radius, floored) was
-  documented as "within a few raw units of 1.0", which was never true: at a
-  radius of 0.01 its length was `2^32 + 56` raw units and at a radius of 1 raw
-  unit it could be the zero vector. The identity is kept because the contract
-  merged on 2026-11-15 (flyingrobots/bunny#375), is in no release and has no
-  caller. Distances and facing are unchanged. Closes flyingrobots/bunny#422.
+  documented as "within a few raw units of 1.0", which held only for a radius
+  near 1.0 or larger: at a radius of 0.01 its length was `2^32 + 56` raw units
+  and at a radius of 1 raw unit it could be the zero vector. The normal's test
+  oracle no longer repeats the kernel's formula: it checks the bound against
+  the exact rational offset, a positive dot product with it and unit length,
+  and named tests now put a root exactly on `t_min`, on `t_max` and one raw unit
+  past each. The identity is kept because the contract merged on 2026-11-16
+  (flyingrobots/bunny#375), is in no release and has no caller. Distances and
+  facing are unchanged. Closes flyingrobots/bunny#422.
 
 * `bunny-perf` builds with each feature group alone. Helpers shared by several
   groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
