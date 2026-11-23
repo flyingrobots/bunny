@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
+  `bunny-num` has. With default features off each crate is `#![no_std]` and
+  needs only `core` (no `alloc`), with every public item and the same bits;
+  the default build is unchanged. Each depends on the Bunny crates below it
+  with `default-features = false`, and its `std` feature turns theirs on. The
+  error types implement `core::error::Error`, which `std::error::Error`
+  re-exports. `docs/topics/no-std/` lists every `std` use the three crates had
+  (all `core` items under the same name: `fmt`, `ops`, `cmp`, `error`,
+  `array::from_fn`), and `code-dojo-no-std` builds, lints and tests each with
+  default features off for `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`
+  and the host (NOSTD-REQ-010 to -013, NOSTD-TP-010 to -017). Closes
+  flyingrobots/bunny#156.
+
 * `bunny-geom`: geometry-level shape types `FixedLine3`, `FixedTriangle3`,
   `FixedCapsule3` and `FixedObb3`, refusing with a new `#[non_exhaustive]`
   `ShapeError` (`GeomError` is unchanged). The line is a point and a
