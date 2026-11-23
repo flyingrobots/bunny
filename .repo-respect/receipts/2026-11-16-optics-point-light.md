@@ -49,6 +49,12 @@ Golden values marked "model" come from Python integers written from the chapter'
 Mutations (test plan, Point-Light Mutation Checks): twelve, each under `timeout 120`; each
 fails at least one case; the restored source passes.
 cargo fmt, clippy -D warnings; the full local gate at the final commit (see the PR).
+2026-11-22, after the merge of main, on the macOS host (Rust 1.100.0): cargo fmt --all --check;
+cargo test --locked --workspace --all-targets --all-features (107 test result lines, all ok;
+point_light_tests 6 passed); xtask code-dojo-generated, code-dojo-rust --all,
+code-dojo-determinism --enforce, code-dojo-perf-groups, topic-docs (zero duplicate IDs) and
+repo-respect check --branch, each clean. No kernel line changed in the merge, so the twelve
+mutations were not rerun.
 
 Known risks:
 The minimum distance (1/128 unit) and `shadow_t_max = m - 1` are choices this identity fixes;
