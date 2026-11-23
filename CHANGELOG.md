@@ -24,6 +24,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the host (NOSTD-REQ-010 to -013, NOSTD-TP-010 to -017). Closes
   flyingrobots/bunny#156.
 
+* `bunny-linalg`: matrix-side unprojection under `bunny-unproject/1`.
+  `Viewport::try_unproject(coordinate, clip_from_view, view_from_world)` maps a
+  continuous viewport coordinate in the closed viewport to a world-space
+  `ViewportRay`: origin at NDC depth 0 (the near plane), direction to the
+  depth-1 point, not normalized. The viewport map, the projection (divide
+  included) and the view are inverted exactly in 512-bit integers, so each
+  component is the exact value rounded once to nearest, ties to even, and
+  equals the general inverse of `clip_from_world` bit for bit before that
+  rounding. Only the two shapes `try_perspective` and `try_orthographic`
+  produce (any entries) and affine views are accepted. Typed `UnprojectError`
+  refusals: `OutsideViewport`, `UnsupportedProjection`, `SingularProjection`,
+  `PointAtInfinity`, `PointBehindCamera`, `UnsupportedView`, `SingularView`,
+  `Overflow`, `DegenerateRay`. Its rays agree with `PinholeCamera::ray` and
+  `OrthographicCamera::ray` within a measured `2^6` raw. Refs
+  flyingrobots/bunny#150.
+
 * `bunny-geom`: classify a segment, a triangle or an AABB against a
   `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
   return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
