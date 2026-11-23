@@ -240,6 +240,12 @@ fn trs_tp_023_box_hull_of_a_rotated_cube_and_a_point() {
     let flip = affine(diagonal([-2 * ONE, ONE, 3 * ONE]), [ONE, 0, -ONE]);
     let moved = aabb([ONE, -ONE, 0], [2 * ONE, ONE, ONE]).checked_transform(&flip);
     assert_eq!(bounds(moved.expect("in range")), ([-3 * ONE, -ONE, -ONE], [-ONE, ONE, 2 * ONE]));
+    // The identity gives the box back; a translation moves both corners by it.
+    let odd = aabb([-5, 7, -ONE - 3], [ONE + 1, 9, 0]);
+    assert_eq!(odd.checked_transform(&FixedAffine3::IDENTITY), Ok(odd));
+    let shift = affine(diagonal([ONE; 3]), [ONE, -2, 3]);
+    let shifted = odd.checked_transform(&shift).map(bounds);
+    assert_eq!(shifted, Ok(([ONE - 5, 5, -ONE], [2 * ONE + 1, 7, 3])));
     // A point box gives the point transform exactly, as a point box.
     let general = affine([[ONE + 3, -7, 11], [5, ONE - 1, 1 << 31], [-1, 9, 2 * ONE]], [3, -5, 7]);
     let p = [123_456_789, -987_654_321, 5];
