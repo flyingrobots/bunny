@@ -142,3 +142,10 @@ const fn round_shift(high: u128, low: u128, shift: u32) -> u64 {
     let up = remainder > half || (remainder == half && quotient & 1 == 1);
     (quotient + up as u128) as u64
 }
+
+// Part 2 (flyingrobots/bunny#305): back, circ and bounce.
+mod back_circ_bounce;
+pub use back_circ_bounce::{
+    back_in, back_in_out, back_out, bounce_in, bounce_in_out, bounce_out, circ_in, circ_in_out,
+    circ_out, BACK_DEFAULT_OVERSHOOT,
+};

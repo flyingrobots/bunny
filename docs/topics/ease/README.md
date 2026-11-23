@@ -6,7 +6,9 @@ rational coefficients, so its exact value is a rational with a power-of-two deno
 computes it exactly and rounds it once, to nearest with ties to even. The identity string is
 `bunny-ease/1` (`bunny_num::EASE_CONTRACT_ID`); the functions are in `bunny_num::ease`. The
 [test plan](test-plan.md) holds the oracles, golden vectors and mutation checks. It answers
-flyingrobots/bunny#304. Part 3, the [sine eases](#sine-eases), answers flyingrobots/bunny#306.
+flyingrobots/bunny#304. Part 2, [Back, Circ and Bounce](#back-circ-and-bounce), adds GSAP's back,
+circ and bounce eases from flyingrobots/bunny#305. Part 3, the [sine eases](#sine-eases), answers
+flyingrobots/bunny#306.
 
 | Function | Exact value rounded | Refused (`None`) |
 | --- | --- | --- |
@@ -95,6 +97,158 @@ steps(n, t) = from_ratio(k, n)      k = floor(n r / 2^32)
 value can sit just below the interval's start: `steps(3, t)` for the least `t` with `3 t >= 1`
 (raw `1 431 655 766`) is `round(1/3)`, raw `1 431 655 765`. `steps` is non-decreasing in `t`
 and constant on each interval.
+
+## Back, Circ and Bounce
+
+Part 2 adds GSAP's back, circ and bounce eases, from flyingrobots/bunny#305, in the same module.
+Back and bounce are polynomials with rational coefficients, each rounded once to nearest with
+ties to even. Circ needs a square root. Its radicand is formed exactly and its root is a floor,
+so circ has a one-sided bound of one raw unit, not half a unit.
+
+| Function | Exact value | Result | Refused (`None`) |
+| --- | --- | --- | --- |
+| `back_in(s, t)` | `t^2 ((s + 1) t - s)` | rounded once | `t` outside `[0, 1]` |
+| `back_out(s, t)` | `(t - 1)^2 ((s + 1)(t - 1) + s) + 1` | rounded once | the same |
+| `back_in_out(s, t)` | `back_in(s, 2t) / 2` for `t < 1/2`, `1 - back_in(s, 2 - 2t) / 2` from `1/2` | rounded once | the same |
+| `circ_in(t)` | `1 - sqrt(1 - t^2)` | `2^32 - isqrt(2^64 - r^2)` | the same |
+| `circ_out(t)` | `sqrt(1 - (1 - t)^2)` | `isqrt(2^64 - (2^32 - r)^2)` | the same |
+| `circ_in_out(t)` | `circ_in(2t) / 2` for `t < 1/2`, `1 - circ_in(2 - 2t) / 2` from `1/2` | `2^31 - isqrt(2^62 - r^2)`, reflected | the same |
+| `bounce_out(t)` | GSAP's four pieces, [below](#bounce) | rounded once | the same |
+| `bounce_in(t)` | `1 - bounce_out(1 - t)` | rounded once | the same |
+| `bounce_in_out(t)` | `(1 - bounce_out(1 - 2t)) / 2` for `t < 1/2`, `(1 + bounce_out(2t - 1)) / 2` from `1/2` | rounded once | the same |
+
+### Part 2 Domain
+
+`t` has the same domain as in part 1: raw `0` to `2^32`, and anything else is `None`. The back
+eases accept every `FixedQ32_32` overshoot `s`, negative ones included, and refuse nothing else.
+Every value fits. `t^3` is in `[0, 1]` and `t^2 (1 - t)` is in `[0, 4/27]`, so
+`back_in = t^3 - s t^2 (1 - t)` has magnitude at most `1 + 4 |s| / 27`, and so do `back_out` and
+`back_in_out`. For `|s| < 2^31` that is below `3.2 10^8`. The raw value is then below `2^61`.
+
+`BACK_DEFAULT_OVERSHOOT` is GSAP's `1.70158`, which is `85 079 / 50 000`. The contract rounds it
+once to nearest, giving raw `7 308 230 452`. `85 079 2^32 / 50 000` is `7 308 230 451.53`, so the
+overshoot actually used is exactly `7 308 230 452 / 2^32`, `0.47` raw units above GSAP's
+decimal. The curve is then exact for that rational.
+
+### Back
+
+On raw values, with `r = t_raw`, `S = s_raw` and `U = 2^32`:
+
+```text
+back_in(s, t)      = round_half_even(r^2 (S (r - U) + U r) / 2^96)
+back_out(s, t)     = U - back_in(s, 1 - t)
+back_in_out(s, t)  = round_half_even((2r)^2 (S (2r - U) + U 2r) / 2^97)    r < 2^31
+                   = U - back_in_out(s, 1 - t)                             r >= 2^31
+```
+
+`r^2 (S (r - U) + U r) / 2^96` is `t^2 ((s + 1) t - s)` in raw units, exactly. "Out" and the upper
+half of "in-out" use the same reflection as [part 1](#power-eases), and it is exact for the same
+reason: `U` is even, so `round_half_even(U - x) = U - round_half_even(x)`. A negative value
+rounds as the negation of its magnitude, so a tie goes to even on either side of zero. Every
+result is within half a raw unit of the exact value. In-out is GSAP's construction with the
+same overshoot. It is not Penner's, which scales `s` by `1.525`.
+
+Back is not monotone for `s > 0`, and it leaves `[0, 1]`. Write `k = 4 s^3 / (27 (s + 1)^2)`.
+`back_in` falls to its minimum `-k` at `t* = 2s / (3 (s + 1))`, then rises to exactly `1.0` at
+`t = 1`; it is at most `t^3 <= 1` elsewhere. `back_out` rises to its maximum `1 + k` at `1 - t*`,
+and is never below `0`. `back_in_out` reaches `-k/2` at `t*/2` and `1 + k/2` at `1 - t*/2`. At the
+default overshoot `k` is about `0.1`, so `back_in` dips about 10 % below zero. A raw `t` within
+half a raw unit of `t*` gives a value within `1/2 + s 2^-34` raw units of the closed form: one
+rounding, plus the curve's rise over that half unit, where its second derivative is `2s`.
+
+| Quantity | Bound | Held in |
+| --- | --- | --- |
+| `S (r - U)` | `2^95` | `i128` |
+| inner factor `S (r - U) + U r` | `2^95 + 2^64` | `i128`, then its magnitude in `u128` |
+| magnitude times `r` | below `2^128` | `u128` |
+| times `r` again | below `2^160` | the high and low `u128` halves of a 256-bit value |
+| the rounded result | below `2^61` | `i64` |
+
+### Circ
+
+```text
+circ_in(t)      = U - isqrt(2^64 - r^2)
+circ_out(t)     = isqrt(2^64 - (U - r)^2)                   = U - circ_in(1 - t)
+circ_in_out(t)  = 2^31 - isqrt(2^62 - r^2)                  r < 2^31
+                = 2^31 + isqrt(2^62 - (U - r)^2)            r >= 2^31, = U - circ_in_out(1 - t)
+```
+
+`isqrt(n)` is the floor of the square root, `max { y : y^2 <= n }`, computed exactly by
+`u128::isqrt`. Nothing is rounded before the root. `1 - t^2` in raw units squared is the exact
+integer `2^64 - r^2`, at most `2^64`, so it fits a `u128`. In-out halves inside the root:
+`sqrt(2^64 - 4 r^2) / 2 = sqrt(2^62 - r^2)`, so it needs no division after it. Each subtraction
+is of integers, and exact.
+
+The rule is a floor followed by an exact subtraction. That is not one rounding to nearest of
+the exact value, so the bound comes from the rule. `isqrt(n)` is in `(sqrt(n) - 1, sqrt(n)]`.
+So `circ_in` and the lower half of `circ_in_out` are at least the exact value and less than one
+raw unit above it. `circ_out` and the upper half of `circ_in_out` are at most the exact value
+and less than one raw unit below it. Each is exact where the radicand is a perfect square. The
+bound was proved before it was measured. A Python model then compared the results with a
+50-digit `decimal` square root over every tested point: the grid, every raw `t` within `2^16`
+of each end, and the `2^20 + 1` seeded points. The measured `kernel - exact` was:
+
+| Function | Least | Greatest |
+| --- | --- | --- |
+| `circ_in` | `0` | `0.999 999 999 884` |
+| `circ_out` | `-0.999 999 999 884` | `0` |
+| `circ_in_out` | `-0.999 999 999 767` | `0.999 999 999 767` |
+
+Near `t = 1` the slope of `circ_in` is unbounded. At raw `U - k` the radicand is `2 k U - k^2`,
+so the last raw unit before `1.0` gives `U - isqrt(2^33 - 1) = U - 92 681`, a step of 92 681 raw
+units. That is why the radicand is never rounded. At raw `4 294 920 955` (`k = 46 341`) the
+radicand is `398 064 011 439 591`, with root `19 951 541.58`. The floor gives
+`circ_in = 4 275 015 755`, `0.58` raw units above the exact value. Rounding `1 - t^2` to Q32.32
+first would err by `54.58` raw units there. Circ is non-decreasing (not strictly), because
+`isqrt` is.
+
+### Bounce
+
+GSAP's bounce.out uses `n = 7.5625 = 121/16` and the breakpoints `1/2.75 = 4/11`,
+`2/2.75 = 8/11` and `2.5/2.75 = 10/11`:
+
+```text
+bounce_out(t) = 121/16 t^2                          0      <= t < 4/11
+              = 121/16 (t - 6/11)^2  + 3/4           4/11   <= t < 8/11      (1.5/2.75 = 6/11)
+              = 121/16 (t - 9/11)^2  + 15/16         8/11   <= t < 10/11     (2.25/2.75 = 9/11)
+              = 121/16 (t - 21/22)^2 + 63/64         10/11  <= t <= 1        (2.625/2.75 = 21/22)
+```
+
+Each breakpoint belongs to the piece on its right. No raw `t` sits on one, because `11` does
+not divide `k 2^32`. The pieces meet there with the common value exactly `1`. With
+`t = n/22`, a piece is `((n - p)^2 + q) / 64` for centre `p/22` and level `q/64`, and
+`(8 - 0)^2 + 0 = (8 - 12)^2 + 48 = (16 - 18)^2 + 60 = (20 - 21)^2 + 63 = 64`. So bounce is
+continuous but not smooth. Its slope jumps at each breakpoint: from `5.5` to `-2.75` at `4/11`,
+from `2.75` to `-1.375` at `8/11`, and from `1.375` to `-0.6875` at `10/11`. Bounce is not
+monotone. It is at most `1` everywhere, and exactly `1` at each breakpoint and at `t = 1`.
+
+`121/16 (t - p/22)^2` is `(22 t - p)^2 / 64`, so on raw values each piece is
+
+```text
+bounce_out(t)      = round_half_even((22 r - p U)^2 / 2^38) + q 2^26
+bounce_in(t)       = U - bounce_out(1 - t)
+bounce_in_out(t)   = 2^31 - q 2^25 - round_half_even((22 u - p U)^2 / 2^39)      r < 2^31, u = U - 2r
+                   = U - bounce_in_out(1 - t)                                    r >= 2^31
+```
+
+The piece is chosen by `22 r` against `8 U`, `16 U` and `20 U`. `|22 r - p U| < 2^37`, so the
+square is exact in a `u128`, and each level is a whole number of raw units, so each result is
+the exact value rounded once. `(22 r - p U)^2 / 2^38` is never a tie, because a square has an
+even number of factors of two. Halved, it can be one: `bounce_in_out(1/2 - 2^17 raw)` is
+exactly `1/2 - 60.5` raw, rounded to `1/2 - 60`. Either side of a breakpoint the result is
+within one raw unit of the common value `1`, carried along that side's slope. The steepest
+slope is `5.5`, so one raw unit of `t` moves any bounce ease by at most 6 raw units.
+
+### Part 2 Properties
+
+- **Ends.** Every part-2 ease is exactly `0` at `t = 0` and exactly `1.0` at `t = 1`, for every
+  overshoot. `back_out(s, 1) = 1.0` because `back_in(s, 0) = 0` exactly.
+- **Reflection.** `f_out(t) == 1 - f_in(1 - t)` and `f_in_out(1 - t) == 1 - f_in_out(t)` hold
+  bit for bit for back (at every overshoot), circ and bounce. `f_in_out(1/2) = 1/2` exactly.
+- **Order.** Circ is non-decreasing. Back for `s > 0` and bounce are not monotone, and no
+  order property is claimed for them.
+- **The circ join.** `circ_in_out` is continuous at `1/2`, but its slope there is unbounded:
+  `circ_in_out(1/2 - 1 raw) = 1/2 - 65 535 raw`.
 
 ## Sine Eases
 
