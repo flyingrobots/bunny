@@ -154,6 +154,10 @@ curl in the direction of the fingers.
 The full deterministic angle and trigonometry profile is owned by future angle
 work. That work must preserve this sign convention.
 
+`FixedMat3::rotation_x`, `rotation_y`, `rotation_z` and `rotation_axis_angle`
+follow it: a positive quarter turn about a unit axis `a` maps each perpendicular
+`v` onto `a x v` (see [Rotation](../rotation/README.md)).
+
 ## Bounds and Boundary Contact
 
 Axis-aligned bounds use component-wise minimum and maximum corners in the
