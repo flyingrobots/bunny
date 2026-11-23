@@ -61,7 +61,9 @@ pub enum CompactError {
     /// The output buffer holds fewer nodes than the tree has interior nodes.
     OutputTooSmall,
     /// The nodes do not form a tree: more interior nodes are reached than a tree of this
-    /// many nodes can have, so some node is reached twice.
+    /// many nodes can have, so some node is reached twice. This is a count, not a proof of
+    /// a tree: a node shared by two parents is refused only when the count runs out, and
+    /// with unused nodes in the slice the shared part is written once under each parent.
     NotATree,
     /// More than 64 interior subtrees would wait to be written at once. A tree of depth `d`
     /// (the root at depth 0) queues at most `d`, so only a tree of depth 65 or more can cause
@@ -79,10 +81,12 @@ pub enum CompactError {
 /// The conversion is integer-only and gives the same bytes on every target.
 ///
 /// # Errors
-/// Returns [`CompactError`] when a node index is out of range, `out` is too small, a node is
-/// reached twice or more than 64 interior subtrees would wait at once (see
-/// [`CompactError::TooDeep`]). Leaf primitive ranges are copied as
-/// they are and checked by the traversal, as [`crate::closest_hit`] checks them.
+/// Returns [`CompactError`] when a node index is out of range, `out` is too small, more
+/// interior nodes are reached than the slice allows for (a node reached twice; see
+/// [`CompactError::NotATree`], which is a count and not a check that the nodes are a tree) or
+/// more than 64 interior subtrees would wait at once (see [`CompactError::TooDeep`]). Leaf
+/// primitive ranges are copied as they are and checked by the traversal, as
+/// [`crate::closest_hit`] checks them.
 pub fn compact_bvh(
     nodes: &[BvhNode],
     out: &mut [CompactNode],

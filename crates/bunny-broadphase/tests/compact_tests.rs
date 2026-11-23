@@ -360,6 +360,31 @@ fn trace_tp_304_malformed_input_is_a_typed_error() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
+fn trace_tp_318_a_shared_node_converts_while_the_node_count_allows_it() {
+    // The root's children are nodes 1 and 2, and both of those name nodes 3 and 4 as their
+    // children, so the leaves 3 and 4 have two parents. Five nodes allow two interior nodes
+    // and three are reached, so the conversion refuses the buffer.
+    let shared = [interior(1), interior(3), interior(3), leaf(0), leaf(1)];
+    assert_eq!(Compact::of(&shared).err(), Some(CompactError::NotATree));
+    // Four unused nodes after them raise the allowance to four interior nodes. The buffer is
+    // still not a tree, but the conversion does not see it: it writes the shared leaves under
+    // both parents, and three nodes come out.
+    let padded = [
+        interior(1),
+        interior(3),
+        interior(3),
+        leaf(0),
+        leaf(1),
+        leaf(2),
+        leaf(3),
+        leaf(4),
+        leaf(5),
+    ];
+    let compact = Compact::of(&padded).expect("a shared pair of leaves converts with spare nodes");
+    assert_eq!(compact.nodes.len(), 3);
+}
+
+#[wasm_bindgen_test(unsupported = test)]
 fn trace_tp_305_malformed_compact_trees_are_traversal_errors() {
     let ray = TraceRay::new(vec3([0, 0, 5 * ONE_RAW]), vec3([0, 0, -ONE_RAW])).expect("in domain");
     let miss = |_: u32, _: FixedQ32_32| None;

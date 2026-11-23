@@ -456,6 +456,7 @@ Regenerating them is a contract change.
 | TRACE-TP-305 | Malformed compact trees | TRACE-REQ-028, TRACE-REQ-026 | A root that names a missing compact node is InvalidNodeIndex, a leaf range past the primitive buffer is InvalidPrimitiveRange, and a chain that keeps a leaf on the stack per level is StackOverflow. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_305_malformed_compact_trees_are_traversal_errors` |
 | TRACE-TP-306 | Order, equal-bound pruning and early stop | TRACE-REQ-028, TRACE-REQ-024, TRACE-REQ-025 | The constructed cases of TRACE-TP-107 to TRACE-TP-109 on the compact tree: the nearer leaf is the only one tested, a leaf starting at the best distance is still tested (calls 1 then 0, index 0 returned), and compact_any_hit stops after one test and makes none below every box. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_306_the_compact_search_keeps_the_order_pruning_and_early_stop` |
 | TRACE-TP-307 | Conversion golden vectors | TRACE-REQ-028 | A hand-built nine-node tree converts to four exactly stated compact nodes in depth-first, left-first order; a seeded 300-triangle tree converts to bytes whose FNV-1a checksum is the stated constant, the same on every target that runs the tests. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_307_compact_conversion_golden_vectors` |
+| TRACE-TP-318 | Shared nodes in the conversion | TRACE-REQ-028 | Constructed: a root whose two interior children name the same two leaves is NotATree in a five-node slice (three interior nodes reached, two allowed); with four unused nodes after them the same shape converts to three compact nodes, the shared leaves written under both parents. | `crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_318_a_shared_node_converts_while_the_node_count_allows_it` |
 | TRACE-TP-308 | Reference on the golden and oracle corpora | TRACE-REQ-029 | The inputs of TRACE-TP-010 (and an origin-inside case) and the 40 000 seeded cases of TRACE-TP-007, drawn with the same seed, return the same Option as the retained reference at every limit class; over 2 000 cases each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_308_box_entry_matches_the_reference_on_the_golden_and_oracle_corpora` |
 | TRACE-TP-309 | Reference on seeded trace-domain cases | TRACE-REQ-029 | 300 000 seeded rays (origins across the whole trace domain, within 4 units and within 2^20 raw; general, near-axis and axis-parallel directions with zero, tiny, unit and maximum components) against boxes around, ahead of, behind and far from the origin, with faces through the origin, inverted axes and full-range axes, return the same Option as the retained reference at every limit class; over a tenth of them each reach and miss. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_309_box_entry_matches_the_reference_on_seeded_trace_domain_cases` |
 | TRACE-TP-310 | Reference at the ends of i64 | TRACE-REQ-029 | Every (min, max) pair of 15 extreme coordinates (i64::MIN and MAX, their neighbours, the domain bound and +-2^62), inverted pairs included, on each axis, for 7 extreme origin coordinates and 9 extreme direction components, then 200 000 seeded boxes whose every coordinate is within a few units of an extreme, return the same Option as the retained reference at every limit class. | `crates/bunny-query/tests/box_entry_equivalence_tests.rs::trace_tp_310_box_entry_matches_the_reference_at_the_ends_of_the_i64_range` |
@@ -465,6 +466,7 @@ Regenerating them is a contract change.
 | TRACE-TP-314 | Numerators off the triangle | TRACE-REQ-030 | `new` accepts the corners, an interior point and `det = i128::MAX`, and refuses `det <= 0`, a negative `u` or `v`, `u + v > det` and a `u + v` that overflows. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_314_numerators_off_the_triangle_are_refused` |
 | TRACE-TP-315 | Independent near-edge oracle | TRACE-REQ-004, TRACE-REQ-005, TRACE-REQ-008, TRACE-REQ-009, TRACE-REQ-030 | 40 000 generated cases concentrated on and within three numerator units of each edge and vertex, in raw-unit, scaled (numerators near 2^107), domain-corner and long-direction (components near 2^32, grazing) families, with degenerate triangles: hit or miss, floor distance, facing and exact numerators equal a signed-volume oracle in 256-bit integers that shares no formula with the kernel. Minimum counts of hits, hits on each edge, vertex hits, misses one or two units past each edge, extreme-family hits, grazing hits, both facings, degenerate and parallel cases are asserted. | `crates/bunny-query/tests/trace_edge_oracle_tests.rs::trace_tp_315_hits_near_edges_and_vertices_match_a_signed_volume_oracle` |
 | TRACE-TP-316 | Edge-oracle mutations | TRACE-REQ-004, TRACE-REQ-005, TRACE-REQ-008 | Each edge comparison relaxed or made strict, the distance rounded to nearest, and the facing inverted, each make TRACE-TP-315 fail. | [Edge-oracle mutation checks](#edge-oracle-mutation-checks) |
+| TRACE-TP-317 | Inverted box on box_entry | TRACE-REQ-029 | Constructed: a ray along +x at 2^32 raw per unit; a box with x from 6 to 5 raw returns Some(6), as a box from 6 to 7 does; x from -5 to -6 (behind the origin) returns None; a box inverted on an axis the ray does not move along returns None. | `crates/bunny-query/tests/trace_tests.rs::trace_tp_317_box_entry_on_an_inverted_box_is_defined_per_axis` |
 | TRACE-TP-401 | Cycles: closest_hit | TRACE-REQ-031 | closest_hit on four cyclic buffers (node 0 its own left child beside a leaf the ray misses, the same beside a leaf covering everything, a three-node cycle through left children, and a node that is its own right child) returns InvalidNodeIndex with the stated number of primitive calls (none). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_401_closest_hit_refuses_cyclic_buffers` |
 | TRACE-TP-402 | Cycles: any_hit | TRACE-REQ-031 | any_hit on the four cyclic buffers of TRACE-TP-401 returns InvalidNodeIndex with no primitive call. | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_402_any_hit_refuses_cyclic_buffers` |
 | TRACE-TP-403 | Cycles: intersect_ray | TRACE-REQ-031 | intersect_ray on the four cyclic buffers returns InvalidNodeIndex after exactly the stated leaf callbacks (one for the covering leaf, none otherwise). | `crates/bunny-broadphase/tests/traversal_guard_tests.rs::trace_tp_403_intersect_ray_refuses_cyclic_buffers` |
@@ -1059,6 +1061,24 @@ evidence = "manual-audit"
 artifact = "docs/topics/ray-tracing/test-plan.md#edge-oracle-mutation-checks"
 oracle = "Each edge, distance-rounding and facing rule, broken on purpose, makes TRACE-TP-315 fail."
 tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-317"
+requirements = ["TRACE-REQ-029"]
+evidence = "test"
+test = "crates/bunny-query/tests/trace_tests.rs::trace_tp_317_box_entry_on_an_inverted_box_is_defined_per_axis"
+oracle = "A box with x from 6 to 5 raw returns Some(6), as a box from 6 to 7 does; x from -5 to -6 returns None; a box inverted on an axis the ray does not move along returns None."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRACE-TP-318"
+requirements = ["TRACE-REQ-028"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/compact_tests.rs::trace_tp_318_a_shared_node_converts_while_the_node_count_allows_it"
+oracle = "A root whose two interior children name the same two leaves is NotATree in a five-node slice; with four unused nodes after them it converts to three compact nodes."
+tier = "fast"
 status = "implemented"
 
 [[case]]
