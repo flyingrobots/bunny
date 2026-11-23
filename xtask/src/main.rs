@@ -44,6 +44,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "code-dojo-perf-groups" => code_dojo::handle_perf_groups(),
         "code-dojo-generated" => code_dojo::handle_generated(),
         "code-dojo-no-std" => code_dojo::handle_no_std(),
+        "code-dojo-rustdoc" => code_dojo::handle_rustdoc(),
         "repo-respect" => repo_respect::handle(args),
         "topic-docs" => topic_docs::handle(),
         "perf" => perf::handle(args),
@@ -81,6 +82,8 @@ fn print_help() {
     println!("                  Build the timing harness with each feature group alone");
     println!("  code-dojo-no-std");
     println!("                  Build bunny-num without default features for a no-std target");
+    println!("  code-dojo-rustdoc");
+    println!("                  Document the workspace with rustdoc warnings denied");
     println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
     println!(

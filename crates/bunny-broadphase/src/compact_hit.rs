@@ -1,13 +1,13 @@
 //! Front-to-back ray traversal of the compact layout from [`crate::compact_bvh`].
 //!
-//! The search is [`crate::closest_hit`]'s, step for step: the same box tests in the same
+//! The search is [`crate::closest_hit()`]'s, step for step: the same box tests in the same
 //! order, the same nearer-first descent with ties to the left, the same pruning, and the same
 //! primitive calls. Only where the boxes are read from differs: an interior visit reads one
 //! [`CompactNode`] that holds both children's boxes, and a stack entry carries the child's
 //! reference, so a leaf is visited without reading a node at all.
 //!
 //! One search loop serves both the plain functions and their `_counted` forms: it is generic
-//! over a [`Tally`], which is the zero-sized [`NoTally`] for the plain functions and
+//! over a `Tally`, which is the zero-sized `NoTally` for the plain functions and
 //! [`TraversalCounts`] for the counted ones, so both run the same steps.
 
 use bunny_geom::FixedAabb3;
@@ -38,7 +38,7 @@ pub struct CompactView<'a> {
 
 /// Finds the nearest primitive hit by `ray` within `0..=t_max` in a compact tree.
 ///
-/// Returns exactly what [`crate::closest_hit`] returns on the tree the compact one was
+/// Returns exactly what [`crate::closest_hit()`] returns on the tree the compact one was
 /// converted from, and calls `hit` with the same primitives and limits in the same order.
 ///
 /// # Errors

@@ -85,6 +85,19 @@ pub(super) fn no_std_commands() -> Vec<Vec<String>> {
     ]
 }
 
+/// The rustdoc gate (flyingrobots/bunny#467): document the whole workspace with every
+/// feature on and fail on any rustdoc warning, so a broken, ambiguous or private intra-doc
+/// link is a build error. Only `-D warnings` is passed, so the pinned toolchain and a newer
+/// one run the same flags.
+pub(super) fn rustdoc_command() -> Vec<String> {
+    ["cargo", "doc", "--locked", "--workspace", "--no-deps", "--all-features"]
+        .map(str::to_owned)
+        .to_vec()
+}
+
+/// The value of `RUSTDOCFLAGS` for [`rustdoc_command`].
+pub(super) const RUSTDOCFLAGS: &str = "-D warnings";
+
 /// One `cargo check` of the timing harness per feature group alone, then one with every group.
 ///
 /// `cargo xtask perf` falls back to building each group alone when the base revision cannot
@@ -166,7 +179,9 @@ fn is_path_package(line: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{no_std_commands, perf_group_commands, third_party_packages};
+    use super::{
+        no_std_commands, perf_group_commands, rustdoc_command, third_party_packages, RUSTDOCFLAGS,
+    };
 
     #[test]
     fn no_std_tp_001_bunny_num_is_built_without_std_for_a_bare_metal_target() {
@@ -200,6 +215,17 @@ mod tests {
         assert!(builds_for(None), "the issue's native build");
         assert!(cargo.iter().any(|command| command[1] == "test"));
         assert!(cargo.iter().any(|command| command[1] == "clippy"));
+    }
+
+    #[test]
+    fn rustdoc_documents_the_whole_workspace_and_denies_warnings() {
+        let command = rustdoc_command();
+        assert_eq!(command[..2], ["cargo", "doc"]);
+        for flag in ["--locked", "--workspace", "--no-deps", "--all-features"] {
+            assert!(command.iter().any(|arg| arg == flag), "{flag}: {command:?}");
+        }
+        assert!(!command.iter().any(|arg| arg == "--document-private-items"));
+        assert_eq!(RUSTDOCFLAGS, "-D warnings", "only -D warnings, nothing toolchain-specific");
     }
 
     fn features_of(command: &[String]) -> &str {

@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
+  runs `cargo doc --locked --workspace --no-deps --all-features` with
+  `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI
+  (flyingrobots/bunny#467).
+
 * `bunny-linalg`: uniform Catmull-Rom splines under `bunny-curve/1`, part 2.
   `CatmullRom3::new(points, closed)` borrows a `&[FixedVec3]` (no allocation)
   and returns `CatmullRomError::TooFewPoints` for fewer than 2 points (3
@@ -248,6 +253,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Broken intra-doc links in `bunny-query` (`ray/prepared.rs`) and
+  `bunny-broadphase` (`compact.rs`, `compact_hit.rs`) now resolve, so `cargo doc`
+  with warnings denied is clean (flyingrobots/bunny#467).
 * `bunny-query`: the sphere kernel's normal is corrected under the same
   identity, `bunny-ray-sphere/1`, now public as `RAY_SPHERE_ID`.
   **Breaking for the type:** `SphereHit::normal` returns a `FixedUnitVec3`, not
