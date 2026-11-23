@@ -8,7 +8,7 @@ pub const BUNNY_GRAPHICS_SCHEMA_SHA256: &str =
 /// Identifier of the Bunny Wesley generator used for this output.
 pub const BUNNY_WESLEY_GENERATOR: &str = "bunny-wesley/0.7.1";
 /// Version of `wesley-core` used for schema lowering.
-pub const BUNNY_WESLEY_CORE_VERSION: &str = "0.0.5";
+pub const BUNNY_WESLEY_CORE_VERSION: &str = "0.3.0-alpha.4";
 
 /// Rust representation for the `BunnyFixedQ32_32Raw` scalar.
 #[allow(non_camel_case_types)]

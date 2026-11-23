@@ -26,6 +26,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-perf` builds with each feature group alone. Helpers shared by several
+  groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
+  now gated on the groups that use them, so the `cargo xtask perf` per-group
+  fallback no longer reports a buildable group as new. The full gate runs the
+  new `code-dojo-perf-groups` check, which builds the harness once per group
+  alone and once with all groups. Closes flyingrobots/bunny#272.
+
+* `bunny-optics`: the rounding of the incidence cosine in
+  `bunny-specular-reflection/1` is now tested. The rule is the documented one:
+  the exact `-(u . n)`, in units of `2^-64`, rounded once to nearest raw unit
+  with ties to even. Before this, a kernel that floored the cosine passed
+  every case. Five constructed hits on planes with non-axis normals now pin it
+  at cosines below 0.38: one `2^-64` unit under a tie, on three ties and one
+  unit over a tie. An oracle that shares no code with the crate derives each
+  expected value. The kernel already followed the rule, so no output changes
+  and the contract id stays `bunny-specular-reflection/1`. Closes
+  flyingrobots/bunny#423.
+
+* `cargo xtask perf`: the regression gate no longer trips on one lucky round. A
+  case fails only when its floor p50 (the lowest across rounds, or the
+  second-lowest from five rounds) and its median p50 both slow past the
+  threshold, so one fast base round no longer fails an unrelated change (pull
+  request 252: best +20.2 % against medians 0.1 % apart) and one fast head
+  round no longer hides a real regression. The performance chapter describes
+  the rule. Closes flyingrobots/bunny#254.
+
 * Code Dojo's dependency check holds every crate a deterministic crate
   depends on (normal and build edges, workspace and all features) to the
   scanned set: another deterministic crate at its own directory, or a
@@ -90,6 +116,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-query`: `TraceCylinder` and `TraceRay::hit_cylinder`, the
+  trace-domain ray-cylinder kernel under the contract `bunny-ray-cylinder/1`
+  (`RAY_CYLINDER_ID`).
+  The cylinder is in object space, about the `+Y` axis, with a radius and two
+  cap heights. A hit has the form of `SphereHit` (a distance in multiples of
+  the ray direction, rounded down, `front_face`, and the outward normal as a
+  `FixedUnitVec3`, taken at the exact hit and unit for every radius): the
+  nearest of the side and the two cap discs, or from an origin inside the
+  exit. Every comparison between a cap crossing and a side root is exact in
+  256-bit integers. Where the side meets a cap at the same exact distance the
+  cap is reported, with its normal. `TraceCylinder::new` refuses a radius that
+  is not positive, a radius or cap outside the trace domain, or a bottom cap
+  not below the top cap, with `TraceCylinderError`. Closes
+  flyingrobots/bunny#360.
+
 * `bunny-optics`: texture coordinates at a hit and bilinear texel weights,
   `bunny-texture-bilinear/1` (`TEXTURE_BILINEAR_ID`). `interpolate_uv`
   interpolates a triangle's vertex coordinates at a hit's
@@ -114,6 +155,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corner outside the trace domain or a minimum above a maximum with
   `TraceBoxError`. `ray_intersects_aabb` and `box_entry` are unchanged. Closes
   flyingrobots/bunny#359.
+
+* `bunny-query`: `TraceDisc` and `TraceRay::hit_disc`, the trace-domain ray-disc
+  kernel under the contract `bunny-ray-disc/1`. The disc lies in the plane
+  `z = height`, centred on the `z` axis; a tilted disc is traced through the
+  shape frame. The ray meets the plane at the floor of the true distance in
+  raw units, then the exact hit point is tested against the radius by exact
+  integer comparison (the rim is inside). A ray parallel to the plane misses,
+  including one lying in it. The disc is two-sided: `DiscHit::front_face` is
+  true on the `+z` side, and `DiscHit::normal` is the exact unit axis
+  `FixedUnitVec3::UNIT_Z`. The identity is public as `RAY_DISC_ID`.
+  `TraceDisc::new` refuses a height or radius outside
+  the trace domain, or a radius that is not positive, with `TraceDiscError`.
+  Closes flyingrobots/bunny#363.
 
 * `bunny-optics`: `bunny-srgb8-decode/1` (`SRGB8_DECODE_IDENTITY`).
   `srgb8_to_linear` gives the linear light of an 8-bit sRGB code from a fixed

@@ -48,7 +48,7 @@ cargo run --locked -p xtask -- perf --filter num/ --max-regression 20
 | --- | --- | --- |
 | `--base <rev>` | `origin/main` | The "before" revision. Fetch it first. |
 | `--rounds <n>` | `5` | Interleaved runs (fresh processes) per side; the report takes the median and the best across them. |
-| `--max-regression <percent>` | off | Exit non-zero when any case's best p50 slows by more than this. |
+| `--max-regression <percent>` | off | Exit non-zero when any case's floor p50 and median p50 both slow by more than this ([one lucky round](#one-lucky-round)). |
 | `--summary <file>` | none | Append the Markdown table (CI passes `$GITHUB_STEP_SUMMARY`). |
 | `--align-code` | off | Build both sides with every function and branch target on a 64-byte boundary (see [code-layout noise](#code-layout-noise)). |
 | `--filter <text>`, `--samples <n>` | all cases, 101 | Passed through to the harness. |
@@ -65,8 +65,9 @@ How the comparison stays fair:
 - **Same machine, interleaved.** Rounds alternate base and candidate, and alternate which
   runs first, so warm-up and thermal drift favour neither side.
 - **Median and best, not one run.** Each round is a fresh process. The table shows the
-  median of each percentile across rounds and the best (lowest) p50; the speedup column and
-  the regression gate use the best p50 (see [bimodal cases](#bimodal-cases)).
+  median of each percentile across rounds and the best (lowest) p50; the speedup column
+  uses the best p50, and the regression gate uses a floor p50 together with the median (see
+  [bimodal cases](#bimodal-cases) and [one lucky round](#one-lucky-round)).
 - **New APIs are not "regressions".** The harness is split into feature groups (`num`,
   `linalg`, `query`, `scene`, `trace`, `sample`, `build`, `sah`, …). When the base revision cannot compile a group (an API it does not
   have yet), that group is left out of the base build and its cases are reported as `new`.
@@ -127,10 +128,33 @@ A median over a handful of rounds can land in either mode, so the same code can 
 noise only adds time, so more rounds make it likelier that both sides reach the fast mode,
 but a side can still miss it in every round. A CI failure on a case whose median and best
 disagree sharply, on code the change did not touch, calls for a rerun with more rounds
-before it is treated as a regression. That is why speedups and
-the CI gate use the best p50, while the median columns stay in the table to show spread.
-When a case's median change and best change disagree sharply, suspect placement before
-code.
+before it is treated as a regression. That is why speedups use the best p50, while the
+median columns stay in the table to show spread. When a case's median change and best
+change disagree sharply, suspect placement before code.
+
+### One lucky round
+
+The best p50 is a minimum, so it is as exposed to a single outlier as the median is to a
+mode. On pull request 252 (polygon clipping in `bunny-geom`, no ray-query change) the gate
+failed `query/ray_triangle` at +20.2 %: base best 80.69 ns against head best 97.00 ns, while
+the medians over the 7 rounds were 97.62 and 97.50 ns, a 0.1 % difference. One base round
+had run fast; every other round on both sides agreed. The mirror case, one lucky head
+round, hides a real regression.
+
+The gate therefore compares two numbers, and a case fails only when **both** slow by more
+than the threshold:
+
+- the **floor p50**: the lowest p50 across rounds, except that with at least five rounds it
+  is the second-lowest. A fast mode that shows up in two or more rounds is still found, so
+  the bimodal reasoning above holds; a single lucky round on either side is ignored, so it
+  neither fails an unrelated change nor hides a real regression.
+- the **median p50**: the typical round must have moved too, so a fast mode that appears on
+  one side only (the base side's three fast rounds of seven, say) does not fail a case whose
+  typical round did not change.
+
+A real regression moves every round, so it moves both. With fewer than five rounds the floor
+is the plain minimum, and one outlier round can still trip the gate; use at least five (CI
+uses seven). The table still shows the best p50 and the median for every case.
 
 ### Measuring other targets
 
@@ -159,7 +183,7 @@ Rosetta 2 on Apple Silicon works but measures translated code, so it is not used
 `.github/workflows/perf.yml` runs the comparison on pull requests that touch crates, the
 perf tooling, the lockfile or the toolchain, against the pull request's base branch, with
 `--rounds 7 --align-code --max-regression 20`. It writes the table to the job summary and fails when a
-case's best p50 slows by more than 20 %. Shared runners are noisier than a quiet laptop;
+case's floor p50 and median p50 both slow by more than 20 % ([one lucky round](#one-lucky-round)). Shared runners are noisier than a quiet laptop;
 the threshold is set to catch real regressions, not to referee single-digit changes. The
 workflow can also be started by hand (`workflow_dispatch`) or called from another workflow
 in this repository (`workflow_call`) with its own `base`, `max-regression` and `rounds`.
@@ -209,6 +233,14 @@ exercises. A case for a new API goes in a new feature group (declared in the har
 `Cargo.toml` and added to `default`), so comparisons against older revisions still build.
 Use seeded inputs only, pass every result through `black_box`, and return a checksum of
 the results so the work is not optimized away.
+
+Every group must build on its own: `cargo xtask perf` falls back to building each group
+alone when the base revision cannot build them all, and a group that fails to build would be
+reported as `new` instead of compared. A helper, import or constant shared by some groups
+is therefore gated with `#[cfg(any(feature = ...))]` on exactly the groups that use it,
+because the workspace denies warnings. `cargo run --locked -p xtask -- code-dojo-perf-groups`
+checks the harness once per group alone and once with all groups, and the full gate
+(`code-dojo`) runs it. A new group is picked up from the harness manifest automatically.
 
 The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere of 27 648
 triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
