@@ -110,9 +110,9 @@ impl W {
 
     fn add(self, other: Self) -> Self {
         let (mut out, mut carry) = ([0_u64; 6], 0_u128);
-        for k in 0..6 {
-            let sum = u128::from(self.0[k]) + u128::from(other.0[k]) + carry;
-            (out[k], carry) = (sum as u64, sum >> 64);
+        for (limb, (&left, &right)) in out.iter_mut().zip(self.0.iter().zip(&other.0)) {
+            let sum = u128::from(left) + u128::from(right) + carry;
+            (*limb, carry) = (sum as u64, sum >> 64);
         }
         Self(out)
     }
