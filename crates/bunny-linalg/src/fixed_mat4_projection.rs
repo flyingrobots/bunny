@@ -5,7 +5,7 @@
 //! `z` in `[0, 1]`: the near plane maps to `0` and the far plane to `1`. See
 //! `docs/topics/coordinate-law/README.md`.
 
-use std::fmt;
+use core::fmt;
 
 use bunny_num::FixedQ32_32;
 
@@ -36,7 +36,7 @@ impl fmt::Display for ProjectionError {
     }
 }
 
-impl std::error::Error for ProjectionError {}
+impl core::error::Error for ProjectionError {}
 
 const NEG_ONE: FixedQ32_32 = FixedQ32_32::from_raw(-bunny_num::fixed_q32_32::ONE_RAW);
 

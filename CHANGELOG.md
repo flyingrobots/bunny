@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
+  `bunny-num` has. With default features off each crate is `#![no_std]` and
+  needs only `core` (no `alloc`), with every public item and the same bits;
+  the default build is unchanged. Each depends on the Bunny crates below it
+  with `default-features = false`, and its `std` feature turns theirs on. The
+  error types implement `core::error::Error`, which `std::error::Error`
+  re-exports. `docs/topics/no-std/` lists every `std` use the three crates had
+  (all `core` items under the same name: `fmt`, `ops`, `cmp`, `error`,
+  `array::from_fn`), and `code-dojo-no-std` builds, lints and tests each with
+  default features off for `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`
+  and the host (NOSTD-REQ-010 to -013, NOSTD-TP-010 to -017). Closes
+  flyingrobots/bunny#156.
+
+* `bunny-linalg`: matrix-side unprojection under `bunny-unproject/1`.
+  `Viewport::try_unproject(coordinate, clip_from_view, view_from_world)` maps a
+  continuous viewport coordinate in the closed viewport to a world-space
+  `ViewportRay`: origin at NDC depth 0 (the near plane), direction to the
+  depth-1 point, not normalized. The viewport map, the projection (divide
+  included) and the view are inverted exactly in 512-bit integers, so each
+  component is the exact value rounded once to nearest, ties to even, and
+  equals the general inverse of `clip_from_world` bit for bit before that
+  rounding. Only the two shapes `try_perspective` and `try_orthographic`
+  produce (any entries) and affine views are accepted. Typed `UnprojectError`
+  refusals: `OutsideViewport`, `UnsupportedProjection`, `SingularProjection`,
+  `PointAtInfinity`, `PointBehindCamera`, `UnsupportedView`, `SingularView`,
+  `Overflow`, `DegenerateRay`. Its rays agree with `PinholeCamera::ray` and
+  `OrthographicCamera::ray` within a measured `2^6` raw. Refs
+  flyingrobots/bunny#150.
+
 * `bunny-geom`: classify a segment, a triangle or an AABB against a
   `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
   return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),

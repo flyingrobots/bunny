@@ -7,7 +7,7 @@
 //! unchanged. Choosing the pixel a coordinate belongs to is the caller's job.
 //! See `docs/topics/coordinate-law/README.md`.
 
-use std::fmt;
+use core::fmt;
 
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
@@ -33,7 +33,7 @@ impl fmt::Display for ViewportError {
     }
 }
 
-impl std::error::Error for ViewportError {}
+impl core::error::Error for ViewportError {}
 
 /// A viewport of `width` by `height` device pixels with its origin at the
 /// top-left corner and `y` running down.

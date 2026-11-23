@@ -60,6 +60,20 @@ targets.
   world ray; see `docs/topics/shape-frame/`.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
+## Features
+
+| Feature | Default | Effect |
+| --- | --- | --- |
+| `std` | on | Links `std` and turns on the `std` feature of `bunny-geom`, `bunny-linalg` and `bunny-num`. Off, the crate is `no_std` and needs only `core` (no `alloc`); no public item is removed. |
+
+```toml
+[dependencies]
+bunny-query = { version = "0.7", default-features = false }
+```
+
+See [`docs/topics/no-std/`](../../docs/topics/no-std/README.md) for the gate
+that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
+
 ## License
 
 Apache-2.0.

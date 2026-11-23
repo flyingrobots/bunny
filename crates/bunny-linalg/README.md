@@ -28,6 +28,13 @@ math for graphics pipelines.
 * **Viewport Mapping**: `Viewport::try_ndc_to_viewport` and
   `try_viewport_to_ndc` convert between NDC and continuous top-left, y-down
   viewport coordinates with floored raw rounding and typed `ViewportError`s.
+* **Unprojection (`bunny-unproject/1`)**: `Viewport::try_unproject(coordinate,
+  clip_from_view, view_from_world)` returns the world `ViewportRay` from the
+  NDC depth-0 point to the depth-1 point through a continuous viewport
+  coordinate. Every step is inverted exactly in 512-bit integers and each
+  component rounded once, ties to even; bit-equal to the general inverse of
+  `clip_from_world`. Only the builders' two projection shapes and affine views
+  are accepted; refusals are typed `UnprojectError`s.
 * **Look-At View Matrix**: `FixedMat4::try_look_at(eye, target, up)` builds a
   right-handed `view_from_world` matrix (camera looks down `-Z`). The basis is
   orthonormal within 2 raw units; degenerate input, including an `up` that is
@@ -85,6 +92,20 @@ math for graphics pipelines.
   convenience conversion.
 * **Safe & Portable**: Declares `#![deny(unsafe_code)]` and compiles cleanly on
   all platforms including WebAssembly (`wasm32-unknown-unknown`).
+
+## Features
+
+| Feature | Default | Effect |
+| --- | --- | --- |
+| `std` | on | Links `std` and turns on the `std` feature of `bunny-num`. Off, the crate is `no_std` and needs only `core` (no `alloc`); no public item is removed. |
+
+```toml
+[dependencies]
+bunny-linalg = { version = "0.7", default-features = false }
+```
+
+See [`docs/topics/no-std/`](../../docs/topics/no-std/README.md) for the gate
+that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
 
 ## Usage
 
