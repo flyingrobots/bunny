@@ -18,6 +18,8 @@
 use bunny_num::{FixedQ32_32, Scalar};
 
 mod cubic_bezier3;
+mod curve3;
+mod curve_arc_length;
 mod fixed_affine2;
 mod fixed_affine3;
 mod fixed_affine3_trs;
@@ -35,6 +37,8 @@ pub(crate) mod matrix_common;
 mod viewport;
 
 pub use cubic_bezier3::{CubicBezier3, CURVE_CONTRACT_ID};
+pub use curve3::Curve3;
+pub use curve_arc_length::{ArcLengthError, ArcLengthTable, MAX_SEGMENTS_PER_SPAN};
 pub use fixed_affine2::FixedAffine2;
 pub use fixed_affine3::FixedAffine3;
 pub use fixed_affine3_trs::TRANSFORM_CONTRACT_ID;
