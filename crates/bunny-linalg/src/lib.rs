@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
@@ -13,6 +14,10 @@
 #![deny(missing_docs)]
 
 //! Linear algebra primitives for Bunny graphics contracts.
+//!
+//! The default `std` feature links `std` and turns on the `std` feature of every Bunny
+//! dependency. Without it the crate is `no_std` and uses only `core`, with the same public
+//! items and the same bits.
 
 // dojo: allow float-boundary -- imports the f32 DTO alias for Vec2 and Vec3 below
 use bunny_num::{FixedQ32_32, Scalar};

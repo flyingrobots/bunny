@@ -6,7 +6,7 @@ use super::super::{vec3, TraceRay};
 use super::TraceCylinder;
 use bunny_linalg::FixedUnitVec3;
 use bunny_num::FixedQ32_32;
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// The surface a crossing is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

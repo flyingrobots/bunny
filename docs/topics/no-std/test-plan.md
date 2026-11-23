@@ -153,7 +153,7 @@ evidence = "static-check"
 artifact = "xtask/src/code_dojo.rs"
 oracle = "code-dojo-no-std exits 0; before the change the thumbv7em-none-eabihf build of bunny-linalg fails because bunny-num is built with std."
 tier = "slow"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "NOSTD-TP-012"
@@ -162,7 +162,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/no-std/test-plan.md#seeded-std-uses-in-the-stack"
 oracle = "Each seeded std use, and a Bunny dependency line without default-features = false, makes the build without default features fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "NOSTD-TP-013"
@@ -171,7 +171,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/no-std/test-plan.md#default-api-audit-of-the-stack"
 oracle = "The rustdoc HTML of the three crates' default builds at the base and at the change lists the same items and implementations."
 tier = "manual"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "NOSTD-TP-014"
@@ -180,7 +180,7 @@ evidence = "static-check"
 artifact = "crates/bunny-query/tests/determinism.rs"
 oracle = "The workspace tests, golden vectors included, pass with no test or golden value changed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "NOSTD-TP-015"
@@ -198,7 +198,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/no-std/test-plan.md#feature-wiring"
 oracle = "cargo tree -e features of bunny-query lists bunny-num feature std with default features, and no std feature of a Bunny crate without them."
 tier = "manual"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "NOSTD-TP-017"
@@ -207,7 +207,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/no-std/README.md#audit"
 oracle = "Every std match of git grep in the three crates' src at the base appears in the audit tables."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Seeded `std` Uses
@@ -241,3 +241,50 @@ removed. The `FloatConversionError` page links its `Error` implementation to
 `core/error/trait.Error.html` at the base and at the change alike: rustdoc
 already rendered `impl std::error::Error` as the `core` trait, because `std`
 re-exports it (`pub use core::error::Error;` in `library/std/src/error.rs`).
+
+## Seeded `std` Uses in the Stack
+
+The same method as [Seeded `std` uses](#seeded-std-uses), on the three crates
+after the change. Each seed was applied alone, the command run, and the file
+restored.
+
+| Seed | Command (`--no-default-features`) | Result |
+| --- | --- | --- |
+| none, at the first commit (the crates as on `main`) | `cargo build -p bunny-linalg --target thumbv7em-none-eabihf` | fails: `bunny-num` is built with `std`, 149 errors |
+| `use std::ops::` in `bunny-linalg/src/fixed_vec2.rs` | `cargo build -p bunny-linalg` | fails: `cannot find module or crate std in this scope` |
+| `impl std::error::Error for GeomError` in `bunny-geom/src/lib.rs` | `cargo build -p bunny-geom` | fails: the same error |
+| `use std::cmp::{max, min};` in `bunny-query/src/ray.rs` | `cargo build -p bunny-query` | fails: the same error |
+| `std::array::from_fn` in `bunny-query/src/trace/box_hit.rs` | `cargo build -p bunny-query` | fails: the same error |
+| `bunny-geom`'s `bunny-num` line without `default-features = false` | `cargo build -p bunny-geom` | builds: the host has `std` |
+| the same | `cargo build -p bunny-geom --target thumbv7em-none-eabihf` | fails: `can't find crate for std` in `bunny-num`, 149 errors |
+
+The last two rows are why the gate builds for a target with no `std`: a
+dependency that turns `std` back on is invisible to a native build.
+
+## Default API Audit of the Stack
+
+`cargo doc --locked --no-deps -p bunny-linalg -p bunny-geom -p bunny-query`
+with default features was built at the base (`origin/main` at `b306708`) and at
+the change, and the `target/doc/bunny_linalg`, `bunny_geom` and `bunny_query`
+trees compared with `diff -r` (45, 24 and 79 files, the same files at both).
+Before normalising, 5, 8 and 1 files differed: each `index.html`, and 4, 7
+and 0 item pages that differed only by `src/<crate>/lib.rs.html#<lines>`
+source anchors, which moved because each
+`lib.rs` gained lines. After replacing those anchors, the only difference is the
+new crate-level paragraph on each `index.html` describing the `std` feature. The
+`GeomError` page links its `Error` implementation to
+`core/error/trait.Error.html` at the base and at the change alike, as
+`bunny-num`'s did.
+
+## Feature Wiring
+
+`cargo tree --locked -p bunny-query -e features -i bunny-num` lists the
+features that reach `bunny-num`:
+
+| Build | Bunny features listed |
+| --- | --- |
+| default | `bunny-query` `default` and `std`, `bunny-geom` `std`, `bunny-linalg` `std`, `bunny-num` `std` |
+| `--no-default-features` | none |
+
+The same query over `--workspace` lists `bunny-num` `default` and `std`, as
+before the change.

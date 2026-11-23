@@ -12,8 +12,15 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-bunny-linalg = { path = "../bunny-linalg", version = "0.7.1" }
-bunny-num = { path = "../bunny-num", version = "0.7.1" }
+bunny-linalg = { path = "../bunny-linalg", version = "0.7.1", default-features = false }
+bunny-num = { path = "../bunny-num", version = "0.7.1", default-features = false }
+
+[features]
+# `std` is on by default and turns on the `std` feature of every Bunny dependency. Without
+# it the crate is `#![no_std]` and needs only `core`; every public item is available either
+# way.
+default = ["std"]
+std = ["bunny-linalg/std", "bunny-num/std"]
 
 [lib]
 path = "src/lib.rs"

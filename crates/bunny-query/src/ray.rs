@@ -1,6 +1,6 @@
 //! Ray-intersection math solvers.
 
-use std::cmp::{max, min};
+use core::cmp::{max, min};
 
 use bunny_geom::{FixedAabb3, FixedRay3, FixedSphere3};
 use bunny_linalg::FixedVec3;

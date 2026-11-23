@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
@@ -13,6 +14,10 @@
 #![deny(missing_docs)]
 
 //! Geometry primitives for Bunny graphics contracts.
+//!
+//! The default `std` feature links `std` and turns on the `std` feature of every Bunny
+//! dependency. Without it the crate is `no_std` and uses only `core`, with the same public
+//! items and the same bits.
 
 use core::fmt;
 
@@ -58,7 +63,7 @@ impl fmt::Display for GeomError {
     }
 }
 
-impl std::error::Error for GeomError {}
+impl core::error::Error for GeomError {}
 
 pub(crate) const fn vec3_is_finite(v: Vec3) -> bool {
     is_finite(v.x) && is_finite(v.y) && is_finite(v.z)

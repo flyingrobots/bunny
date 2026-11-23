@@ -6,7 +6,7 @@
 //! two reported bounds are rounded (ties to even, as `FixedQ32_32::checked_div`) and
 //! saturated to the Q32.32 range.
 
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 use bunny_geom::{FixedAabb3, FixedRay3};
 use bunny_num::FixedQ32_32;
