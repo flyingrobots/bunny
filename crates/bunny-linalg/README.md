@@ -68,6 +68,13 @@ math for graphics pipelines.
   15/8 raw units of the exact spline and exact at every point, `derivative_at(u)`
   within 9/2 and continuous bit for bit at joints; `None` for `u` outside
   `[0, segment_count]`.
+* **Curve Bounds (`bunny-curve/1`)**: `CurveBounds3 { min, max }` with
+  `contains`. `CubicBezier3::control_bounds()` (the exact control box, proven to
+  contain every rounded `at(t)` with no widening), `split_bounds(t)` (each
+  half's control box widened by 3 raw units and clipped, proven to contain the
+  original on that half's range) and `CatmullRom3::control_bounds()` (the
+  union of the segments' control boxes, which covers the overshoot past the
+  points).
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
   multiplication, determinant, and inverse APIs return `None` for singular or
   overflowing cases; transpose is infallible and returns a matrix directly.
