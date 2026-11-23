@@ -28,9 +28,10 @@ targets.
   conservative ray-box test and an exact integer ray-triangle test with
   inclusive edges; see `docs/topics/ray-tracing/`.
 * `TraceSphere` and `TraceRay::hit_sphere` (contract `bunny-ray-sphere/1`): the
-  exact ray-sphere test, returning the rounded-down distance, facing and outward
-  normal in the form of `TriangleHit`; inputs outside the trace domain are refused
-  with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
+  exact ray-sphere test, returning the rounded-down distance, facing and the
+  outward unit normal (a `FixedUnitVec3` at the exact hit point) in the form of
+  `TriangleHit`, with the identity constant `RAY_SPHERE_ID`; inputs outside the
+  trace domain are refused with `TraceSphereError`. See `docs/topics/ray-tracing/README.md#ray-sphere`.
 * `TraceCylinder` and `TraceRay::hit_cylinder` (contract `bunny-ray-cylinder/1`,
   `RAY_CYLINDER_ID`):
   the exact test of a capped cylinder about the object-space `+Y` axis, returning
