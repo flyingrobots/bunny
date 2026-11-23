@@ -199,7 +199,7 @@ impl PinholeCamera {
     }
 }
 
-fn check_position(position: FixedVec3) -> Result<(), CameraError> {
+pub fn check_position(position: FixedVec3) -> Result<(), CameraError> {
     let inside = |c: FixedQ32_32| c.raw().unsigned_abs() < TRACE_COORD_LIMIT_RAW.unsigned_abs();
     if inside(position.x) && inside(position.y) && inside(position.z) {
         Ok(())
@@ -208,7 +208,7 @@ fn check_position(position: FixedVec3) -> Result<(), CameraError> {
     }
 }
 
-const fn check_image(width: u32, height: u32) -> Result<(), CameraError> {
+pub const fn check_image(width: u32, height: u32) -> Result<(), CameraError> {
     if width == 0 || height == 0 {
         Err(CameraError::EmptyImage)
     } else if width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
@@ -249,7 +249,7 @@ pub fn neighbour_directions(plane: &Plane, lens: &Lens, sample: PixelSample) -> 
 }
 
 /// The raw Q32.32 value of `2 * (index + sub) - size`, or `None` outside the image.
-fn doubled_offset(index: u32, sub: FixedQ32_32, size: u32) -> Option<i64> {
+pub fn doubled_offset(index: u32, sub: FixedQ32_32, size: u32) -> Option<i64> {
     let sub = sub.raw();
     let inside = index < size && (0..ONE_RAW).contains(&sub);
     inside.then(|| (2 * i64::from(index) - i64::from(size)) * ONE_RAW + 2 * sub)
