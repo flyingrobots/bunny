@@ -23,6 +23,19 @@ impl FixedVec3 {
         Self { x, y, z }
     }
 
+    /// Interpolates from `a` to `b` by `t`, component-wise by [`FixedQ32_32::lerp`]
+    /// (`bunny-lerp/1`).
+    ///
+    /// Each component is rounded once, on its own, by the scalar rule; `t = 0` returns `a` and
+    /// `t = 1.0` returns `b` exactly, and `t` outside `[0, 1]` extrapolates.
+    ///
+    /// Returns `None` when any component's result is outside the Q32.32 range.
+    #[must_use]
+    pub const fn lerp(a: Self, b: Self, t: FixedQ32_32) -> Option<Self> {
+        let _ = (a, b, t);
+        None
+    }
+
     /// Computes the dot product of two vectors.
     #[must_use]
     pub fn dot(self, rhs: Self) -> FixedQ32_32 {

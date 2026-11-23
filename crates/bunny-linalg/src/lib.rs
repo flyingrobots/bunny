@@ -27,6 +27,7 @@ mod fixed_mat4_look_at;
 mod fixed_mat4_projection;
 mod fixed_vec2;
 mod fixed_vec3;
+mod lerp;
 pub(crate) mod matrix_common;
 mod viewport;
 
@@ -39,6 +40,7 @@ pub use fixed_mat4_look_at::LookAtError;
 pub use fixed_mat4_projection::ProjectionError;
 pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
+pub use lerp::lerp_channels;
 pub use matrix_common::FixedMat4Row;
 pub use viewport::{Viewport, ViewportError};
 

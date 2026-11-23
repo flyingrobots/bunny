@@ -21,12 +21,14 @@ pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod fixed_angle;
 pub mod fixed_divisor;
 pub mod fixed_q32_32;
+pub mod lerp;
 pub mod u32_div_round_even;
 pub mod u32_ellipse_classify;
 
 pub use fixed_angle::FixedAngle;
 pub use fixed_divisor::FixedDivisor;
 pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
+pub use lerp::LERP_CONTRACT_ID;
 pub use u32_div_round_even::{
     div_round_even_u32, div_round_even_u32_bytes, div_round_even_u32_words, DivisionByZero,
     U32_DIV_ROUND_EVEN_CONTRACT_ID, U32_DIV_ROUND_EVEN_STATUS_DIV_BY_ZERO,
