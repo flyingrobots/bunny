@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outside its range, and a hit ray parallel to the plane or with the plane
   not ahead return a `RayFootprintError`. Closes flyingrobots/bunny#383.
 
+* `bunny-num`: conversions out of `FixedAngle` and `FixedAngle::atan2`.
+  `to_turns` (`[0, 1]`) and `to_degrees` (`[0, 360]`) are the exact value
+  rounded once to Q32.32, ties to even; `to_radians` multiplies by
+  `round(2 pi 2^61)` and is within `1/2 + 2^-30` raw units of the exact radians.
+  `to_turns(from_turns(t))` is exactly the fractional part of `t`.
+  `atan2(y, x)` is the angle of `(x, y)` counter-clockwise from `+x`, within
+  `1/2 + 2^-9` angle units by 72 integer CORDIC steps over a compile-time
+  table, `None` only at the origin, exactly `HALF_TURN` on the negative x axis,
+  exact on the axes and diagonals, and bit-exact under conjugation, mirroring,
+  swapping and doubling. Each has golden vectors and an independent 124-bit
+  oracle. Refs flyingrobots/bunny#244.
+
 * `bunny-num`: a default `std` feature. With default features off the crate is
   `#![no_std]` and needs only `core`, with every public item and the same
   bits; the default build is unchanged. `FloatConversionError` implements
