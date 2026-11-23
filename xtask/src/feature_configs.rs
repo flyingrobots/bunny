@@ -54,6 +54,37 @@ pub(super) fn commands() -> Vec<Vec<String>> {
     ]
 }
 
+/// The crate whose build with default features off must not use `std`.
+const NO_STD_PACKAGE: &str = "bunny-num";
+
+/// A target that has no `std` at all, so a `std` path in [`NO_STD_PACKAGE`], or a
+/// dependency that links `std`, is a build error there.
+const NO_STD_TARGET: &str = "thumbv7em-none-eabihf";
+
+/// The `no_std` gate of [`NO_STD_PACKAGE`] (flyingrobots/bunny#198): install the bare-metal
+/// target, then build the library with default features off for it, for
+/// `wasm32-unknown-unknown` and natively, and lint and test it in that configuration. Each
+/// command selects only that package, so no other workspace member re-enables `std` through
+/// feature unification. The tests themselves still link `std`.
+pub(super) fn no_std_commands() -> Vec<Vec<String>> {
+    let rustup = ["rustup", "target", "add", NO_STD_TARGET, "wasm32-unknown-unknown"];
+    let no_std = |head: &[&str], tail: &[&str]| {
+        let mut args = vec!["cargo".to_owned()];
+        args.extend(head.iter().map(|arg| (*arg).to_owned()));
+        args.extend(["--locked", "-p", NO_STD_PACKAGE, "--no-default-features"].map(str::to_owned));
+        args.extend(tail.iter().map(|arg| (*arg).to_owned()));
+        args
+    };
+    vec![
+        rustup.map(str::to_owned).to_vec(),
+        no_std(&["build"], &["--target", NO_STD_TARGET]),
+        no_std(&["build"], &["--target", "wasm32-unknown-unknown"]),
+        no_std(&["build"], &[]),
+        no_std(&["clippy"], &["--all-targets", "--", "-D", "warnings"]),
+        no_std(&["test"], &[]),
+    ]
+}
+
 /// One `cargo check` of the timing harness per feature group alone, then one with every group.
 ///
 /// `cargo xtask perf` falls back to building each group alone when the base revision cannot
@@ -135,7 +166,41 @@ fn is_path_package(line: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{perf_group_commands, third_party_packages};
+    use super::{no_std_commands, perf_group_commands, third_party_packages};
+
+    #[test]
+    fn no_std_tp_001_bunny_num_is_built_without_std_for_a_bare_metal_target() {
+        let commands = no_std_commands();
+        let (rustup, cargo) = commands.split_first().expect("the target install comes first");
+        assert_eq!(rustup[..3], ["rustup", "target", "add"]);
+        assert!(rustup.iter().any(|arg| arg == "thumbv7em-none-eabihf"));
+        assert!(rustup.iter().any(|arg| arg == "wasm32-unknown-unknown"));
+        for command in cargo {
+            assert_eq!(command[0], "cargo");
+            assert!(command.iter().any(|arg| arg == "--no-default-features"), "{command:?}");
+            assert!(!command.iter().any(|arg| arg == "--all-features" || arg == "--features"));
+            let packages: Vec<&String> = command
+                .windows(2)
+                .filter(|pair| pair[0] == "-p" || pair[0] == "--package")
+                .map(|pair| &pair[1])
+                .collect();
+            assert_eq!(packages, ["bunny-num"], "only bunny-num is selected: {command:?}");
+        }
+        let builds_for = |target: Option<&str>| {
+            cargo.iter().any(|command| {
+                command[1] == "build"
+                    && match target {
+                        Some(target) => command.windows(2).any(|pair| pair == ["--target", target]),
+                        None => !command.iter().any(|arg| arg == "--target"),
+                    }
+            })
+        };
+        assert!(builds_for(Some("thumbv7em-none-eabihf")), "a target with no std");
+        assert!(builds_for(Some("wasm32-unknown-unknown")), "the issue's wasm32 build");
+        assert!(builds_for(None), "the issue's native build");
+        assert!(cargo.iter().any(|command| command[1] == "test"));
+        assert!(cargo.iter().any(|command| command[1] == "clippy"));
+    }
 
     fn features_of(command: &[String]) -> &str {
         let at = command.iter().position(|arg| arg == "--features").expect("a --features flag");
