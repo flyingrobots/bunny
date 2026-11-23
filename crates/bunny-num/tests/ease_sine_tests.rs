@@ -103,7 +103,7 @@ fn error(value: i64, exact: u128) -> u128 {
 
 /// A distance in units of `2^-92` raw, as millionths of a raw unit.
 fn micro(distance: u128) -> u128 {
-    distance * 1_000_000 >> 92
+    (distance * 1_000_000) >> 92
 }
 
 // ---- Kernel access, digests and points ---------------------------------------------------

@@ -185,7 +185,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_040_golden_vectors_and_the_halving_tie_go_to_even"
 oracle = "Golden raw values from the Python model, each within one raw unit of the independent series oracle; halving ties."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-041"
@@ -194,7 +194,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_041_the_domain_is_refused_outside_and_the_ends_and_middle_are_exact"
 oracle = "Exact ends and 1/2; refusals one raw unit past each end of the domain."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-042"
@@ -203,7 +203,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_042_the_sweep_over_every_k_over_2_20_is_within_one_raw_unit"
 oracle = "Independent Machin and sine-series oracle at all 1 048 577 points of k / 2^20, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-043"
@@ -212,7 +212,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_043_seeded_and_boundary_points_are_within_one_raw_unit"
 oracle = "Independent series oracle at 100 000 seeded and 16 387 boundary points, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-044"
@@ -221,7 +221,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_044_every_sine_ease_is_monotone_non_decreasing"
 oracle = "Order of consecutive outputs over the 2^20 grid and one raw unit either side of the 2^16 grid."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-045"
@@ -230,7 +230,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_045_reflections_and_the_direct_formulas_agree_bit_for_bit"
 oracle = "Bit-exact reflections and agreement with the direct formulas read from sin_cos."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-046"
@@ -239,7 +239,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/ease/test-plan.md#sine-mutation-checks"
 oracle = "Each sine rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -266,3 +266,26 @@ positive infinity.
 | `steps(0, t)` returns `0` | `None` for `n = 0` | 002 |
 | In-out takes its lower half at `t <= 1/2` | none, as proved: both halves are exactly `1/2` there ([properties](README.md#properties)) | none |
 | In-out takes its lower half below `1/2 - 1` raw | none observed: at one raw unit from `1/2` the two formulas differ by about `2 n (n - 1) 2^-64`, far below a raw unit, and no tested point rounds differently | none |
+
+## Sine Mutation Checks
+
+Each rule below was broken on purpose in a local copy of `crates/bunny-num/src/ease/sine.rs`,
+and `cargo test --locked -q -p bunny-num --no-fail-fast --test ease_sine_tests` was run; the
+source was restored after each. The unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `sine_in` reads a half turn, `r 2^31` (the issue's mutation) | The quarter-turn angle | 040, 041 (`sine_in(1) = U - cos(half) = 2.0`), 042, 043, 044, 045 |
+| `sine_out` reads `sin(r 2^31)` | The quarter-turn angle | 040, 041, 042, 043, 044, 045 |
+| `sine_in_out` reads a quarter turn, `r 2^30` | The half-turn angle | 040, 041 (`sine_in_out(1/2)`), 042, 043, 044, 045 |
+| `sine_in` reads `sin`, not `cos` | The formula | 040, 041, 042, 043, 044, 045 |
+| The halving truncates | Ties to even | 040 (`U - cos = 3` gives 1), 042, 043, 045 |
+| A halving tie goes half up | Ties to even | 040 (`U - cos = 1` gives 1), 042, 043, 045 |
+| A halving tie goes to the odd neighbour | Ties to even | 040, 042, 043, 045 |
+| The halving is dropped | `(1 - cos) / 2` | 040, 041, 042, 043, 044, 045 |
+| `t` outside `[0, 1]` clamped, not refused | `None` outside `[0, 1]` | 041 |
+| The in-out upper half is not reflected (`f(1 - t)`) | The in-out reflection | 040, 041, 042, 043, 044, 045 |
+| `sine_out` is `sine_in(t)` | The out reflection | 040, 042, 043, 045 |
+| In-out takes its lower half at `t <= 1/2` | none, as proved: both halves are exactly `1/2` there | none |
+| In-out reads the lower formula on all of `[0, 1]` | none, as proved: `cos(half - a) == -cos(a)` bit for bit in `sin_cos` and `U` is even ([sine eases](README.md#sine-eases)) | none |
+| `sine_out` reads `sin(r 2^30)` directly | none, as proved: `cos(quarter - a) == sin(a)` bit for bit in `sin_cos` | none |
