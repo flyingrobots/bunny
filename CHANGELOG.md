@@ -81,6 +81,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function returns `None` for `t` outside `[0, 1]`. Closes
   flyingrobots/bunny#308.
 
+* `bunny-num`: sine eases under `bunny-ease/1`, part 3. `ease::sine_in(t)` is
+  `1 - cos(t pi/2)`, `sine_out(t)` is `sin(t pi/2)` (as `1 - sine_in(1 - t)`,
+  the same bits) and `sine_in_out(t)` is `(1 - cos(t pi)) / 2`, the halving
+  rounded once to nearest, ties to even, below `1/2` and reflected from it.
+  Each reads `FixedAngle::sin_cos` at an exact angle (`t_raw 2^30` or
+  `t_raw 2^31` units) and is within one raw unit, the bound `sin_cos`'s own
+  one raw unit gives; over every `t = k / 2^20` the largest errors measured
+  are 0.500 047 raw (in and out) and 0.750 004 raw (in-out). The ends are
+  exact, `sine_in_out(1/2) = 1/2`, and both reflections hold bit for bit.
+  `t` outside `[0, 1]` is `None`. Closes flyingrobots/bunny#306.
+
 * `bunny-linalg`: rotations from a `FixedAngle` under the contract identity
   `bunny-rotation/1` (`ROTATION_CONTRACT_ID`). `FixedMat3::rotation_x`,
   `rotation_y` and `rotation_z` copy `FixedAngle::sin_cos` into the axis

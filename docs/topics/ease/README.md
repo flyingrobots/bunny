@@ -6,7 +6,7 @@ rational coefficients, so its exact value is a rational with a power-of-two deno
 computes it exactly and rounds it once, to nearest with ties to even. The identity string is
 `bunny-ease/1` (`bunny_num::EASE_CONTRACT_ID`); the functions are in `bunny_num::ease`. The
 [test plan](test-plan.md) holds the oracles, golden vectors and mutation checks. It answers
-flyingrobots/bunny#304.
+flyingrobots/bunny#304. Part 3, the [sine eases](#sine-eases), answers flyingrobots/bunny#306.
 
 | Function | Exact value rounded | Refused (`None`) |
 | --- | --- | --- |
@@ -14,6 +14,9 @@ flyingrobots/bunny#304.
 | `power_out(n, t)` | `1 - (1 - t)^n` | the same |
 | `power_in_out(n, t)` | `2^(n-1) t^n` for `t < 1/2`, `1 - 2^(n-1) (1 - t)^n` from `1/2` | the same |
 | `steps(n, t)` | `k / n` for `k = floor(n t)` | `t` outside `[0, 1]`; `n = 0` |
+| `sine_in(t)` | `1 - cos(t pi/2)`, within one raw unit | `t` outside `[0, 1]` |
+| `sine_out(t)` | `sin(t pi/2)`, within one raw unit | the same |
+| `sine_in_out(t)` | `(1 - cos(t pi)) / 2`, within one raw unit | the same |
 
 ## Domain
 
@@ -92,3 +95,69 @@ steps(n, t) = from_ratio(k, n)      k = floor(n r / 2^32)
 value can sit just below the interval's start: `steps(3, t)` for the least `t` with `3 t >= 1`
 (raw `1 431 655 766`) is `round(1/3)`, raw `1 431 655 765`. `steps` is non-decreasing in `t`
 and constant on each interval.
+
+## Sine Eases
+
+The sine eases need cosine, which has no exact rational value, so they are not rounded once
+from an exact value like the power eases. They read [`FixedAngle::sin_cos`](../angle-trigonometry/README.md#sine-and-cosine),
+which is within one raw unit of the exact sine and cosine, and inherit that bound. On raw
+values, with `r = t_raw`, `U = 2^32` and `cos(a)` the raw cosine `sin_cos` returns for the
+angle `a` in `FixedAngle` units (`2^64` a turn):
+
+```text
+sine_in(t)      = U - cos(r 2^30)
+sine_out(t)     = U - sine_in(1 - t)                              (= sin(r 2^30))
+sine_in_out(t)  = round_half_even((U - cos(r 2^31)) / 2)         r < 2^31
+                = U - sine_in_out(1 - t)                          r >= 2^31
+```
+
+**The angle is exact.** `t pi/2` is `t` of a quarter turn, `2^62` units, so it is `r 2^62 /
+2^32 = r 2^30` units, and `t pi` is `r 2^31`. For `r <= 2^32` these are at most `2^62` and
+`2^63`, exact in a `u64`; no step before `sin_cos` rounds.
+
+**The rounding steps.** `sin_cos` rounds its own result to Q32.32 once, ties to even.
+`sine_in` subtracts it from `U` exactly; `sine_out` is two exact subtractions. `sine_in_out`
+halves `U - cos`, an integer in `[0, 2^32]`, and rounds the half to nearest, ties to even: an
+odd `U - cos` is a tie (`U - cos = 3`, at raw `t = 49 152`, gives `2`, not `1`). Each angle
+the formulas read is at most a quarter turn, where `sin_cos` returns a cosine in `[0, 1]`, so
+every result is in `[0, 1]`.
+
+**The bound.** With `sin_cos` within one raw unit, `sine_in` and `sine_out` are within one
+raw unit of the exact ease, and `sine_in_out` within `1/2 + 1/2 = 1` (half of `sin_cos`'s
+error, plus the halving's half unit). **One raw unit is the contract for all three.** It is
+exactly as strong as `sin_cos`'s bound, which its own tests check against `f64` at sampled
+angles (AT-TP-004) rather than prove. Measured against an exact oracle (Machin's `pi` and the
+sine series, with 124 fractional bits) at every `t = k / 2^20`, 1 048 577 points per ease:
+
+| Ease | Largest error | At |
+| --- | --- | --- |
+| `sine_in` | `0.500 047` raw | `k = 17 981` |
+| `sine_out` | `0.500 047` raw | `k = 1 030 595`, the mirror of `sine_in`'s |
+| `sine_in_out` | `0.750 004` raw | `k = 314 529` |
+
+100 000 seeded full-resolution `t` and every raw `t` within 4 096 of `0`, `1/2` and `1` stay
+below those figures. The sweep covers `2^20 + 1` of the `2^32 + 1` inputs, so the measured
+figures describe it and are not promised; flyingrobots/bunny#306 expected about 2 raw units,
+and the derivation gives 1.
+
+**Ends and middle.** `sin_cos` is exact at every multiple of a quarter turn
+([angles](../angle-trigonometry/README.md#sine-and-cosine), AT-TP-002), so
+`sine_in(0) = U - cos(0) = 0`, `sine_in(1) = U - cos(quarter) = 1.0`, `sine_out` follows by
+reflection, `sine_in_out(0) = round((U - U) / 2) = 0`, `sine_in_out(1/2) = (U - cos(quarter))
+/ 2 = 1/2` exactly, and `sine_in_out(1) = U - sine_in_out(0) = 1.0`. One raw unit either side
+of `1/2`, where the slope is `pi/2`, `sine_in_out` moves by two raw units.
+
+**Reflection.** `sine_out(t) == 1 - sine_in(1 - t)` and `sine_in_out(1 - t) == 1 -
+sine_in_out(t)` bit for bit, by definition. Neither changes the issue's formulas: `sin_cos`
+reads cosine from the sine table at the complementary position and rebuilds other quadrants
+by exact sign changes, so `cos(quarter - a) == sin(a)` and `cos(half - a) == -cos(a)` bit for
+bit, and `U` is even. `sine_out` is therefore exactly `sin(r 2^30)` and the upper half of
+`sine_in_out` exactly `round_half_even((U - cos(r 2^31)) / 2)`; EASE-TP-045 checks both.
+
+**Order.** `sin_cos` documents no monotonicity, so this is measured: every ease is
+non-decreasing over all 1 048 577 grid points and over every `t = k / 2^16` and one raw unit
+either side. Equal grid neighbours occur only at the flat ends, where the slope is under one
+raw unit per `2^12` raw units of `t`: 52 pairs for `sine_in`, all with `k <= 94`; 52 for
+`sine_out`, all with `k >= 1 048 481`; 68 for `sine_in_out`, with `k <= 67` or
+`k >= 1 048 508`. Between raw neighbours equal values are common: the slope is at most `pi/2`
+raw units per raw unit.

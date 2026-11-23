@@ -36,6 +36,9 @@ ecosystem to guarantee bit-level CPU determinism.
   `n` in `2..=5`) are each exact value rounded once to nearest, ties to even,
   exact at both ends, non-decreasing, with bit-exact reflections;
   `ease::steps(n, t)` is `floor(n t) / n`. `t` outside `[0, 1]` is `None`.
+  `ease::sine_in`, `sine_out` and `sine_in_out` read `FixedAngle::sin_cos` at
+  an exact angle, within one raw unit, exact at both ends and at in-out's
+  `1/2`, with bit-exact reflections.
 * **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
   arithmetic, exact or symmetric-rounding conversions from turns, degrees and
   radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
