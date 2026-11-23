@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
+  runs `cargo doc --locked --workspace --no-deps --all-features` with
+  `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI
+  (flyingrobots/bunny#467).
+
+* `bunny-linalg`: uniform Catmull-Rom splines under `bunny-curve/1`, part 2.
+  `CatmullRom3::new(points, closed)` borrows a `&[FixedVec3]` (no allocation)
+  and returns `CatmullRomError::TooFewPoints` for fewer than 2 points (3
+  closed), `AllPointsEqual`, or `ControlPointOutOfRange { segment }`. Open
+  splines duplicate their end points as phantom neighbours; closed ones wrap.
+  `segment(i)` and `to_beziers()` give each segment as a `CubicBezier3` with
+  inner control points `(6 P1 + P2 - P0) / 6` and `(6 P2 + P1 - P3) / 6`, each
+  rounded once to nearest, ties to even. `at(u)` and `derivative_at(u)` split
+  `u` in `[0, segment_count]` into segment and fraction (the end owned by the
+  last segment) and evaluate through `CubicBezier3`: within 15/8 and 9/2 raw
+  units of the exact spline, exactly every point at whole `u`, tangents
+  bit-equal at joints where defined, `None` outside the range. Closes
+  flyingrobots/bunny#309.
+
 * `cargo xtask perf --evidence <file>` writes every round of both sides (case,
   side, round, p50, p95, p99) and the build identity (base reference, full base
   and candidate SHAs, target triple, flags, and whether the working tree was
@@ -56,6 +75,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   negative scales are accepted. The chapter also bounds both groupings of a
   product of three transforms by the existing `checked_mul_affine`. Normals
   under a non-uniform scale are out of scope. Closes flyingrobots/bunny#312.
+
+* `bunny-num`: back, circ and bounce eases under `bunny-ease/1`, part 2, in
+  `bunny_num::ease`. `back_in`, `back_out` and `back_in_out(overshoot, t)` are
+  GSAP's back for any Q32.32 overshoot (`BACK_DEFAULT_OVERSHOOT` is 1.70158,
+  raw 7 308 230 452), and `bounce_in`, `bounce_out` and `bounce_in_out` are
+  GSAP's four-piece bounce with breakpoints `1/2.75`, `2/2.75` and `2.5/2.75`:
+  each exact rational is rounded once to nearest, ties to even, within half a
+  raw unit. Circ takes the floor of an exact 128-bit square root, with nothing
+  rounded before it: `circ_in` is `2^32 - isqrt(2^64 - t_raw^2)`, `circ_out`
+  is its reflection `isqrt(2^64 - (2^32 - t_raw)^2)`, and `circ_in_out` is
+  `2^31 - isqrt(2^62 - t_raw^2)` below `1/2` and the reflection of that from
+  `1/2`, so `circ_in_out(1/2)` is exactly `1/2`. Each is within one raw unit
+  on a stated side; for `circ_in` at raw `t` 4 294 920 955 that is 0.58 raw
+  units, where rounding `1 - t^2` first would give 54.58. The ends are
+  exact, the out and in-out reflections hold bit for bit and circ is
+  non-decreasing; back and bounce are not monotone. `t` outside `[0, 1]` is
+  `None`. Closes flyingrobots/bunny#305.
 
 * `bunny-num`: power eases and steps under the contract identity
   `bunny-ease/1` (`EASE_CONTRACT_ID`), in `bunny_num::ease`. `power_in(n, t)`
@@ -229,6 +265,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Broken intra-doc links in `bunny-query` (`ray/prepared.rs`) and
+  `bunny-broadphase` (`compact.rs`, `compact_hit.rs`) now resolve, so `cargo doc`
+  with warnings denied is clean (flyingrobots/bunny#467).
 * `bunny-query`: the sphere kernel's normal is corrected under the same
   identity, `bunny-ray-sphere/1`, now public as `RAY_SPHERE_ID`.
   **Breaking for the type:** `SphereHit::normal` returns a `FixedUnitVec3`, not

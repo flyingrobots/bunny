@@ -3,7 +3,7 @@
 //!
 //! [`compact_bvh`] converts a tree that [`crate::build_bvh`] filled into this layout, in a
 //! caller-provided buffer. [`crate::compact_closest_hit`] and [`crate::compact_any_hit`]
-//! search it and return what [`crate::closest_hit`] and [`crate::any_hit`] return on the
+//! search it and return what [`crate::closest_hit()`] and [`crate::any_hit`] return on the
 //! source tree. See `docs/topics/ray-tracing/README.md`.
 
 use bunny_geom::FixedAabb3;
@@ -86,7 +86,7 @@ pub enum CompactError {
 /// [`CompactError::NotATree`], which is a count and not a check that the nodes are a tree) or
 /// more than 64 interior subtrees would wait at once (see [`CompactError::TooDeep`]). Leaf
 /// primitive ranges are copied as they are and checked by the traversal, as
-/// [`crate::closest_hit`] checks them.
+/// [`crate::closest_hit()`] checks them.
 pub fn compact_bvh(
     nodes: &[BvhNode],
     out: &mut [CompactNode],

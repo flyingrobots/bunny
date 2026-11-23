@@ -249,6 +249,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
     }
     handle_perf_groups()?;
     handle_no_std()?;
+    handle_rustdoc()?;
     println!("Code Dojo: full gate clean");
     Ok(())
 }
@@ -268,6 +269,24 @@ pub(super) fn handle_no_std() -> Result<(), DynError> {
         run_command_strings(&command)?;
     }
     Ok(())
+}
+
+/// Documents the workspace with `RUSTDOCFLAGS=-D warnings`, so a broken intra-doc link fails.
+pub(super) fn handle_rustdoc() -> Result<(), DynError> {
+    let args = crate::feature_configs::rustdoc_command();
+    let flags = crate::feature_configs::RUSTDOCFLAGS;
+    println!("Code Dojo: RUSTDOCFLAGS=\"{flags}\" {}", args.join(" "));
+    let status = Command::new(&args[0])
+        .args(&args[1..])
+        .current_dir(git_root()?)
+        .env_remove("GIT_INDEX_FILE")
+        .env("RUSTDOCFLAGS", flags)
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(DojoError::new(format!("command failed: {}", args.join(" "))).into())
+    }
 }
 
 pub(super) fn handle_pre_commit() -> Result<(), DynError> {
