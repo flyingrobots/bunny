@@ -950,6 +950,36 @@ Fixture reviewer.
     }
 
     #[test]
+    fn fixture_tests_pass_when_ci_base_ref_names_a_missing_branch() {
+        // Re-run the fixture-backed tests in a child process whose environment names a
+        // base branch the temporary repositories do not have. The child gets the variable
+        // through `Command::env`, so nothing in this process's environment changes.
+        let exe = std::env::current_exe().expect("test binary path should be known");
+        let fixture_tests = [
+            "repo_respect::tests::changed_path_lists_include_deleted_files",
+            "repo_respect::tests::changed_path_lists_include_typechanged_files",
+            "repo_respect::tests::branch_commit_message_failures_report_missing_trailers",
+            "repo_respect::tests::branch_commit_message_failures_ignore_new_base_commits",
+        ];
+        for name in fixture_tests {
+            for variable in ["GITHUB_BASE_REF", "CODE_DOJO_BASE_REF"] {
+                let output = Command::new(&exe)
+                    .args(["--exact", name, "--test-threads=1"])
+                    .env_remove("GITHUB_BASE_REF")
+                    .env_remove("CODE_DOJO_BASE_REF")
+                    .env(variable, "stacked-base-that-does-not-exist")
+                    .output()
+                    .expect("test binary should run");
+                assert!(
+                    output.status.success(),
+                    "{name} must not depend on {variable}:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn civil_date_matches_unix_epoch() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
     }
