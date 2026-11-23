@@ -41,7 +41,7 @@ impl fmt::Display for PolygonClipError {
     }
 }
 
-impl std::error::Error for PolygonClipError {}
+impl core::error::Error for PolygonClipError {}
 
 /// Appends points to a caller-provided buffer without indexing.
 struct Sink<'a> {

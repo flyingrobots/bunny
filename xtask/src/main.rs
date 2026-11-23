@@ -81,7 +81,9 @@ fn print_help() {
     println!("  code-dojo-perf-groups");
     println!("                  Build the timing harness with each feature group alone");
     println!("  code-dojo-no-std");
-    println!("                  Build bunny-num without default features for a no-std target");
+    println!(
+        "                  Build the no_std crates without default features for a no-std target"
+    );
     println!("  code-dojo-rustdoc");
     println!("                  Document the workspace with rustdoc warnings denied");
     println!("  repo-respect   Create or validate repo-respect receipts");

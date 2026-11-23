@@ -60,7 +60,7 @@ impl fmt::Display for ShapeFrameError {
     }
 }
 
-impl std::error::Error for ShapeFrameError {}
+impl core::error::Error for ShapeFrameError {}
 
 /// A rigid placement: right-handed, orthogonal unit axes and an origin in world space.
 ///

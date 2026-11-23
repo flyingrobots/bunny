@@ -4,7 +4,7 @@
 //! only roundings, and evaluated through it; the rules and their bounds are proved in
 //! `docs/topics/curve/README.md`.
 
-use std::fmt;
+use core::fmt;
 
 use bunny_num::FixedQ32_32;
 
@@ -37,7 +37,7 @@ impl fmt::Display for CatmullRomError {
     }
 }
 
-impl std::error::Error for CatmullRomError {}
+impl core::error::Error for CatmullRomError {}
 
 /// A uniform Catmull-Rom spline through borrowed points, open or closed (`bunny-curve/1`).
 ///

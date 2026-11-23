@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
@@ -13,6 +14,10 @@
 #![deny(missing_docs)]
 
 //! Ray-casting and spatial query math solvers for Bunny.
+//!
+//! The default `std` feature links `std` and turns on the `std` feature of every Bunny
+//! dependency. Without it the crate is `no_std` and uses only `core`, with the same public
+//! items and the same bits.
 
 mod barycentric;
 #[allow(clippy::module_name_repetitions)]

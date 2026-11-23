@@ -263,9 +263,11 @@ pub(super) fn handle_perf_groups() -> Result<(), DynError> {
     Ok(())
 }
 
-/// Builds `bunny-num` with default features off for a target that has no `std`.
+/// Builds `bunny-num`, then `bunny-linalg`, `bunny-geom` and `bunny-query`, each with default
+/// features off, for a target that has no `std`.
 pub(super) fn handle_no_std() -> Result<(), DynError> {
-    for command in crate::feature_configs::no_std_commands() {
+    let stack = crate::feature_configs::no_std_stack_commands();
+    for command in crate::feature_configs::no_std_commands().into_iter().chain(stack) {
         run_command_strings(&command)?;
     }
     Ok(())

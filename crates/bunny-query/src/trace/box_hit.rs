@@ -10,8 +10,8 @@ use super::{in_trace_domain, raw3, vec3, TraceRay};
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
-use std::cmp::Ordering;
-use std::fmt;
+use core::cmp::Ordering;
+use core::fmt;
 
 /// The contract identity of [`TraceRay::hit_box`].
 pub const RAY_BOX_ID: &str = "bunny-ray-box/1";
@@ -42,7 +42,7 @@ impl fmt::Display for TraceBoxError {
     }
 }
 
-impl std::error::Error for TraceBoxError {}
+impl core::error::Error for TraceBoxError {}
 
 impl TraceBox {
     /// Prepares a box.
@@ -123,7 +123,7 @@ impl Crossing {
 
 /// The raw unit vector along `axis`, pointing the way of `sign`.
 fn unit_normal(axis: usize, sign: i64) -> [i64; 3] {
-    std::array::from_fn(|i| if i == axis { sign << FixedQ32_32::FRACTIONAL_BITS } else { 0 })
+    core::array::from_fn(|i| if i == axis { sign << FixedQ32_32::FRACTIONAL_BITS } else { 0 })
 }
 
 /// What one axis says about the line.
