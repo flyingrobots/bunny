@@ -15,7 +15,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::git_helpers::git_command;
-use crate::perf_report::{add_run, compare, regressions, render, Heading, Runs};
+use crate::perf_evidence::{evidence_text, host_triple, is_dirty, BuildIdentity, Measured, Side};
+use crate::perf_report::{compare, regressions, render, Heading, Row};
 
 const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_ROUNDS: usize = 5;
@@ -35,6 +36,8 @@ struct PerfOptions {
     target: Option<String>,
     /// A command that runs the harness binary (for example `wasmtime`); run directly when absent.
     runner: Option<String>,
+    /// Where to write the per-round evidence file (`bunny-perf-evidence/1`); none when absent.
+    evidence: Option<PathBuf>,
 }
 
 impl PerfOptions {
@@ -57,6 +60,7 @@ impl PerfOptions {
             align_code: false,
             target: None,
             runner: None,
+            evidence: None,
         };
         while let Some(flag) = args.next() {
             if flag == "--align-code" {
@@ -71,6 +75,7 @@ impl PerfOptions {
                 "--summary" => options.summary = Some(PathBuf::from(value)),
                 "--target" => options.target = Some(value),
                 "--runner" => options.runner = Some(value),
+                "--evidence" => options.evidence = Some(PathBuf::from(value)),
                 "--filter" | "--samples" => options.harness_args.extend([flag, value]),
                 other => return Err(format!("unknown perf option {other}").into()),
             }
@@ -86,6 +91,11 @@ pub(crate) fn handle(args: impl Iterator<Item = String>) -> Result<(), Box<dyn E
     let sha = resolve(&root, &options.base)?;
     let short = sha.get(..12).unwrap_or(&sha).to_owned();
     let perf_dir = root.join("target").join("perf");
+    // Taken before anything is built, so it describes the tree that was measured.
+    let evidence = match &options.evidence {
+        Some(path) => Some((path, build_identity(&root, &options, &sha, path)?)),
+        None => None,
+    };
 
     // Both sides build the same way (a standalone copy of the harness), so codegen differences
     // between a workspace build and a standalone build cannot bias the comparison.
@@ -99,23 +109,108 @@ pub(crate) fn handle(args: impl Iterator<Item = String>) -> Result<(), Box<dyn E
     remove_worktree(&root, &base_tree);
     let base_bin = base_bin?;
 
-    let (base_runs, head_runs) = run_interleaved(&base_bin, &head_bin, &options)?;
-    let rows = compare(&base_runs, &head_runs);
-    let (base_label, platform) = (format!("{} ({short})", options.base), options.platform());
-    let table = render(
-        &rows,
-        &Heading {
-            base: &base_label,
-            head: "working tree",
-            platform: &platform,
-            rounds: options.rounds,
-        },
-    );
+    let measured = run_interleaved(&base_bin, &head_bin, &options)?;
+    let platform = options.platform();
+    let scope =
+        ReportScope { base: &options.base, sha: &sha, platform: &platform, rounds: options.rounds };
+    let (rows, table) = report(&measured, &scope);
     println!("{table}");
     if let Some(path) = &options.summary {
         fs::OpenOptions::new().create(true).append(true).open(path)?.write_all(table.as_bytes())?;
     }
+    if let Some((path, identity)) = &evidence {
+        let text = evidence_text(identity, &measured.rounds)?;
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)?
+            .write_all(text.as_bytes())?;
+        eprintln!("perf: wrote the evidence file {}", path.display());
+    }
     check_threshold(&rows, options.max_regression)
+}
+
+/// What a report compares: the base revision as given and as resolved, and the target.
+pub(crate) struct ReportScope<'a> {
+    pub(crate) base: &'a str,
+    /// The full SHA the base resolved to; the heading shows its first 12 digits.
+    pub(crate) sha: &'a str,
+    pub(crate) platform: &'a str,
+    pub(crate) rounds: usize,
+}
+
+/// The rows and the Markdown table for the measured rounds.
+pub(crate) fn report(measured: &Measured, scope: &ReportScope<'_>) -> (Vec<Row>, String) {
+    let rows = compare(&measured.base, &measured.candidate);
+    let short = scope.sha.get(..12).unwrap_or(scope.sha);
+    let base_label = format!("{} ({short})", scope.base);
+    let heading = Heading {
+        base: &base_label,
+        head: "working tree",
+        platform: scope.platform,
+        rounds: scope.rounds,
+    };
+    let table = render(&rows, &heading);
+    (rows, table)
+}
+
+/// The build identity an evidence file records. Refuses an evidence path that already exists,
+/// before anything is built, so a ledger's evidence is never overwritten.
+fn build_identity(
+    root: &Path,
+    options: &PerfOptions,
+    sha: &str,
+    path: &Path,
+) -> Result<BuildIdentity, Box<dyn Error>> {
+    refuse_existing(path)?;
+    let (target, target_is_host) = match &options.target {
+        Some(triple) => (triple.clone(), false),
+        None => (host_target(root)?, true),
+    };
+    let status = git_stdout(root, &["status", "--porcelain", "--untracked-files=normal"])?;
+    Ok(BuildIdentity {
+        base_ref: options.base.clone(),
+        base_revision: sha.to_owned(),
+        candidate_revision: git_stdout(root, &["rev-parse", "--verify", "HEAD^{commit}"])?
+            .trim()
+            .to_owned(),
+        candidate_dirty: is_dirty(&status),
+        target,
+        target_is_host,
+        platform: options.platform(),
+        rounds: options.rounds,
+        align_code: options.align_code,
+        rustflags: rustflags(options.align_code),
+        harness_args: options.harness_args.clone(),
+        runner: options.runner.clone(),
+        max_regression: options.max_regression,
+    })
+}
+
+fn refuse_existing(path: &Path) -> Result<(), Box<dyn Error>> {
+    if path.exists() {
+        return Err(format!("the evidence file {} already exists", path.display()).into());
+    }
+    Ok(())
+}
+
+fn git_stdout(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
+    let output = git_command(root).args(args).output()?;
+    if !output.status.success() {
+        return Err(format!("git {} failed", args.join(" ")).into());
+    }
+    Ok(String::from_utf8(output.stdout)?)
+}
+
+/// The host triple of the toolchain that builds the harness, from `rustc -vV`.
+fn host_target(root: &Path) -> Result<String, Box<dyn Error>> {
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let output = Command::new(rustc).current_dir(root).arg("-vV").output()?;
+    if !output.status.success() {
+        return Err("rustc -vV failed".into());
+    }
+    host_triple(&String::from_utf8(output.stdout)?)
+        .ok_or_else(|| "rustc -vV printed no host line".into())
 }
 
 fn workspace_root() -> PathBuf {
@@ -291,8 +386,8 @@ fn run_interleaved(
     base: &Path,
     head: &Path,
     options: &PerfOptions,
-) -> Result<(Runs, Runs), Box<dyn Error>> {
-    let (mut base_runs, mut head_runs) = (Runs::new(), Runs::new());
+) -> Result<Measured, Box<dyn Error>> {
+    let mut measured = Measured::default();
     for round in 1..=options.rounds {
         eprintln!("perf: round {round} of {}", options.rounds);
         // Alternate which side runs first, so warm-up or thermal drift favours neither.
@@ -305,10 +400,10 @@ fn run_interleaved(
             head_output = run_harness(head, options)?;
             base_output = run_harness(base, options)?;
         }
-        add_run(&mut base_runs, &base_output)?;
-        add_run(&mut head_runs, &head_output)?;
+        measured.record(Side::Base, round, base_output)?;
+        measured.record(Side::Candidate, round, head_output)?;
     }
-    Ok((base_runs, head_runs))
+    Ok(measured)
 }
 
 fn run_harness(binary: &Path, options: &PerfOptions) -> Result<String, Box<dyn Error>> {
@@ -334,10 +429,7 @@ fn run_harness(binary: &Path, options: &PerfOptions) -> Result<String, Box<dyn E
     Ok(String::from_utf8(output.stdout)?)
 }
 
-fn check_threshold(
-    rows: &[crate::perf_report::Row],
-    max_regression: Option<f64>,
-) -> Result<(), Box<dyn Error>> {
+fn check_threshold(rows: &[Row], max_regression: Option<f64>) -> Result<(), Box<dyn Error>> {
     if rows.iter().all(|row| row.base.is_none() || row.head.is_none()) {
         return Err("no case was measured on both sides; check --filter".into());
     }
@@ -476,6 +568,57 @@ mod tests {
         let only_new =
             crate::perf_report::compare(&crate::perf_report::Runs::new(), &runs("a", &[1.0]));
         assert!(check_threshold(&only_new, None).is_err());
+    }
+
+    #[test]
+    fn the_evidence_option_is_opt_in() {
+        let none = PerfOptions::parse(std::iter::empty()).expect("no options");
+        assert_eq!(none.evidence, None);
+        let args = ["--evidence", "docs/topics/performance/evidence/run.jsonl"];
+        let some = PerfOptions::parse(args.iter().map(|s| (*s).to_owned())).expect("valid");
+        assert_eq!(
+            some.evidence.as_deref(),
+            Some(Path::new("docs/topics/performance/evidence/run.jsonl"))
+        );
+        assert!(PerfOptions::parse(["--evidence".to_owned()].into_iter()).is_err());
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        assert!(refuse_existing(&manifest).is_err(), "an existing file is never overwritten");
+        assert!(refuse_existing(&manifest.with_file_name("no-such-evidence.jsonl")).is_ok());
+    }
+
+    #[test]
+    fn the_report_is_rendered_as_before() {
+        // The table `handle` printed before evidence existed: `render` of `compare` over the
+        // runs `add_run` accumulated, side by side, with the same heading labels.
+        let outputs = [
+            (Side::Base, "a\t10\t11\t12\nb\t5\t6\t7\n"),
+            (Side::Candidate, "a\t9\t10\t11\n"),
+            (Side::Candidate, "a\t8\t9\t10\nc\t1\t2\t3\n"),
+            (Side::Base, "a\t11\t12\t13\nb\t6\t7\t8\n"),
+        ];
+        let (mut base, mut head) =
+            (crate::perf_report::Runs::new(), crate::perf_report::Runs::new());
+        let mut measured = Measured::default();
+        for (index, (side, output)) in outputs.iter().enumerate() {
+            let runs = if *side == Side::Base { &mut base } else { &mut head };
+            crate::perf_report::add_run(runs, output).expect("valid");
+            measured.record(*side, index / 2 + 1, (*output).to_owned()).expect("valid");
+        }
+        assert_eq!(measured.base, base);
+        assert_eq!(measured.candidate, head);
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        let scope = ReportScope { base: "origin/main", sha, platform: "p", rounds: 2 };
+        let (rows, table) = report(&measured, &scope);
+        let expected_rows = compare(&base, &head);
+        let heading = Heading {
+            base: "origin/main (0123456789ab)",
+            head: "working tree",
+            platform: "p",
+            rounds: 2,
+        };
+        assert_eq!(table, render(&expected_rows, &heading));
+        assert_eq!(rows, expected_rows);
+        assert!(measured.record(Side::Base, 3, "a\t1\n".to_owned()).is_err());
     }
 
     #[test]
