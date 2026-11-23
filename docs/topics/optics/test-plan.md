@@ -64,6 +64,14 @@ and `point_at`:
   hand-derived mirrors, Schlick's term at its ends and rounding boundaries,
   exact big-integer oracles for the term and the reflected direction on
   seeded inputs, normal incidence and the two refusals.
+- the smooth dielectric `bunny-dielectric/1`
+  (`SurfaceHit::dielectric_reflectance`, `dielectric_scatter`,
+  `try_dielectric_scatter`, `front_face`, `DielectricBoundary`,
+  `DielectricReflectance`, `DielectricScatter`, `DIELECTRIC_ID`):
+  hand-derived boundaries, Snell's law, the critical angle and the Fresnel
+  reflectance against an exact big-integer oracle on seeded hits, the choice
+  between the branches and their weights, a parallel slab, the start point of
+  the refracted ray and the refusals.
 - texture coordinates and bilinear weights `bunny-texture-bilinear/1`
   (`interpolate_uv`, `bilinear`, `TextureWrap`, `BilinearTaps`,
   `TEXTURE_BILINEAR_ID`): hand-derived cases, exact rational oracles on
@@ -77,9 +85,9 @@ and `point_at`:
   of the published listing, the mirror limit with derived bounds, a
   white-furnace table, and counts of what the seeded generator reaches.
 
-Projection matrices (flyingrobots/bunny#201, #202), and refraction, the
-evaluation of a rough conductor for a given pair of directions and other
-material helpers (#160) are out of scope.
+Projection matrices (flyingrobots/bunny#201, #202), and rough transmission,
+dispersion, absorption, the evaluation of a rough conductor for a given pair
+of directions and other material helpers (#160) are out of scope.
 
 ## Test Goals
 
@@ -161,6 +169,13 @@ formatting.
 | OPTICS-REQ-053 | `schlick_fresnel(f0, cosine)` clamps both inputs to `0..=1.0`, rounds the exact `(1 - cosine)^5` once to nearest and `f0 + (1 - f0) w` once to nearest with ties to even, and is within one raw unit of Schlick's exact formula; the throughput of a mirror sample is `schlick_fresnel(F0_c, c)` per channel with `c` the incidence cosine rounded once, within three raw units of the exact `-(d . n) / |d|`. | `README.md#specular-reflection` |
 | OPTICS-REQ-054 | At normal incidence (`d` along `-n`) the throughput is the base reflectance exactly; at `cosine = 1.0` `schlick_fresnel` is `f0` exactly and at `cosine = 0` it is 1.0. | `README.md#specular-reflection` |
 | OPTICS-REQ-055 | `try_specular_reflection` refuses, in this order, a ray with `d . N >= 0` against the exact facing normal (`SecondaryRayError::ArrivesBelowSurface`) and a reflected direction with `r' . N <= 0` (`SecondaryRayError::ReflectionBelowSurface`), each carrying the direction it saw. | `README.md#specular-reflection` |
+| OPTICS-REQ-091 | `SurfaceHit::dielectric_reflectance` (`bunny-dielectric/1`, `DIELECTRIC_ID`) reports `Total` exactly when `K = b^2 (d.d)(n.n) - a^2 ((d.d)(n.n) - (d.n)^2) <= 0` for the incoming direction `d`, the facing frame normal `n`, the index `a` the ray arrives through and the other index `b`, decided in exact integers: the critical direction itself is total, and a direction one raw unit steeper is not. `a` is `outside` for a front-face hit and `inside` for a back-face hit. | `README.md#smooth-dielectric` |
+| OPTICS-REQ-092 | Otherwise the reflectance is `Partial(R)` with `R` the exact unpolarized Fresnel formula `(r_s^2 + r_p^2) / 2` on `d`, `n`, `a`, `b`, rounded once to nearest: within half a raw unit plus `2^-8` of the exact value, in `0..=1.0`. When `d . n >= 0` (the ray arrives against the exact face but along or behind the plane of the rounded normal) the reflectance is exactly 1.0 and no refraction is computed, whatever the indices; otherwise it is exactly zero for equal indices. | `README.md#smooth-dielectric` |
+| OPTICS-REQ-093 | The refracted direction is the unit vector along `T = a (d (n.n) - (d.n) n) - q n`, `q = floor(sqrt(K))`: each component within one raw unit (plus `2^-26`) of the exact refracted unit vector, so it satisfies Snell's law `a sin_i = b sin_t` in the plane of incidence, on the far side of `n`. | `README.md#smooth-dielectric` |
+| OPTICS-REQ-094 | `try_dielectric_scatter` reflects when `choice.raw() < R.raw()` (always under total internal reflection) and refracts otherwise, so `R` of the `2^32` choice values reflect and `2^32 - R` refract; the throughput of either branch is exactly 1.0 per channel; the reflected sample is `try_specular_reflection` with a base reflectance of 1.0; `dielectric_scatter` returns `None` exactly when `try_dielectric_scatter` errs. | `README.md#smooth-dielectric` |
+| OPTICS-REQ-095 | The refracted ray starts at the nearest point to the hit's start point, along the plane normal's dominant axis, that is strictly on the far side of the triangle's exact plane: at most five raw-unit steps for a hit the trace kernel reported, within 1.5 raw units of the exact hit point on the other axes and 6.5 on the dominant axis; the ray does not meet the triangle it left at any distance. | `README.md#smooth-dielectric` |
+| OPTICS-REQ-096 | A ray refracted into a slab through one face and out through a parallel face leaves with each direction component within `1 + 6 h / c` raw units of the unit vector along its original direction, where `h` is the ratio of the larger index to the smaller and `c >= 2^-10` the cosine of the ray's angle to the normal in the rarer medium. | `README.md#smooth-dielectric` |
+| OPTICS-REQ-097 | `DielectricBoundary::new` accepts each index in `1.0..=8.0` inclusive and refuses the first one outside it with `RefractiveIndexError`; `try_dielectric_scatter` refuses, in this order, a choice outside `[0, 1)` (`ChoiceOutsideUnitInterval`), a ray with `d . N >= 0` (`ArrivesBelowSurface`), then for a refracted ray a direction with `t . N >= 0` (`RefractionAboveSurface`) and a far-side start outside the trace domain (`StartOutsideTraceDomain`), each carrying the value it saw. | `README.md#smooth-dielectric` |
 | OPTICS-REQ-056 | `interpolate_uv` (`bunny-texture-bilinear/1`) returns each component of `(w0 t0 + w1 t1 + w2 t2) / det`, with `w = (det - u - v, u, v)`, rounded once to nearest raw unit with ties to even, for every accepted `BarycentricNumerators` and every vertex coordinate; a corner gives its vertex exactly. | `README.md#texture-coordinates` |
 | OPTICS-REQ-057 | `bilinear(uv, [width, height], [wrap_u, wrap_v])` returns, for any `uv`, the texels `(x0, y0)`, `(x0 + 1, y0)`, `(x0, y0 + 1)`, `(x0 + 1, y0 + 1)` with `x0 = floor(u width - 1/2)` and `y0 = floor(v height - 1/2)`, the columns wrapped by `wrap_u` and the rows by `wrap_v`, each `Repeat` (Euclidean remainder) or `Clamp`, every index in range, and `None` when a size is zero. | `README.md#texture-coordinates` |
 | OPTICS-REQ-058 | The weights of `bilinear` are in `0..=1.0`, sum to exactly 1.0, `w11` and `w10` are the exact products rounded once to nearest with ties to even, `w01` and `w00` their exact complements, and each is within half a raw unit of its exact product. | `README.md#texture-coordinates` |
@@ -434,6 +449,41 @@ summary = "try_specular_reflection refuses, in this order, a ray with d . N >= 0
 status = "active"
 
 [[requirement]]
+id = "OPTICS-REQ-091"
+summary = "SurfaceHit::dielectric_reflectance (bunny-dielectric/1, DIELECTRIC_ID) reports Total exactly when K = b^2 (d.d)(n.n) - a^2 ((d.d)(n.n) - (d.n)^2) <= 0 for the incoming direction d, the facing frame normal n, the index a the ray arrives through and the other index b, decided in exact integers: the critical direction itself is total, and a direction one raw unit steeper is not. a is outside for a front-face hit and inside for a back-face hit."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-092"
+summary = "Otherwise the reflectance is Partial(R) with R the exact unpolarized Fresnel formula (r_s^2 + r_p^2) / 2 on d, n, a, b, rounded once to nearest: within half a raw unit plus 2^-8 of the exact value, in 0..=1.0. When d . n >= 0 (the ray arrives against the exact face but along or behind the plane of the rounded normal) the reflectance is exactly 1.0 and no refraction is computed, whatever the indices; otherwise it is exactly zero for equal indices."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-093"
+summary = "The refracted direction is the unit vector along T = a (d (n.n) - (d.n) n) - q n, q = floor(sqrt(K)): each component within one raw unit (plus 2^-26) of the exact refracted unit vector, so it satisfies Snell's law a sin_i = b sin_t in the plane of incidence, on the far side of n."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-094"
+summary = "try_dielectric_scatter reflects when choice.raw() < R.raw() (always under total internal reflection) and refracts otherwise, so R of the 2^32 choice values reflect and 2^32 - R refract; the throughput of either branch is exactly 1.0 per channel; the reflected sample is try_specular_reflection with a base reflectance of 1.0; dielectric_scatter returns None exactly when try_dielectric_scatter errs."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-095"
+summary = "The refracted ray starts at the nearest point to the hit's start point, along the plane normal's dominant axis, that is strictly on the far side of the triangle's exact plane: at most five raw-unit steps for a hit the trace kernel reported, within 1.5 raw units of the exact hit point on the other axes and 6.5 on the dominant axis; the ray does not meet the triangle it left at any distance."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-096"
+summary = "A ray refracted into a slab through one face and out through a parallel face leaves with each direction component within 1 + 6 h / c raw units of the unit vector along its original direction, where h is the ratio of the larger index to the smaller and c >= 2^-10 the cosine of the ray's angle to the normal in the rarer medium."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-097"
+summary = "DielectricBoundary::new accepts each index in 1.0..=8.0 inclusive and refuses the first one outside it with RefractiveIndexError; try_dielectric_scatter refuses, in this order, a choice outside [0, 1) (ChoiceOutsideUnitInterval), a ray with d . N >= 0 (ArrivesBelowSurface), then for a refracted ray a direction with t . N >= 0 (RefractionAboveSurface) and a far-side start outside the trace domain (StartOutsideTraceDomain), each carrying the value it saw."
+status = "active"
+
+[[requirement]]
 id = "OPTICS-REQ-056"
 summary = "interpolate_uv (bunny-texture-bilinear/1) returns each component of (w0 t0 + w1 t1 + w2 t2) / det, with w = (det - u - v, u, v), rounded once to nearest raw unit with ties to even, for every accepted BarycentricNumerators and every vertex coordinate; a corner gives its vertex exactly."
 status = "active"
@@ -602,6 +652,40 @@ test asserts that `hit_triangle` reports each hit with that distance and
 face. The generated start-point cases (`OPTICS-TP-089`, `OPTICS-TP-090`) use
 SplitMix64 from `START_POINT_TEST_SEED` (`0xB002_0288_5747_0001`) or a
 per-run seed.
+
+### The Dielectric Oracle
+
+The dielectric cases compare against
+`crates/bunny-optics/tests/dielectric_oracle/mod.rs`: a signed integer of any
+size (sign and base-`2^32` limbs; sum, difference, product, comparison and the
+floor of a square root found bit by bit) and the formulas of
+[Smooth Dielectric](README.md#smooth-dielectric) written with it. It calls
+nothing in the crate and uses no floating point. It differs from the kernel
+where it can: the condition for total internal reflection is the textbook
+`a^2 |d x n|^2 >= b^2 (d.d)(n.n)` with the squared sine from a cross product,
+not the kernel's difference of products; the direction is scaled by `2^64`
+first, so its floored root is exact to `2^-64` of the kernel's unit and the
+reflectance it gives is a single rational number within `2^-90` of the exact
+value; and closeness to a unit vector is decided by comparing squares, with
+no square root.
+
+Each tolerance was derived before it was measured:
+
+| Check | Tolerance | Derivation |
+| --- | --- | --- |
+| Reflectance | half a raw unit plus `2^-8` | The final rounding, plus the bound of [Smooth Dielectric](README.md#smooth-dielectric) for the truncated ratios and the floored root. |
+| Refracted direction | one raw unit plus `2^-26` per component | `FixedUnitVec3::new` rounds each quotient to nearest (half a unit); the truncated prescale moves each component by less than one part in `2^61`, the floored length by one in `2^61` and the floored root by less than one in `2^62`, together below `2^-26` raw units. The assertion allows a whole unit, as the other unit-vector cases do. |
+| Snell's law from the direction | `4 b^2 2^-32` on `a^2 sin_i^2 - b^2 sin_t^2` | The direction is within `e = sqrt(3) (1 + 2^-26) < 1.74` raw units of the exact one, so its sine against `n` moves by at most `e` and its squared sine by at most `2 e + e^2 < 3.5` raw units. |
+| Plane of incidence | `2 * 2^-32` | The same `e`, as the component of the direction across the plane. |
+| Slab | `1 + 6 h / c` raw units per component | Derived in [Smooth Dielectric](README.md#smooth-dielectric), to first order with a stated margin. |
+| Start point | 1.5 and 6.5 raw units | Derived in [Smooth Dielectric](README.md#smooth-dielectric). |
+
+Golden values marked "model" in `OPTICS-TP-184` and `OPTICS-TP-190` come from
+a separate Python model of the kernel with unbounded integers (it models
+`FixedUnitVec3::new`); the other goldens are derived by hand in the test.
+Seeded cases use the generator of the specular cases from
+`DIELECTRIC_TEST_SEED` (`0xB002_0372_D1E1_0001`) combined with the case
+number, and print the seed.
 
 ### The Vertex-Normal Oracle
 
@@ -840,6 +924,23 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-106 | Seeded reversed rays | OPTICS-REQ-055 | On 2 000 seeded kernel hits, the reversed incoming ray is refused with `ArrivesBelowSurface` naming its direction. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_106_every_seeded_reversed_ray_is_refused` |
 | OPTICS-TP-107 | Grazing reflection | OPTICS-REQ-055 | A kernel hit found by search where `d . N < 0` but `d . n > 0`, both asserted exactly: refused with `ReflectionBelowSurface` naming the direction, whose exact `r' . N <= 0` is asserted; `None` from the fast path. | `crates/bunny-optics/tests/specular_reflection_tests.rs::optics_tp_107_a_reflection_that_stays_below_the_plane_is_refused` |
 | OPTICS-TP-108 | Specular mutations | OPTICS-REQ-052, OPTICS-REQ-053, OPTICS-REQ-055 | Each rule broken on purpose fails at least one case above. | [Specular-reflection mutation checks](#specular-reflection-mutation-checks) |
+| OPTICS-TP-183 | Hand-derived boundaries | OPTICS-REQ-091, OPTICS-REQ-092, OPTICS-REQ-093, OPTICS-REQ-094, OPTICS-REQ-095 | The identity string. Straight down into glass (1.0 to 1.5): `R = 0.04`, raw 171 798 691.84 rounded to ..692 (a floor gives ..691); the choice `R` refracts straight on from one raw unit below the plane and the choice `R - 1` reflects straight back from one raw unit above. Straight up through the back face: the same `R`, `front_face()` false, a start one raw unit above. From 1.5 into 2.0 along `(4, -3) / 5`, Brewster's angle: `r_p = 0`, `R = 0.0392`, raw 168 362 718.0032 rounded to ..718 (a ceiling gives ..719), and the refracted direction is `(0.6, -0.8, 0)`, raw (2 576 980 377.6, 3 435 973 836.8) rounded to (..378, ..837) (a floor gives ..377, ..836). Every sample's throughput is 1.0. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_183_hand_derived_boundaries_reflect_and_refract` |
+| OPTICS-TP-184 | Equal indices and the index range | OPTICS-REQ-092, OPTICS-REQ-093, OPTICS-REQ-097 | With equal indices 1.0, 1.5 and 8.0, `R` is exactly zero and the refracted direction is the unit vector along `d` (a model value, and within one raw unit by the exact oracle). `DielectricBoundary::new` accepts 1.0 and 8.0 on either side and refuses `1.0 - 1`, `8.0 + 1` raw, zero and a negative index, naming the first refused index; the `Display` text. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_184_equal_indices_pass_straight_through_and_the_range_is_inclusive` |
+| OPTICS-TP-185 | Snell's law on seeded hits | OPTICS-REQ-093, OPTICS-REQ-094 | 3 000 seeded triangles, rays (the trace kernel's hits; one in four with the direction shortened by `2^8`, `2^20` or `2^31`) and boundaries (named indices, seeded indices, one in eight a raw unit apart), with the last choice value. Each refracted direction is within one raw unit plus `2^-26` of the unit vector along the oracle's exact `T`, and, from the direction alone: `\|a^2 sin_i^2 - b^2 sin_t^2\| <= 4 b^2 2^-32`, it is within `2 * 2^-32` of the plane of incidence, on the far side of `n`, and its part along the surface points as that of `d`. A reflection happens only at a reflectance of 1.0. On the committed seed: 1 933 refracted, 964 reflected, none refused; 1 433 entering, 1 464 leaving, 326 with indices exactly one raw unit apart, 183 with equal indices, 182 with an incidence cosine below 1/16, 683 short directions (each kind at least 50, asserted). | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_185_refracted_directions_satisfy_snells_law_on_seeded_hits` |
+| OPTICS-TP-186 | The exact critical angle | OPTICS-REQ-091, OPTICS-REQ-094 | From index 1.25 into 1.0 through the ground, `(a^2 - b^2) / b^2 = 9 / 16`, so `(x, y, 0)` is total exactly when `3 \|x\| >= 4 \|y\|`. For `(2^32, 3 * 2^30)` and for `(4 j, 3 j)` with the odd `j = 1 000 000 007`: the critical direction is `Total`, one raw unit shallower is `Total`, one raw unit steeper is `Partial` and refracts for the last choice; the oracle agrees. With indices one raw unit apart at both ends of the range, `(1.0 + 2^-32)` into 1.0 and 8.0 into `(8.0 - 2^-32)`, along `(1.0, y, 0)` through the ground: the critical lift `y` is 92 681 and 32 768 raw (the largest `y` with `b^2 y^2 <= (a^2 - b^2) x^2`, asserted in exact integers in the test); at the lift and one raw unit below it the reflectance is `Total`, one raw unit above it is not, and the oracle agrees. At 45 degrees inside glass every choice reflects, with the ray of `try_specular_reflection`. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_186_total_internal_reflection_is_decided_exactly` |
+| OPTICS-TP-187 | Total internal reflection against the oracle | OPTICS-REQ-091 | `Total` exactly when the oracle's `a^2 \|d x n\|^2 >= b^2 (d.d)(n.n)` (and the direction arrives against `n`): on 1 500 seeded index pairs and directions through the ground within three raw units of the critical direction (found by an exact search in the test; 810 total and 384 partial on the committed seed, of which 36 have equal indices and the closest unequal pair is 7 412 021 raw units apart, printed; OPTICS-TP-186 covers indices one raw unit apart), and on 3 000 seeded tilted hits (962 total, 1 970 partial); at least 200 of each, asserted. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_187_total_internal_reflection_matches_the_oracle_around_the_critical_angle` |
+| OPTICS-TP-188 | The Fresnel reflectance against the oracle | OPTICS-REQ-092 | On 3 000 seeded hits and boundaries and on 1 000 directions between one raw unit and `2^20` raw units steeper than a seeded critical direction: `Partial(R)` with `R` in `0..=1.0` and within half a raw unit plus `2^-8` of the oracle's exact rational `(r_s^2 + r_p^2) / 2`; `Total` where the oracle says so; exactly 1.0 when `d . n >= 0`. 1 922 and 596 partial reflectances checked on the committed seed. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_188_the_reflectance_is_the_exact_fresnel_formula_rounded_once` |
+| OPTICS-TP-189 | The choice and the weights | OPTICS-REQ-094 | On 3 000 seeded hits and boundaries with reflectance `R` raw: the choices 0 and `R - 1` (when `R > 0`) give exactly `try_specular_reflection` with a white base reflectance, as `Reflected`; the choices `R` and `2^32 - 1` (when `R < 2^32`) refract, or are refused as grazing; every throughput is exactly 1.0. So the reflecting choice values are exactly `0..R` and the refracting ones `R..2^32`: `R + (2^32 - R) = 2^32`. On the committed seed 1 451 hits have both branches, 989 reflection only and 500 refraction only. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_189_the_two_branches_share_the_choice_values_and_each_weighs_one` |
+| OPTICS-TP-190 | Parallel slab | OPTICS-REQ-096, OPTICS-REQ-095 | A glass slab one unit thick entered along `(4, -3) / 5`: the outgoing direction is raw (3 435 973 837, -2 576 980 377, 0) (model), 0.6 raw units from the unit vector, against a bound of 19. Then 6 000 seeded slabs (a seeded triangle and its copy moved behind it with the winding reversed, seeded boundaries, the last choice on both faces): every ray refracted twice leaves within `1 + ceil(6 h k)` raw units per component of the exact unit vector along its original direction, with `k` the smallest integer with `1 / k` at most the rarer-side cosine (so the asserted bound is the stated one with `1 / c` rounded up); cases with `k > 1 024` are skipped. Both refracted rays pass the start-point checks of OPTICS-TP-191. On the committed seed 1 639 dense and 210 rarer slabs are crossed; the largest deviation from the rounded unit vector is 634 raw units, in a case whose bound is 15 103. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_190_a_parallel_slab_returns_the_original_direction` |
+| OPTICS-TP-191 | Start of the refracted ray | OPTICS-REQ-095 | On every refracted ray of 4 000 seeded hits: the start differs from the hit's start point on the dominant axis only, by one to five raw units; it is strictly on the far side of the exact plane (computed in the test from the vertices) and the point one unit nearer is not; it is within 1.5 raw units of the exact rational hit point on the other axes and 6.5 on the dominant axis; and the ray reports no hit on the triangle it left, at any distance. On the committed seed 2 267 rays take one step, 289 two, 11 three, none more. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_191_a_refracted_ray_starts_strictly_on_the_far_side` |
+| OPTICS-TP-192 | Refusals | OPTICS-REQ-097 | Choices -1 raw and 1.0 are refused with `ChoiceOutsideUnitInterval` naming the choice, before the arrival test; rays up from below and along the plane with `ArrivesBelowSurface`, from the scatter and the reflectance; on a face one raw unit inside the trace domain the refracted ray is refused with `StartOutsideTraceDomain` naming the start on the boundary, while the reflected ray starts inside. The fast path returns `None` each time. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_192_a_dielectric_sample_names_each_refusal` |
+| OPTICS-TP-193 | Grazing refraction | OPTICS-REQ-097 | A kernel hit found by search, with equal indices: `d . N < 0` (asserted exactly), the reflectance is zero, and the refracted direction, the rounded unit vector along `d`, has `t . N >= 0` (asserted exactly): refused with `RefractionAboveSurface` naming the direction; `None` from the fast path. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_193_a_refraction_that_stays_above_the_plane_is_refused` |
+| OPTICS-TP-194 | 256-bit products | OPTICS-REQ-091 | `(2^128 - 1)^2`, `2^64 * 2^64` and a product by `2^64` across the limbs equal hand-computed values; a product of `2^256` or more is `None`. | `crates/bunny-optics/src/shading/wide256.rs::tests::products_are_exact_and_refuse_overflow` |
+| OPTICS-TP-195 | 256-bit square root | OPTICS-REQ-091 | `isqrt` of `k^2 - 1`, `k^2` and `k^2 + 1` is `k - 1`, `k` and `k` for five `k` up to `2^128 - 1`. | `crates/bunny-optics/src/shading/wide256.rs::tests::isqrt_is_the_floor_root_around_squares` |
+| OPTICS-TP-196 | 256-bit sums and differences | OPTICS-REQ-091 | Carries and borrows across the limb boundary, `\|x - y\|` both ways, and the overflow and underflow refusals, against hand-computed values. | `crates/bunny-optics/src/shading/wide256.rs::tests::add_sub_and_difference_carry_and_refuse_overflow` |
+| OPTICS-TP-197 | 256-bit lengths and shifts | OPTICS-REQ-091 | Bit lengths of 0, 1, `2^128 - 1`, `2^200 + 5` and `2^256 - 1`, and right shifts of `2^200 + 5` and `3 * 2^128` on both sides of the limb boundary, against hand-computed values. | `crates/bunny-optics/src/shading/wide256.rs::tests::bit_length_and_right_shift_cross_the_limb_boundary` |
+| OPTICS-TP-198 | Dielectric mutations | OPTICS-REQ-091, OPTICS-REQ-092, OPTICS-REQ-093, OPTICS-REQ-094, OPTICS-REQ-095, OPTICS-REQ-097 | Each rule broken on purpose fails at least one case above; four rounding choices that no case can tell apart are listed with the size of their effect. | [Dielectric mutation checks](#dielectric-mutation-checks) |
+| OPTICS-TP-199 | A reflectance of 1.0 has no refracted ray | OPTICS-REQ-092, OPTICS-REQ-094 | Two inputs whose reflectance is `Partial(1.0)`. Leaving index 8 870 361 974 raw (about 2.065) for 1.0 through the ground along raw `(1 486 455 473, 2 686 100 064, 0)`, a direction found by a search over the continued-fraction convergents of the critical slope (exact integers, outside the test): short of the critical angle by the oracle, so not `Total`, but the reflectance rounds to 1.0, and the choices 0, 0.5 and the last choice all reflect. The grazing kernel hit of OPTICS-TP-107, with `d . N < 0` and `d . n > 0` asserted exactly, into glass: the reflectance is exactly 1.0, and for the choices 0 and the last choice the result is the mirror's own `ReflectionBelowSurface` refusal of `try_specular_reflection` with a white base reflectance. | `crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_199_a_reflectance_of_one_has_no_refracted_ray` |
 | OPTICS-TP-180 | The incidence cosine at its rounding boundaries | OPTICS-REQ-090, OPTICS-REQ-053 | Five constructed kernel hits on the planes `x - y + z = 0` (frame normal `g (1, -1, 1)`, g = 2 479 700 525) and `x = y` (`h (1, -1, 0)`, h = 3 037 000 500), whose exact `-(u . n)` sits one `2^-64` unit under a tie, on ties with floors even, even and odd, and one unit over a tie, at cosines below 0.38: each throughput, for F0 = (0, 0.04, 0.5), equals the pinned value bit for bit, and every mismatching case is listed. | `crates/bunny-optics/tests/specular_cosine_rounding_tests.rs::optics_tp_180_the_incidence_cosine_rounds_once_to_nearest_with_ties_to_even` |
 | OPTICS-TP-181 | The pinned cosines derived without the kernel | OPTICS-REQ-090 | For each case of OPTICS-TP-180, without the kernel: u equals `FixedUnitVec3::new` of the prescaled d and lies within one raw unit of the exact `d / \|d\|` (exact squares); the exact i128 `-(u . n)` equals the value derived by hand in the case's comment; a separately written round-to-nearest-even gives the pinned cosine; a big-integer Schlick oracle gives the pinned throughput; and each wrong rule the case targets (floor, ceiling, ties away, ties toward zero, ties to odd) would change at least one channel. The remainders against the tie (-1, 0, 1, 0, 0) and the tie floors' parities are asserted. | `crates/bunny-optics/tests/specular_cosine_rounding_tests.rs::optics_tp_181_each_pinned_case_is_derived_independently_of_the_kernel` |
 | OPTICS-TP-182 | Incidence-cosine mutations | OPTICS-REQ-090 | Each other rounding rule, and rounding at another step, fails OPTICS-TP-180; normalizing `d` without the prescale is not caught (recorded). | [Incidence-cosine mutation checks](#incidence-cosine-mutation-checks) |
@@ -1807,6 +1908,159 @@ tier = "manual"
 status = "implemented"
 
 [[case]]
+id = "OPTICS-TP-183"
+requirements = ["OPTICS-REQ-091", "OPTICS-REQ-092", "OPTICS-REQ-093", "OPTICS-REQ-094", "OPTICS-REQ-095"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_183_hand_derived_boundaries_reflect_and_refract"
+oracle = "The identity string. Straight down into glass (1.0 to 1.5): R = 0.04, raw 171 798 691.84 rounded to ..692 (a floor gives ..691); the choice R refracts straight on from one raw unit below the plane and the choice R - 1 reflects straight back from one raw unit above. Straight up through the back face: the same R, front_face() false, a start one raw unit above. From 1.5 into 2.0 along (4, -3) / 5, Brewster's angle: r_p = 0, R = 0.0392, raw 168 362 718.0032 rounded to ..718 (a ceiling gives ..719), and the refracted direction is (0.6, -0.8, 0), raw (2 576 980 377.6, 3 435 973 836.8) rounded to (..378, ..837) (a floor gives ..377, ..836). Every sample's throughput is 1.0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-184"
+requirements = ["OPTICS-REQ-092", "OPTICS-REQ-093", "OPTICS-REQ-097"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_184_equal_indices_pass_straight_through_and_the_range_is_inclusive"
+oracle = "With equal indices 1.0, 1.5 and 8.0, R is exactly zero and the refracted direction is the unit vector along d (a model value, and within one raw unit by the exact oracle). DielectricBoundary::new accepts 1.0 and 8.0 on either side and refuses 1.0 - 1, 8.0 + 1 raw, zero and a negative index, naming the first refused index; the Display text."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-185"
+requirements = ["OPTICS-REQ-093", "OPTICS-REQ-094"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_185_refracted_directions_satisfy_snells_law_on_seeded_hits"
+oracle = "3 000 seeded triangles, rays (the trace kernel's hits; one in four with the direction shortened by 2^8, 2^20 or 2^31) and boundaries (named indices, seeded indices, one in eight a raw unit apart), with the last choice value. Each refracted direction is within one raw unit plus 2^-26 of the unit vector along the oracle's exact T, and, from the direction alone: |a^2 sin_i^2 - b^2 sin_t^2| <= 4 b^2 2^-32, it is within 2 * 2^-32 of the plane of incidence, on the far side of n, and its part along the surface points as that of d. A reflection happens only at a reflectance of 1.0. On the committed seed: 1 933 refracted, 964 reflected, none refused; 1 433 entering, 1 464 leaving, 326 with indices exactly one raw unit apart, 183 with equal indices, 182 with an incidence cosine below 1/16, 683 short directions (each kind at least 50, asserted)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-186"
+requirements = ["OPTICS-REQ-091", "OPTICS-REQ-094"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_186_total_internal_reflection_is_decided_exactly"
+oracle = "From index 1.25 into 1.0 through the ground, (a^2 - b^2) / b^2 = 9 / 16, so (x, y, 0) is total exactly when 3 |x| >= 4 |y|. For (2^32, 3 * 2^30) and for (4 j, 3 j) with the odd j = 1 000 000 007: the critical direction is Total, one raw unit shallower is Total, one raw unit steeper is Partial and refracts for the last choice; the oracle agrees. With indices one raw unit apart at both ends of the range, (1.0 + 2^-32) into 1.0 and 8.0 into (8.0 - 2^-32), along (1.0, y, 0) through the ground: the critical lift y is 92 681 and 32 768 raw (the largest y with b^2 y^2 <= (a^2 - b^2) x^2, asserted in exact integers in the test); at the lift and one raw unit below it the reflectance is Total, one raw unit above it is not, and the oracle agrees. At 45 degrees inside glass every choice reflects, with the ray of try_specular_reflection."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-187"
+requirements = ["OPTICS-REQ-091"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_187_total_internal_reflection_matches_the_oracle_around_the_critical_angle"
+oracle = "Total exactly when the oracle's a^2 |d x n|^2 >= b^2 (d.d)(n.n) (and the direction arrives against n): on 1 500 seeded index pairs and directions through the ground within three raw units of the critical direction (found by an exact search in the test; 810 total and 384 partial on the committed seed, of which 36 have equal indices and the closest unequal pair is 7 412 021 raw units apart, printed; OPTICS-TP-186 covers indices one raw unit apart), and on 3 000 seeded tilted hits (962 total, 1 970 partial); at least 200 of each, asserted."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-188"
+requirements = ["OPTICS-REQ-092"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_188_the_reflectance_is_the_exact_fresnel_formula_rounded_once"
+oracle = "On 3 000 seeded hits and boundaries and on 1 000 directions between one raw unit and 2^20 raw units steeper than a seeded critical direction: Partial(R) with R in 0..=1.0 and within half a raw unit plus 2^-8 of the oracle's exact rational (r_s^2 + r_p^2) / 2; Total where the oracle says so; exactly 1.0 when d . n >= 0. 1 922 and 596 partial reflectances checked on the committed seed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-189"
+requirements = ["OPTICS-REQ-094"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_189_the_two_branches_share_the_choice_values_and_each_weighs_one"
+oracle = "On 3 000 seeded hits and boundaries with reflectance R raw: the choices 0 and R - 1 (when R > 0) give exactly try_specular_reflection with a white base reflectance, as Reflected; the choices R and 2^32 - 1 (when R < 2^32) refract, or are refused as grazing; every throughput is exactly 1.0. So the reflecting choice values are exactly 0..R and the refracting ones R..2^32: R + (2^32 - R) = 2^32. On the committed seed 1 451 hits have both branches, 989 reflection only and 500 refraction only."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-190"
+requirements = ["OPTICS-REQ-096", "OPTICS-REQ-095"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_190_a_parallel_slab_returns_the_original_direction"
+oracle = "A glass slab one unit thick entered along (4, -3) / 5: the outgoing direction is raw (3 435 973 837, -2 576 980 377, 0) (model), 0.6 raw units from the unit vector, against a bound of 19. Then 6 000 seeded slabs (a seeded triangle and its copy moved behind it with the winding reversed, seeded boundaries, the last choice on both faces): every ray refracted twice leaves within 1 + ceil(6 h k) raw units per component of the exact unit vector along its original direction, with k the smallest integer with 1 / k at most the rarer-side cosine (so the asserted bound is the stated one with 1 / c rounded up); cases with k > 1 024 are skipped. Both refracted rays pass the start-point checks of OPTICS-TP-191. On the committed seed 1 639 dense and 210 rarer slabs are crossed; the largest deviation from the rounded unit vector is 634 raw units, in a case whose bound is 15 103."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-191"
+requirements = ["OPTICS-REQ-095"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_191_a_refracted_ray_starts_strictly_on_the_far_side"
+oracle = "On every refracted ray of 4 000 seeded hits: the start differs from the hit's start point on the dominant axis only, by one to five raw units; it is strictly on the far side of the exact plane (computed in the test from the vertices) and the point one unit nearer is not; it is within 1.5 raw units of the exact rational hit point on the other axes and 6.5 on the dominant axis; and the ray reports no hit on the triangle it left, at any distance. On the committed seed 2 267 rays take one step, 289 two, 11 three, none more."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-192"
+requirements = ["OPTICS-REQ-097"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_192_a_dielectric_sample_names_each_refusal"
+oracle = "Choices -1 raw and 1.0 are refused with ChoiceOutsideUnitInterval naming the choice, before the arrival test; rays up from below and along the plane with ArrivesBelowSurface, from the scatter and the reflectance; on a face one raw unit inside the trace domain the refracted ray is refused with StartOutsideTraceDomain naming the start on the boundary, while the reflected ray starts inside. The fast path returns None each time."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-193"
+requirements = ["OPTICS-REQ-097"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_193_a_refraction_that_stays_above_the_plane_is_refused"
+oracle = "A kernel hit found by search, with equal indices: d . N < 0 (asserted exactly), the reflectance is zero, and the refracted direction, the rounded unit vector along d, has t . N >= 0 (asserted exactly): refused with RefractionAboveSurface naming the direction; None from the fast path."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-194"
+requirements = ["OPTICS-REQ-091"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/wide256.rs::tests::products_are_exact_and_refuse_overflow"
+oracle = "(2^128 - 1)^2, 2^64 * 2^64 and a product by 2^64 across the limbs equal hand-computed values; a product of 2^256 or more is None."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-195"
+requirements = ["OPTICS-REQ-091"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/wide256.rs::tests::isqrt_is_the_floor_root_around_squares"
+oracle = "isqrt of k^2 - 1, k^2 and k^2 + 1 is k - 1, k and k for five k up to 2^128 - 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-196"
+requirements = ["OPTICS-REQ-091"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/wide256.rs::tests::add_sub_and_difference_carry_and_refuse_overflow"
+oracle = "Carries and borrows across the limb boundary, |x - y| both ways, and the overflow and underflow refusals, against hand-computed values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-197"
+requirements = ["OPTICS-REQ-091"]
+evidence = "test"
+test = "crates/bunny-optics/src/shading/wide256.rs::tests::bit_length_and_right_shift_cross_the_limb_boundary"
+oracle = "Bit lengths of 0, 1, 2^128 - 1, 2^200 + 5 and 2^256 - 1, and right shifts of 2^200 + 5 and 3 * 2^128 on both sides of the limb boundary, against hand-computed values."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-198"
+requirements = ["OPTICS-REQ-091", "OPTICS-REQ-092", "OPTICS-REQ-093", "OPTICS-REQ-094", "OPTICS-REQ-095", "OPTICS-REQ-097"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#dielectric-mutation-checks"
+oracle = "Thirty-three mutations of the dielectric kernel, each mutant's tests under timeout 600: 29 fail at least one case; the four survivors are rounding choices whose effect is below what any test can see, listed with their bounds."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-199"
+requirements = ["OPTICS-REQ-092", "OPTICS-REQ-094"]
+evidence = "test"
+test = "crates/bunny-optics/tests/dielectric_tests.rs::optics_tp_199_a_reflectance_of_one_has_no_refracted_ray"
+oracle = "Two inputs whose reflectance is Partial(1.0). Leaving index 8 870 361 974 raw (about 2.065) for 1.0 through the ground along raw (1 486 455 473, 2 686 100 064, 0), a direction found by a search over the continued-fraction convergents of the critical slope (exact integers, outside the test): short of the critical angle by the oracle, so not Total, but the reflectance rounds to 1.0, and the choices 0, 0.5 and the last choice all reflect. The grazing kernel hit of OPTICS-TP-107, with d . N < 0 and d . n > 0 asserted exactly, into glass: the reflectance is exactly 1.0, and for the choices 0 and the last choice the result is the mirror's own ReflectionBelowSurface refusal of try_specular_reflection with a white base reflectance."
+tier = "fast"
+status = "implemented"
+
+[[case]]
 id = "OPTICS-TP-180"
 requirements = ["OPTICS-REQ-090", "OPTICS-REQ-053"]
 evidence = "test"
@@ -2446,6 +2700,61 @@ case fail; the restored source passed every case.
 | The cosine taken with `d`, not its unit vector | The cosine of the incidence angle | OPTICS-TP-100, OPTICS-TP-103 |
 | `f0` not clamped | Inputs clamped to `0..=1.0` | OPTICS-TP-101 |
 
+## Dielectric Mutation Checks
+
+Each rule below was broken on purpose in a container copy of
+`crates/bunny-optics/src/shading/` (`snell.rs`, `dielectric.rs`, `hit.rs`,
+`light.rs`), and the tests were run with `timeout 600 cargo test --locked -p
+bunny-optics --test dielectric_tests` per mutation (lints capped, so that a
+mutant compiles). Every mutation in this table made at least one case fail;
+the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `K = 0` treated as refraction | The critical direction is total | OPTICS-TP-186 |
+| `(d . d)` loses its low 8 bits in `K` | The decision is exact | OPTICS-TP-185, -186, -187, -188 |
+| `(d . n)` loses its low 8, 24, 32 or 40 bits in `K` | The decision is exact | OPTICS-TP-185, -188 (8 bits); also -193 (24); also -187 (32); also -184, -186, -190 (40) |
+| `a b` for `a^2` in `K` | Snell's law | OPTICS-TP-183, -185, -186, -187, -188, -190 |
+| `Total` reported as a reflectance of 1.0 | `Total` names total internal reflection | OPTICS-TP-186, -187, -188 |
+| The final reflectance rounding floors | Round to nearest | OPTICS-TP-183, -188 |
+| The half of `(r_s^2 + r_p^2) / 2` dropped | The unpolarized mean | OPTICS-TP-183, -186, -188 |
+| `a b m` for `b^2 m` in `r_p` | The parallel-polarized ratio | OPTICS-TP-183, -188 |
+| Ratios held to 30 fraction bits | 62 fraction bits | OPTICS-TP-183, -188 |
+| The indices swapped for the facing | Front face goes from `outside` to `inside` | OPTICS-TP-183, -185, -186, -187, -188, -190 |
+| Refraction when `choice > R` | Reflected exactly when `choice < R` | OPTICS-TP-183, -184, -189, -193 |
+| A reflection labelled `Refracted` | The branch names | OPTICS-TP-183, -185, -186, -189, -190, -191, -192 |
+| The reflected branch with a base reflectance one raw unit below 1.0 | The reflected weight is exactly one | OPTICS-TP-183, -186, -189, -192 |
+| The refracted throughput one raw unit below 1.0 | The refracted weight is exactly one | OPTICS-TP-183, -184, -189 |
+| `d (n.n) + (d.n) n` in `T` | The part of `d` across `n` | OPTICS-TP-183, -184, -185, -190 |
+| `b` for `a` in `T` | Snell's ratio | OPTICS-TP-183, -185, -190 |
+| The prescale to bit 31 | Normalized at 62 bits | OPTICS-TP-184, -185, -190, -193 |
+| The far-side step count without its `+ 1` | Strictly on the far side | OPTICS-TP-183, -190, -191, -192 |
+| The refracted ray from the hit's start point | The far-side start | OPTICS-TP-183, -190, -191, -192 |
+| The far-side step toward the arrival side | The far-side start | OPTICS-TP-183, -190, -191, -192 |
+| The leaving test removed | A refraction above the plane is refused | OPTICS-TP-193 |
+| The domain check of the far-side start removed | A start outside the domain is refused | OPTICS-TP-192 |
+| A choice of 1.0 accepted | The choice is in `[0, 1)` | OPTICS-TP-192 |
+| The arrival test removed | A ray from below is refused | OPTICS-TP-192 |
+| The index range without 8.0 | The range is inclusive | OPTICS-TP-184 and six more |
+| The index range from `1.0 - 1` raw | The range starts at 1.0 | OPTICS-TP-184 |
+
+Four mutations passed every case. Each replaces a stated rounding by another
+whose results differ too rarely, or by too little, for any case here to see;
+the bits of `bunny-dielectric/1` are those of the stated rule, and these rows
+are an open gap, not evidence:
+
+| Mutation | Stated rule | Why no case fails |
+| --- | --- | --- |
+| The root `q + 1` for `q` | `q = floor(sqrt(K))` | It moves the reflectance by at most `2^-8` of a raw unit, and by less than `2^-40` unless the direction is a few raw units long, and each direction component by less than `2^-30`; an output changes only when it lies that close to a rounding boundary. |
+| The root with its lowest bit cleared | The same | The same. |
+| A ratio rounded to nearest at 62 bits | The quotient is floored | It moves the reflectance by less than `2^-29` of a raw unit. |
+| The prescale of a negative component rounded away from zero | Truncated toward zero | It moves a component of the prescaled vector by one part in `2^61`, the direction by less than `2^-27` of a raw unit. |
+
+The final rounding's tie rule (to even) has no row: a tie needs
+`r_s^2 + r_p^2` to end in exactly `2^92` below bit 93, and no input is known
+that does. The clamp of the refracted direction to `-1.0..=1.0` has no row
+either: no input is known that reaches it.
+
 ## Incidence-Cosine Mutation Checks
 
 Each change below was made to `incidence_cosine` in
@@ -2749,6 +3058,9 @@ case with a stable test name.
 | An exhaustive sweep of all `2^32` inputs in `[0, 1]` for the tone curves (the 60-digit model found every code threshold once, which decides every input of a monotone function; the test suite covers the structure densely instead). | None; too slow for a debug-build test, a candidate for a `slow` tier. |
 | Shrinking for `OPTICS-TP-062` and `OPTICS-TP-064`: a failure reports its seed, case and variant, not a reduced input. | None; a property-testing harness or a hand-written reducer. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_specular_reflection`: no input is known to reach it (the start point is inside the domain and the clamped unit direction is a valid trace direction). | None; a constructed case if one is found. |
+| Pinned cases that tell apart four rounding choices of `bunny-dielectric/1` (the floored root, the floored ratio, the truncated prescale, the tie rule of the final rounding) and one that reaches the clamp of the refracted direction: see [Dielectric mutation checks](#dielectric-mutation-checks). Each needs an output within `2^-26` of a rounding boundary. | None; a directed search. |
+| A dielectric case whose incoming direction has a component of `2^32 + 1` raw (a `TraceRay::from_ray` direction): the widths allow it, no case passes one. | None; a constructed case. |
+| A case that produces `SecondaryRayError::BounceRayRefused` from `try_dielectric_scatter`: no input is known to reach it. | None; a constructed case if one is found. |
 | A derived bound for the white-furnace difference of `OPTICS-TP-148`: its `2^-11` is a measured tolerance, because no bound is derived for the error of a 256 by 256 midpoint rule on the weight. | None; a bound on the variation of the weight over the sample square, or an evaluation kernel to integrate against (flyingrobots/bunny#390). |
 | A derived bound for the direction of `bunny-ggx-conductor/1` against the ideal map (`OPTICS-TP-146` asserts a structural threshold and prints measurements), and any statement for samples with `1 - u` below `2^-12`, where the floored root of a small number loses relative precision. | None; a worst-case analysis of the chain, or a form of `t3` that keeps relative precision at the rim (a new contract version). |
 | The mirror-limit bounds of `OPTICS-TP-147` for `u > 1/2`. | None; the same analysis with the rim's rounding bounded. |
