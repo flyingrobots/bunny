@@ -207,6 +207,11 @@ formatting.
 | OPTICS-REQ-100 | `PointLight::irradiance` (`bunny-point-light/1`) is `intensity_c * g` with `g` the exact `c 2^64` divided by the exact `v . v` and rounded once to nearest with ties to even, `c` the cosine with the normalized `v` rounded once and clamped to `0..=1.0`, and the product rounded to nearest with ties to even; it is within `I_c (3 / d^2 + 1/2) + 1/2` raw units of the exact `I_c max(n . v, 0) / \|v\|^3`. | `README.md#point-light` |
 | OPTICS-REQ-101 | `SurfaceHit::point_light_sample` gives a `LightSample` whose shadow ray runs from the start point along `v 2^32 / m` (each component rounded to nearest, the largest exactly 1.0) with `shadow_t_max` `m - 1` raw, so an occluder counts exactly when it is nearer than the light; a light with `v . N' <= 0` exactly gives a dark sample; the radiance is `E_c * FRAC_1_PI`; a directional light's sample has `shadow_t_max` `SHADOW_T_MAX`. | `README.md#point-light` |
 | OPTICS-REQ-102 | A point at most `MIN_LIGHT_DISTANCE_RAW` (`2^25` raw) from the light (`v . v <= 2^50`, exact) is refused with `PointLightError::TooNear { to_light }`, before the side test and without a division; `PointLight::new` refuses, in this order, a position outside the trace domain, a negative intensity channel and one above `MAX_LIGHT_RAW`; `irradiance` refuses a point outside the trace domain. | `README.md#point-light` |
+| OPTICS-REQ-110 | `PinholeCamera::footprint` and `ThinLensCamera::footprint` (`bunny-ray-footprint/1`) measure three of the camera's rays: the sample's and those through the same sub-pixel offset one column right and one row down, each the camera's ray bit for bit inside the image and the same image-plane formula and floor past the last column or row; a thin-lens camera's three rays start at the one lens point of `lens_sample`, and with aperture 0 its footprint is the pinhole camera's bit for bit. | `README.md#ray-footprint` |
+| OPTICS-REQ-111 | Each component of `dx` and `dy` is the exact difference `T(neighbour) - T(hit)` of the texture coordinates `t0 + u (t1 - t0) + v (t2 - t0)` at the points where the rays' lines meet the triangle's plane, rounded once to nearest raw unit with ties to even: within half a raw unit of the exact difference. | `README.md#ray-footprint` |
+| OPTICS-REQ-112 | On a plane facing an exact camera at depth `d`, with texture coordinates the world `x` and `y` times `s`, every pixel has `du/dx = s d 2 tan / height`, `dv/dy = -du/dx` and zero cross terms; on a plane tilted toward a neighbouring ray the footprint is the closed-form secant, whose long axis grows without bound as the plane nears that ray's direction. | `README.md#ray-footprint` |
+| OPTICS-REQ-113 | A neighbouring ray with `D' . N` exactly zero gives `Unbounded { axis, reason: Parallel }`, one whose `D' . N` has the sign opposite to the hit ray's gives `Behind`, and one whose component rounds outside `i64` gives `TooLarge`, checked for the right neighbour (parallel, behind, `u`, `v`) and then the down neighbour; nothing wraps or panics for any accepted camera, sample, triangle and texture coordinates. | `README.md#ray-footprint` |
+| OPTICS-REQ-114 | `TexturedTriangle::new` refuses a triangle whose `(v1 - v0) x (v2 - v0)` is exactly zero (`DegenerateTriangle`); `footprint` refuses, in this order, a sample outside the image (`SampleOutsideImage`), a thin-lens sample outside `[0, 1)^2` (`LensSampleOutsideUnitSquare`), a hit ray with `D . N` exactly zero (`RayParallelToPlane`) and a plane with `(v0 - O) . N` zero or of the sign opposite to `D . N` (`PlaneNotAhead`). | `README.md#ray-footprint` |
 
 ```toml
 [[requirement]]
@@ -618,6 +623,31 @@ status = "active"
 id = "OPTICS-REQ-102"
 summary = "A point at most MIN_LIGHT_DISTANCE_RAW (2^25 raw) from the light (v . v <= 2^50, exact) is refused with PointLightError::TooNear { to_light }, before the side test and without a division; PointLight::new refuses, in this order, a position outside the trace domain, a negative intensity channel and one above MAX_LIGHT_RAW; irradiance refuses a point outside the trace domain."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-110"
+summary = "PinholeCamera::footprint and ThinLensCamera::footprint (bunny-ray-footprint/1) measure three of the camera's rays: the sample's and those through the same sub-pixel offset one column right and one row down, each the camera's ray bit for bit inside the image and the same image-plane formula and floor past the last column or row; a thin-lens camera's three rays start at the one lens point of lens_sample, and with aperture 0 its footprint is the pinhole camera's bit for bit."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-111"
+summary = "Each component of dx and dy is the exact difference T(neighbour) - T(hit) of the texture coordinates t0 + u (t1 - t0) + v (t2 - t0) at the points where the rays' lines meet the triangle's plane, rounded once to nearest raw unit with ties to even: within half a raw unit of the exact difference."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-112"
+summary = "On a plane facing an exact camera at depth d, with texture coordinates the world x and y times s, every pixel has du/dx = s d 2 tan / height, dv/dy = -du/dx and zero cross terms; on a plane tilted toward a neighbouring ray the footprint is the closed-form secant, whose long axis grows without bound as the plane nears that ray's direction."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-113"
+summary = "A neighbouring ray with D' . N exactly zero gives Unbounded { axis, reason: Parallel }, one whose D' . N has the sign opposite to the hit ray's gives Behind, and one whose component rounds outside i64 gives TooLarge, checked for the right neighbour (parallel, behind, u, v) and then the down neighbour; nothing wraps or panics for any accepted camera, sample, triangle and texture coordinates."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-114"
+summary = "TexturedTriangle::new refuses a triangle whose (v1 - v0) x (v2 - v0) is exactly zero (DegenerateTriangle); footprint refuses, in this order, a sample outside the image (SampleOutsideImage), a thin-lens sample outside [0, 1)^2 (LensSampleOutsideUnitSquare), a hit ray with D . N exactly zero (RayParallelToPlane) and a plane with (v0 - O) . N zero or of the sign opposite to D . N (PlaneNotAhead)."
+status = "active"
 ```
 
 ## Fixtures
@@ -807,6 +837,19 @@ which is `2^32 D` times the raw error of the ray's point at parameter
 `f 2^k / 2^32` against the exact focus-plane point. The case passes when
 `-tau' (3 D + 2 slack) <= 2 e_i <= tau' (D + 2 slack)` on each axis, which is
 `OPTICS-REQ-071` multiplied through by `2^33 D`.
+
+### The Footprint Oracle
+
+`crates/bunny-optics/tests/ray_footprint_tests.rs` decides each footprint
+from the cameras' public `ray` outputs in exact big integers (the shared
+`tests/exact` module), by a construction that shares nothing with the
+kernel: `N = e1 x e2`, the ray's `t = ((v0 - O) . N) / (D . N)`, the point
+`P - v0 = ((O - v0)(D . N) + ((v0 - O) . N) D) / (D . N)`, its weights
+`((P - v0) x e2) . N / (N . N)` and `(e1 x (P - v0)) . N / (N . N)`, the
+texture coordinates they give, and the difference of the neighbour's and the
+hit's over their common denominator, rounded to nearest with ties to even by
+bisection on the integer `r` with `r (2 y) <= 2 x + y`. It refuses and
+reports unbounded results by its own tests on `D . N` and `(v0 - O) . N`.
 
 ### The GGX Oracles
 
@@ -1071,6 +1114,18 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-204 | The minimum distance | OPTICS-REQ-102 | `TooNear` at distance zero, at exactly `2^25` raw on two axes and at a diagonal with `v . v = 3 2^48`; one raw unit farther is accepted with every channel below `2^46` raw; a light at a hit's start point is refused through `point_light_sample`. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_204_a_point_at_or_inside_the_minimum_distance_is_refused` |
 | OPTICS-TP-205 | Domain and intensity refusals | OPTICS-REQ-102, OPTICS-REQ-101 | A position at `TRACE_COORD_LIMIT_RAW` is refused and one raw unit inside accepted; a negative channel and one above `MAX_LIGHT_RAW` are refused and `MAX_LIGHT_RAW` accepted; a point outside the domain is refused; a light in the start point's plane gives a dark sample. | `crates/bunny-optics/tests/point_light_tests.rs::optics_tp_205_lights_and_points_outside_the_domain_are_refused` |
 | OPTICS-TP-206 | Point-light mutations | OPTICS-REQ-100, OPTICS-REQ-101, OPTICS-REQ-102 | Each of twelve rules broken on purpose fails at least one case above. | [Point-light mutation checks](#point-light-mutation-checks) |
+| OPTICS-TP-210 | Facing-plane closed form | OPTICS-REQ-111, OPTICS-REQ-112 | Two exact level cameras (tangent 1 over 4 by 4, 1/2 over 8 by 8) and four depth and scale pairs: at every pixel centre the footprint is `[[s d 2 tan / height, 0], [0, -s d 2 tan / height]]` raw, by hand. | Planned |
+| OPTICS-TP-211 | Ties to even | OPTICS-REQ-111 | Depths of 1, 2, 3, 5, 7 and 9 raw on the 4 by 4 camera give exact footprints `d / 2` raw: 0, 1, 2, 2, 4 and 4, with `dv/dy` their negations (ties to even both ways), by hand. | Planned |
+| OPTICS-TP-212 | Grazing plane | OPTICS-REQ-112, OPTICS-REQ-113 | The plane `z = -2 + g y` from pixel (1, 1) of the 4 by 4 camera for `g` = 0, 1, 2, `4 - 2^-j` (`j` = 0 to 24) and 4 less one raw unit: all four components equal the hand closed form `du/dx = d 2^33 / p`, `du/dy = -d 2^33 g / (m p)`, `dv/dy = -d 2^67 / (m p)` (`m = 4 - g`, `p = 4 + g`, raw) rounded to even, and the rational oracle; `dv/dy` is the long axis and grows strictly; once it does not fit it is `TooLarge`; `g = 4` is `Parallel` and `4 + 2^-32` and 5 are `Behind`. | Planned |
+| OPTICS-TP-213 | Seeded pinhole footprints | OPTICS-REQ-110, OPTICS-REQ-111, OPTICS-REQ-113, OPTICS-REQ-114 | 2 000 seeded cameras (2 to 512 pixels a side, positions within `2^38` raw), interior samples, triangles near the hit (a third nearly edge-on to a neighbour) and texture coordinates within 16 units (one in eight anywhere in `i64`): the result equals the [footprint oracle](#the-footprint-oracle) on the cameras' `ray` outputs, refusals and unbounded reasons included; on the committed seed 1 305 bounded, 430 behind, 163 too large and 102 refused, with at least 1 000, 20 and 20 required; the seed is printed. | Planned |
+| OPTICS-TP-214 | Seeded thin-lens footprints | OPTICS-REQ-110, OPTICS-REQ-111, OPTICS-REQ-113 | 1 000 seeded thin-lens cameras (apertures up to 4 units, focus distances `2^-8` to 64 units) with seeded lens samples: the three `ray` outputs share one origin and the result equals the footprint oracle on them; on the committed seed 643 bounded, 196 behind, 101 too large and 60 refused, with at least 500, 10 and 10 required; the seed is printed. | Planned |
+| OPTICS-TP-215 | Aperture 0 is the pinhole | OPTICS-REQ-110 | 500 seeded cameras with aperture 0, any sample (edges included) and seeded lens samples: the thin-lens footprint equals the pinhole footprint bit for bit; at least 450 compared (500 on the committed seed); the seed is printed. | Planned |
+| OPTICS-TP-216 | Neighbours past the edge | OPTICS-REQ-110, OPTICS-REQ-111 | 1 500 seeded `n` by `m` cameras with tangent `k m` raw, each beside an `(n + 2)` by `(m + 2)` camera with tangent `k (m + 2)` and the same scale shift (pairs whose shifts differ are skipped and counted): the larger camera's pixel `(x + 1, y + 1)` is the smaller's `(x, y)` bit for bit, and a sample in the last column, the last row or the corner has the footprint the oracle gives on the larger camera's rays; at least 1 000 checked (1 463 on the committed seed); the seed is printed. | Planned |
+| OPTICS-TP-217 | Thresholds one raw unit either side | OPTICS-REQ-113, OPTICS-REQ-114 | A camera looking along `+x` with up `+z` (rays checked) and a plane with normal `64 L (0, 1, 2^32 - 1)`: the down neighbour at sub-pixel offsets `sx` = 0, 1, 2 raw has `D' . N` of +1, 0 and -1 times `64 L`, giving a bounded footprint equal to the oracle (`TooLarge` with unit texture gradients), `Parallel` and `Behind`; the hit ray at the same offsets gives a footprint, `RayParallelToPlane` and `PlaneNotAhead`; the plane one raw unit above, through and one raw unit below the camera gives a footprint and `PlaneNotAhead` twice. | Planned |
+| OPTICS-TP-218 | Refusals and their order | OPTICS-REQ-114 | Collinear, coincident and triple vertices are `DegenerateTriangle` and a triangle with a normal of one raw unit squared is accepted; a column or row at the image size and sub-pixel offsets of 1.0 and -1 raw are `SampleOutsideImage`, before an invalid lens sample and before a plane behind; a lens sample of 1.0 is `LensSampleOutsideUnitSquare`; a plane behind the camera is `PlaneNotAhead`; every error has its own nonempty message and is a `std::error::Error`. | Planned |
+| OPTICS-TP-219 | Extremes | OPTICS-REQ-113 | Tangent 256 on 1 by 1, 32 768 by 1, 1 by 32 768, 32 768 by 32 768 and 3 by 2 images, cameras at trace-domain corners, every image corner at sub-pixel offsets 0 and `1 - 2^-32` (so the neighbours lie past the edge), triangles at trace-domain corners, texture coordinates of `i64::MIN`, `i64::MAX`, 0 and -1, pinhole and thin lens: no call panics in a test build, which checks every `i128` overflow; at least 1 000 results with bounded and `TooLarge` among them; the seed is printed. | Planned |
+| OPTICS-TP-220 | The quotient at the `i64` boundary | OPTICS-REQ-111, OPTICS-REQ-113 | Hand-computed: numerators of `(2^64 - 1) d` and `(2^64 + 1) d` over `2 d` (the ties `2^63 - 1/2` and `2^63 + 1/2`) and one raw unit either side, both signs: `i64::MAX`, then outside; `i64::MIN + 1`, `i64::MIN`, `i64::MIN`; `i64::MIN`, `i64::MIN`, then outside; a quotient of `2^64` is refused early. | Planned |
+| OPTICS-TP-221 | Ray-footprint mutations | OPTICS-REQ-110, OPTICS-REQ-111, OPTICS-REQ-112, OPTICS-REQ-113, OPTICS-REQ-114 | Each of fifteen rules broken on purpose fails at least one case above. | Planned |
 
 ```toml
 [[case]]
@@ -2620,6 +2675,102 @@ artifact = "docs/topics/optics/test-plan.md#point-light-mutation-checks"
 oracle = "Twelve rules of point_light.rs broken on purpose, each mutant's tests under timeout 120; each fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-210"
+requirements = ["OPTICS-REQ-111", "OPTICS-REQ-112"]
+evidence = "test"
+oracle = "Two exact level cameras (tangent 1 over 4 by 4, 1/2 over 8 by 8) and four depth and scale pairs: at every pixel centre the footprint is [[s d 2 tan / height, 0], [0, -s d 2 tan / height]] raw, by hand."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-211"
+requirements = ["OPTICS-REQ-111"]
+evidence = "test"
+oracle = "Depths of 1, 2, 3, 5, 7 and 9 raw on the 4 by 4 camera give exact footprints d / 2 raw: 0, 1, 2, 2, 4 and 4, with dv/dy their negations (ties to even both ways), by hand."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-212"
+requirements = ["OPTICS-REQ-112", "OPTICS-REQ-113"]
+evidence = "test"
+oracle = "The plane z = -2 + g y from pixel (1, 1) of the 4 by 4 camera for g = 0, 1, 2, 4 - 2^-j (j = 0 to 24) and 4 less one raw unit: all four components equal the hand closed form du/dx = d 2^33 / p, du/dy = -d 2^33 g / (m p), dv/dy = -d 2^67 / (m p) (m = 4 - g, p = 4 + g, raw) rounded to even, and the rational oracle; dv/dy is the long axis and grows strictly; once it does not fit it is TooLarge; g = 4 is Parallel and 4 + 2^-32 and 5 are Behind."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-213"
+requirements = ["OPTICS-REQ-110", "OPTICS-REQ-111", "OPTICS-REQ-113", "OPTICS-REQ-114"]
+evidence = "test"
+oracle = "2 000 seeded cameras (2 to 512 pixels a side, positions within 2^38 raw), interior samples, triangles near the hit (a third nearly edge-on to a neighbour) and texture coordinates within 16 units (one in eight anywhere in i64): the result equals the [footprint oracle](#the-footprint-oracle) on the cameras' ray outputs, refusals and unbounded reasons included; on the committed seed 1 305 bounded, 430 behind, 163 too large and 102 refused, with at least 1 000, 20 and 20 required; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-214"
+requirements = ["OPTICS-REQ-110", "OPTICS-REQ-111", "OPTICS-REQ-113"]
+evidence = "test"
+oracle = "1 000 seeded thin-lens cameras (apertures up to 4 units, focus distances 2^-8 to 64 units) with seeded lens samples: the three ray outputs share one origin and the result equals the footprint oracle on them; on the committed seed 643 bounded, 196 behind, 101 too large and 60 refused, with at least 500, 10 and 10 required; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-215"
+requirements = ["OPTICS-REQ-110"]
+evidence = "test"
+oracle = "500 seeded cameras with aperture 0, any sample (edges included) and seeded lens samples: the thin-lens footprint equals the pinhole footprint bit for bit; at least 450 compared (500 on the committed seed); the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-216"
+requirements = ["OPTICS-REQ-110", "OPTICS-REQ-111"]
+evidence = "test"
+oracle = "1 500 seeded n by m cameras with tangent k m raw, each beside an (n + 2) by (m + 2) camera with tangent k (m + 2) and the same scale shift (pairs whose shifts differ are skipped and counted): the larger camera's pixel (x + 1, y + 1) is the smaller's (x, y) bit for bit, and a sample in the last column, the last row or the corner has the footprint the oracle gives on the larger camera's rays; at least 1 000 checked (1 463 on the committed seed); the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-217"
+requirements = ["OPTICS-REQ-113", "OPTICS-REQ-114"]
+evidence = "test"
+oracle = "A camera looking along +x with up +z (rays checked) and a plane with normal 64 L (0, 1, 2^32 - 1): the down neighbour at sub-pixel offsets sx = 0, 1, 2 raw has D' . N of +1, 0 and -1 times 64 L, giving a bounded footprint equal to the oracle (TooLarge with unit texture gradients), Parallel and Behind; the hit ray at the same offsets gives a footprint, RayParallelToPlane and PlaneNotAhead; the plane one raw unit above, through and one raw unit below the camera gives a footprint and PlaneNotAhead twice."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-218"
+requirements = ["OPTICS-REQ-114"]
+evidence = "test"
+oracle = "Collinear, coincident and triple vertices are DegenerateTriangle and a triangle with a normal of one raw unit squared is accepted; a column or row at the image size and sub-pixel offsets of 1.0 and -1 raw are SampleOutsideImage, before an invalid lens sample and before a plane behind; a lens sample of 1.0 is LensSampleOutsideUnitSquare; a plane behind the camera is PlaneNotAhead; every error has its own nonempty message and is a std::error::Error."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-219"
+requirements = ["OPTICS-REQ-113"]
+evidence = "test"
+oracle = "Tangent 256 on 1 by 1, 32 768 by 1, 1 by 32 768, 32 768 by 32 768 and 3 by 2 images, cameras at trace-domain corners, every image corner at sub-pixel offsets 0 and 1 - 2^-32 (so the neighbours lie past the edge), triangles at trace-domain corners, texture coordinates of i64::MIN, i64::MAX, 0 and -1, pinhole and thin lens: no call panics in a test build, which checks every i128 overflow; at least 1 000 results with bounded and TooLarge among them; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-220"
+requirements = ["OPTICS-REQ-111", "OPTICS-REQ-113"]
+evidence = "test"
+oracle = "Hand-computed: numerators of (2^64 - 1) d and (2^64 + 1) d over 2 d (the ties 2^63 - 1/2 and 2^63 + 1/2) and one raw unit either side, both signs: i64::MAX, then outside; i64::MIN + 1, i64::MIN, i64::MIN; i64::MIN, i64::MIN, then outside; a quotient of 2^64 is refused early."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-221"
+requirements = ["OPTICS-REQ-110", "OPTICS-REQ-111", "OPTICS-REQ-112", "OPTICS-REQ-113", "OPTICS-REQ-114"]
+evidence = "manual-audit"
+oracle = "Fifteen rules of footprint.rs, footprint/wide.rs, camera.rs and thin_lens.rs broken on purpose; each fails at least one case."
+tier = "manual"
+status = "planned"
 ```
 
 ## Mutation Checks

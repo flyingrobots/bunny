@@ -100,6 +100,13 @@ impl Signed {
         Self { negative: big.negative && magnitude != Big::new(0), magnitude }
     }
 
+    /// `self * other`, exactly.
+    #[allow(dead_code, reason = "used by the ray-footprint tests only")]
+    pub(crate) fn mul(&self, other: &Self) -> Self {
+        let magnitude = self.magnitude.mul(&other.magnitude);
+        Self { negative: self.negative != other.negative && magnitude != Big::new(0), magnitude }
+    }
+
     pub(crate) fn negated(&self) -> Self {
         Self {
             negative: !self.negative && self.magnitude != Big::new(0),
