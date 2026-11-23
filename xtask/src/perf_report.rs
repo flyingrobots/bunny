@@ -61,6 +61,10 @@ pub(crate) struct Row {
     /// case's fast mode even when process placement makes it bimodal.
     pub(crate) base_best: Option<f64>,
     pub(crate) head_best: Option<f64>,
+    /// The p50 the gate compares: the lowest, or the second-lowest once there are enough
+    /// rounds that one lucky round is not the only evidence of a fast mode.
+    pub(crate) base_floor: Option<f64>,
+    pub(crate) head_floor: Option<f64>,
 }
 
 impl Row {
@@ -69,12 +73,21 @@ impl Row {
         relative_change(self.base?.p50, self.head?.p50)
     }
 
-    /// Relative change of the best p50, in percent (positive is slower). The regression gate
-    /// uses this one.
+    /// Relative change of the best p50, in percent (positive is slower). It is shown in the
+    /// table, but one lucky round on either side moves it, so the gate does not use it alone.
     pub(crate) fn best_change_percent(&self) -> Option<f64> {
         relative_change(self.base_best?, self.head_best?)
     }
+
+    /// Relative change of the gate's floor p50 (see [`floor_p50`]), in percent (positive is
+    /// slower).
+    pub(crate) fn floor_change_percent(&self) -> Option<f64> {
+        relative_change(self.base_floor?, self.head_floor?)
+    }
 }
+
+/// Rounds from which the gate's floor skips the single lowest p50.
+pub(crate) const ROBUST_FLOOR_ROUNDS: usize = 5;
 
 fn relative_change(before: f64, after: f64) -> Option<f64> {
     (before > 0.0).then(|| (after - before) / before * 100.0)
@@ -82,6 +95,17 @@ fn relative_change(before: f64, after: f64) -> Option<f64> {
 
 fn best_p50(timings: &[Timing]) -> Option<f64> {
     timings.iter().map(|t| t.p50).min_by(f64::total_cmp)
+}
+
+/// The p50 the gate treats as a side's fast mode: the lowest across rounds, except that with
+/// at least [`ROBUST_FLOOR_ROUNDS`] rounds the second-lowest, so one lucky round on either
+/// side neither fails an unrelated change nor hides a real regression. A fast mode that
+/// shows up in two or more rounds is still found.
+fn floor_p50(timings: &[Timing]) -> Option<f64> {
+    let mut p50s: Vec<f64> = timings.iter().map(|t| t.p50).collect();
+    p50s.sort_by(f64::total_cmp);
+    let at = usize::from(p50s.len() >= ROBUST_FLOOR_ROUNDS);
+    p50s.get(at).copied()
 }
 
 /// Pairs every case seen in either revision, in case order.
@@ -97,14 +121,21 @@ pub(crate) fn compare(base: &Runs, head: &Runs) -> Vec<Row> {
             head: head.get(case).and_then(|t| median_timing(t)),
             base_best: base.get(case).and_then(|t| best_p50(t)),
             head_best: head.get(case).and_then(|t| best_p50(t)),
+            base_floor: base.get(case).and_then(|t| floor_p50(t)),
+            head_floor: head.get(case).and_then(|t| floor_p50(t)),
         })
         .collect()
 }
 
-/// Cases whose best p50 slowed down by more than `max_percent`.
+/// Cases whose floor p50 and median p50 both slowed down by more than `max_percent`. The floor
+/// keeps the bimodal-case reasoning (noise only adds time); the median must agree, so a fast
+/// mode that appears on one side only does not fail a case whose typical round did not move.
 pub(crate) fn regressions(rows: &[Row], max_percent: f64) -> Vec<&Row> {
     rows.iter()
-        .filter(|row| row.best_change_percent().is_some_and(|change| change > max_percent))
+        .filter(|row| {
+            row.floor_change_percent().is_some_and(|change| change > max_percent)
+                && row.change_percent().is_some_and(|change| change > max_percent)
+        })
         .collect()
 }
 
@@ -305,5 +336,17 @@ mod tests {
             compare(&Runs::from([("c".to_owned(), base)]), &Runs::from([("c".to_owned(), head)]));
         assert!(rows[0].change_percent().expect("both sides").abs() < f64::EPSILON);
         assert!(regressions(&rows, 20.0).is_empty());
+    }
+
+    #[test]
+    fn the_floor_skips_the_lowest_round_only_from_five_rounds() {
+        let four = [10.0, 20.0, 21.0, 22.0].map(timing);
+        let five = [10.0, 20.0, 21.0, 22.0, 23.0].map(timing);
+        assert_eq!(floor_p50(&four), Some(10.0));
+        assert_eq!(floor_p50(&five), Some(20.0));
+        assert_eq!(floor_p50(&[]), None);
+        // Two rounds that reach the fast mode keep it: the floor is not a median.
+        let two_fast = [40.0, 40.0, 52.0, 52.0, 52.0].map(timing);
+        assert_eq!(floor_p50(&two_fast), Some(40.0));
     }
 }

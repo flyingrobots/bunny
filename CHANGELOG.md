@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `cargo xtask perf`: the regression gate no longer trips on one lucky round. A
+  case fails only when its floor p50 (the lowest across rounds, or the
+  second-lowest from five rounds) and its median p50 both slow past the
+  threshold, so one fast base round no longer fails an unrelated change (pull
+  request 252: best +20.2 % against medians 0.1 % apart) and one fast head
+  round no longer hides a real regression. The performance chapter describes
+  the rule. Closes flyingrobots/bunny#254.
+
 * Code Dojo's dependency check holds every crate a deterministic crate
   depends on (normal and build edges, workspace and all features) to the
   scanned set: another deterministic crate at its own directory, or a

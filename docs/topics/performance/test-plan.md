@@ -36,7 +36,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | --- | --- | --- |
 | PERF-REQ-001 | An optimization either preserves every output bit or ships as a new API with a stated error bound. | `README.md#the-fidelity-rule` |
 | PERF-REQ-002 | Comparisons report the median of each percentile and the best p50 across interleaved rounds. | `README.md#measuring` |
-| PERF-REQ-003 | The regression gate fails only when a case's best p50 slows past the threshold. | `README.md#continuous-integration` |
+| PERF-REQ-003 | The regression gate fails only when a case's floor p50 (lowest, or second-lowest from five rounds) and its median p50 both slow past the threshold; one outlier round on either side changes neither the verdict of an unchanged case nor that of a real regression. | `README.md#one-lucky-round` |
 | PERF-REQ-004 | Cases the base revision cannot build are reported as new. | `README.md#measuring` |
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
@@ -57,7 +57,7 @@ status = "active"
 
 [[requirement]]
 id = "PERF-REQ-003"
-summary = "The regression gate fails only when a case's best p50 slows past the threshold."
+summary = "The regression gate fails only when a case's floor p50 (lowest, or second-lowest from five rounds) and its median p50 both slow past the threshold; one outlier round on either side changes neither the verdict of an unchanged case nor that of a real regression."
 status = "active"
 
 [[requirement]]
@@ -117,7 +117,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-020 | Build | PERF-REQ-005 | Harness binary names follow the target (`.wasm`, `.exe`, none). | `xtask/src/perf.rs::tests::binary_names_follow_the_target` |
 | PERF-TP-021 | Build | PERF-REQ-005 | Manifest paths use forward slashes and escape quotes, so Windows and unusual paths produce valid TOML. | `xtask/src/perf.rs::tests::toml_paths_use_forward_slashes_and_escape_quotes` |
 | PERF-TP-022 | Gate | PERF-REQ-003 | A run that measured no case on both sides fails instead of passing. | `xtask/src/perf.rs::tests::the_gate_refuses_a_run_that_measured_nothing` |
-| PERF-TP-023 | Gate | PERF-REQ-003 | The failure message reports the best-p50 change the gate tested. | `xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested` |
+| PERF-TP-023 | Gate | PERF-REQ-003 | The failure message reports the floor and median change the gate tested. | `xtask/src/perf.rs::tests::the_gate_message_reports_the_floor_and_median_change_it_tested` |
 | PERF-TP-024 | Build | PERF-REQ-005 | The generated manifest lists every crate the cases use, including `bunny-broadphase`. | `xtask/src/perf.rs::tests::harness_manifest_includes_every_crate_the_cases_use` |
 | PERF-TP-025 | Comparability | PERF-REQ-006 | `scene/closest_visitor` and `trace/closest_hit` choose the same primitive (or both miss) on all 1 024 camera rays. | `crates/bunny-perf/src/scene.rs::tests::both_paths_choose_the_same_primitive_on_every_ray` |
 | PERF-TP-026 | Comparability | PERF-REQ-006 | The benchmark scene has 27 650 triangles. | `crates/bunny-perf/src/scene.rs::tests::the_scene_has_the_stated_size` |
@@ -143,6 +143,11 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-046 | Memory | PERF-REQ-008 | The scene's compact tree has one node per interior source node and an interior root. | `crates/bunny-perf/src/compact.rs::tests::the_compact_tree_has_one_node_per_interior_source_node` |
 | PERF-TP-047 | Comparability | PERF-REQ-009 | `closest_hit` returns the same hit and `any_hit` the same answer on all 1 024 camera rays through both trees. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_and_the_quartile_tree_agree_on_every_ray` |
 | PERF-TP-048 | Quality | PERF-REQ-009 | The SAH tree's exact SAH cost on the benchmark scene is below the quartile tree's; shapes and triangle-test counts are printed for the ledger. | `crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree` |
+| PERF-TP-052 | Gate | PERF-REQ-003 | The pull request 252 shape (7 rounds, one base round at 80.69 ns, the rest within 0.5 %) has a best-p50 change above +20 % and no regression at the 20 % threshold. | `xtask/src/perf_report.rs::tests::one_lucky_base_round_does_not_fail_the_gate` |
+| PERF-TP-053 | Gate | PERF-REQ-003 | Base rounds near 100 ns and head rounds near 130 ns (7 rounds) fail the 20 % threshold. | `xtask/src/perf_report.rs::tests::a_regression_in_every_round_still_fails_the_gate` |
+| PERF-TP-054 | Gate | PERF-REQ-003 | A real +30 % regression with one head round at 95 ns (best change negative) still fails the 20 % threshold. | `xtask/src/perf_report.rs::tests::one_lucky_head_round_does_not_hide_a_regression` |
+| PERF-TP-055 | Gate | PERF-REQ-003 | Three fast base rounds of seven against no fast head round, equal medians: no regression at the 20 % threshold. | `xtask/src/perf_report.rs::tests::a_floor_that_regresses_while_the_median_does_not_passes` |
+| PERF-TP-056 | Gate | PERF-REQ-003 | The floor is the lowest p50 for four rounds, the second-lowest for five, and a fast mode in two rounds is kept. | `xtask/src/perf_report.rs::tests::the_floor_skips_the_lowest_round_only_from_five_rounds` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -302,8 +307,8 @@ status = "implemented"
 id = "PERF-TP-023"
 requirements = ["PERF-REQ-003"]
 evidence = "test"
-test = "xtask/src/perf.rs::tests::the_gate_message_reports_the_best_p50_change_it_tested"
-oracle = "The failure message reports the best-p50 change the gate tested."
+test = "xtask/src/perf.rs::tests::the_gate_message_reports_the_floor_and_median_change_it_tested"
+oracle = "For three rounds at 100 and 130 ns the message names `a (+30.0% floor, +30.0% median)`."
 tier = "fast"
 status = "implemented"
 
@@ -529,6 +534,51 @@ requirements = ["PERF-REQ-009"]
 evidence = "test"
 test = "crates/bunny-perf/src/scene.rs::tests::the_sah_tree_costs_less_than_the_quartile_tree"
 oracle = "The exact SAH cost of both trees over the benchmark scene."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-052"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf_report.rs::tests::one_lucky_base_round_does_not_fail_the_gate"
+oracle = "The pull request 252 shape (7 rounds, one base round at 80.69 ns, the rest within 0.5 %) has a best-p50 change above +20 % and no regression at the 20 % threshold."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-053"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf_report.rs::tests::a_regression_in_every_round_still_fails_the_gate"
+oracle = "Base rounds near 100 ns and head rounds near 130 ns (7 rounds) fail the 20 % threshold."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-054"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf_report.rs::tests::one_lucky_head_round_does_not_hide_a_regression"
+oracle = "A real +30 % regression with one head round at 95 ns (best change negative) still fails the 20 % threshold."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-055"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf_report.rs::tests::a_floor_that_regresses_while_the_median_does_not_passes"
+oracle = "Three fast base rounds of seven against no fast head round, equal medians: no regression at the 20 % threshold."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-056"
+requirements = ["PERF-REQ-003"]
+evidence = "test"
+test = "xtask/src/perf_report.rs::tests::the_floor_skips_the_lowest_round_only_from_five_rounds"
+oracle = "The floor is the lowest p50 for four rounds, the second-lowest for five, and a fast mode in two rounds is kept."
 tier = "fast"
 status = "implemented"
 ```
