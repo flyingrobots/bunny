@@ -20,6 +20,8 @@ use crate::{FixedMat4, FixedMat4Row, FixedVec3};
 
 use bunny_num::fixed_q32_32::FRAC_BITS;
 
+mod look_rotation;
+
 /// Error returned by [`FixedMat4::try_look_at`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LookAtError {
@@ -162,6 +164,27 @@ fn checked_negate(v: FixedVec3) -> Option<FixedVec3> {
     Some(FixedVec3::new(v.x.checked_neg()?, v.y.checked_neg()?, v.z.checked_neg()?))
 }
 
+/// The look-at basis `[right, true_up, back]` for an exact raw view direction.
+///
+/// `forward = unit(direction)`, `right = unit(forward x up)`, `true_up =
+/// unit(right x forward)` and `back = -forward`, each cross product exact on the
+/// raw components. Refusals, in this order: a zero direction is
+/// `CoincidentEyeTarget`; an `up` that is zero or exactly parallel to
+/// `direction`, or whose exact cross product with the rounded `forward` is
+/// zero, is `ParallelUp`.
+fn basis(direction: Raw3, up: FixedVec3) -> Result<[FixedVec3; 3], LookAtError> {
+    let forward = unit(direction).ok_or(LookAtError::CoincidentEyeTarget)?;
+    if exactly_parallel(direction, Raw3::from_fixed(up)) {
+        return Err(LookAtError::ParallelUp);
+    }
+    let (raw_forward, raw_up) = (Raw3::from_fixed(forward), Raw3::from_fixed(up));
+    let right = unit(raw_forward.cross(raw_up)).ok_or(LookAtError::ParallelUp)?;
+    let true_up =
+        unit(Raw3::from_fixed(right).cross(raw_forward)).ok_or(LookAtError::ParallelUp)?;
+    let back = checked_negate(forward).ok_or(LookAtError::Overflow)?;
+    Ok([right, true_up, back])
+}
+
 /// `magnitude / 2^32` rounded to nearest, ties to even, as `checked_mul` rounds.
 const fn round_shift(magnitude: u128) -> u128 {
     let (quotient, remainder) = (magnitude >> FRAC_BITS, magnitude & ((1 << FRAC_BITS) - 1));
@@ -227,16 +250,7 @@ impl FixedMat4 {
         target: FixedVec3,
         up: FixedVec3,
     ) -> Result<Self, LookAtError> {
-        let direction = Raw3::difference(target, eye);
-        let forward = unit(direction).ok_or(LookAtError::CoincidentEyeTarget)?;
-        if exactly_parallel(direction, Raw3::from_fixed(up)) {
-            return Err(LookAtError::ParallelUp);
-        }
-        let (raw_forward, raw_up) = (Raw3::from_fixed(forward), Raw3::from_fixed(up));
-        let right = unit(raw_forward.cross(raw_up)).ok_or(LookAtError::ParallelUp)?;
-        let true_up =
-            unit(Raw3::from_fixed(right).cross(raw_forward)).ok_or(LookAtError::ParallelUp)?;
-        let back = checked_negate(forward).ok_or(LookAtError::Overflow)?;
+        let [right, true_up, back] = basis(Raw3::difference(target, eye), up)?;
         Ok(Self::from_rows(
             view_row(right, eye)?,
             view_row(true_up, eye)?,
