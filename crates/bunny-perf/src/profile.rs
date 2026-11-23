@@ -839,6 +839,24 @@ mod tests {
         assert_eq!(box_tests, 20_238);
     }
 
+    /// TRACE-TP-419: the profile's node, box and leaf counts are the counted searches' own.
+    /// `counted_counts` is the library's count for one ray; `walk` must report exactly it for
+    /// the seven counters the library gives, and the replica's recorded calls must agree.
+    #[test]
+    #[cfg(feature = "trace_counted")]
+    fn the_profile_takes_its_counts_from_the_counted_searches() {
+        let rig = Rig::new();
+        for ray in &rig.rays {
+            for mode in [Mode::Closest, Mode::Any] {
+                let walked = walk(&rig, ray, mode);
+                let library = rig.counted_counts(ray, mode).expect("a well formed tree");
+                assert_eq!(replica(walked.counts), counted(library));
+                assert_eq!(walked.boxes.len() as u64, library.box_tests);
+                assert_eq!(walked.tests.len() as u64, library.primitive_tests);
+            }
+        }
+    }
+
     #[test]
     fn counters_obey_their_identities() {
         let rig = Rig::new();
