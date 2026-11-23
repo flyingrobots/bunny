@@ -78,6 +78,7 @@ LR-TP-003 golden and its ideal columns also come from the model.
 | LR-TP-003 | Pinned golden | LR-REQ-001, LR-REQ-002 | Forward `(1, 2, 3)`, up `+Y`: pinned raw rows, each within 1/2 raw of the Decimal ideal. | `crates/bunny-linalg/tests/look_rotation_tests.rs::lr_tp_003_diagonal_forward_has_the_pinned_golden_matrix` |
 | LR-TP-004 | Refusals | LR-REQ-003 | Zero forward refused, 1 raw along `±Z` accepted; zero up refused, 1 raw accepted; parallel and antiparallel up at several scales (and all `i64::MIN`) refused, 1 raw off accepted; `(2^40, 2^40 + 1, 0)` with up `(1, 1, 0)` refused although not parallel, up 1 raw away accepted. | `crates/bunny-linalg/tests/look_rotation_tests.rs::lr_tp_004_degenerate_inputs_are_refused_one_raw_unit_from_the_threshold` |
 | LR-TP-005 | Seeded bound | LR-REQ-002, LR-REQ-003 | 10 000 seeded cases: exact `i128` length and dot bounds on every column and row; exactly 9 798 `Ok` and 202 `ParallelUp`, no other error; digest equal to the Python model's. | `crates/bunny-linalg/tests/look_rotation_tests.rs::lr_tp_005_seeded_directions_are_orthonormal_within_the_documented_bound` |
+| LR-TP-006 | Scaling | LR-REQ-002, LR-REQ-003 | Up `(2^32, 0, 0)` raw: forward `(2^61, 2^28 - 1, 0)` is accepted with back `-(2^32, 1, 0)`; three times that forward is refused with `ParallelUp`, so the result is not scale invariant. | `crates/bunny-linalg/tests/look_rotation_tests.rs::lr_tp_006_scaling_forward_can_change_the_rounded_direction` |
 
 ```toml
 [[case]]
@@ -122,6 +123,15 @@ requirements = ["LR-REQ-002", "LR-REQ-003"]
 evidence = "test"
 test = "crates/bunny-linalg/tests/look_rotation_tests.rs::lr_tp_005_seeded_directions_are_orthonormal_within_the_documented_bound"
 oracle = "Exact i128 bounds on 10 000 seeded cases; counts and digest equal the Decimal-checked Python model."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "LR-TP-006"
+requirements = ["LR-REQ-002", "LR-REQ-003"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/look_rotation_tests.rs::lr_tp_006_scaling_forward_can_change_the_rounded_direction"
+oracle = "Hand-derived rounding of the two forwards: (2^32, 1, 0) and (2^32, 0, 0)."
 tier = "fast"
 status = "implemented"
 ```

@@ -215,3 +215,17 @@ fn lr_tp_005_seeded_directions_are_orthonormal_within_the_documented_bound() {
     assert_eq!((ok, parallel), (EXPECTED_OK, EXPECTED_PARALLEL_UP), "seed={SEED:#x}");
     assert_eq!(digest, EXPECTED_DIGEST, "seed={SEED:#x}: results differ from the Python model");
 }
+
+/// LR-TP-006: scaling `forward` by a positive factor can change its rounded form, so the result
+/// is not scale invariant: here the original is accepted and three times it is refused.
+#[test]
+#[wasm_bindgen_test]
+fn lr_tp_006_scaling_forward_can_change_the_rounded_direction() {
+    let up = raw_vec(1 << 32, 0, 0);
+    let forward = raw_vec(1 << 61, (1 << 28) - 1, 0);
+    let scaled = raw_vec(3 << 61, 3 * ((1 << 28) - 1), 0);
+
+    let accepted = FixedMat3::try_look_rotation(forward, up).expect("the unscaled forward");
+    assert_eq!(columns(accepted)[2], [-(1 << 32), -1, 0], "back = -(2^32, 1, 0)");
+    assert_eq!(FixedMat3::try_look_rotation(scaled, up), Err(LookAtError::ParallelUp));
+}
