@@ -125,7 +125,13 @@ was redone for this bound; none is tight:
 The bounds exist so that every intermediate of the triangle test fits `i128`
 exactly: edges and origin offsets are below `2^41`, cross products below
 `2^84`, and the largest numerator below `2^126`. Box coordinates are not
-restricted; `box_entry` accepts any `FixedAabb3`.
+restricted; `box_entry` accepts any `FixedAabb3`, including one whose minimum
+is above its maximum on some axis. `box_entry` does not check the order of the
+corners: each axis is read from the two planes in the direction of travel, so
+with a ray along +x at `2^32` raw per unit of distance, a box whose x runs from 6 to 5
+raw returns `Some(6)`, the same bound as a box from 6 to 7 (TRACE-TP-317). Such a
+box is rejected only by the rules below: a far plane behind the origin, or an
+axis the ray does not move along whose origin coordinate is outside `min..=max`.
 
 The direction need not be a unit vector. Every distance in this chapter is a
 multiple of the direction: the point at distance `t` is
@@ -846,7 +852,9 @@ every target. It returns the root and the number of nodes written, or a
 `CompactError`: `InvalidNodeIndex` when a child index is outside the node
 slice, `OutputTooSmall` when `out` is shorter than the tree needs, `NotATree`
 when more interior nodes are reached than a tree of that size has (a node
-reached twice), and `TooDeep` when more than 64 interior subtrees wait to be
+reached twice; this is a count and not a check that the nodes are a tree, so a
+node shared by two parents converts, written once under each parent, when
+unused nodes in the slice leave room in the count; TRACE-TP-318), and `TooDeep` when more than 64 interior subtrees wait to be
 written at once. The conversion writes each node's left subtree first and
 queues its interior children; at most one subtree waits per level above the
 node being written, so a tree of depth `d` queues at most `d`, and every tree

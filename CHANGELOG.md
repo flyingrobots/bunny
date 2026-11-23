@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Ray-tracing documentation: the contract now states that `TraceRay::box_entry`
+  accepts a box whose minimum is above its maximum (an x range of 6 to 5 raw
+  returns `Some(6)`); `compact_bvh`'s `NotATree` is documented as a count of
+  interior nodes and not a check that the nodes are a tree; the Numeric
+  Constitution's overflow audit lists the trace kernels' floor rounding and
+  saturation. Two tests pin the first two (`TRACE-TP-317`, `TRACE-TP-318`).
+  flyingrobots/bunny#295.
+
 * Tests: the four zero-allocation tests (`bunny-broadphase` `bvh_allocation_tests`
   and `bvh_sah_allocation_tests`, `bunny-codec` `ply_allocation_tests` and
   `ply_ascii_allocation_tests`) count allocations of the measuring thread only,
