@@ -12,10 +12,13 @@ flyingrobots/bunny#287.
 | `FixedQ32_32::checked_mul`, `Mul` | `lhs * rhs / 2^32`, from the exact `i128` product | ties to even |
 | `FixedQ32_32::checked_div`, `Div` | `dividend * 2^32 / divisor`, from the exact `i128` quotient and remainder | ties to even |
 | `FixedDivisor::checked_div` | the same quotient as `checked_div`, by a prepared reciprocal | ties to even, the same bits |
+| `FixedQ32_32::lerp` | the step `(b - a) * t / 2^32`, from the exact `i128` product ([`bunny-lerp/1`](../lerp/README.md)) | ties to even |
+| `FixedQ32_32::from_ratio` | `n * 2^32 / d`, from the exact `u64` quotient and remainder (a tie cannot occur) | ties to even |
 | `from_f32`, `try_from_f32` | the float's exact value times `2^32` | ties to even |
 | `to_f32` | the raw value to a 24-bit significand | ties to even |
 
-Each site rounds the magnitude and then applies the sign. Because being even does not
+Each site rounds the magnitude and then applies the sign, except the lerp step, which rounds
+the signed value through its floor; the two give the same result. Because being even does not
 depend on the sign, this is ties to even on the signed value: `-2.5` becomes `-2` and
 `-1.5` becomes `-2`, and `round(-x) == -round(x)` always.
 
