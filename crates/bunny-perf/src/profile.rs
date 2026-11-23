@@ -1,19 +1,28 @@
 //! Counters for `closest_hit` and `any_hit` on the benchmark scene, and kernel replay cases.
 //!
-//! The core crates carry no counters. This module re-runs the traversal in the harness: a
-//! replica of the search loop built on the public [`TraceRay::box_entry`], [`BvhNode`] data
-//! and the same primitive closure the benchmark uses. A test checks that the replica tests
-//! the same primitives, with the same limits and in the same order, as `closest_hit` and
-//! `any_hit` on every benchmark ray, and returns the same hit.
+//! The node, box and leaf counts (`popped`, `skipped_at_pop`, `interior_visited`,
+//! `leaf_visited`, `box_calls`, `box_some`, `box_none`, `stack_peak`, `tri_tests`) are the
+//! counts `compact_closest_hit_counted` and `compact_any_hit_counted` return for the same ray
+//! on the compact copy of the scene's tree; they need the `trace_counted` group. What those
+//! searches do not give is replicated here: a replica of the search loop built on the public
+//! [`TraceRay::box_entry`], [`BvhNode`] data and the same primitive closure the benchmark
+//! uses supplies the per-stage triangle counters, the child counts and the recorded calls. A
+//! test checks that the replica tests the same primitives, with the same limits and in the
+//! same order, as `closest_hit` and `any_hit` on every benchmark ray, and returns the same hit.
 //!
-//! The replica also records every box test and triangle test it makes, so the kernel cases
-//! can replay exactly those calls and time them in isolation (see [`kernel_cases`]).
+//! The replica records every box test and triangle test it makes, so the kernel cases can
+//! replay exactly those calls and time them in isolation (see [`kernel_cases`]).
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 use std::hint::black_box;
 
 use bunny_broadphase::BvhNode;
+#[cfg(feature = "trace_counted")]
+use bunny_broadphase::{
+    compact_any_hit_counted, compact_bvh, compact_closest_hit_counted, CompactChild, CompactNode,
+    CompactRoot, CompactView, TraversalCounts, TraversalError,
+};
 use bunny_num::FixedQ32_32;
 use bunny_query::{TraceRay, TraceTriangle};
 
@@ -41,6 +50,22 @@ macro_rules! counters {
             }
         }
     };
+}
+
+impl Counts {
+    /// Sets the counters the counted searches give from their record of the same ray.
+    #[cfg(feature = "trace_counted")]
+    fn take_counted(&mut self, library: &TraversalCounts) {
+        self.popped = library.popped_skipped + library.interior_visits + library.leaf_visits;
+        self.skipped_at_pop = library.popped_skipped;
+        self.interior_visited = library.interior_visits;
+        self.leaf_visited = library.leaf_visits;
+        self.box_calls = library.box_tests;
+        self.box_some = library.box_entries;
+        self.box_none = library.box_tests - library.box_entries;
+        self.stack_peak = library.peak_stack;
+        self.tri_tests = library.primitive_tests;
+    }
 }
 
 counters! {
@@ -184,6 +209,11 @@ pub(crate) struct Rig {
     pub(crate) scene: Scene,
     pub(crate) triangles: Vec<TraceTriangle>,
     pub(crate) rays: Vec<TraceRay>,
+    /// The compact copy of the scene's tree the counted searches run on.
+    #[cfg(feature = "trace_counted")]
+    root: Option<CompactRoot>,
+    #[cfg(feature = "trace_counted")]
+    compact: Vec<CompactNode>,
 }
 
 impl Rig {
@@ -199,7 +229,59 @@ impl Rig {
 
     fn with(scene: Scene) -> Self {
         let triangles = trace_triangles(&scene);
-        Self { scene, triangles, rays: trace_rays() }
+        #[cfg(feature = "trace_counted")]
+        let (root, compact) = Self::compacted(&scene);
+        Self {
+            scene,
+            triangles,
+            rays: trace_rays(),
+            #[cfg(feature = "trace_counted")]
+            root,
+            #[cfg(feature = "trace_counted")]
+            compact,
+        }
+    }
+
+    #[cfg(feature = "trace_counted")]
+    fn compacted(scene: &Scene) -> (Option<CompactRoot>, Vec<CompactNode>) {
+        let Some(first) = scene.nodes.first() else { return (None, Vec::new()) };
+        let blank =
+            CompactNode { bounds: [first.bounds; 2], children: [CompactChild::default(); 2] };
+        let mut nodes = vec![blank; scene.nodes.len() / 2];
+        let (root, used) = compact_bvh(&scene.nodes, &mut nodes)
+            .ok()
+            .flatten()
+            .map_or((None, 0), |(root, used)| (Some(root), used));
+        nodes.truncate(used);
+        (root, nodes)
+    }
+
+    /// What the library's counted search of `mode` reports for one ray, run with the same
+    /// primitive test as the benchmark.
+    #[cfg(feature = "trace_counted")]
+    fn counted_counts(
+        &self,
+        ray: &TraceRay,
+        mode: Mode,
+    ) -> Result<TraversalCounts, TraversalError> {
+        let view = CompactView {
+            root: self.root,
+            nodes: &self.compact,
+            prim_indices: &self.scene.prim_indices,
+        };
+        let triangle = |primitive: u32| self.triangles.get(primitive as usize);
+        match mode {
+            Mode::Closest => compact_closest_hit_counted(view, ray, FAR, |primitive, limit| {
+                ray.hit_triangle(triangle(primitive)?, FixedQ32_32::ZERO, limit)
+                    .map(|hit| hit.distance)
+            })
+            .map(|(_, counts)| counts),
+            Mode::Any => compact_any_hit_counted(view, ray, FAR, |primitive| {
+                triangle(primitive)
+                    .is_some_and(|t| ray.hit_triangle(t, FixedQ32_32::ZERO, FAR).is_some())
+            })
+            .map(|(_, counts)| counts),
+        }
     }
 }
 
@@ -220,6 +302,10 @@ pub(crate) fn walk(rig: &Rig, ray: &TraceRay, mode: Mode) -> Walk {
     let out = Walk { counts: Counts::default(), hit: None, boxes: Vec::new(), tests: Vec::new() };
     let mut walker = Walker { rig, ray, mode, limit: FAR, stack: Vec::new(), done: false, out };
     walker.run();
+    #[cfg(feature = "trace_counted")]
+    if let Ok(library) = rig.counted_counts(ray, mode) {
+        walker.out.counts.take_counted(&library);
+    }
     walker.out
 }
 
@@ -230,9 +316,7 @@ impl Walker<'_> {
             self.push((0, root));
         }
         while let Some((index, enter)) = self.stack.pop() {
-            self.out.counts.popped += 1;
             if enter > self.limit {
-                self.out.counts.skipped_at_pop += 1;
                 continue;
             }
             self.visit(index);
@@ -245,13 +329,6 @@ impl Walker<'_> {
     fn entry(&mut self, index: u32) -> Option<FixedQ32_32> {
         let node = self.rig.scene.nodes.get(index as usize)?;
         let found = self.ray.box_entry(&node.bounds, self.limit);
-        let counts = &mut self.out.counts;
-        counts.box_calls += 1;
-        if found.is_some() {
-            counts.box_some += 1;
-        } else {
-            counts.box_none += 1;
-        }
         self.out.boxes.push((index, self.limit));
         found
     }
@@ -259,8 +336,6 @@ impl Walker<'_> {
     fn push(&mut self, (index, enter): Entry) {
         if let Some(enter) = enter {
             self.stack.push((index, enter));
-            let depth = self.stack.len() as u64;
-            self.out.counts.stack_peak = self.out.counts.stack_peak.max(depth);
         }
     }
 
@@ -271,11 +346,9 @@ impl Walker<'_> {
             return;
         };
         if prim_count > 0 {
-            self.out.counts.leaf_visited += 1;
             self.visit_leaf(first as usize, prim_count as usize);
             return;
         }
-        self.out.counts.interior_visited += 1;
         let (left, right) = (self.entry(first), self.entry(first + 1));
         let kept = u8::from(left.is_some()) + u8::from(right.is_some());
         let counts = &mut self.out.counts;
@@ -344,7 +417,6 @@ impl Walker<'_> {
 
     fn count_stage(&mut self, stage: Stage) {
         let counts = &mut self.out.counts;
-        counts.tri_tests += 1;
         match stage {
             Stage::Determinant => counts.fail_determinant += 1,
             Stage::FirstBarycentric => counts.fail_first_barycentric += 1,
@@ -569,12 +641,19 @@ fn render_packets(rig: &Rig) -> String {
 
 /// The `--stats` report, as Markdown tables: for the `build_bvh` tree and, with the `sah`
 /// group, again for the `build_bvh_sah` tree.
-pub(crate) fn report() -> String {
+///
+/// # Errors
+/// Returns a message when the `trace_counted` group is off, because the node, box and leaf
+/// counts come from the counted searches.
+pub(crate) fn report() -> Result<String, &'static str> {
+    if cfg!(not(feature = "trace_counted")) {
+        return Err("--stats needs the `trace_counted` feature");
+    }
     #[allow(unused_mut)]
     let mut out = report_for(&Rig::new(), "");
     #[cfg(feature = "sah")]
     out.push_str(&report_for(&Rig::sah(), " (build_bvh_sah tree)"));
-    out
+    Ok(out)
 }
 
 fn report_for(rig: &Rig, tree: &str) -> String {
@@ -791,7 +870,8 @@ mod tests {
     }
 
     /// TRACE-TP-418: on every benchmark ray, both counted searches on the compact copy of the
-    /// scene's tree give the replica's answer and counters.
+    /// scene's tree give the replica's answer and as many box and primitive tests as the
+    /// replica recorded.
     #[test]
     fn the_counted_compact_search_matches_the_replica_on_every_ray() {
         use bunny_broadphase::{
@@ -825,10 +905,15 @@ mod tests {
                 continue;
             };
             let (want, want_any) = (walk(&rig, ray, Mode::Closest), walk(&rig, ray, Mode::Any));
-            let found = (closest.0.map(|h| (h.primitive, h.distance)), counted(closest.1));
-            let found_any = (any.0, counted(any.1));
-            if found != (want.hit, replica(want.counts))
-                || found_any != (want_any.hit.is_some(), replica(want_any.counts))
+            let found = (closest.0.map(|h| (h.primitive, h.distance)), closest.1);
+            let found_any = (any.0, any.1);
+            let recorded = |boxes: usize, tests: usize| (boxes as u64, tests as u64);
+            if found.0 != want.hit
+                || (found.1.box_tests, found.1.primitive_tests)
+                    != recorded(want.boxes.len(), want.tests.len())
+                || found_any.0 != want_any.hit.is_some()
+                || (found_any.1.box_tests, found_any.1.primitive_tests)
+                    != recorded(want_any.boxes.len(), want_any.tests.len())
             {
                 bad.push(index);
             }
@@ -839,11 +924,10 @@ mod tests {
         assert_eq!(box_tests, 20_238);
     }
 
-    /// TRACE-TP-419: the profile's node, box and leaf counts are the counted searches' own.
+    /// PERF-TP-057: the profile's node, box and leaf counts are the counted searches' own.
     /// `counted_counts` is the library's count for one ray; `walk` must report exactly it for
     /// the seven counters the library gives, and the replica's recorded calls must agree.
     #[test]
-    #[cfg(feature = "trace_counted")]
     fn the_profile_takes_its_counts_from_the_counted_searches() {
         let rig = Rig::new();
         for ray in &rig.rays {

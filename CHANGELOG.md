@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   between the rays. Results outside the trace domain or Q32.32 are typed
   `ShapeFrameError` refusals. Closes flyingrobots/bunny#357.
 
+### Changed
+
+* `bunny-perf`: the `--stats` profile takes its node, box and leaf counts from
+  `compact_closest_hit_counted` and `compact_any_hit_counted` instead of
+  replicating them in the harness; the replica stays for the per-stage triangle
+  counters, the child counts and the recorded calls the kernel replays need.
+  The printed tables are unchanged, and `--stats` now needs the `trace_counted`
+  group. No kernel changed.
+
 ### Fixed
 
 * `bunny-perf` builds with each feature group alone. Helpers shared by several

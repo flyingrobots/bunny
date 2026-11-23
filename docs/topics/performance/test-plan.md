@@ -40,7 +40,7 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-004 | Cases the base revision cannot build are reported as new. | `README.md#measuring` |
 | PERF-REQ-005 | The harness is built from the same source against each revision's own crates. | `README.md#measuring` |
 | PERF-REQ-006 | The whole-scene closest-hit cases time comparable work: both APIs choose the same primitive on every benchmark ray. | `README.md#adding-a-case` |
-| PERF-REQ-007 | The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
+| PERF-REQ-007 | The profile takes its node, box and leaf counts from the counted compact searches and keeps a harness replica only for the per-stage triangle counters and the recorded calls; the replica tests the same primitives, in the same order with the same limits, as `closest_hit` and `any_hit` on every benchmark ray; the core crates carry no counters beyond the counted searches. | `README.md#profile-of-closest_hit-on-the-benchmark-scene` |
 | PERF-REQ-008 | Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray. | `README.md#memory-share-of-a-box-test` |
 | PERF-REQ-009 | The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree. | `README.md#adding-a-case` |
 | PERF-REQ-010 | The harness builds with each feature group alone and with all groups, so the per-group fallback of `cargo xtask perf` compares every group the base can build. | `README.md#adding-a-case` |
@@ -78,7 +78,7 @@ status = "active"
 
 [[requirement]]
 id = "PERF-REQ-007"
-summary = "The traversal counters come from a harness replica that tests the same primitives, in the same order with the same limits, as closest_hit and any_hit on every benchmark ray; the core crates carry no counters."
+summary = "The profile takes its node, box and leaf counts from the counted compact searches and keeps a harness replica only for the per-stage triangle counters and the recorded calls; the replica tests the same primitives, in the same order with the same limits, as closest_hit and any_hit on every benchmark ray; the core crates carry no counters beyond the counted searches."
 status = "active"
 
 [[requirement]]
@@ -157,6 +157,7 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-054 | Gate | PERF-REQ-003 | A real +30 % regression with one head round at 95 ns (best change negative) still fails the 20 % threshold. | `xtask/src/perf_report.rs::tests::one_lucky_head_round_does_not_hide_a_regression` |
 | PERF-TP-055 | Gate | PERF-REQ-003 | Three fast base rounds of seven against no fast head round, equal medians: no regression at the 20 % threshold. | `xtask/src/perf_report.rs::tests::a_floor_that_regresses_while_the_median_does_not_passes` |
 | PERF-TP-056 | Gate | PERF-REQ-003 | The floor is the lowest p50 for four rounds, the second-lowest for five, and a fast mode in two rounds is kept. | `xtask/src/perf_report.rs::tests::the_floor_skips_the_lowest_round_only_from_five_rounds` |
+| PERF-TP-057 | Profile | PERF-REQ-007 | On all 1 024 rays and both modes, the profile's popped, skipped_at_pop, interior_visited, leaf_visited, box_calls, box_some, box_none, stack_peak and tri_tests equal what the counted compact searches return for the ray, and the replica's recorded box and triangle calls number as many as the library's box_tests and primitive_tests. Setting leaf_visited one too high fails this case and PERF-TP-030. | `crates/bunny-perf/src/profile.rs::tests::the_profile_takes_its_counts_from_the_counted_searches` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -615,6 +616,15 @@ requirements = ["PERF-REQ-003"]
 evidence = "test"
 test = "xtask/src/perf_report.rs::tests::the_floor_skips_the_lowest_round_only_from_five_rounds"
 oracle = "The floor is the lowest p50 for four rounds, the second-lowest for five, and a fast mode in two rounds is kept."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-057"
+requirements = ["PERF-REQ-007"]
+evidence = "test"
+test = "crates/bunny-perf/src/profile.rs::tests::the_profile_takes_its_counts_from_the_counted_searches"
+oracle = "The library's own counted searches (TRACE-TP-417 ties them to the uncounted searches); the replica's recorded calls as a cross-check."
 tier = "fast"
 status = "implemented"
 ```
