@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: conservative bounds for `bunny-curve/1`. `CurveBounds3 {
+  min, max }` is a closed box with `contains`. `CubicBezier3::control_bounds()`
+  is the per-axis minimum and maximum of the control points, exact, and
+  contains every `at(t)` as rounded, with no widening (a lerp with `t` in
+  `[0, 1]` cannot round outside its ends). `CubicBezier3::split_bounds(t)`
+  widens each half's control box by a derived 3 raw units and clips it to the
+  control box, so it contains the original's evaluations on that half's range;
+  `None` outside `[0, 1]`. `CatmullRom3::control_bounds()` is the union of the
+  segments' control boxes, not the box of the points. Closes
+  flyingrobots/bunny#152.
+
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
   `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI

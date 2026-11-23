@@ -257,3 +257,83 @@ while the leaving one is defined, and `derivative_at(k)` is then the leaving der
 The inner control points' numerators are at most `2^66` and are held in `i128`; the result
 is checked against `i64`. The parameter split is a shift and a mask of the raw value.
 Everything else is part 1's `CubicBezier3::at` and `CubicBezier3::derivative_at`.
+
+## Conservative Bounds
+
+These boxes answer flyingrobots/bunny#152. A box is conservative when it contains every
+point the kernel can return for the curve: every `at(t)`, rounding included, for every
+representable `t` in `[0, 1]`, not only the exact curve `B`.
+
+| Function | Result | Contains | Refused |
+| --- | --- | --- | --- |
+| `CubicBezier3::control_bounds()` | per-axis minimum and maximum of `p0` to `p3` | `at(t)` for every `t` in `[0, 1]` | never |
+| `CubicBezier3::split_bounds(t)` | each half's control box widened by 3 raw units, clipped to `control_bounds` | `at(s)` for every `s` in `[0, t]`, and in `[t, 1]` | `t` outside `[0, 1]` |
+| `CatmullRom3::control_bounds()` | the union of every segment's control box | `at(u)` for every `u` in `[0, segment_count]` | never |
+
+`CurveBounds3 { min, max }` is the box, closed on every face: `contains(point)` is
+`min <= point <= max` on each axis. Every box is exact arithmetic on raw coordinates
+(minimum, maximum and a widening by whole raw units): nothing is rounded. `bunny-linalg` has
+its own box type because the crates with one (`bunny-geom`, `bunny-broadphase`) are published
+after it and depend on it.
+
+**The control box needs no widening.** A lerp with `t` in `[0, 1]` is
+`x + round(s)` with the exact step `s = (y - x) t` between `0` and `y - x`. Both ends are
+whole raw units, so `s` lies in a closed interval `[lo, hi]` with integer ends, and
+`floor(s) >= lo` and `ceil(s) <= hi`. Rounding to nearest returns `floor(s)` or `ceil(s)`,
+whichever way a tie goes, so `round(s)` is in `[lo, hi]` and the lerp is between `x` and `y`
+inclusive. Ties to even cannot leave the interval: a tie is `s = k + 1/2` with `k` and
+`k + 1` both inside it, and there is no tie at an end, which is a whole raw unit. By induction
+over the three levels of [evaluation](#evaluation), every de Casteljau point, and `at(t)`,
+lies between the per-axis minimum and maximum of the four control points. So the control box
+contains every `at(t)` bit for bit, with no padding. The faces at `p0` and `p3` are reached
+(`at(0)` and `at(1.0)`); a face set only by `p1` or `p2` generally is not, since the exact
+curve stays strictly inside it, and a tie can land exactly on a face: `x = (0, 1, 1, 0)` raw
+gives `at(1/2) = 0`, the lower face, while the exact value is 3/4 raw.
+
+The control box is not the tightest box: that would come from the extrema of the exact cubic
+(roots of a quadratic per axis), and would need an outward-rounded root and widening by the
+3/2 raw unit evaluation bound to be conservative. It is not provided.
+
+## Bounds of a Split
+
+`split_bounds(t)` gives a box for the original curve on each side of `t`, from the halves of
+[`split(t)`](#split). A half's own control box contains the half's own evaluations, by the
+argument above, but not always the original's: the halves' inner points are rounded. Split
+at `t = 2 329 330 117` raw, `x = (-2, -3, 1, -4)` raw has a right half with `x` control points
+`(-2, -2, -2, -4)`, while the original at `s = 2 916 077 839` raw (in `[t, 1]`) is `-1`, one
+raw unit outside.
+
+**The widening.** Take the left half and `s` in `[0, t]`; the right half is the mirror image.
+The exact curve on `[0, t]` is the exact cubic with the exact de Casteljau points
+`(p0, a*, d*, m*)` as control points, so `B(s)` lies in their convex hull, and on each axis
+`B(s) >= min(p0, a*, d*, m*)`. The rounded points are within `0`, `1/2`, `1` and `3/2` raw
+units of those ([evaluation](#evaluation), one half per level), so
+`min(p0, a*, d*, m*) >= min(p0, a, d, m) - 3/2`. And `at(s) >= B(s) - 3/2`. Together,
+`at(s) >= min(p0, a, d, m) - 3`, and likewise `at(s) <= max(p0, a, d, m) + 3`. So the half's
+control box widened by 3 raw units on every face contains every original `at(s)` on the
+half's range.
+
+The widened box is then clipped to `control_bounds()`, which also contains every `at(s)`, so
+the intersection does too; the clipping keeps the box inside the Q32.32 range. The half's own
+evaluations stay inside as well: its control points are de Casteljau points, inside both the
+control box and their own box. The widening of 3 is proven, not shown tight: the largest
+escape from an unwidened half box found by search is 1 raw unit. `t = 0` gives a left box
+around `p0` and `t = 1.0` a right box around `p3`.
+
+## Bounds of a Catmull-Rom Spline
+
+`CatmullRom3::control_bounds()` is the union of `segment(i).control_bounds()` over every
+segment, read through `to_beziers()` without allocating: `n - 1` segments for an open spline
+of `n` points and `n` for a closed one, the closing segment from the last point back to the
+first included. `at(u)` is `segment(i).at(t)` bit for bit, inside that segment's control box,
+so the union contains every `at(u)`.
+
+It is not the box of the spline's points. A Catmull-Rom curve overshoots its points, and the
+segments' inner control points, rounded within 1/2 raw unit of
+`P1 + (P2 - P0) / 6` and `P2 - (P3 - P1) / 6`, can lie outside the points' box, and the
+curve with them. Points with `x = (0, 10, 10, 0)` give an open spline reaching about `11.25` at `u = 1.5`,
+inside a box whose `x` maximum is `35/3` (the rounded inner point); closed, the segment back
+to the first point dips to about `-1.25` at `u = 3.5`, below the open spline's box. The rounded
+inner points are what the evaluation uses, so their box, not the exact one, is the
+conservative one. `new` guarantees at least one segment and converts every one, so the union
+is never empty and the function is never refused.

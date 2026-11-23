@@ -131,6 +131,13 @@ sharing no code with `bunny-linalg` or `bunny-num`:
   and its derivative, not the Bezier form, as exact numerators in a 384-bit two's-complement
   integer, and `within` decides `|result - exact| <= bound` without rounding.
 
+`crates/bunny-linalg/tests/curve_bounds_tests.rs` holds the bounds references, also sharing
+no code with `bunny-linalg` or `bunny-num`: `port_box` (per-axis minimum and maximum of raw
+points), `port_split_box` (a half from its own de Casteljau port, widened by 3 and clipped),
+`port_segment` (its own Catmull-Rom conversion) and `inside`, which decides containment on raw
+`i64` coordinates. Containment is checked against the kernel's own `at`, so the bound covers
+the rounded evaluation, not only the exact curve.
+
 The golden vectors of CURVE-TP-002 and CURVE-TP-021 come from Python models (an integer
 port of the rule plus a `fractions` check of the bounds) posted in their pull requests.
 Every test is a `wasm_bindgen_test`, so the WebAssembly job runs the golden vectors too.
@@ -285,7 +292,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_060_hand_derived_boxes_and_contains"
 oracle = "Hand-derived raw boxes of constant, flat and bumped curves; contains on and one raw unit outside each face."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-061"
@@ -294,7 +301,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_061_seeded_control_boxes_contain_every_evaluation"
 oracle = "Independent min and max over 1 000 seeded polygons, each evaluated at 324 parameters."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-062"
@@ -303,7 +310,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_062_ties_at_a_box_face_stay_inside"
 oracle = "Constructed ties to even landing on a face, and ties at the ends of the raw range."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-063"
@@ -312,7 +319,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_063_split_bounds_contain_the_original_on_each_range"
 oracle = "A constructed escape from the unwidened half box; independent de Casteljau port over 2 000 seeded splits."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-064"
@@ -321,7 +328,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_064_catmull_rom_box_covers_the_overshoot"
 oracle = "Hand-derived overshoot of an open and a closed spline; independent segment conversion port."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-065"
@@ -330,7 +337,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/curve_bounds_tests.rs::curve_tp_065_seeded_catmull_rom_boxes_contain_every_evaluation"
 oracle = "Independent segment conversion port over 2 000 seeded point lists."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-066"
@@ -339,7 +346,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/curve/test-plan.md#mutation-checks"
 oracle = "Each bounds rule broken on purpose, and each face shrunk by one raw unit, makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -384,3 +391,30 @@ bunny-linalg --test catmull_rom_tests`:
 
 Owning a point by the arriving segment changes no position and, by the exact tangent
 continuity, no defined derivative; only CURVE-TP-023's one-sided overflow sees it.
+
+The bounds were broken the same way in `crates/bunny-linalg/src/curve_bounds3.rs`, with
+`cargo test --locked --no-fail-fast -p bunny-linalg --test curve_bounds_tests`:
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| The control box's `min.x` raised by one raw unit | The box is the control points' minimum | 060, 061, 062, 063, 064, 065 |
+| The control box's `min.y` raised by one raw unit | The box is the control points' minimum | 060, 061, 062, 063, 064, 065 |
+| The control box's `min.z` raised by one raw unit | The box is the control points' minimum | 060, 061, 062, 063, 064, 065 |
+| The control box's `max.x` lowered by one raw unit | The box is the control points' maximum | 060, 061, 062, 063, 064, 065 |
+| The control box's `max.y` lowered by one raw unit | The box is the control points' maximum | 060, 061, 062, 063, 064, 065 |
+| The control box's `max.z` lowered by one raw unit | The box is the control points' maximum | 060, 061, 062, 063, 064, 065 |
+| The split widening 1 raw unit | Widened by 3 | 063 |
+| The split widening 2 raw units | Widened by 3 | 063 |
+| The split widening 0 | Widened by 3 | 063 (the constructed escape) |
+| The widened split box not clipped to the control box | Clipped to `control_bounds` | 063 |
+| The right half not widened | Both halves widened | 063 |
+| The spline box from its points | The union of the segments' control boxes | 064, 065 |
+| A closed spline's closing segment left out | Every segment, `n` when closed | 064, 065 |
+| `contains` excludes the lower face | Closed on every face | 060, 061, 063, 064 |
+| `contains` excludes the upper face | Closed on every face | 060, 061, 063, 064 |
+
+A shrunk face reached by `p0` or `p3` fails containment, since `at(0)` and `at(1.0)` are
+those points; a shrunk face set only by `p1` or `p2` fails the equality with the independent
+minimum and maximum. A split widening of 1 or 2 raw units is caught only by the equality with
+the port, which states the rule: no evaluation found leaves a half's box by more than 1 raw
+unit, so containment alone cannot tell 1, 2 and 3 apart.

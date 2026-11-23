@@ -16,6 +16,9 @@
 //!
 //! `U = 2^32` is `1.0` and `H = 2^31` is `0.5` in raw units.
 
+// The ports name the de Casteljau points and the four neighbours as the chapter does.
+#![allow(clippy::many_single_char_names)]
+
 use bunny_linalg::{CatmullRom3, CubicBezier3, CurveBounds3, FixedVec3};
 use bunny_num::FixedQ32_32;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -129,13 +132,9 @@ fn port_segment(points: &[Raw3], closed: bool, i: usize) -> Option<Polygon> {
         usize::try_from(wrapped).expect("non-negative")
     };
     let [a, b, c, d] = [-1, 0, 1, 2].map(|j| points[index(j)]);
-    let mut first = [0; 3];
-    let mut second = [0; 3];
-    for k in 0..3 {
-        first[k] = port_round_sixth(b[k], c[k], a[k])?;
-        second[k] = port_round_sixth(c[k], b[k], d[k])?;
-    }
-    Some([b, first, second, c])
+    let first = [0, 1, 2].map(|k| port_round_sixth(b[k], c[k], a[k]));
+    let second = [0, 1, 2].map(|k| port_round_sixth(c[k], b[k], d[k]));
+    Some([b, [first[0]?, first[1]?, first[2]?], [second[0]?, second[1]?, second[2]?], c])
 }
 
 fn port_spline_box(points: &[Raw3], closed: bool) -> RawBox {
@@ -293,6 +292,7 @@ fn curve_tp_062_ties_at_a_box_face_stay_inside() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn curve_tp_063_split_bounds_contain_the_original_on_each_range() {
+    const CASES: usize = 2_000;
     // Constructed: x = (-2, -3, 1, -4) raw, split at t = 2 329 330 117 raw. The right half's
     // x control points are (-2, -2, -2, -4), but the original at s = 2 916 077 839 raw (in
     // [t, 1]) is -1: one raw unit outside the half's own box. The widened box holds it.
@@ -313,7 +313,6 @@ fn curve_tp_063_split_bounds_contain_the_original_on_each_range() {
         assert_eq!(curve(&p).split_bounds(fx(t)), None, "t={t}");
     }
 
-    const CASES: usize = 2_000;
     println!("curve_tp_063 seed={SEED:#018x} cases={CASES}");
     let mut state = SEED ^ 0x0063;
     let mut escapes = 0_usize;

@@ -39,6 +39,20 @@ None.
 Checks run:
 First commit (tests and planned cases only): the bounds tests fail to compile (the API does
 not exist); topic-docs and repo-respect check --branch clean.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (125
+test result lines, all ok); code-dojo-generated; code-dojo-rust --all;
+code-dojo-determinism --enforce; code-dojo-perf-groups; code-dojo-rustdoc; topic-docs;
+repo-respect check --branch; git diff --check. cargo clippy --locked -p bunny-linalg
+--all-targets --all-features -- -D warnings clean.
+Mutations: fifteen, each applied to curve_bounds3.rs, run with cargo test --locked -q -p
+bunny-linalg --no-fail-fast --test curve_bounds_tests, and restored; each failed at least one
+case (the test plan's table), including each of the six faces shrunk by one raw unit.
+Python search (an integer port of de Casteljau, 300 000 small polygons): the largest escape of
+the original from a half's unwidened control box is 1 raw unit; the constructed case of
+CURVE-TP-063 comes from it.
+Not run locally: wasm-pack (not installed; CI's WebAssembly job runs it), cargo deny and
+markdownlint-cli2 (not installed; CI's Dojo job runs them).
 
 Known risks:
 The split widening of 3 raw units is proven, not shown tight: the largest escape found from a
