@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Closest-point queries and a mesh layout for BVH-backed queries
+  (flyingrobots/bunny#246, `docs/topics/mesh-queries/`). `bunny-query`:
+  `PointQuery::closest_on_triangle` finds the exact closest point of a closed
+  triangle to a point in the trace domain (collinear or coincident vertices
+  give their segment or point) in 256- and 512-bit integers; the
+  `TrianglePoint` it returns compares exactly (`cmp_distance`, `cmp_bound`) and
+  rounds the point and the squared distance once each, to nearest, ties to even,
+  when read. `PointQuery::box_distance_bound` is the exact squared distance to a
+  box, gaps capped at `2^42` raw (`POINT_BOX_GAP_LIMIT_RAW`), never above it.
+  `bunny-broadphase`: `closest_point` and `ClosestPoint`, a nearest-first BVH
+  search that equals a test of every primitive on every tree shape, the lowest
+  index winning exact ties, with the `TraversalError` conventions of
+  `closest_hit`; no allocation. `bunny-mesh`: `MeshView` (a checked borrow of a
+  vertex buffer and an `IndexBufferLayout`, triangle `i` as primitive `i`,
+  `write_bounds` for the builders), `MeshBvh` (`closest_hit`, `closest_point`)
+  and `MeshError`; `bunny-mesh` now depends on `bunny-query` and
+  `bunny-broadphase`. The committed Stanford bunny fixture is traced and queried
+  through the layout in tests.
+
 * `bunny-linalg`: uniform Catmull-Rom splines under `bunny-curve/1`, part 2.
   `CatmullRom3::new(points, closed)` borrows a `&[FixedVec3]` (no allocation)
   and returns `CatmullRomError::TooFewPoints` for fewer than 2 points (3

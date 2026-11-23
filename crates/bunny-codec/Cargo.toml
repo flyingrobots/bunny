@@ -9,7 +9,11 @@ license.workspace = true
 readme = "README.md"
 # The 143 KB Stanford asset and the only test that reads it stay out of the package
 # together; `scripts/publish-crates.sh packaged-tests` builds the packaged tests.
-exclude = ["tests/fixtures/stanford-bunny-ascii/", "tests/ply_ascii_stanford_tests.rs"]
+exclude = [
+  "tests/fixtures/stanford-bunny-ascii/",
+  "tests/ply_ascii_stanford_tests.rs",
+  "tests/mesh_bvh_stanford_tests.rs",
+]
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
@@ -34,4 +38,6 @@ workspace = true
 
 [dev-dependencies]
 allocation-counter = "0.8.1"
+bunny-broadphase = { path = "../bunny-broadphase", version = "0.7.1" }
+bunny-query = { path = "../bunny-query", version = "0.7.1" }
 wasm-bindgen-test = "0.3"

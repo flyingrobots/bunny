@@ -58,6 +58,11 @@ targets.
   once, ties to even, with typed refusals. A direction lengthened by the
   rotation is halved and the `ObjectRay` maps hit distances back to the
   world ray; see `docs/topics/shape-frame/`.
+* `PointQuery` and `TrianglePoint`: the exact closest point of a closed
+  triangle (degenerate triangles as the segment or point they span) to a
+  point in the trace domain, compared exactly and rounded once, ties to even,
+  when read; and `PointQuery::box_distance_bound`, the conservative box bound
+  for closest-point searches. See `docs/topics/mesh-queries/`.
 * Raw Q32.32 receipt tests for cross-target determinism.
 
 ## License

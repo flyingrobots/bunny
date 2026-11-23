@@ -26,6 +26,11 @@ buffer is large enough for the requested operation.
   `compact_any_hit_counted`) that also return a `TraversalCounts` record of
   the box tests, visits and primitive tests one search made.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
+* Nearest-first closest-point traversal (`closest_point`, `ClosestPoint`)
+  over the same trees, with a caller-supplied per-primitive closest point:
+  distances are compared exactly, ties go to the lowest primitive index, and
+  the answer does not depend on the tree's shape; see
+  `docs/topics/mesh-queries/` in the repository.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 
 ## License
