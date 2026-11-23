@@ -1160,13 +1160,13 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-206 | Point-light mutations | OPTICS-REQ-100, OPTICS-REQ-101, OPTICS-REQ-102 | Each of twelve rules broken on purpose fails at least one case above. | [Point-light mutation checks](#point-light-mutation-checks) |
 | OPTICS-TP-290 | Hand-derived directions | OPTICS-REQ-151, OPTICS-REQ-152 | By hand: `(a, e)` of `(0, 0)`, `(0, 1/4)` and `(1/4, 0)` turn give `(1, 0, 0)`, `(0, 1, 0)` and `(0, 0, 1)` exactly; `(1/2, 0)`, `(3/4, 0)` and `(0, 3/4)` the negated axes; elevation a half turn continues over the pole to `-x` (azimuth 0) and `-z` (azimuth a quarter); an eighth turn gives `(1, 1, 0)`, `(-1, 1, 0)` at 3/8, `(1, 0, 1)` in azimuth and `(1, -1, 0)` at -1/8, below the horizon; the identity is `bunny-light-direction/1`. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_290_hand_derived_directions_on_the_axes_and_diagonals` |
 | OPTICS-TP-291 | The poles | OPTICS-REQ-152, OPTICS-REQ-153 | At elevation 1/4 and 3/4 turn, the sixteen multiples of 1/16 turn and 4 096 seeded azimuths all give exactly `(0, 1, 0)` and `(0, -1, 0)`; at elevations 1, `2^10`, `2^20`, `2^30`, `2^40` and `2^50` turn units from either pole, 257 of those azimuths stay within the stated bound of the [light-angle oracle](#the-light-angle-oracle). | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_291_at_the_poles_azimuth_has_no_effect` |
-| OPTICS-TP-292 | Golden directions | OPTICS-REQ-150, OPTICS-REQ-151 | Pinned raw directions for angle pairs off the axes, each equal to the integer step model and to a Python model of the steps (in the pull request); truncating the division instead of rounding changes at least one. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_292_golden_directions_are_pinned` |
+| OPTICS-TP-292 | Golden directions | OPTICS-REQ-150, OPTICS-REQ-151 | Ten pinned raw directions for angle pairs off the axes, two of them with a product that is an exact tie (`cos e` exactly `+-1/2` and `sin a` odd), each equal to the integer step model and to a Python model of the steps (in the pull request); truncating the division instead of rounding changes six of them. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_292_golden_directions_are_pinned` |
 | OPTICS-TP-293 | Seeded angles follow the steps | OPTICS-REQ-150, OPTICS-REQ-151 | 100 000 seeded angle pairs (one in eight near a pole, one in eight with the azimuth and one in eight with the elevation near an eighth-turn multiple): the largest component magnitude is exactly `2^32` raw, `DirectionalLight::new` accepts the result and keeps it, and it equals bit for bit an integer model of the chapter's steps on `sin_cos`'s outputs, written in the test with floor division; at least a quarter below the horizon; the seed is printed. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_293_seeded_angles_follow_the_steps_and_build_a_valid_light` |
 | OPTICS-TP-294 | Seeded angles within the bound | OPTICS-REQ-153 | The same 100 000 pairs against the [light-angle oracle](#the-light-angle-oracle): every component within 9.161 raw units of the exact scaled direction and the sine of the angle, from the exact cross product, below `4.55 x 2^-32`; the measured worst cases are printed and claim nothing tighter; the seed is printed. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_294_seeded_angles_are_within_the_bound_of_the_exact_direction` |
 | OPTICS-TP-295 | The division's ties | OPTICS-REQ-150 | By hand, with `m = 2^33`: components 1, 3, 5 and 7 raw give 0, 2, 2 and 4 (ties to even), negated they give the negations; 1 over `2^33 + 1` and `2^33 - 1` gives 0 and 1, one raw unit either side of the tie; `(0, 0, -1)` gives `(0, 0, -1.0)`, `(5, -5, 1)` gives `(1.0, -1.0, 858 993 459)`, `(i64::MIN, i64::MAX, 1)` gives `(-1.0, 1.0, 0)`; a direction already scaled is returned as given and equals `DirectionalLight::new`'s light. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_295_the_division_rounds_to_nearest_with_ties_to_even` |
 | OPTICS-TP-296 | Seeded vectors | OPTICS-REQ-150 | 20 000 seeded nonzero vectors with component magnitudes from 0 to `2^63 - 1` raw: each component within half a raw unit of `v_i 2^32 / m`, decided exactly as `\|2 (q m - v_i 2^32)\| <= m`, equal to the floor-division model, and a seeded multiple `k` in `2..=2^20` that fits gives the same bits; at least 5 000 multiples compared; the seed is printed. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_296_seeded_directions_are_within_half_a_raw_unit_of_the_exact_quotient` |
 | OPTICS-TP-297 | Refusals and their order | OPTICS-REQ-154 | The zero vector is `ZeroDirection`, also with a negative irradiance; an irradiance channel of -1 raw and of `MAX_LIGHT_RAW + 1` is `Light(NegativeRadiance)` and `Light(RadianceTooLarge)` from both constructors, and `MAX_LIGHT_RAW` and 0 are accepted; each error has its own nonempty message and is a `std::error::Error`. | `crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_297_zero_and_out_of_range_irradiance_are_refused_in_order` |
-| OPTICS-TP-298 | Light-direction mutations | OPTICS-REQ-150, OPTICS-REQ-151, OPTICS-REQ-152, OPTICS-REQ-153, OPTICS-REQ-154 | Each rule broken on purpose fails at least one case above. | [Light-direction mutation checks](#light-direction-mutation-checks) |
+| OPTICS-TP-298 | Light-direction mutations | OPTICS-REQ-150, OPTICS-REQ-151, OPTICS-REQ-152, OPTICS-REQ-153, OPTICS-REQ-154 | Each of seventeen rules broken on purpose fails at least one case above. | [Light-direction mutation checks](#light-direction-mutation-checks) |
 | OPTICS-TP-210 | Facing-plane closed form | OPTICS-REQ-111, OPTICS-REQ-112 | Two exact level cameras (tangent 1 over 4 by 4, 1/2 over 8 by 8) and four depth and scale pairs: at every pixel centre the footprint is `[[s d 2 tan / height, 0], [0, -s d 2 tan / height]]` raw, by hand. | `crates/bunny-optics/tests/ray_footprint_tests.rs::optics_tp_210_a_plane_facing_the_camera_gives_the_closed_form_footprint` |
 | OPTICS-TP-211 | Ties to even | OPTICS-REQ-111 | Depths of 1, 2, 3, 5, 7 and 9 raw on the 4 by 4 camera give exact footprints `d / 2` raw: 0, 1, 2, 2, 4 and 4, with `dv/dy` their negations (ties to even both ways), by hand. | `crates/bunny-optics/tests/ray_footprint_tests.rs::optics_tp_211_a_half_raw_unit_footprint_rounds_to_even` |
 | OPTICS-TP-212 | Grazing plane | OPTICS-REQ-112, OPTICS-REQ-113 | The plane `z = -2 + g y` from pixel (1, 1) of the 4 by 4 camera for `g` = 0, 1, 2, `4 - 2^-j` (`j` = 0 to 24) and 4 less one raw unit: all four components equal the hand closed form `du/dx = d 2^33 / p`, `du/dy = -d 2^33 g / (m p)`, `dv/dy = -d 2^67 / (m p)` (`m = 4 - g`, `p = 4 + g`, raw) rounded to even, and the rational oracle; `dv/dy` is the long axis and grows strictly; once it does not fit it is `TooLarge`; `g = 4` is `Parallel` and `4 + 2^-32` and 5 are `Behind`. | `crates/bunny-optics/tests/ray_footprint_tests.rs::optics_tp_212_a_grazing_plane_stretches_the_footprint_as_the_closed_form_says` |
@@ -2736,7 +2736,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_290_hand_derived_directions_on_the_axes_and_diagonals"
 oracle = "By hand: (a, e) of (0, 0), (0, 1/4) and (1/4, 0) turn give (1, 0, 0), (0, 1, 0) and (0, 0, 1) exactly; (1/2, 0), (3/4, 0) and (0, 3/4) the negated axes; elevation a half turn continues over the pole to -x (azimuth 0) and -z (azimuth a quarter); an eighth turn gives (1, 1, 0), (-1, 1, 0) at 3/8, (1, 0, 1) in azimuth and (1, -1, 0) at -1/8, below the horizon; the identity is bunny-light-direction/1."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-291"
@@ -2745,16 +2745,16 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_291_at_the_poles_azimuth_has_no_effect"
 oracle = "At elevation 1/4 and 3/4 turn, the sixteen multiples of 1/16 turn and 4 096 seeded azimuths all give exactly (0, 1, 0) and (0, -1, 0); at elevations 1, 2^10, 2^20, 2^30, 2^40 and 2^50 turn units from either pole, 257 of those azimuths stay within the stated bound of the [light-angle oracle](#the-light-angle-oracle)."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-292"
 requirements = ["OPTICS-REQ-150", "OPTICS-REQ-151"]
 evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_292_golden_directions_are_pinned"
-oracle = "Pinned raw directions for angle pairs off the axes, each equal to the integer step model and to a Python model of the steps (in the pull request); truncating the division instead of rounding changes at least one."
+oracle = "Ten pinned raw directions for angle pairs off the axes, two of them with a product that is an exact tie (cos e exactly +-1/2 and sin a odd), each equal to the integer step model and to a Python model of the steps (in the pull request); truncating the division instead of rounding changes six of them."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-293"
@@ -2763,7 +2763,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_293_seeded_angles_follow_the_steps_and_build_a_valid_light"
 oracle = "100 000 seeded angle pairs (one in eight near a pole, one in eight with the azimuth and one in eight with the elevation near an eighth-turn multiple): the largest component magnitude is exactly 2^32 raw, DirectionalLight::new accepts the result and keeps it, and it equals bit for bit an integer model of the chapter's steps on sin_cos's outputs, written in the test with floor division; at least a quarter below the horizon; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-294"
@@ -2772,7 +2772,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_294_seeded_angles_are_within_the_bound_of_the_exact_direction"
 oracle = "The same 100 000 pairs against the [light-angle oracle](#the-light-angle-oracle): every component within 9.161 raw units of the exact scaled direction and the sine of the angle, from the exact cross product, below 4.55 x 2^-32; the measured worst cases are printed and claim nothing tighter; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-295"
@@ -2781,7 +2781,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_295_the_division_rounds_to_nearest_with_ties_to_even"
 oracle = "By hand, with m = 2^33: components 1, 3, 5 and 7 raw give 0, 2, 2 and 4 (ties to even), negated they give the negations; 1 over 2^33 + 1 and 2^33 - 1 gives 0 and 1, one raw unit either side of the tie; (0, 0, -1) gives (0, 0, -1.0), (5, -5, 1) gives (1.0, -1.0, 858 993 459), (i64::MIN, i64::MAX, 1) gives (-1.0, 1.0, 0); a direction already scaled is returned as given and equals DirectionalLight::new's light."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-296"
@@ -2790,7 +2790,7 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_296_seeded_directions_are_within_half_a_raw_unit_of_the_exact_quotient"
 oracle = "20 000 seeded nonzero vectors with component magnitudes from 0 to 2^63 - 1 raw: each component within half a raw unit of v_i 2^32 / m, decided exactly as |2 (q m - v_i 2^32)| <= m, equal to the floor-division model, and a seeded multiple k in 2..=2^20 that fits gives the same bits; at least 5 000 multiples compared; the seed is printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-297"
@@ -2799,16 +2799,16 @@ evidence = "test"
 test = "crates/bunny-optics/tests/light_direction_tests.rs::optics_tp_297_zero_and_out_of_range_irradiance_are_refused_in_order"
 oracle = "The zero vector is ZeroDirection, also with a negative irradiance; an irradiance channel of -1 raw and of MAX_LIGHT_RAW + 1 is Light(NegativeRadiance) and Light(RadianceTooLarge) from both constructors, and MAX_LIGHT_RAW and 0 are accepted; each error has its own nonempty message and is a std::error::Error."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-298"
 requirements = ["OPTICS-REQ-150", "OPTICS-REQ-151", "OPTICS-REQ-152", "OPTICS-REQ-153", "OPTICS-REQ-154"]
 evidence = "manual-audit"
 artifact = "docs/topics/optics/test-plan.md#light-direction-mutation-checks"
-oracle = "Rules of light_direction.rs broken on purpose; each fails at least one case."
+oracle = "Seventeen rules of light_direction.rs broken on purpose; each fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "OPTICS-TP-210"
@@ -3254,9 +3254,40 @@ were rewritten to keep the names in use and then failed as listed.
 
 ## Light-Direction Mutation Checks
 
-Planned: each rule of `crates/bunny-optics/src/shading/light_direction.rs`
-broken on purpose, with the light-direction tests run per mutation; every
-mutation must make at least one case fail.
+Each rule below was broken on purpose in
+`crates/bunny-optics/src/shading/light_direction.rs`, and the tests were run
+with `cargo test --locked -q -p bunny-optics --no-fail-fast --test
+light_direction_tests` per mutation. Every mutation made at least one case
+fail; the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| The division truncates toward zero | Round to nearest | OPTICS-TP-292, OPTICS-TP-293, OPTICS-TP-295, OPTICS-TP-296 |
+| The division floors | Round to nearest | OPTICS-TP-292, OPTICS-TP-293, OPTICS-TP-295, OPTICS-TP-296 |
+| The division's ties away from zero | Ties to even | OPTICS-TP-295 |
+| The division's ties toward `+inf` | Ties to even, symmetric | OPTICS-TP-295 |
+| The divisor the largest signed value, not magnitude | The largest magnitude is exactly 1.0 | OPTICS-TP-290 to OPTICS-TP-296 |
+| The divisor the first component's magnitude | The largest magnitude is exactly 1.0 | OPTICS-TP-290 to OPTICS-TP-294, OPTICS-TP-296, OPTICS-TP-297 |
+| The divisor the Euclidean length (floored) | Scaled to a unit largest component, not normalized | OPTICS-TP-290 to OPTICS-TP-297 |
+| Azimuth sine and cosine swapped (azimuth 0 along `+z`) | Azimuth 0 is `+x` | OPTICS-TP-290 to OPTICS-TP-294 |
+| `z` negated (positive azimuth toward `-z`) | A positive azimuth turns `+x` toward `+z` | OPTICS-TP-290 to OPTICS-TP-294 |
+| Elevation sine and cosine swapped | Elevation 0 is the horizon | OPTICS-TP-290 to OPTICS-TP-294 |
+| `y` negated (positive elevation toward `-y`) | A positive elevation tilts toward `+y` | OPTICS-TP-290 to OPTICS-TP-294 |
+| The products floored | Round to nearest | OPTICS-TP-292, OPTICS-TP-293 |
+| The products' ties away from zero | Ties to even | OPTICS-TP-292 |
+| The products' ties toward `+inf` | Ties to even | OPTICS-TP-292 |
+| The zero test removed (a division by zero panics) | The zero vector is refused | OPTICS-TP-297 |
+| The irradiance checked before the zero test | `ZeroDirection` comes first | OPTICS-TP-297 |
+| An irradiance refusal reported as `ZeroDirection` | `Light` carries `new`'s refusal | OPTICS-TP-297 |
+
+The first attempt at the four division mutants did not compile (an unused
+import under `-D warnings`); they were rerun with the import removed and then
+failed as listed. The products' tie mutants survived their first run: no
+seeded pair of 100 000 had a product exactly half a raw unit from an integer
+(about one in `2^32` does). The last two goldens of OPTICS-TP-292 were added
+for that reason: `cos e` is exactly `+-1/2` there, so `cos e * sin a` is a tie
+whenever `sin a` is odd. The division mutants that change only ties are caught
+only by the hand-built ties of OPTICS-TP-295, for the same reason.
 
 ## Thin-Lens Mutation Checks
 

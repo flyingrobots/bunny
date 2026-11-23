@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-optics`: a directional light from two angles or from any nonzero
+  vector, under the identity `bunny-light-direction/1`
+  (`LIGHT_DIRECTION_ID`). `DirectionalLight::from_angles(azimuth, elevation,
+  irradiance)` points toward `(cos e cos a, sin e, cos e sin a)`, from
+  `FixedAngle::sin_cos` with each product rounded once to nearest, ties to
+  even: azimuth 0 and elevation 0 along `+x`, a positive azimuth toward `+z`
+  (the right-hand rule about `-y`), a positive elevation toward `+y`; every
+  angle is accepted and a light below the horizon is valid.
+  `DirectionalLight::from_direction(v, irradiance)` divides each `v_i 2^32` by
+  the exact largest magnitude, rounded once to nearest, ties to even, so the
+  largest component is exactly `+-1.0` and the result is a light
+  `DirectionalLight::new` accepts. From angles each component is within
+  `5 sqrt(3) + 1/2 + 10^-8` (below 9.161) raw units of the exact scaled
+  direction and the angle's sine below `4.55 x 2^-32`; at the poles the
+  direction is exactly `(0, +-1, 0)` for every azimuth. The zero vector is
+  refused with the new `LightDirectionError::ZeroDirection`, an out-of-range
+  irradiance with `LightDirectionError::Light`. `DirectionalLight::new` and
+  `bunny-diffuse-shading/1` are unchanged. Closes flyingrobots/bunny#313.
+
 * `bunny-linalg`: translate, rotate and scale composition under the contract
   identity `bunny-transform/1` (`TRANSFORM_CONTRACT_ID`).
   `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S`: a point

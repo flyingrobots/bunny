@@ -51,9 +51,12 @@ fn white() -> [FixedQ32_32; 3] {
 
 /// The direction `from_angles` gives for `(azimuth, elevation)` in raw turn units.
 fn from_angles(azimuth: u64, elevation: u64) -> Raw3 {
-    let light =
-        DirectionalLight::from_angles(FixedAngle::from_raw(azimuth), FixedAngle::from_raw(elevation), white())
-            .expect("every angle pair gives a light");
+    let light = DirectionalLight::from_angles(
+        FixedAngle::from_raw(azimuth),
+        FixedAngle::from_raw(elevation),
+        white(),
+    )
+    .expect("every angle pair gives a light");
     raw3(light.toward_light())
 }
 
@@ -110,7 +113,11 @@ fn optics_tp_290_hand_derived_directions_on_the_axes_and_diagonals() {
         (0, EIGHTH.wrapping_neg(), [ONE, -ONE, 0]),
     ];
     for (azimuth, elevation, expected) in cases {
-        assert_eq!(from_angles(azimuth, elevation), expected, "azimuth {azimuth:#x} elevation {elevation:#x}");
+        assert_eq!(
+            from_angles(azimuth, elevation),
+            expected,
+            "azimuth {azimuth:#x} elevation {elevation:#x}"
+        );
     }
 }
 
@@ -134,6 +141,34 @@ fn optics_tp_291_at_the_poles_azimuth_has_no_effect() {
                 check_bound(&oracle, azimuth, elevation);
             }
         }
+    }
+}
+
+/// `(azimuth, elevation)` raw and the pinned direction raw. Each equals a Python model of the
+/// steps on `sin_cos`'s outputs (in the pull request); the division truncated instead of
+/// rounded changes the first, second, fourth, fifth, seventh and ninth. In the last two a
+/// product is a tie: `cos e` is exactly `-1/2` and `sin a` raw 3 719 550 787, so `z` is
+/// `-1 859 775 393.5` before its rounding (to even, `-1 859 775 394`); then `cos e` is exactly
+/// `1/2` and `sin a` raw 2 147 483 649, so `z` is `1 073 741 824.5` (to even, `1 073 741 824`).
+const GOLDEN_DIRECTIONS: [(u64, u64, Raw3); 10] = [
+    (EIGHTH, EIGHTH, [3_037_000_500, ONE, 3_037_000_500]),
+    (0x1555_5555_5555_5555, 0x1555_5555_5555_5555, [ONE, 2_863_311_531, 2_479_700_525]),
+    (0x1234_5678_9ABC_DEF0, 0x0FED_CBA9_8765_4321, [ONE, 1_962_956_228, 2_057_803_534]),
+    (0x9E37_79B9_7F4A_7C15, 0xC2B2_AE3D_27D4_EB4F, [-210_018_376, -ONE, -192_394_036]),
+    (3 * EIGHTH - 1, EIGHTH / 2, [-ONE, 2_515_933_593, ONE]),
+    (u64::MAX, 0, [ONE, 0, 0]),
+    (0x5555_5555_5555_5555, 0x2AAA_AAAA_AAAA_AAAA, [-1_239_850_262, ONE, 2_147_483_649]),
+    (0x7000_0000_0000_0000, 0xF000_0000_0000_0000, [-ONE, -1_925_612_205, 1_779_033_703]),
+    (0x5555_5555_5555_5555, 0x5555_5555_5555_5555, [1_239_850_262, ONE, -2_147_483_649]),
+    (0x1555_5555_6CE5_5555, 0x2AAA_AAAA_AAAA_AAAA, [2_147_483_647, ONE, 1_239_850_262]),
+];
+
+#[wasm_bindgen_test(unsupported = test)]
+fn optics_tp_292_golden_directions_are_pinned() {
+    for (azimuth, elevation, expected) in GOLDEN_DIRECTIONS {
+        let context = format!("azimuth {azimuth:#x} elevation {elevation:#x}");
+        assert_eq!(from_angles(azimuth, elevation), expected, "{context}");
+        assert_eq!(step_model(azimuth, elevation), expected, "{context}");
     }
 }
 
@@ -297,7 +332,7 @@ fn optics_tp_297_zero_and_out_of_range_irradiance_are_refused_in_order() {
     ];
     let messages: Vec<String> = errors.iter().map(ToString::to_string).collect();
     for (k, message) in messages.iter().enumerate() {
-        assert!(!message.is_empty());
+        assert_ne!(message.as_str(), "");
         assert!(messages[k + 1..].iter().all(|other| other != message), "{message}");
     }
     let _: &dyn std::error::Error = &errors[0];
@@ -327,7 +362,7 @@ impl Seeds {
     fn small(&mut self) -> u64 {
         let bits = u32::try_from(self.next() % 41).expect("below 41");
         let offset = self.next() & ((1_u64 << bits) - 1);
-        if self.next() % 2 == 0 {
+        if self.next().is_multiple_of(2) {
             offset
         } else {
             offset.wrapping_neg()
@@ -352,8 +387,9 @@ impl Seeds {
         loop {
             let mut component = || {
                 let bits = u32::try_from(self.next() % 64).expect("below 64");
-                let magnitude = i64::try_from(self.next() & ((1_u64 << bits) - 1)).expect("63 bits");
-                if self.next() % 2 == 0 {
+                let magnitude =
+                    i64::try_from(self.next() & ((1_u64 << bits) - 1)).expect("63 bits");
+                if self.next().is_multiple_of(2) {
                     magnitude
                 } else {
                     -magnitude

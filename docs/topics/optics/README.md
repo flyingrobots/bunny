@@ -86,6 +86,9 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
   (`new`, `position`, `intensity`, `irradiance`), `SurfaceHit`
   (`point_light_sample`), `LightSample::shadow_t_max`, `PointLightError`,
   `MIN_LIGHT_DISTANCE_RAW` and `POINT_LIGHT_ID`;
+- for the [directional light from angles](#directional-light-from-angles)
+  (`bunny-light-direction/1`): `DirectionalLight` (`from_angles`,
+  `from_direction`), `LightDirectionError` and `LIGHT_DIRECTION_ID`;
 - for the [ray footprint](#ray-footprint) (`bunny-ray-footprint/1`):
   `PinholeCamera::footprint`, `ThinLensCamera::footprint`,
   `TexturedTriangle` (`new`, `triangle`, `uvs`), `TextureDerivatives`
@@ -1286,6 +1289,95 @@ coordinate magnitude of at least `TRACE_COORD_LIMIT_RAW`
 one above `MAX_LIGHT_RAW` (`IntensityTooLarge`). `irradiance` refuses a point
 outside the trace domain (`PointOutsideTraceDomain`), then `TooNear
 { to_light }`, which carries `v`. No input divides by zero.
+
+### Directional Light From Angles
+
+`DirectionalLight::from_angles(azimuth, elevation, irradiance)` and
+`DirectionalLight::from_direction(v, irradiance)` build a directional light
+whose direction is not already in the form `new` accepts: a sun given by two
+angles, or a tweened direction of any length. Their identity is
+`bunny-light-direction/1` (`LIGHT_DIRECTION_ID`). `DirectionalLight::new`, its
+accepted set and every bit of `bunny-diffuse-shading/1` are unchanged; the
+light either constructor returns is the light `new` returns for its
+direction.
+
+**The angles.** The direction points toward the light, as `new`'s
+`toward_light` does:
+
+```text
+toward_light = (cos e * cos a, sin e, cos e * sin a)
+```
+
+| Angles `(a, e)` | Direction |
+| --- | --- |
+| `(0, 0)` | `+x`, exactly `(1, 0, 0)` |
+| `(1/4 turn, 0)` | `+z`, exactly `(0, 0, 1)` |
+| `(any, 1/4 turn)` | `+y`, straight up, exactly `(0, 1, 0)` |
+| `(any, 3/4 turn)` | `-y`, straight down, exactly `(0, -1, 0)` |
+
+A positive azimuth turns `+x` toward `+z`: in the
+[right-handed frame](../coordinate-law/README.md) that is the right-hand rule
+about `-y`, clockwise seen from above. A positive elevation tilts toward `+y`.
+Every `FixedAngle` is a valid input, so there is no angle refusal: an
+elevation past a quarter turn continues over the pole (a half turn with
+azimuth 0 points along `-x`), and a negative elevation puts the light below
+the horizon, which is a valid light (`light_sample` is dark wherever the light
+is behind the surface).
+
+**Steps and rounding.**
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Trigonometry | `(sin a, cos a)` and `(sin e, cos e)` by `FixedAngle::sin_cos` | each within one raw unit of the exact value; exact at quarter turns ([angles](../angle-trigonometry/README.md#sine-and-cosine)) |
+| Products | `x = cos e * cos a`, `z = cos e * sin a`; `y = sin e` as given | one Q32.32 product each, to nearest, ties to even |
+| Scaling | `from_direction` of `(x, y, z)` | below |
+
+`from_direction(v)` finds the exact largest magnitude `m = max |v_i|` and
+divides each `v_i 2^32` by it, exactly in `i128`, rounded once to nearest
+with ties to even. The largest component is exactly `+-1.0` (raw `2^32`) by
+construction, no component exceeds it, and every component is within half a
+raw unit of `v_i 2^32 / m`. A direction already scaled comes back as given,
+and every positive integer multiple of `v` is the same rational quotient, so
+it gives the same bits. Components up to `i64::MIN` fit: `|v_i| 2^32` is at
+most `2^95`.
+
+**The bound.** Each product is within `2 + 2^-32` raw units of the exact
+`cos e cos a` before its rounding (each factor within one raw unit and at most
+1.0 in magnitude), so within `e = 5/2 + 2^-32` after it, and `y` within one.
+The exact direction has length 1.0, so its largest magnitude is at least
+`2^32 / sqrt(3)` raw and the computed one at least that less `e`. Dividing by
+it then moves each component by at most `2 e / m` relative to the exact
+direction divided by its own largest magnitude (the error in the component
+and the error in the divisor), plus the half unit of the division:
+
+- each component of `from_angles` is within `5 sqrt(3) + 1/2 + 10^-8` (below
+  9.161) raw units of the exact direction scaled so its largest magnitude is
+  1.0;
+- the sine of the angle between them is below `(sqrt(13.5) + sqrt(3) / 2)
+  2^-32`, under `4.55 x 2^-32` radians: `sqrt(13.5)` from the products and `y`
+  against the exact unit direction, `sqrt(3) / 2` from the division's
+  rounding on a vector at least 1.0 long.
+
+The bound comes from `sin_cos`'s documented one raw unit, not from a
+measurement. Over the test plan's 100 000 seeded angle pairs the largest
+component error measured is 2.89 raw units and the largest sine 1.78 times
+`2^-32` (OPTICS-TP-294); no tighter bound is claimed.
+
+**The poles.** At an elevation of a quarter or three quarters of a turn,
+`cos e` is exactly zero, so `x` and `z` are exactly zero and the direction is
+exactly `(0, +-1, 0)` for every azimuth. Near a pole the azimuth moves `x`
+and `z` by at most `|cos e|` and the bound above.
+
+**Refusals.** `from_direction` refuses the zero vector with
+`LightDirectionError::ZeroDirection`, before it looks at the irradiance; then
+`new` refuses an irradiance channel below zero or above `MAX_LIGHT_RAW`, which
+comes back as `LightDirectionError::Light(ShadingError::NegativeRadiance)` or
+`Light(ShadingError::RadianceTooLarge)`. `LightNotNormalized` cannot occur.
+`from_angles` refuses only the irradiance: `sin e` or `cos e` is at least
+`2^32 / sqrt(2) - 1` raw in magnitude, and so is `sin a` or `cos a`, so `y`
+or one of the products is nonzero. `LightDirectionError` is a new type,
+because adding a variant to the exhaustive `ShadingError` would break code
+that matches on it.
 
 ### Sky
 
