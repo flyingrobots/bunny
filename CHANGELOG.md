@@ -46,6 +46,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bit-equal at joints where defined, `None` outside the range. Closes
   flyingrobots/bunny#309.
 
+* `bunny-optics`: an orthographic camera under the identity
+  `bunny-orthographic-camera/1` (`ORTHOGRAPHIC_CAMERA_ID`).
+  `OrthographicCamera::new(&OrthographicSpec)` takes the pinhole camera's
+  inputs with the tangent replaced by `half_height`, half the view
+  rectangle's height in `(0, 256]` (`ORTHOGRAPHIC_HALF_HEIGHT_LIMIT_RAW`), and
+  derives the pinhole camera's basis bit for bit. `ray(sample)` looks along
+  the unit `forward` from `position + o`, with
+  `o_i = round((a h R_i + b h U_i) / (height 2^64))` to nearest, ties to even,
+  from the exact numerator: within half a raw unit. Each invalid input is its
+  own `OrthographicError`, including a view whose rounded corner leaves the
+  trace domain. A projection round-trip check carries points along pinhole
+  and orthographic rays through `FixedMat4::try_look_at`, `try_perspective`
+  or `try_orthographic` and `Viewport` back to their samples, within a bound
+  derived for each case and below `2^-10` pixel; the conventions agree. The
+  optics chapter now proves the camera basis orthogonal within
+  `2.6 * 2^32` raw-squared units and the pinhole camera's forward corner check
+  unreachable, and shows the thin-lens forward check deciding an extreme
+  aperture. No existing output changes. The thin lens was already done
+  (flyingrobots/bunny#364). Closes flyingrobots/bunny#257.
+
 * `cargo xtask perf --evidence <file>` writes every round of both sides (case,
   side, round, p50, p95, p99) and the build identity (base reference, full base
   and candidate SHAs, target triple, flags, and whether the working tree was

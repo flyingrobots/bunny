@@ -9,8 +9,11 @@ radiance samples into output codes.
 ## Scope
 
 This plan covers `PinholeCamera`, `CameraSpec`, `PixelSample`, `CameraError`,
-`point_at`, and the thin-lens camera `bunny-thin-lens/1` (`ThinLensCamera`,
-`ThinLensSpec`, `ThinLensError`, `lens_disc_point`):
+`point_at`, the thin-lens camera `bunny-thin-lens/1` (`ThinLensCamera`,
+`ThinLensSpec`, `ThinLensError`, `lens_disc_point`), the orthographic camera
+`bunny-orthographic-camera/1` (`OrthographicCamera`, `OrthographicSpec`,
+`OrthographicError`) and the projection round trip through `FixedMat4` and
+`Viewport`:
 
 - construction refusals for every degenerate input;
 - the camera basis and its agreement with the coordinate law;
@@ -92,7 +95,8 @@ This plan covers `PinholeCamera`, `CameraSpec`, `PixelSample`, `CameraError`,
   of the published listing, the mirror limit with derived bounds, a
   white-furnace table, and counts of what the seeded generator reaches.
 
-Projection matrices (flyingrobots/bunny#201, #202), and rough transmission,
+The projection matrices themselves (flyingrobots/bunny#201, #202) are tested
+in their own chapters; this plan uses them only in the round trip. Rough transmission,
 dispersion, absorption, the evaluation of a rough conductor for a given pair
 of directions and other material helpers (#160) are out of scope.
 
@@ -217,6 +221,15 @@ formatting.
 | OPTICS-REQ-112 | On a plane facing an exact camera at depth `d`, with texture coordinates the world `x` and `y` times `s`, every pixel has `du/dx = s d 2 tan / height`, `dv/dy = -du/dx` and zero cross terms; on a plane tilted toward a neighbouring ray the footprint is the closed-form secant, whose long axis grows without bound as the plane nears that ray's direction. | `README.md#ray-footprint` |
 | OPTICS-REQ-113 | A neighbouring ray with `D' . N` exactly zero gives `Unbounded { axis, reason: Parallel }`, one whose `D' . N` has the sign opposite to the hit ray's gives `Behind`, and one whose component rounds outside `i64` gives `TooLarge`, checked for the right neighbour (parallel, behind, `u`, `v`) and then the down neighbour; nothing wraps or panics for any accepted camera, sample, triangle and texture coordinates. | `README.md#ray-footprint` |
 | OPTICS-REQ-114 | `TexturedTriangle::new` refuses a triangle whose `(v1 - v0) x (v2 - v0)` is exactly zero (`DegenerateTriangle`); `footprint` refuses, in this order, a sample outside the image (`SampleOutsideImage`), a thin-lens sample outside `[0, 1)^2` (`LensSampleOutsideUnitSquare`), a hit ray with `D . N` exactly zero (`RayParallelToPlane`) and a plane with `(v0 - O) . N` zero or of the sign opposite to `D . N` (`PlaneNotAhead`). | `README.md#ray-footprint` |
+| OPTICS-REQ-160 | `OrthographicCamera::new` (`bunny-orthographic-camera/1`) refuses, in this order, a position coordinate with `abs(raw) >= 2^40` (`PositionOutsideTraceDomain`), a zero image dimension (`EmptyImage`) or one above 32768 (`ImageTooLarge`), a half height of zero or below (`HalfHeightNotPositive`) or above `2^40` raw (`HalfHeightTooLarge`), a zero look (`ZeroLook`), an up hint zero or nearly parallel by the pinhole camera's rule (`UpParallelToLook`), and a view rectangle with a rounded corner (`a = +-width`, `b = +-height`) whose component has `abs(raw) >= 2^40` (`ViewOutsideTraceDomain`); `ray` returns `None` for a sample outside the image. | `README.md#orthographic-camera` |
+| OPTICS-REQ-161 | Each orthographic ray has the direction of the stored unit `forward` and the origin `position + o`, `o_i = round((a_raw h R_i + b_raw h U_i) / (height 2^64))` to nearest, ties to even, from the exact numerator: within half a raw unit of the exact point `position + (h / height)(a R + b U)` with the stored basis. | `README.md#orthographic-camera` |
+| OPTICS-REQ-162 | Every in-image sample of an accepted orthographic camera has a ray: every origin component is inside the trace domain. | `README.md#orthographic-camera` |
+| OPTICS-REQ-163 | The orthographic camera's basis is the pinhole camera's for the same look and up hint; pixel `(0, 0)` is top-left, rows grow toward `-up`, one pixel is `2 h / height` along both axes, and the view rectangle spans `-h..=h` along `up` and `-h width / height..=h width / height` along `right`, the view volume of `FixedMat4::try_orthographic(h width / height, h, near, far)`. | `README.md#orthographic-camera` |
+| OPTICS-REQ-164 | A point `point_at(ray, t)` of a pinhole camera's ray, carried through `FixedMat4::try_look_at(position, position + look, up)` and `try_perspective(tan, width / height rounded to nearest, near, far)` exactly, divided by `w` and rounded once to nearest raw NDC unit, and mapped by `Viewport::try_ndc_to_viewport`, lands within the bound derived for that case of the sample's viewport coordinate `(x + sub_x, y + sub_y)`, and that bound is at most `2^-10` pixel; axis-aligned power-of-two cameras land exactly. | `README.md#projection-round-trip` |
+| OPTICS-REQ-165 | The same holds for an orthographic camera's ray through `try_look_at` and `try_orthographic(round(h width / height), h, near, far)`, with `w = 1`. | `README.md#projection-round-trip` |
+| OPTICS-REQ-166 | Every pairwise dot product of a camera basis is below `(3/2) sqrt(3) (1 + 2^-28) 2^32`, under `2.6 * 2^32` raw-squared units, for every accepted look and up hint, including hints just inside the parallel threshold; this is proven from the rounding of `FixedVec3::cross` and of normalization, and needs the second orthogonalization. | `README.md#construction-safeguards` |
+| OPTICS-REQ-167 | Every corner direction of an accepted pinhole camera has `d . F >= 2^(64 - k) (1 - 2^-7) - 2^33`, above `2^39` for every accepted shift `k <= 24`, so the positive-forward corner check (`d . F > 2 \|F\|_1`) never refuses a pinhole camera. | `README.md#construction-safeguards` |
+| OPTICS-REQ-168 | The positive-forward corner check with the thin-lens forward margin decides acceptance: a level 2 by 2 camera with tangent 1 and focus distance 1 raw is accepted at shift 29 with aperture `2^28 - 1` raw, and refused with `ThinLensError::Unrepresentable` at aperture `2^28` raw, whose components fit at shift 30. | `README.md#construction-safeguards` |
 
 ```toml
 [[requirement]]
@@ -678,6 +691,51 @@ status = "active"
 id = "OPTICS-REQ-114"
 summary = "TexturedTriangle::new refuses a triangle whose (v1 - v0) x (v2 - v0) is exactly zero (DegenerateTriangle); footprint refuses, in this order, a sample outside the image (SampleOutsideImage), a thin-lens sample outside [0, 1)^2 (LensSampleOutsideUnitSquare), a hit ray with D . N exactly zero (RayParallelToPlane) and a plane with (v0 - O) . N zero or of the sign opposite to D . N (PlaneNotAhead)."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-160"
+summary = "OrthographicCamera::new (bunny-orthographic-camera/1) refuses, in this order, a position coordinate with abs(raw) >= 2^40 (PositionOutsideTraceDomain), a zero image dimension (EmptyImage) or one above 32768 (ImageTooLarge), a half height of zero or below (HalfHeightNotPositive) or above 2^40 raw (HalfHeightTooLarge), a zero look (ZeroLook), an up hint zero or nearly parallel by the pinhole camera's rule (UpParallelToLook), and a view rectangle with a rounded corner (a = +-width, b = +-height) whose component has abs(raw) >= 2^40 (ViewOutsideTraceDomain); ray returns None for a sample outside the image."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-161"
+summary = "Each orthographic ray has the direction of the stored unit forward and the origin position + o, o_i = round((a_raw h R_i + b_raw h U_i) / (height 2^64)) to nearest, ties to even, from the exact numerator: within half a raw unit of the exact point position + (h / height)(a R + b U) with the stored basis."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-162"
+summary = "Every in-image sample of an accepted orthographic camera has a ray: every origin component is inside the trace domain."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-163"
+summary = "The orthographic camera's basis is the pinhole camera's for the same look and up hint; pixel (0, 0) is top-left, rows grow toward -up, one pixel is 2 h / height along both axes, and the view rectangle spans -h..=h along up and -h width / height..=h width / height along right, the view volume of FixedMat4::try_orthographic(h width / height, h, near, far)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-164"
+summary = "A point point_at(ray, t) of a pinhole camera's ray, carried through FixedMat4::try_look_at(position, position + look, up) and try_perspective(tan, width / height rounded to nearest, near, far) exactly, divided by w and rounded once to nearest raw NDC unit, and mapped by Viewport::try_ndc_to_viewport, lands within the bound derived for that case of the sample's viewport coordinate (x + sub_x, y + sub_y), and that bound is at most 2^-10 pixel; axis-aligned power-of-two cameras land exactly."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-165"
+summary = "The same holds for an orthographic camera's ray through try_look_at and try_orthographic(round(h width / height), h, near, far), with w = 1."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-166"
+summary = "Every pairwise dot product of a camera basis is below (3/2) sqrt(3) (1 + 2^-28) 2^32, under 2.6 * 2^32 raw-squared units, for every accepted look and up hint, including hints just inside the parallel threshold; this is proven from the rounding of FixedVec3::cross and of normalization, and needs the second orthogonalization."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-167"
+summary = "Every corner direction of an accepted pinhole camera has d . F >= 2^(64 - k) (1 - 2^-7) - 2^33, above 2^39 for every accepted shift k <= 24, so the positive-forward corner check (d . F > 2 |F|_1) never refuses a pinhole camera."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-168"
+summary = "The positive-forward corner check with the thin-lens forward margin decides acceptance: a level 2 by 2 camera with tangent 1 and focus distance 1 raw is accepted at shift 29 with aperture 2^28 - 1 raw, and refused with ThinLensError::Unrepresentable at aperture 2^28 raw, whose components fit at shift 30."
+status = "active"
 ```
 
 ## Fixtures
@@ -864,6 +922,24 @@ slack = (W + H) * H * 2^(31 + k)
 image-plane point. The case passes when `-D - slack < d_i * D - S_i <= slack`
 for each component, which is `OPTICS-REQ-005` multiplied through by `D`. All
 products are checked; an overflow fails the case.
+
+### The Orthographic Origin Oracle
+
+With `D = height 2^64` and `N_i = a_raw h R_i + b_raw h U_i` from the raw
+doubled offsets, half height and stored basis, an origin component `o_i` is
+correct when `|(o_i - p_i) D - N_i| <= D / 2`, and on equality `o_i - p_i` is
+even. The test computes `N_i` from the chapter's formula in `i128`, sharing
+nothing with the kernel.
+
+### The Round-Trip Bound
+
+The bound of [Projection Round
+Trip](README.md#projection-round-trip), evaluated for each case in exact
+rationals over the shared signed big integers (`tests/exact/mod.rs`): the
+camera's and the view matrix's stored axes, the projection entries, the
+sample's offsets and the distance enter exactly; every other term is a stated
+rounding bound. The check asserts the measured landing error is at most it and
+that it is at most `2^-10` pixel.
 
 ### The Focus-Plane Oracle
 
@@ -1182,6 +1258,21 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-219 | Extremes | OPTICS-REQ-113 | Tangent 256 on 1 by 1, 32 768 by 1, 1 by 32 768, 32 768 by 32 768 and 3 by 2 images, cameras at trace-domain corners, every image corner at sub-pixel offsets 0 and `1 - 2^-32` (so the neighbours lie past the edge), triangles at trace-domain corners, texture coordinates of `i64::MIN`, `i64::MAX`, 0 and -1, pinhole and thin lens (its lens centre `2^31` raw inside the corner): no call panics in a test build, which checks every `i128` overflow; at least 1 000 results with bounded and `TooLarge` among them (2 000 on the committed seed) and at least 50 thin-lens cameras (200); the seed is printed. | `crates/bunny-optics/tests/ray_footprint_tests.rs::optics_tp_219_extreme_cameras_triangles_and_coordinates_neither_wrap_nor_panic` |
 | OPTICS-TP-220 | The quotient at the `i64` boundary | OPTICS-REQ-111, OPTICS-REQ-113 | Hand-computed: numerators of `(2^64 - 1) d` and `(2^64 + 1) d` over `2 d` (the ties `2^63 - 1/2` and `2^63 + 1/2`) and one raw unit either side, both signs: `i64::MAX`, then outside; `i64::MIN + 1`, `i64::MIN`, `i64::MIN`; `i64::MIN`, `i64::MIN`, then outside; a quotient of `2^64` is refused early. | `crates/bunny-optics/src/footprint/wide.rs::tests::the_range_boundary_is_exact_one_unit_either_side` |
 | OPTICS-TP-221 | Ray-footprint mutations | OPTICS-REQ-110, OPTICS-REQ-111, OPTICS-REQ-112, OPTICS-REQ-113, OPTICS-REQ-114 | Each of fifteen rules broken on purpose fails at least one case above. | [Ray-footprint mutation checks](#ray-footprint-mutation-checks) |
+| OPTICS-TP-310 | Golden orthographic rays | OPTICS-REQ-161, OPTICS-REQ-163 | Hand-computed origins of a 2 by 2 camera with half height 1 (pixel centres, the top-left corner, the last sub-pixel offset at `1 - 2^-32`), a 3 by 3 camera (`round(2^33 / 3)` either sign) and a camera looking along `+x` from `(1, 2, 3)` with half height 1/2 (right `+z`): every direction is `forward`; the identity string; construction is deterministic. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_310_golden_orthographic_rays_lock_raw_outputs` |
+| OPTICS-TP-311 | Ties to even | OPTICS-REQ-161 | A 1 by 1 camera with half height 1, 3, 5 and 7 raw at sub-pixel offsets 3/4 and 1/4: exact ties `+-1/2`, `+-3/2`, `+-5/2` and `7/2` raw give 0, `+-2`, `+-2` and 4, and the oracle confirms each is a tie. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_311_origin_ties_round_to_even` |
+| OPTICS-TP-312 | Exact origin oracle | OPTICS-REQ-161, OPTICS-REQ-162 | 1 000 seeded cameras (positions within 64 units, half extents up to 16 units, images up to 4096 a side), eight seeded samples each: the direction is `forward`, every origin is inside the trace domain, and `\|(o_i - p_i) D - N_i\| <= D / 2` with `D = height 2^64` and `N_i` the exact numerator, a tie at the even value; 8 000 rays on the committed seed, at least 990 cameras required; the seed is printed. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_312_every_origin_is_the_exact_point_rounded_once` |
+| OPTICS-TP-313 | Refusals and their thresholds | OPTICS-REQ-160 | On a 1 by 1 camera of half height 1 (corners one unit from the position): a corner at `2^40 - 1` raw accepted and at `2^40` refused on both signs and axes, a position at `2^40` refused before its view, a frame turned an eighth of a turn whose off-diagonal corner reaches `sqrt(2)` units, the image sizes 0, 32 768 (refused by its view at half height 1, accepted at 1/256) and 32 769, half heights 0, -1 raw, 1 raw, `2^40 - 1`, `2^40` (refused by its view) and `2^40 + 1`, a zero look, a zero and a parallel up hint, the pinhole camera's parallel threshold either side, and the order of all six refusals. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_313_construction_refusals_and_their_thresholds` |
+| OPTICS-TP-314 | Samples outside the image | OPTICS-REQ-160 | Columns and rows at the image size, `u32::MAX`, sub-pixel offsets of 1.0, -1 raw and the extreme raw values give `None`; the last and first in-range samples give rays. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_314_samples_outside_the_image_are_refused` |
+| OPTICS-TP-315 | Extreme cameras | OPTICS-REQ-162 | Images of 32 768 by 32 768, 32 768 by 1 (256 units wide), 1 by 32 768 and 1 by 1 with half height one raw unit, on three look directions: the four extreme corner samples and the centre have rays within half a raw unit of the oracle and inside the trace domain. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_315_corner_samples_of_extreme_cameras_have_rays` |
+| OPTICS-TP-316 | Image convention | OPTICS-REQ-163 | An 8 by 4 camera of half height 2 looking down `-z`: pixel `(0, 0)` is at `(-7/2, 3/2)`, the next column one unit along `+x`, the next row one unit along `-y`, the last pixel bottom-right, every direction `-z`, and the basis is the pinhole camera's `(-z, +x, +y)`. | `crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_316_pixel_origin_is_top_left_and_rows_grow_downward` |
+| OPTICS-TP-317 | Orthographic mutations | OPTICS-REQ-160, OPTICS-REQ-161, OPTICS-REQ-162, OPTICS-REQ-163 | Each of ten rules broken on purpose fails at least one case above. | [Orthographic and safeguard mutation checks](#orthographic-and-safeguard-mutation-checks) |
+| OPTICS-TP-318 | Exact round trips | OPTICS-REQ-164, OPTICS-REQ-165 | Axis-aligned cameras with power-of-two tangents, half heights and sizes (2 by 2 and 4 by 2 looking down `-z`, 4 by 2 looking along `+x` from `(1, 2, 3)`): pixel centres, corners and a quarter offset at three distances land exactly on their samples. | `crates/bunny-optics/tests/projection_round_trip_tests.rs::optics_tp_318_axis_aligned_cameras_land_exactly_on_their_samples` |
+| OPTICS-TP-319 | Pinhole round trip | OPTICS-REQ-164 | 200 seeded cameras (tangents 1/16 to 4, images up to 2048 a side, positions within 64 units), four seeded samples each at depths 1/16, 1, 16 and 128 units: each landing error is at most the bound derived for its case in exact rationals, and each bound at most `2^22` raw (`2^-10` pixel); 3 200 cases, worst measured 183 466 raw against a worst bound of 410 778 on the committed seed; the seed is printed. | `crates/bunny-optics/tests/projection_round_trip_tests.rs::optics_tp_319_pinhole_points_project_back_to_their_sample` |
+| OPTICS-TP-320 | Orthographic round trip | OPTICS-REQ-165 | 200 seeded cameras (half extents 1/16 to 4 units on the longer side, images up to 2048 a side), four seeded samples each at distances 0, 1/16, 1, 16 and 128 units: as OPTICS-TP-319; 4 000 cases, worst measured 401 416 raw against a worst bound of 420 161; the seed is printed. | `crates/bunny-optics/tests/projection_round_trip_tests.rs::optics_tp_320_orthographic_points_project_back_to_their_sample` |
+| OPTICS-TP-321 | Basis orthogonality at the parallel threshold | OPTICS-REQ-166 | Three fixed hints within `2^-15` of `-z` and 2 000 seeded looks with hints `2^-12` to `2^-15` of a unit off them: every accepted camera's pairwise dot products are below `2.6 * 2^32` raw-squared units (1 636 cameras, largest `2.06 * 2^32`, on the committed seed; at least 1 500 required); the seed is printed. | `crates/bunny-optics/tests/camera_safeguard_tests.rs::optics_tp_321_the_basis_is_orthogonal_within_its_proven_bound` |
+| OPTICS-TP-322 | Pinhole forward margin | OPTICS-REQ-167 | The extreme cameras of OPTICS-TP-004 on three looks and two hints (one just inside the parallel threshold): the shift is at most 24 and every corner sample's direction has `d . F >= 2^(64 - k) (1 - 2^-7) - 2^33` and above `2^39`; the smallest `d . F / (2 \|F\|_1)` is 147, at least 32 required. | `crates/bunny-optics/tests/camera_safeguard_tests.rs::optics_tp_322_pinhole_corner_directions_keep_the_proven_forward_margin` |
+| OPTICS-TP-323 | Thin-lens forward check | OPTICS-REQ-168 | A level 2 by 2 camera with tangent 1 and focus distance 1 raw: aperture `2^28 - 1` raw is accepted at shift 29, with every corner ray facing forward at four lens samples; `2^28` raw is `Unrepresentable`. | `crates/bunny-optics/tests/camera_safeguard_tests.rs::optics_tp_323_the_thin_lens_forward_check_decides_extreme_apertures` |
+| OPTICS-TP-324 | Safeguard mutations | OPTICS-REQ-166, OPTICS-REQ-167, OPTICS-REQ-168 | The second orthogonalization removed, the thin-lens forward margin set to 0, the pinhole slack set to 0 and the corner check removed each fail a case above; no pinhole test catches the last three, as OPTICS-REQ-167 says. | [Orthographic and safeguard mutation checks](#orthographic-and-safeguard-mutation-checks) |
 
 ```toml
 [[case]]
@@ -2947,6 +3038,141 @@ artifact = "docs/topics/optics/test-plan.md#ray-footprint-mutation-checks"
 oracle = "Fifteen rules of footprint.rs, footprint/wide.rs, camera.rs and thin_lens.rs broken on purpose; each fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-310"
+requirements = ["OPTICS-REQ-161", "OPTICS-REQ-163"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_310_golden_orthographic_rays_lock_raw_outputs"
+oracle = "Hand-computed origins of a 2 by 2 camera with half height 1 (pixel centres, the top-left corner, the last sub-pixel offset at 1 - 2^-32), a 3 by 3 camera (round(2^33 / 3) either sign) and a camera looking along +x from (1, 2, 3) with half height 1/2 (right +z): every direction is forward; the identity string; construction is deterministic."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-311"
+requirements = ["OPTICS-REQ-161"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_311_origin_ties_round_to_even"
+oracle = "A 1 by 1 camera with half height 1, 3, 5 and 7 raw at sub-pixel offsets 3/4 and 1/4: exact ties +-1/2, +-3/2, +-5/2 and 7/2 raw give 0, +-2, +-2 and 4, and the oracle confirms each is a tie."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-312"
+requirements = ["OPTICS-REQ-161", "OPTICS-REQ-162"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_312_every_origin_is_the_exact_point_rounded_once"
+oracle = "1 000 seeded cameras (positions within 64 units, half extents up to 16 units, images up to 4096 a side), eight seeded samples each: the direction is forward, every origin is inside the trace domain, and |(o_i - p_i) D - N_i| <= D / 2 with D = height 2^64 and N_i the exact numerator, a tie at the even value; 8 000 rays on the committed seed, at least 990 cameras required; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-313"
+requirements = ["OPTICS-REQ-160"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_313_construction_refusals_and_their_thresholds"
+oracle = "On a 1 by 1 camera of half height 1 (corners one unit from the position): a corner at 2^40 - 1 raw accepted and at 2^40 refused on both signs and axes, a position at 2^40 refused before its view, a frame turned an eighth of a turn whose off-diagonal corner reaches sqrt(2) units, the image sizes 0, 32 768 (refused by its view at half height 1, accepted at 1/256) and 32 769, half heights 0, -1 raw, 1 raw, 2^40 - 1, 2^40 (refused by its view) and 2^40 + 1, a zero look, a zero and a parallel up hint, the pinhole camera's parallel threshold either side, and the order of all six refusals."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-314"
+requirements = ["OPTICS-REQ-160"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_314_samples_outside_the_image_are_refused"
+oracle = "Columns and rows at the image size, u32::MAX, sub-pixel offsets of 1.0, -1 raw and the extreme raw values give None; the last and first in-range samples give rays."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-315"
+requirements = ["OPTICS-REQ-162"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_315_corner_samples_of_extreme_cameras_have_rays"
+oracle = "Images of 32 768 by 32 768, 32 768 by 1 (256 units wide), 1 by 32 768 and 1 by 1 with half height one raw unit, on three look directions: the four extreme corner samples and the centre have rays within half a raw unit of the oracle and inside the trace domain."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-316"
+requirements = ["OPTICS-REQ-163"]
+evidence = "test"
+test = "crates/bunny-optics/tests/orthographic_tests.rs::optics_tp_316_pixel_origin_is_top_left_and_rows_grow_downward"
+oracle = "An 8 by 4 camera of half height 2 looking down -z: pixel (0, 0) is at (-7/2, 3/2), the next column one unit along +x, the next row one unit along -y, the last pixel bottom-right, every direction -z, and the basis is the pinhole camera's (-z, +x, +y)."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-317"
+requirements = ["OPTICS-REQ-160", "OPTICS-REQ-161", "OPTICS-REQ-162", "OPTICS-REQ-163"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#orthographic-and-safeguard-mutation-checks"
+oracle = "Ten rules of orthographic.rs broken on purpose; each fails at least one case."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-318"
+requirements = ["OPTICS-REQ-164", "OPTICS-REQ-165"]
+evidence = "test"
+test = "crates/bunny-optics/tests/projection_round_trip_tests.rs::optics_tp_318_axis_aligned_cameras_land_exactly_on_their_samples"
+oracle = "Axis-aligned cameras with power-of-two tangents, half heights and sizes (2 by 2 and 4 by 2 looking down -z, 4 by 2 looking along +x from (1, 2, 3)): pixel centres, corners and a quarter offset at three distances land exactly on their samples."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-319"
+requirements = ["OPTICS-REQ-164"]
+evidence = "test"
+test = "crates/bunny-optics/tests/projection_round_trip_tests.rs::optics_tp_319_pinhole_points_project_back_to_their_sample"
+oracle = "200 seeded cameras (tangents 1/16 to 4, images up to 2048 a side, positions within 64 units), four seeded samples each at depths 1/16, 1, 16 and 128 units: each landing error is at most the bound derived for its case in exact rationals, and each bound at most 2^22 raw (2^-10 pixel); 3 200 cases, worst measured 183 466 raw against a worst bound of 410 778 on the committed seed; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-320"
+requirements = ["OPTICS-REQ-165"]
+evidence = "test"
+test = "crates/bunny-optics/tests/projection_round_trip_tests.rs::optics_tp_320_orthographic_points_project_back_to_their_sample"
+oracle = "200 seeded cameras (half extents 1/16 to 4 units on the longer side, images up to 2048 a side), four seeded samples each at distances 0, 1/16, 1, 16 and 128 units: as OPTICS-TP-319; 4 000 cases, worst measured 401 416 raw against a worst bound of 420 161; the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-321"
+requirements = ["OPTICS-REQ-166"]
+evidence = "test"
+test = "crates/bunny-optics/tests/camera_safeguard_tests.rs::optics_tp_321_the_basis_is_orthogonal_within_its_proven_bound"
+oracle = "Three fixed hints within 2^-15 of -z and 2 000 seeded looks with hints 2^-12 to 2^-15 of a unit off them: every accepted camera's pairwise dot products are below 2.6 * 2^32 raw-squared units (1 636 cameras, largest 2.06 * 2^32, on the committed seed; at least 1 500 required); the seed is printed."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-322"
+requirements = ["OPTICS-REQ-167"]
+evidence = "test"
+test = "crates/bunny-optics/tests/camera_safeguard_tests.rs::optics_tp_322_pinhole_corner_directions_keep_the_proven_forward_margin"
+oracle = "The extreme cameras of OPTICS-TP-004 on three looks and two hints (one just inside the parallel threshold): the shift is at most 24 and every corner sample's direction has d . F >= 2^(64 - k) (1 - 2^-7) - 2^33 and above 2^39; the smallest d . F / (2 |F|_1) is 147, at least 32 required."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-323"
+requirements = ["OPTICS-REQ-168"]
+evidence = "test"
+test = "crates/bunny-optics/tests/camera_safeguard_tests.rs::optics_tp_323_the_thin_lens_forward_check_decides_extreme_apertures"
+oracle = "A level 2 by 2 camera with tangent 1 and focus distance 1 raw: aperture 2^28 - 1 raw is accepted at shift 29, with every corner ray facing forward at four lens samples; 2^28 raw is Unrepresentable."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-324"
+requirements = ["OPTICS-REQ-166", "OPTICS-REQ-167", "OPTICS-REQ-168"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#orthographic-and-safeguard-mutation-checks"
+oracle = "Four safeguards of basis.rs, plane.rs and thin_lens.rs broken on purpose; each fails a case of camera_safeguard_tests.rs, and the three forward-check mutations fail no pinhole case."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -3338,12 +3564,13 @@ camera_tests` per mutation; the restored source passed every case.
 | Lens offset `+ 1` raw | Aperture 0 is the pinhole | OPTICS-TP-130, OPTICS-TP-136 |
 | Cosine and sine swapped | `v = 0` lies along `right` | OPTICS-TP-132, OPTICS-TP-136 |
 | Margins ignore the shift | The margin halves with `k` | OPTICS-TP-131, OPTICS-TP-134, OPTICS-TP-135, OPTICS-TP-136 |
-| Forward margin set to 0 | `direction . forward > 0` | none |
+| Forward margin set to 0 | `direction . forward > 0` | OPTICS-TP-323 (added later; none of the cases above) |
 
-The forward margin is defensive, like the pinhole's own forward check: the
-correction is nearly orthogonal to `forward` (`R . F` and `U . F` are a few
-raw-squared units), so no camera the tests build comes near it. It is an open
-gap below.
+No case above comes near the forward margin: the correction is nearly
+orthogonal to `forward` (`R . F` and `U . F` are a few raw-squared units).
+OPTICS-TP-323 reaches it with an aperture `2^28` times the focus distance,
+where the shift is 30; see [Orthographic and safeguard mutation
+checks](#orthographic-and-safeguard-mutation-checks).
 
 ## Dielectric Mutation Checks
 
@@ -3470,6 +3697,39 @@ case fail; the restored source passed every case.
 | The two edges' texture differences swapped | `t1 - t0` with `u`, `t2 - t0` with `v` | OPTICS-TP-210, OPTICS-TP-211, OPTICS-TP-212, OPTICS-TP-213, OPTICS-TP-214, OPTICS-TP-216, OPTICS-TP-217 |
 | The thin lens without its correction | The camera's directions | OPTICS-TP-214 |
 | The thin lens from the lens centre | The lens point held fixed | OPTICS-TP-214 |
+
+## Orthographic And Safeguard Mutation Checks
+
+Each rule below was broken on purpose in `crates/bunny-optics/src/orthographic.rs`,
+`src/basis.rs`, `src/plane.rs` or `src/thin_lens.rs`, and the tests were run
+with `cargo test --locked -q -p bunny-optics --no-fail-fast --test
+orthographic_tests --test projection_round_trip_tests --test
+camera_safeguard_tests --test camera_tests --test thin_lens_tests` per
+mutation, the source restored after each. Every mutation made at least one
+case fail; the restored source passed every case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| Origin floored | Round to nearest | OPTICS-TP-310, OPTICS-TP-311, OPTICS-TP-312, OPTICS-TP-315 |
+| Ties away from zero | Ties to even | OPTICS-TP-311 |
+| Rows grow upward | Rows grow toward `-up` | OPTICS-TP-310, OPTICS-TP-312, OPTICS-TP-315, OPTICS-TP-316, OPTICS-TP-318, OPTICS-TP-320 |
+| View check inclusive of `2^40` | The trace domain is exclusive | OPTICS-TP-313 |
+| View check removed | `ViewOutsideTraceDomain` | OPTICS-TP-313 |
+| Only the two diagonal corners checked | All four corners bound the view | OPTICS-TP-313 |
+| Half-height limit exclusive | `2^40` raw is accepted | OPTICS-TP-313 |
+| Direction `-forward` | Every ray looks along `forward` | OPTICS-TP-310, OPTICS-TP-312, OPTICS-TP-316, OPTICS-TP-320 |
+| Divisor `width` instead of `height` | Square pixels | OPTICS-TP-312, OPTICS-TP-313, OPTICS-TP-315, OPTICS-TP-316, OPTICS-TP-318, OPTICS-TP-320 |
+| Position check removed | `PositionOutsideTraceDomain` first | OPTICS-TP-313 |
+| `right = first_right` (the second orthogonalization removed) | OPTICS-REQ-166 | OPTICS-TP-321 |
+| Thin-lens forward margin set to 0 | OPTICS-REQ-168 | OPTICS-TP-323 |
+| The pinhole slack `2 \|F\|_1` set to 0 | OPTICS-REQ-168 | OPTICS-TP-323 |
+| The corner forward check always passes | OPTICS-REQ-168 | OPTICS-TP-323 |
+
+The last four are the safeguards. Before OPTICS-TP-321 no test caught the
+removal of the second orthogonalization: the seeded hints of OPTICS-TP-003 are
+far from parallel, and the near-parallel hints of OPTICS-TP-005 were only
+checked for acceptance. No pinhole case catches the last three, as
+OPTICS-REQ-167 proves none can.
 
 ## Decode Mutation Check
 
@@ -3724,7 +3984,9 @@ case with a stable test name.
 
 | Gap | Blocking API |
 | --- | --- |
-| A differential check that points along a camera ray project, through `FixedMat4::try_look_at`, `FixedMat4::try_perspective` and `Viewport`, back to the ray's sample. | None; a follow-up case (the matrices landed while this chapter was written). |
+| A uniform bound for the projection round trip over every accepted camera: OPTICS-TP-319 and OPTICS-TP-320 prove a bound per case, from that case's exact basis mismatch. | None; an a priori bound on the camera's basis against `try_look_at`'s ideal one. |
+| A ray footprint for the orthographic camera, as `PinholeCamera::footprint` gives. | None; a follow-up case. |
+| A case that makes `FixedUnitVec3::new` fail on a camera basis vector (`Unrepresentable`): none is known, and no proof rules it out. | None; a constructed case or a proof. |
 | A statistical test suite (PractRand or TestU01) over the sample hash and the sampler. | None; it needs a harness outside the core crates. |
 | Stratification evidence above 1 024 samples per pixel (the property is proven for every `k` up to 32 and tested to 10). | None; a slow-tier case. |
 | Timing of ray generation. | A `bunny-perf` case once a renderer loop exists. |
@@ -3742,7 +4004,7 @@ case with a stable test name.
 | A case where normalizing the incoming direction without the prescale changes the throughput (OPTICS-TP-182): the pinned and seeded specular directions have a component of exactly 1.0, except OPTICS-TP-104's, whose cosine is near 1.0 where the weight rounds to zero. | None; a constructed direction whose largest component is below 1.0. |
 | A case that produces `SecondaryRayError::BounceRayRefused` from `try_bounce_ray` (OPTICS-TP-065 only builds the value): no input is known to reach it (the start point is inside the domain and every bounce direction is a valid trace direction), and `OPTICS-TP-062` checks that none of its generated inputs does. | None; a constructed case if one is found. |
 | The hemisphere distribution beyond the stated guard (for example a chi-squared test over many cells, or convergence of a full renderer against an independent one). | None; a slow-tier case or a renderer-level comparison. |
-| A thin-lens camera whose forward margin is load-bearing: without it `OPTICS-TP-134` still passes, since `R . F` and `U . F` are tiny for every derived basis. | None; a constructed case if one is found. |
+| A thin-lens camera on which the forward margin stops a ray that would face backward: OPTICS-TP-323 shows the margin decides acceptance, on a level camera whose corrections have no forward component. | None; a tilted camera at a shift near 32, if one is found. |
 | A choice of sampler pair for the lens in a renderer (the camera takes any pair; pair 0 is the sub-pixel offset). | None; the renderer decides. |
 | A seeded footprint that is exactly `Parallel`: an exact zero `D' . N` is too rare for random planes, so `OPTICS-TP-213` and `OPTICS-TP-214` see none; `OPTICS-TP-212` and `OPTICS-TP-217` construct it. | None; a seeded generator that builds the plane from the neighbour's direction exactly. |
 | A timing case for `bunny-ray-footprint/1` in `bunny-perf`. | None; a follow-up case. |
