@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: uniform Catmull-Rom splines under `bunny-curve/1`, part 2.
+  `CatmullRom3::new(points, closed)` borrows a `&[FixedVec3]` (no allocation)
+  and returns `CatmullRomError::TooFewPoints` for fewer than 2 points (3
+  closed), `AllPointsEqual`, or `ControlPointOutOfRange { segment }`. Open
+  splines duplicate their end points as phantom neighbours; closed ones wrap.
+  `segment(i)` and `to_beziers()` give each segment as a `CubicBezier3` with
+  inner control points `(6 P1 + P2 - P0) / 6` and `(6 P2 + P1 - P3) / 6`, each
+  rounded once to nearest, ties to even. `at(u)` and `derivative_at(u)` split
+  `u` in `[0, segment_count]` into segment and fraction (the end owned by the
+  last segment) and evaluate through `CubicBezier3`: within 15/8 and 9/2 raw
+  units of the exact spline, exactly every point at whole `u`, tangents
+  bit-equal at joints where defined, `None` outside the range. Closes
+  flyingrobots/bunny#309.
+
 * `bunny-optics`: an orthographic camera under the identity
   `bunny-orthographic-camera/1` (`ORTHOGRAPHIC_CAMERA_ID`).
   `OrthographicCamera::new(&OrthographicSpec)` takes the pinhole camera's
@@ -100,6 +114,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `split(t)`, the de Casteljau halves sharing `at(t)` bit for bit. Every
   function returns `None` for `t` outside `[0, 1]`. Closes
   flyingrobots/bunny#308.
+
+* `bunny-num`: sine eases under `bunny-ease/1`, part 3. `ease::sine_in(t)` is
+  `1 - cos(t pi/2)`, `sine_out(t)` is `sin(t pi/2)` (as `1 - sine_in(1 - t)`,
+  the same bits) and `sine_in_out(t)` is `(1 - cos(t pi)) / 2`, the halving
+  rounded once to nearest, ties to even, below `1/2` and reflected from it.
+  Each reads `FixedAngle::sin_cos` at an exact angle (`t_raw 2^30` or
+  `t_raw 2^31` units) and is within one raw unit, the bound `sin_cos`'s own
+  one raw unit gives; over every `t = k / 2^20` the largest errors measured
+  are 0.500 047 raw (in and out) and 0.750 004 raw (in-out). The ends are
+  exact, `sine_in_out(1/2) = 1/2`, and both reflections hold bit for bit.
+  `t` outside `[0, 1]` is `None`. Closes flyingrobots/bunny#306.
 
 * `bunny-linalg`: rotations from a `FixedAngle` under the contract identity
   `bunny-rotation/1` (`ROTATION_CONTRACT_ID`). `FixedMat3::rotation_x`,

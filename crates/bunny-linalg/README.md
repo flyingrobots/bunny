@@ -60,6 +60,14 @@ math for graphics pipelines.
   cubic, exact at the ends), `derivative_at(t)` (within 3 raw units, `None` on
   overflow) and `split(t)` into the de Casteljau halves; `None` for `t`
   outside `[0, 1]`.
+* **Catmull-Rom Splines (`bunny-curve/1`)**: `CatmullRom3::new(points,
+  closed)` borrows a point slice (open with duplicated end points, or closed)
+  and refuses too few points, all points equal or an out-of-range control point
+  with `CatmullRomError`. Each segment is a `CubicBezier3` with inner control
+  points rounded once, ties to even (`segment`, `to_beziers`); `at(u)` is within
+  15/8 raw units of the exact spline and exact at every point, `derivative_at(u)`
+  within 9/2 and continuous bit for bit at joints; `None` for `u` outside
+  `[0, segment_count]`.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
   multiplication, determinant, and inverse APIs return `None` for singular or
   overflowing cases; transpose is infallible and returns a matrix directly.
