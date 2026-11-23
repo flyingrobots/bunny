@@ -92,9 +92,11 @@ resolution of the Q32.32 inputs, so for any practical input the angle is as exac
 direction it was given.
 
 Range and branch: the result is any `FixedAngle`, `[0, 1)` turn. `+x` gives `ZERO`, `+y`
-`QUARTER_TURN`, and the negative x axis exactly `HALF_TURN`; one raw unit above `-x` is
-just below a half turn and one raw unit below it just above, so the result is continuous
-there. Read as a signed `i64`, the raw value is in `[-2^63, 2^63)`, which is the half-open
+`QUARTER_TURN`, and the negative x axis exactly `HALF_TURN`. A direction just above `-x`
+is at or just below a half turn and one just below it at or just above, so the result
+never jumps there. It can round onto the half turn itself: for raw `x = i64::MIN` and
+`y = ±1` the exact angle is about `1/π` of an angle unit from a half turn, and the result
+is `HALF_TURN` (AT-TP-014). Read as a signed `i64`, the raw value is in `[-2^63, 2^63)`, which is the half-open
 turn `[-1/2, 1/2)` with `-x` at `-1/2`.
 
 Exact by construction:

@@ -139,7 +139,7 @@ an independent high-precision oracle when you do.
 | AT-TP-006 | Conversion | AT-REQ-006 | Exact raw angles for 0, ±90, 180, 270, 360 and 450 degrees. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_006_whole_quarter_degrees_convert_exactly` |
 | AT-TP-007 | Conversion | AT-REQ-007 | `from_radians(-x)` equals the wrapped negation of `from_radians(x)` over 20 000 seeded values. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_007_radians_round_to_the_nearest_unit_symmetrically` |
 | AT-TP-009 | Final rounding tie | AT-REQ-009 | Six quarter-wave positions whose interpolated sine is exactly half a raw unit above an integer (three even, three odd, found by bisection over a replica of the interpolation) give the even neighbour from `sin` and from `cos` at the mirrored angle; rounding ties away from zero or toward zero fails. | `crates/bunny-num/tests/fixed_angle_tests.rs::at_tp_009_an_exact_tie_in_the_last_rounding_goes_to_even` |
-| AT-TP-010 | Conversion out | AT-REQ-010 | Exact rational rounded by `u128` quotient and remainder, over 20 000 seeded angles and the ties of each conversion with one unit either side. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_010_turns_and_degrees_are_rounded_once_to_nearest_even` |
+| AT-TP-010 | Conversion out | AT-REQ-010 | Exact rational rounded by `u128` quotient and remainder, over 20 000 seeded angles and eight listed tie values of the conversions, each with one unit either side. `to_turns` alone has `2^32` ties, so the ties are sampled, not exhausted. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_010_turns_and_degrees_are_rounded_once_to_nearest_even` |
 | AT-TP-011 | Conversion out | AT-REQ-011 | Independent 124-bit oracle (`pi` by Machin's formula) over the same angles. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_011_radians_are_within_half_a_unit_and_two_to_the_minus_thirty` |
 | AT-TP-012 | Round trip | AT-REQ-012 | `rem_euclid` of the turns and the exactly rounded multiple of `2^32`, over 20 000 seeded values each. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_012_turn_round_trips_are_exact` |
 | AT-TP-013 | Error bound | AT-REQ-013 | Independent 124-bit oracle (Machin `pi`, Taylor `atan`) over 20 000 seeded directions of every magnitude and the directions on and one raw unit either side of the axes, the diagonals and the extremes. | `crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_013_atan2_is_within_half_a_unit_and_two_to_the_minus_nine` |
@@ -235,7 +235,7 @@ id = "AT-TP-010"
 requirements = ["AT-REQ-010"]
 evidence = "test"
 test = "crates/bunny-num/tests/fixed_angle_inverse_tests.rs::at_tp_010_turns_and_degrees_are_rounded_once_to_nearest_even"
-oracle = "Exact rational rounded by u128 quotient and remainder, over seeded angles and every tie with one unit either side."
+oracle = "Exact rational rounded by u128 quotient and remainder, over seeded angles and eight listed tie values, each with one unit either side; ties are sampled, not exhausted."
 tier = "fast"
 status = "implemented"
 

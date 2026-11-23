@@ -173,6 +173,10 @@ fn at_tp_014_atan2_axes_diagonals_branch_and_origin() {
     let below = atan2_raw(-1, -one).expect("not the origin");
     assert!(above < HALF && HALF - above < 1 << 30, "above={above:#018x}");
     assert!(below > HALF && below - HALF < 1 << 30, "below={below:#018x}");
+    // At the largest magnitude of x the exact angle one raw unit off the axis is about 1/pi of
+    // an angle unit from a half turn, so it rounds onto the half turn from either side.
+    assert_eq!(atan2_raw(1, min), Some(HALF));
+    assert_eq!(atan2_raw(-1, min), Some(HALF));
     // One raw unit below the positive x axis wraps to just below a full turn.
     let under = atan2_raw(-1, one).expect("not the origin");
     assert!(under.wrapping_neg() < 1 << 30, "under={under:#018x}");
