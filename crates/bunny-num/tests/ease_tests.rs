@@ -10,6 +10,10 @@
 //! `fractions.Fraction` model (posted on the pull request), so the kernel, this oracle and that
 //! model agree on every grid and seeded point. `U = 2^32` is one unit (`1.0`), `H = 2^31`.
 
+// Base-2^32 digits are taken by truncating `as` casts on purpose, and raw `t` is in
+// `[0, 2^32]` (or a seeded draw reduced below `2^32 + 1`) before every signed conversion.
+#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+
 use bunny_num::ease::{power_in, power_in_out, power_out, steps};
 use bunny_num::{FixedQ32_32, EASE_CONTRACT_ID};
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -93,17 +97,23 @@ impl Nat {
         Self(digits)
     }
 
-    fn bit(&self, index: u32) -> bool {
-        self.0.get(index as usize / 32).is_some_and(|&d| (d >> (index % 32)) & 1 == 1)
+    /// `(floor(self / 2^bits), self mod 2^bits == 0)`, the quotient below `2^64`.
+    fn split(&self, bits: u32) -> (u64, bool) {
+        let (whole, part) = (bits as usize / 32, bits % 32);
+        let digit = |i: usize| u128::from(self.0.get(i).copied().unwrap_or(0));
+        let window = digit(whole) | digit(whole + 1) << 32 | digit(whole + 2) << 64;
+        let quotient = window >> part;
+        assert!(quotient < 1 << 64 && self.0.iter().skip(whole + 3).all(|&d| d == 0), "wide");
+        let low_zero =
+            self.0.iter().take(whole).all(|&d| d == 0) && digit(whole) % (1 << part) == 0;
+        (quotient as u64, low_zero)
     }
 
     /// `round_half_even(self / 2^shift)` as `floor((2v + 2^shift) / 2^(shift+1))`, a tie
     /// that landed on an odd value moved back by one.
     fn round_down_by(&self, shift: u32) -> i64 {
         let sum = self.combine(self, false).combine(&Self::power_of_two(shift), false);
-        let quotient = (0..64).fold(0_u64, |q, i| q | (u64::from(sum.bit(shift + 1 + i)) << i));
-        assert!((shift + 65..sum.0.len() as u32 * 32).all(|i| !sum.bit(i)), "too wide");
-        let tie = (0..=shift).all(|i| !sum.bit(i));
+        let (quotient, tie) = sum.split(shift + 1);
         let rounded = if tie && quotient % 2 == 1 { quotient - 1 } else { quotient };
         i64::try_from(rounded).unwrap_or(i64::MAX)
     }
@@ -318,7 +328,7 @@ fn ease_tp_007_steps_are_k_over_n_on_each_interval() {
         assert_eq!(step(n, r), Some(expected), "steps({n}) at {r}");
     }
     let mut state = SEED ^ 0x5_7E95;
-    println!("ease_tp_007 seed={:#018x} cases=100000", state);
+    println!("ease_tp_007 seed={state:#018x} cases=100000");
     for case in 0..100_000 {
         let n = ((next_seed(&mut state) as u32) >> (next_seed(&mut state) % 32)).max(1);
         let r = (next_seed(&mut state) % (U as u64 + 1)) as i64;

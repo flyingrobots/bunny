@@ -19,7 +19,9 @@ flyingrobots/bunny#304, #305 and #306 (the issues that list #304 in `.blocked_by
 Files edited:
 crates/bunny-num/src/ease.rs (new), crates/bunny-num/src/lib.rs (module and export)
 crates/bunny-num/tests/ease_tests.rs (new)
-docs/topics/ease/test-plan.md (new: EASE-REQ-001 to -004, EASE-TP-001 to -008)
+docs/topics/ease/README.md (new chapter)
+docs/topics/ease/test-plan.md (new: EASE-REQ-001 to -004, EASE-TP-001 to -008, mutation checks)
+crates/bunny-num/README.md, CHANGELOG.md, docs/README.md (topic index)
 .repo-respect/receipts/2026-11-23-bunny-ease-power.md
 
 Topic docs:
@@ -33,8 +35,23 @@ Checks run:
 First commit (planned cases, failing tests, a stub kernel that returns `None`): cargo test
 --locked -q -p bunny-num --test ease_tests runs 7 tests and all 7 fail on the kernel's
 assertions (the oracle's own golden assertions pass); topic-docs clean.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (every
+`test result` line `ok`); cargo build and cargo test -p bunny-num --no-default-features (native
+host, every `test result` line `ok`); cargo run --locked -p xtask -- code-dojo-generated;
+code-dojo-rust --all; code-dojo-determinism --enforce; code-dojo-perf-groups; topic-docs (zero
+duplicate IDs); repo-respect check --branch. All clean. cargo clippy --locked -p bunny-num
+--all-targets --all-features -- -D warnings: clean.
+Mutations: fifteen, each applied to the source, run with cargo test --locked -q -p bunny-num
+--no-fail-fast --test ease_tests, and restored; thirteen fail at least one case and two are
+proved or shown unobservable (the test plan's table).
+Not run locally: wasm-pack (not installed; CI's WebAssembly job runs it), code-dojo-no-std
+(needs rustup; the bare-metal build runs only in CI), cargo deny and markdownlint-cli2 (not
+installed; CI's Dojo job runs them).
 
 Known risks:
+The pull request is longer than the issue's guide of about 400 changed lines; most of it is the
+test file and the chapter, and the kernel is about 130 lines.
 The grid `k / 2^16` lands many powers exactly on the Q32.32 grid, so the seeded and boundary
 full-resolution points carry most of the rounding evidence.
 

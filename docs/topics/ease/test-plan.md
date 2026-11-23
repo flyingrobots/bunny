@@ -79,7 +79,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_001_hand_derived_eases_and_ties_round_to_even"
 oracle = "Hand-derived raw golden values, each also checked against the independent Nat oracle and the Python Fraction model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-002"
@@ -88,7 +88,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_002_the_domain_is_refused_outside_and_the_ends_are_exact"
 oracle = "Exact ends and refusals on and one raw unit past each end of the domain."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-003"
@@ -97,7 +97,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_003_the_grid_matches_the_oracle_exhaustively"
 oracle = "Independent Nat oracle at all 65 537 grid points for 12 eases, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-004"
@@ -106,7 +106,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_004_seeded_and_boundary_points_match_the_oracle"
 oracle = "Independent Nat oracle at 100 000 seeded and 16 387 boundary points, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-005"
@@ -115,7 +115,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_005_every_ease_is_monotone_non_decreasing"
 oracle = "Order of consecutive outputs over the grid and one raw unit either side of each point."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-006"
@@ -124,7 +124,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_006_reflections_symmetry_and_the_join_are_exact"
 oracle = "Bit-exact reflection and symmetry identities at grid and seeded points; the value at and beside 1/2."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-007"
@@ -133,7 +133,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_tests.rs::ease_tp_007_steps_are_k_over_n_on_each_interval"
 oracle = "Hand-derived steps and an independent u128 oracle over 100 000 seeded pairs."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-008"
@@ -142,12 +142,30 @@ evidence = "manual-audit"
 artifact = "docs/topics/ease/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule in [the chapter](README.md) broken on purpose in a local copy of
-`crates/bunny-num/src/ease.rs`, including the issue's listed mutation (the final rounding
-truncates instead of rounding ties to even, which must fail a tie vector), with the cases that
-fail recorded here.
+Each rule below was broken on purpose in a local copy of `crates/bunny-num/src/ease.rs`, and
+`cargo test --locked -q -p bunny-num --no-fail-fast --test ease_tests` was run; the source was
+restored after each. The unmutated source passed every case. "Half up" means a tie goes toward
+positive infinity.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| The final rounding truncates (the issue's mutation) | Ties to even | 001 (the tie `power_in(3, 3 2^21 raw) = 13.5`, which truncates to 13), 003, 004 |
+| A tie goes half up | Ties to even | 001 (`power_in(3, 2^21 raw) = 0.5`), 003, 004 |
+| A tie goes to the odd neighbour | Ties to even | 001, 003, 004 |
+| A tie goes down | Ties to even | 001, 003 |
+| In-out divides by `2^(32(n-1))`, dropping `2^(n-1)` | The in-out polynomial | 001, 003, 004, 006 |
+| In-out takes its lower half below `1/2 - 2^20` raw | The join at `1/2` | 003, 004, 005, 006 |
+| Out is `t^n`, not the reflection | The out polynomial | 001, 003, 004, 005, 006 |
+| `t` above `1.0` accepted | `None` outside `[0, 1]` | 002 |
+| `n = 1` accepted | `None` outside `2..=5` | 002 |
+| `r^n` built with one factor too few | The power | 001, 002, 003, 004, 006 |
+| The high 128 bits dropped before the shift | The 256-bit intermediate | 001, 002, 003, 004, 005, 006 |
+| `steps` rounds `k` up | `k = floor(n t)` | 002, 007 |
+| `steps(0, t)` returns `0` | `None` for `n = 0` | 002 |
+| In-out takes its lower half at `t <= 1/2` | none, as proved: both halves are exactly `1/2` there ([properties](README.md#properties)) | none |
+| In-out takes its lower half below `1/2 - 1` raw | none observed: at one raw unit from `1/2` the two formulas differ by about `2 n (n - 1) 2^-64`, far below a raw unit, and no tested point rounds differently | none |

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-num`: power eases and steps under the contract identity
+  `bunny-ease/1` (`EASE_CONTRACT_ID`), in `bunny_num::ease`. `power_in(n, t)`
+  is `t^n`, `power_out(n, t)` is `1 - (1 - t)^n` and `power_in_out(n, t)` is
+  `2^(n-1) t^n` below `1/2` and `1 - 2^(n-1) (1 - t)^n` from it, for `n` in
+  `2..=5`: each exact rational is held in a 256-bit intermediate and rounded
+  once to nearest, ties to even, within half a raw unit. The ends are exact,
+  each ease is non-decreasing, `power_out(n, t) == 1 - power_in(n, 1 - t)` and
+  `power_in_out(n, 1 - t) == 1 - power_in_out(n, t)` bit for bit, and
+  `power_in_out(n, 1/2) = 1/2`. `steps(n, t)` is `floor(n t) / n` rounded once.
+  `t` outside `[0, 1]`, `n` outside `2..=5` (or `0` for `steps`) are `None`.
+  Closes flyingrobots/bunny#304.
+
 * `bunny-linalg`: rotations from a `FixedAngle` under the contract identity
   `bunny-rotation/1` (`ROTATION_CONTRACT_ID`). `FixedMat3::rotation_x`,
   `rotation_y` and `rotation_z` copy `FixedAngle::sin_cos` into the axis
