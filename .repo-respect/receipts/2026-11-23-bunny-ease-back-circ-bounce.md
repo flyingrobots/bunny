@@ -41,7 +41,15 @@ request, not committed.
 Checks run:
 First commit (tests and planned cases): cargo test --locked -q -p bunny-num --test
 ease_back_circ_bounce_tests fails to compile (the kernel does not exist); topic-docs clean.
-Kernel commit: see the pull request description for each gate and its result.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (119
+test result lines, every one `ok`); cargo build and cargo test -p bunny-num
+--no-default-features (native host, all `ok`); cargo clippy --locked -p bunny-num
+--all-targets --all-features -- -D warnings (clean); cargo run --locked -p xtask --
+code-dojo-generated; code-dojo-rust --all; code-dojo-determinism --enforce;
+code-dojo-perf-groups; topic-docs; repo-respect check --branch. All clean. Workspace-wide
+clippy stops on a 1.100.0-only lint in crates/bunny-perf/src/memory.rs, a file this change does
+not touch.
 Mutations: fifteen, each applied, run with cargo test --locked -q -p bunny-num --no-fail-fast
 --test ease_back_circ_bounce_tests, and restored; fourteen fail at least one case and one is
 proved equivalent (the test plan's table).

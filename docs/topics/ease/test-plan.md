@@ -215,7 +215,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_020_hand_derived_eases_and_the_default_overshoot"
 oracle = "Hand-derived raw golden values, each also checked against the independent oracle and the Python model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-021"
@@ -224,7 +224,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_021_the_domain_is_refused_outside_and_the_ends_are_exact"
 oracle = "Exact ends and refusals on and one raw unit past each end of the domain."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-022"
@@ -233,7 +233,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_022_the_grid_matches_the_oracle_exhaustively"
 oracle = "Independent oracle at all 65 537 grid points for 9 eases, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-023"
@@ -242,7 +242,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_023_every_raw_t_near_the_ends_and_joins_matches_the_oracle"
 oracle = "Independent oracle at every raw t near each end, join and breakpoint."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-024"
@@ -251,7 +251,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_024_seeded_full_resolution_t_match_the_oracle"
 oracle = "Independent oracle at 1 048 577 seeded points, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-025"
@@ -260,7 +260,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_025_back_matches_the_oracle_for_every_overshoot"
 oracle = "Independent wide-integer oracle over 65 536 seeded and 63 constructed overshoot pairs, and the Python model's digest."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-026"
@@ -269,7 +269,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_026_circ_is_the_floor_root_within_one_raw_unit"
 oracle = "The floor property `y^2 <= X < (y + 1)^2` checked by squaring, with no square root; the Python model's 50-digit decimal measurement is in the chapter."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-027"
@@ -278,7 +278,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_027_reflections_and_the_middle_are_exact"
 oracle = "Bit-exact reflection and symmetry identities at grid and seeded points; the value at 1/2."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-028"
@@ -287,7 +287,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_028_circ_is_monotone_and_back_and_bounce_are_not"
 oracle = "Order of consecutive outputs; explicit counterexamples for the non-monotone families."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-029"
@@ -296,7 +296,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_029_bounce_is_continuous_at_each_breakpoint"
 oracle = "Exact piece values at the breakpoints and exact slope bounds on consecutive outputs."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-030"
@@ -305,7 +305,7 @@ evidence = "test"
 test = "crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_030_back_overshoots_by_the_closed_form"
 oracle = "The closed-form extremes in exact integer arithmetic."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "EASE-TP-031"
@@ -314,7 +314,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/ease/test-plan.md#part-2-mutation-checks"
 oracle = "Each part-2 rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks

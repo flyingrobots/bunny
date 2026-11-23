@@ -36,6 +36,11 @@ ecosystem to guarantee bit-level CPU determinism.
   `n` in `2..=5`) are each exact value rounded once to nearest, ties to even,
   exact at both ends, non-decreasing, with bit-exact reflections;
   `ease::steps(n, t)` is `floor(n t) / n`. `t` outside `[0, 1]` is `None`.
+  Part 2 adds GSAP's `ease::back_in`, `back_out` and `back_in_out(overshoot, t)`
+  (default `BACK_DEFAULT_OVERSHOOT`, 1.70158) and `bounce_in`, `bounce_out` and
+  `bounce_in_out`, each exact value rounded once, and `circ_in`, `circ_out` and
+  `circ_in_out`, the floor of the exact root of `2^64 - t_raw^2` subtracted
+  exactly: within one raw unit on a stated side. Reflections are bit-exact.
 * **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
   arithmetic, exact or symmetric-rounding conversions from turns, degrees and
   radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
