@@ -44,7 +44,7 @@ impl fmt::Display for BoundsError {
     }
 }
 
-impl std::error::Error for BoundsError {}
+impl core::error::Error for BoundsError {}
 
 type Raw3 = [i64; 3];
 
