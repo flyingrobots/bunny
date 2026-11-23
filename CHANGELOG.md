@@ -127,6 +127,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* `bunny-optics` docs (flyingrobots/bunny#299): the optics chapter now says the
+  facing guarantee `d . N < 0` is about the exact plane normal, not the frame's
+  rounded unit normal (a grazing witness has `d . n = +65 823 548` raw squared);
+  that `SurfaceHit::new` refuses a hit off the arrival side, not every hit the
+  kernel did not report; which functions of other crates the shading identity
+  inherits without a version; that the pinhole camera has no identity string;
+  and the rule for sample indices past 1 023. Three pinning tests
+  (`OPTICS-TP-270` to `-272`). No behaviour change.
+
 * Ray-tracing documentation: the contract now states that `TraceRay::box_entry`
   accepts a box whose minimum is above its maximum (an x range of 6 to 5 raw
   returns `Some(6)`); `compact_bvh`'s `NotATree` is documented as a count of
