@@ -200,9 +200,9 @@ fn cl_tp_020_unprojected_rays_agree_with_the_pinhole_camera() {
 }
 
 #[wasm_bindgen_test(unsupported = test)]
-fn cl_tp_020_unprojected_rays_agree_with_the_orthographic_camera() {
+fn cl_tp_021_unprojected_rays_agree_with_the_orthographic_camera() {
     let seed = AGREEMENT_SEED ^ 0x02;
-    println!("CL-TP-020 orthographic seed {seed:#018x}");
+    println!("CL-TP-021 orthographic seed {seed:#018x}");
     let mut seeds = Seeds(seed);
     let mut worst = Worst::default();
     for index in 0..300 {
@@ -238,6 +238,6 @@ fn cl_tp_020_unprojected_rays_agree_with_the_orthographic_camera() {
             worst.record(&ours, &theirs, &format!("camera {index}, {sample:?}"));
         }
     }
-    worst.report("CL-TP-020 orthographic");
+    worst.report("CL-TP-021 orthographic");
     assert!(worst.cases >= 2_000, "only {} cases", worst.cases);
 }

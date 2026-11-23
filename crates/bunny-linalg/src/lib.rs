@@ -33,6 +33,7 @@ mod fixed_vec2;
 mod fixed_vec3;
 mod lerp;
 pub(crate) mod matrix_common;
+mod unproject;
 mod viewport;
 
 pub use catmull_rom3::{CatmullRom3, CatmullRomError};
@@ -50,6 +51,7 @@ pub use fixed_vec2::FixedVec2;
 pub use fixed_vec3::FixedVec3;
 pub use lerp::lerp_channels;
 pub use matrix_common::FixedMat4Row;
+pub use unproject::{UnprojectError, ViewportRay, UNPROJECT_CONTRACT_ID};
 pub use viewport::{Viewport, ViewportError};
 
 const UNIT_LENGTH_TOLERANCE_RAW: i128 = 1;

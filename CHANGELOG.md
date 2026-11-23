@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: matrix-side unprojection under `bunny-unproject/1`.
+  `Viewport::try_unproject(coordinate, clip_from_view, view_from_world)` maps a
+  continuous viewport coordinate in the closed viewport to a world-space
+  `ViewportRay`: origin at NDC depth 0 (the near plane), direction to the
+  depth-1 point, not normalized. The viewport map, the projection (divide
+  included) and the view are inverted exactly in 512-bit integers, so each
+  component is the exact value rounded once to nearest, ties to even, and
+  equals the general inverse of `clip_from_world` bit for bit before that
+  rounding. Only the two shapes `try_perspective` and `try_orthographic`
+  produce (any entries) and affine views are accepted. Typed `UnprojectError`
+  refusals: `OutsideViewport`, `UnsupportedProjection`, `SingularProjection`,
+  `PointAtInfinity`, `PointBehindCamera`, `UnsupportedView`, `SingularView`,
+  `Overflow`, `DegenerateRay`. Its rays agree with `PinholeCamera::ray` and
+  `OrthographicCamera::ray` within a measured `2^6` raw. Refs
+  flyingrobots/bunny#150.
+
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
   `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI

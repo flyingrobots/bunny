@@ -299,7 +299,7 @@ impl Seeds {
         let width = 1 + u32::try_from(self.next() % u64::from(bits)).expect("small");
         let magnitude = (self.next() | 1) >> (53 - width.min(53));
         let magnitude = i64::try_from(magnitude).expect("below 2^53") << width.saturating_sub(53);
-        if self.next() % 2 == 0 {
+        if self.next().is_multiple_of(2) {
             magnitude.max(1)
         } else {
             -magnitude.max(1)
@@ -356,7 +356,7 @@ fn random_projection(seeds: &mut Seeds) -> FixedMat4 {
 
 /// A view: half from `try_look_at`, half affine matrices with entries of random width.
 fn random_view(seeds: &mut Seeds) -> FixedMat4 {
-    if seeds.next() % 2 == 0 {
+    if seeds.next().is_multiple_of(2) {
         let eye = vec3(seeds.triple(1 << 40));
         let target = vec3(seeds.triple(1 << 40));
         if let Ok(view) = FixedMat4::try_look_at(eye, target, vec3(seeds.triple(1 << 34))) {
@@ -373,7 +373,8 @@ fn random_view(seeds: &mut Seeds) -> FixedMat4 {
 
 /// A coordinate in the closed viewport: an edge or corner value one time in four.
 fn random_coordinate(seeds: &mut Seeds, size: u32) -> i64 {
-    let top = (i64::from(size) * ONE).min(i64::MAX);
+    // Sizes are at most 2^20, so the top edge fits.
+    let top = i64::from(size) * ONE;
     match seeds.next() % 8 {
         0 => 0,
         1 => top,
@@ -451,7 +452,7 @@ fn inverse3(view: &Raw4) -> [[Ratio; 3]; 3] {
             [0, 1, 2].into_iter().filter(|&k| k != j).collect::<Vec<_>>(),
         );
         let m = minor(rows[0], rows[1], cols[0], cols[1]);
-        if (i + j) % 2 == 0 {
+        if (i + j).is_multiple_of(2) {
             m
         } else {
             m.neg()
@@ -460,6 +461,8 @@ fn inverse3(view: &Raw4) -> [[Ratio; 3]; 3] {
     [0, 1, 2].map(|i| [0, 1, 2].map(|j| cofactor(j, i).div(&det)))
 }
 
+// The short names are those of the chapter's derivation.
+#[allow(clippy::many_single_char_names)]
 /// One round trip's measured distance from the world point to the ray, squared, raw units,
 /// and its derived bound, squared.
 fn round_trip(
@@ -551,7 +554,7 @@ fn cl_tp_019_world_points_round_trip_onto_their_ray_within_the_derived_bound() {
             .checked_div(fixed(i64::from(height) << 32))
             .expect("an aspect");
         let tan = fixed(seeds.range(ONE >> 4, 4 * ONE));
-        let perspective = seeds.next() % 2 == 0;
+        let perspective = seeds.next().is_multiple_of(2);
         let projection = if perspective {
             FixedMat4::try_perspective(tan, aspect, fixed(ONE >> 4), fixed(256 * ONE))
         } else {

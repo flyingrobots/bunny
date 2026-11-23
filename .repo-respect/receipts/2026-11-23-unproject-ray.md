@@ -32,11 +32,11 @@ crates/bunny-linalg/tests/unproject_oracle/mod.rs (new: general-inverse oracle b
 crates/bunny-optics/tests/unproject_agreement_tests.rs (new: agreement with the cameras)
 crates/bunny-linalg/README.md, CHANGELOG.md
 docs/topics/coordinate-law/README.md (Unprojection section; one stale sentence corrected)
-docs/topics/coordinate-law/test-plan.md (CL-REQ-019 to -023, CL-TP-013 to -021; mutations)
+docs/topics/coordinate-law/test-plan.md (CL-REQ-019 to -023, CL-TP-013 to -022; mutations)
 .repo-respect/receipts/2026-11-23-unproject-ray.md
 
 Topic docs:
-docs/topics/coordinate-law/: new IDs CL-REQ-019 to CL-REQ-023 and CL-TP-013 to CL-TP-021,
+docs/topics/coordinate-law/: new IDs CL-REQ-019 to CL-REQ-023 and CL-TP-013 to CL-TP-022,
 contiguous above the ledger's highest (CL-REQ-018, CL-TP-012). No other ledger uses the CL-
 prefix.
 
@@ -45,7 +45,19 @@ None.
 
 Checks run:
 First commit (tests only): the unprojection tests fail to compile (the API does not exist).
-Kernel commit: see the pull request for the gate list and results.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (129
+test result lines, none failed); cargo run --locked -p xtask -- code-dojo-generated;
+code-dojo-rust --all; code-dojo-determinism --enforce; code-dojo-perf-groups; topic-docs (zero
+duplicate IDs); repo-respect check --branch. RUSTDOCFLAGS="-D warnings" cargo doc -p
+bunny-linalg clean. cargo clippy --locked -p bunny-linalg -p bunny-optics --all-targets
+--all-features -D warnings: clean in every added file (two pre-existing lints of the newer
+toolchain remain in untouched optics tests).
+Mutations: twelve, each applied to the kernel, run with cargo test -p bunny-linalg -p
+bunny-optics --test unproject_tests --test unproject_agreement_tests, and restored; each failed
+at least one case (the test plan's table).
+Not run locally: wasm-pack (CI's WebAssembly job), cargo deny and markdownlint-cli2 (CI's Dojo
+job), the pinned 1.96.0 clippy.
 
 Known risks:
 Only the two projection shapes the builders produce are accepted (any entry values); an

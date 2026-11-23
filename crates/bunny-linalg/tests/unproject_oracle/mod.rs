@@ -9,7 +9,7 @@
 // Some helpers serve only some of the test files that include this module.
 #![allow(dead_code)]
 // Limbs are below 2^32 by construction, so the `as u32` conversions keep every bit.
-#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use std::cmp::Ordering;
 
