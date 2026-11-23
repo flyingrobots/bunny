@@ -8,11 +8,12 @@ use super::{aabb_wide, AxisBounds, RayInterval, SlabStop};
 /// A ray whose direction is prepared for many box tests.
 ///
 /// Each nonzero direction component holds an exact [`FixedDivisor`], so
-/// [`ray_intersects_aabb_prepared`] multiplies where [`ray_intersects_aabb`] divides.
+/// [`crate::ray_intersects_aabb_prepared`] multiplies where [`crate::ray_intersects_aabb`]
+/// divides.
 ///
 /// Use it when many boxes are tested against one ray and the exact `(enter, exit)` bits of
-/// [`ray_intersects_aabb`] are needed. A ray tracer that only needs a conservative entry bound
-/// should use [`crate::TraceRay::box_entry`], which is faster per box and per ray (ledger
+/// [`crate::ray_intersects_aabb`] are needed. A ray tracer that only needs a conservative entry
+/// bound should use [`crate::TraceRay::box_entry`], which is faster per box and per ray (ledger
 /// entry 5 in `docs/topics/performance/README.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PreparedRay3 {
@@ -39,11 +40,11 @@ impl PreparedRay3 {
     }
 }
 
-/// [`ray_intersects_aabb`] for a prepared ray: identical results, bit for bit, with no
+/// [`crate::ray_intersects_aabb`] for a prepared ray: identical results, bit for bit, with no
 /// division per box.
 ///
 /// When a slab distance or coordinate difference does not fit Q32.32 the hit is decided by the
-/// same exact wide path as [`ray_intersects_aabb`], so the two agree on every input.
+/// same exact wide path as [`crate::ray_intersects_aabb`], so the two agree on every input.
 #[must_use]
 pub fn ray_intersects_aabb_prepared(
     prepared: &PreparedRay3,
