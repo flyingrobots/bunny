@@ -34,7 +34,7 @@ translation `(2, 0, 0)` and maps `(2, 0, 0)` to the origin and the pivot to itse
 ## Rounding And Bounds
 
 Rounding is to nearest, ties to even (the
-[numeric constitution's rule](../NUMERIC_CONSTITUTION.md#rounding-policy)), by
+[numeric constitution's rule](../../NUMERIC_CONSTITUTION.md#rounding-policy)), by
 `FixedQ32_32::checked_mul`: the exact `i128` product of two raw values (below `2^126`)
 divided by `2^32` and rounded once.
 
