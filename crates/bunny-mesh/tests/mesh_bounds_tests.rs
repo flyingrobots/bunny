@@ -53,7 +53,10 @@ fn bounds_tp_010_mesh_bounds_hand_derived() {
     let vertices = [v([0, 0, 0]), v([4, 0, 0]), v([0, 3, 0]), v([0, 0, -2]), v([100, 100, 100])];
     let none16: [Triangle16; 0] = [];
     let none32: [Triangle32; 0] = [];
-    assert_eq!(got(&vertices, IndexBufferLayout::Width16(&none16)), Err(MeshBoundsError::EmptyMesh));
+    assert_eq!(
+        got(&vertices, IndexBufferLayout::Width16(&none16)),
+        Err(MeshBoundsError::EmptyMesh)
+    );
     assert_eq!(got(&[], IndexBufferLayout::Width32(&none32)), Err(MeshBoundsError::EmptyMesh));
     let one = [Triangle16::new(0, 1, 2)];
     let want = Ok(([0, 0, 0], [4, 3, 0]));
@@ -103,13 +106,20 @@ fn bounds_tp_011_seeded_mesh_bounds_match_the_oracle() {
         let vertices: Vec<Raw3> =
             (0..n_vertices).map(|_| [0; 3].map(|_| raw_any(&mut state))).collect();
         let n_faces = below(&mut state, 6);
-        // Indices up to two past the end, so some meshes refer outside the buffer.
-        let faces: Vec<[u32; 3]> =
-            (0..n_faces).map(|_| [0; 3].map(|_| below(&mut state, u64::from(n_vertices) + 2))).collect();
+        // One face in sixteen draws its indices up to two past the end, so some meshes refer
+        // outside the buffer; an empty buffer makes every index out of range.
+        let faces: Vec<[u32; 3]> = (0..n_faces)
+            .map(|_| {
+                let past = if next(&mut state).is_multiple_of(16) { 2 } else { 0 };
+                let span = (u64::from(n_vertices) + past).max(1);
+                [0; 3].map(|_| below(&mut state, span))
+            })
+            .collect();
         let fixed: Vec<FixedVec3> = vertices.iter().map(|p| v(*p)).collect();
         let want = oracle(&vertices, &faces);
         let ctx = format!("seed={SEED:#x} case={case} vertices={vertices:?} faces={faces:?}");
-        let wide: Vec<Triangle32> = faces.iter().map(|f| Triangle32::new(f[0], f[1], f[2])).collect();
+        let wide: Vec<Triangle32> =
+            faces.iter().map(|f| Triangle32::new(f[0], f[1], f[2])).collect();
         assert_eq!(got(&fixed, IndexBufferLayout::Width32(&wide)), want, "32; {ctx}");
         let narrow: Vec<Triangle16> = faces
             .iter()
@@ -123,9 +133,11 @@ fn bounds_tp_011_seeded_mesh_bounds_match_the_oracle() {
             Err(MeshBoundsError::EmptyMesh) => empty += 1,
         }
     }
-    println!("seed={SEED:#x}: {CASES} meshes; ok {ok}, index out of range {out_of_range}, empty {empty}");
+    println!(
+        "seed={SEED:#x}: {CASES} meshes; ok {ok}, index out of range {out_of_range}, empty {empty}"
+    );
     assert_eq!((ok, out_of_range, empty), EXPECTED_MESH_COUNTS, "seed={SEED:#x}");
 }
 
 /// Of the 2 000 seeded meshes: bounded, refused for an index, refused as empty.
-const EXPECTED_MESH_COUNTS: (usize, usize, usize) = (0, 0, 0);
+const EXPECTED_MESH_COUNTS: (usize, usize, usize) = (1_397, 291, 312);

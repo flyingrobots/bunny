@@ -24,16 +24,24 @@ docs/topics/{transform,lerp}/test-plan.md, docs/topics/ray-tracing/README.md (bo
 flyingrobots/bunny#151; open pull requests flyingrobots/bunny#469 and #471 (file lists)
 
 Files edited:
+crates/bunny-geom/src/bounds.rs (new: the helpers, BoundsError, BOUNDS_CONTRACT_ID)
+crates/bunny-geom/src/lib.rs (module and export, at the end of the lists)
+crates/bunny-mesh/src/bounds.rs (new: mesh_bounds, MeshBoundsError)
+crates/bunny-mesh/src/lib.rs (module and export, at the end of the lists)
 crates/bunny-geom/tests/bounds_tests.rs (new)
 crates/bunny-mesh/tests/mesh_bounds_tests.rs (new)
 crates/bunny-broadphase/tests/union_aabb_tests.rs (new)
 crates/bunny-query/tests/trace_bounds_tests.rs (new)
+crates/bunny-geom/README.md, crates/bunny-mesh/README.md, CHANGELOG.md
+docs/README.md (topic index row, sorted)
+docs/NUMERIC_CONSTITUTION.md (one overflow-audit row)
+docs/topics/bounding-volumes/README.md (new chapter)
 docs/topics/bounding-volumes/test-plan.md (new: BOUNDS-REQ-001 to -008, BOUNDS-TP-001 to -016)
 .repo-respect/receipts/2026-11-23-bounding-volumes.md
 
 Topic docs:
 docs/topics/bounding-volumes/ is a new topic with its own BOUNDS- prefix; no other topic uses
-it.
+it. No other topic's ledger is edited.
 
 Generated artifacts:
 None.
@@ -42,9 +50,25 @@ Checks run:
 First commit (tests and planned cases only): cargo test --locked -p bunny-geom --test
 bounds_tests fails to compile (the helpers do not exist); topic-docs and repo-respect check
 --branch clean.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (128
+test result lines, all ok); cargo run --locked -p xtask -- code-dojo-generated;
+code-dojo-rust --all; code-dojo-determinism --enforce; code-dojo-perf-groups; topic-docs;
+repo-respect check --branch. cargo clippy --locked -D warnings on bunny-geom and bunny-mesh
+(lib and the new test) and on the new bunny-query and bunny-broadphase tests: clean.
+RUSTDOCFLAGS="-D warnings" cargo doc for bunny-geom and bunny-mesh: clean. cargo build -p
+bunny-mesh --no-default-features: clean. git diff --check: clean.
+Mutations: fifteen, each applied to the kernel, the four new test files run with cargo test
+--locked -q --no-fail-fast, and restored; each failed at least one case (the test plan's
+table).
+Not run locally: wasm-pack (not installed; CI's WebAssembly job runs it), cargo deny and
+markdownlint-cli2 (not installed; CI's Dojo job runs them).
 
 Known risks:
-None yet; see the pull request.
+The existing bunny_broadphase::utils::union_aabb does not refuse inverted boxes and can turn
+two inverted boxes into an ordered one; it is pinned by test and not changed here (a finding
+for the owner). bunny-broadphase's union_aabb and the new FixedAabb3::merge overlap on
+ordered boxes.
 
 Human reviewer:
 James Ross (maintainer); review pending.

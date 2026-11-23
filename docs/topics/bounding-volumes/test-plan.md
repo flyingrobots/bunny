@@ -93,8 +93,9 @@ None. Seeds and counts are stated in each test and pinned: BOUNDS-TP-008 and BOU
 draw 10 000 cases each from seed `0xB015_1000_0000_0001` (the second XORed with 9),
 BOUNDS-TP-011 2 000 meshes from `0xB015_1000_0000_0002`, BOUNDS-TP-015 5 000 spheres and
 triangles from `0xB015_1000_0000_0003`, BOUNDS-TP-013 5 000 pairs from
-`0xB015_1000_0000_0004`. Raw values are a uniform 64-bit pattern shifted right by 0 to 63 bits,
-so every magnitude occurs; trace-domain values are shifted by 24 to 63 bits. Every failure
+`0xB015_1000_0000_0004`. Raw values are a uniform 64-bit pattern shifted right by 0 to 63 bits
+(in `bounds_tests`, one time in four by 0 to 2 bits, so the range edges are reached often), so
+every magnitude occurs; trace-domain values are shifted by 24 to 63 bits. Every failure
 message names the seed and the case.
 
 ## Test Cases
@@ -108,10 +109,10 @@ message names the seed and the case.
 | BOUNDS-TP-005 | Hand-derived, boundary, overflow | BOUNDS-REQ-005 | A sphere's box; radius zero; radius -1 raw and `i64::MIN` raw refused; centres `MAX - r` and `MAX - r + 1`, `MIN + r` and `MIN + r - 1` for `r = 1000` raw; the radius `i64::MAX` raw at the origin. | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_005_sphere_to_box_hand_derived_and_boundaries` |
 | BOUNDS-TP-006 | Hand-derived, rounding | BOUNDS-REQ-006 | The square `[0, 2]^2 x [0, 0]` has radius 2 where nearest rounding of `sqrt(2)` raw would give 1 and miss a corner; midpoint ties to even on both signs; a 3-4-5 box is exact; a point has radius 0; an inverted box is refused; each checked against the oracle's eight corners. | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_006_box_to_sphere_rounds_the_radius_outward` |
 | BOUNDS-TP-007 | Boundary, overflow | BOUNDS-REQ-006 | Radius exactly `i64::MAX` raw (`[MIN + 1, MAX]` and `[MIN + 2, MAX]` on one axis) accepted; `[MIN, MAX]` (radius `2^63`) refused; squared distance `MAX^2` accepted and `MAX^2 + 1` refused; the full-range box refused. | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_007_box_to_sphere_radius_range_one_raw_unit_either_side` |
-| BOUNDS-TP-008 | Seeded oracle | BOUNDS-REQ-001, BOUNDS-REQ-002, BOUNDS-REQ-003, BOUNDS-REQ-004 | 10 000 seeded cases: `from_points` (0 to 8 points) and `from_triangle` equal the oracle's per-axis min and max; `merge` equals the oracle and contains both inputs; `expand_axes` and `expand` equal the oracle's result or refusal, and an accepted box is the input moved by exactly the margin; the outcome counts are pinned. | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_008_seeded_points_merge_and_expand_match_the_oracle` |
-| BOUNDS-TP-009 | Seeded oracle | BOUNDS-REQ-005, BOUNDS-REQ-006 | 10 000 seeded boxes: `bounding_sphere` equals the oracle's centre and radius, reaches all eight corners, and `r - 1` misses the farthest; the box of the sphere contains the box; `from_sphere` of a seeded sphere equals the oracle; the counts are pinned. | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_009_seeded_spheres_contain_every_corner` |
+| BOUNDS-TP-008 | Seeded oracle | BOUNDS-REQ-001, BOUNDS-REQ-002, BOUNDS-REQ-003, BOUNDS-REQ-004 | 10 000 seeded cases: `from_points` (0 to 8 points) and `from_triangle` equal the oracle's per-axis min and max; `merge` equals the oracle and contains both inputs; `expand_axes` and `expand` equal the oracle's result or refusal, and an accepted box is the input moved by exactly the margin; the `expand_axes` outcomes are pinned (5 308 in range, 1 272 inverted input, 3 217 shrink inverts, 203 out of range). | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_008_seeded_points_merge_and_expand_match_the_oracle` |
+| BOUNDS-TP-009 | Seeded oracle | BOUNDS-REQ-005, BOUNDS-REQ-006 | 10 000 seeded boxes: `bounding_sphere` equals the oracle's centre and radius, reaches all eight corners, and `r - 1` misses the farthest; the box of the sphere contains the box; `from_sphere` of a seeded sphere equals the oracle; one box in four has corners near the range ends, and the counts are pinned (6 936 spheres in range, 2 080 radii above `i64::MAX`, the rest inverted and refused). | `crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_009_seeded_spheres_contain_every_corner` |
 | BOUNDS-TP-010 | Hand-derived, empty, out of range | BOUNDS-REQ-007 | No triangles (16- and 32-bit, with and without vertices) is `EmptyMesh`; an unused far vertex is not covered; a degenerate triangle; index one past the end and `u32::MAX` name the first bad triangle; no vertices at all; the full raw range. | `crates/bunny-mesh/tests/mesh_bounds_tests.rs::bounds_tp_010_mesh_bounds_hand_derived` |
-| BOUNDS-TP-011 | Seeded oracle | BOUNDS-REQ-007 | 2 000 seeded meshes of 0 to 11 vertices and 0 to 5 triangles with indices up to two past the end, in both index widths, equal the oracle; the outcome counts are pinned. | `crates/bunny-mesh/tests/mesh_bounds_tests.rs::bounds_tp_011_seeded_mesh_bounds_match_the_oracle` |
+| BOUNDS-TP-011 | Seeded oracle | BOUNDS-REQ-007 | 2 000 seeded meshes of 0 to 11 vertices and 0 to 5 triangles, one face in sixteen with indices up to two past the end, in both index widths, equal the oracle; the counts are pinned (1 397 bounded, 291 index out of range, 312 empty). | `crates/bunny-mesh/tests/mesh_bounds_tests.rs::bounds_tp_011_seeded_mesh_bounds_match_the_oracle` |
 | BOUNDS-TP-012 | Existing helper, inverted bounds | BOUNDS-REQ-008 | `union_aabb` today: exact on ordered boxes; an inverted input gives a box that is neither set union nor corner hull; two inverted boxes give an ordered box; `merge` refuses both. | `crates/bunny-broadphase/tests/union_aabb_tests.rs::bounds_tp_012_union_aabb_as_it_behaves_today` |
 | BOUNDS-TP-013 | Seeded oracle | BOUNDS-REQ-003, BOUNDS-REQ-008 | 5 000 seeded ordered pairs: `union_aabb` equals the per-axis min and max and equals `merge`. | `crates/bunny-broadphase/tests/union_aabb_tests.rs::bounds_tp_013_seeded_union_aabb_equals_merge_on_ordered_boxes` |
 | BOUNDS-TP-014 | Existing helper | BOUNDS-REQ-008 | `TraceSphere::bounds` and `TraceTriangle::bounds` on hand-derived spheres and triangles, a degenerate and a collinear triangle, and the trace-domain extremes. | `crates/bunny-query/tests/trace_bounds_tests.rs::bounds_tp_014_trace_bounds_hand_derived` |
@@ -126,7 +127,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_001_points_and_triangles_hand_derived"
 oracle = "Hand-derived per-axis minima and maxima."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-002"
@@ -135,7 +136,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_002_merge_hand_derived_and_inverted_refused"
 oracle = "Hand-derived boxes; refusal decided by min above max."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-003"
@@ -144,7 +145,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_003_expand_margins_hand_derived"
 oracle = "Hand-derived margins and refusals."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-004"
@@ -153,7 +154,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_004_expand_overflow_one_raw_unit_either_side"
 oracle = "Hand-derived thresholds in raw units."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-005"
@@ -162,7 +163,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_005_sphere_to_box_hand_derived_and_boundaries"
 oracle = "Hand-derived boxes and thresholds."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-006"
@@ -171,7 +172,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_006_box_to_sphere_rounds_the_radius_outward"
 oracle = "Hand-derived centres and radii; exact squared corner distances."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-007"
@@ -180,7 +181,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_007_box_to_sphere_radius_range_one_raw_unit_either_side"
 oracle = "Hand-derived thresholds; squares compared exactly in u128."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-008"
@@ -189,7 +190,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_008_seeded_points_merge_and_expand_match_the_oracle"
 oracle = "Independent i128 oracle over full-range seeded inputs."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-009"
@@ -198,7 +199,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/bounds_tests.rs::bounds_tp_009_seeded_spheres_contain_every_corner"
 oracle = "Ties-to-even midpoint by neighbours, ceiling root by bisection on squares, exact u128 corner distances."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-010"
@@ -207,7 +208,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/mesh_bounds_tests.rs::bounds_tp_010_mesh_bounds_hand_derived"
 oracle = "Hand-derived boxes and refusals."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-011"
@@ -216,7 +217,7 @@ evidence = "test"
 test = "crates/bunny-mesh/tests/mesh_bounds_tests.rs::bounds_tp_011_seeded_mesh_bounds_match_the_oracle"
 oracle = "Oracle gathers indexed vertices and takes per-axis min and max."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-012"
@@ -225,7 +226,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/union_aabb_tests.rs::bounds_tp_012_union_aabb_as_it_behaves_today"
 oracle = "Hand-derived results of today's code."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-013"
@@ -234,7 +235,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/union_aabb_tests.rs::bounds_tp_013_seeded_union_aabb_equals_merge_on_ordered_boxes"
 oracle = "Per-axis min and max."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-014"
@@ -243,7 +244,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/trace_bounds_tests.rs::bounds_tp_014_trace_bounds_hand_derived"
 oracle = "Hand-derived boxes."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-015"
@@ -252,7 +253,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/trace_bounds_tests.rs::bounds_tp_015_seeded_trace_bounds_match_the_oracle_and_the_geometry_helpers"
 oracle = "Per-axis arithmetic in the test."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "BOUNDS-TP-016"
@@ -261,12 +262,35 @@ evidence = "manual-audit"
 artifact = "docs/topics/bounding-volumes/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations
 
-Planned: each rule of the kernel broken on purpose, the tests run, and the kernel restored.
+Each mutation was applied to the kernel (`crates/bunny-geom/src/bounds.rs` or
+`crates/bunny-mesh/src/bounds.rs`), the four test files run with `cargo test --locked -q
+--no-fail-fast`, and the kernel restored; each fails the named cases.
+
+| Mutation | Fails |
+| --- | --- |
+| `from_points` drops the second point | BOUNDS-TP-001, BOUNDS-TP-008 |
+| A box grown to a point takes the maximum for its minimum | BOUNDS-TP-001, -002, -008, -010, -011, -013, -015 |
+| `merge` does not check the second box's order | BOUNDS-TP-002, -008, -012 |
+| `merge` ignores the other box's maximum | BOUNDS-TP-002, -008, -013 |
+| `expand_axes` does not check the input's order | BOUNDS-TP-003, -008 |
+| `expand_axes` returns the input instead of refusing a shrink that inverts | BOUNDS-TP-003, -004, -008 |
+| `expand_axes` adds the margin to the minimum | BOUNDS-TP-003, -004, -005, -008, -009, -015 |
+| `expand_axes` saturates at the raw range instead of refusing | BOUNDS-TP-004, -005, -008, -009 |
+| `from_sphere` accepts a negative radius | BOUNDS-TP-005, -009 |
+| The centre is the floor of the midpoint, not ties to even | BOUNDS-TP-006, -009 |
+| The radius is the floor of the root (rounded down) | BOUNDS-TP-006, -007, -009 |
+| The radius is always the floor root plus one | BOUNDS-TP-006, -007 |
+| The radius saturates at `i64::MAX` instead of refusing | BOUNDS-TP-007, -009 |
+| `mesh_bounds` skips a triangle with a bad index | BOUNDS-TP-010, -011 |
+| `mesh_bounds` ignores a later triangle's maximum | BOUNDS-TP-011 |
+
+BOUNDS-TP-012 to BOUNDS-TP-015 pin existing helpers that this contract does not change, so no
+mutation of them is recorded.
 
 ## Determinism Obligations And Evidence
 

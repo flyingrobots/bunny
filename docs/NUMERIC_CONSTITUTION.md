@@ -151,6 +151,7 @@ the geometric predicate.
 | `bunny-query` closest-point helpers | Saturating today | Open audit path: these APIs return values, not `Result`/`Option`, so overflow cannot yet be reported distinctly. |
 | `bunny-mesh` quantization | Proven-infallible within `i128` intermediates | Uses wide ratio math; outside points clamp to quantized endpoints. |
 | `bunny-mesh` dequantization | Proven-infallible with endpoint clamps | Uses wide ratio math and clamps final raw reconstruction into `i64`. |
+| `bunny-geom` box helpers (`bunny-bounds/1`) and `bunny-mesh::mesh_bounds` | Checked | Exact minima and maxima; margins and radii added in `i128` and a result outside `i64` is `BoundsError::OutOfRange`, never saturated; inverted input boxes are refused; the bounding sphere's centre rounds ties to even and its radius rounds outward (`docs/topics/bounding-volumes/`). |
 
 The remaining risky surface is value-returning closest-point query math. Future
 query APIs that need to distinguish "valid closest point" from "arithmetic

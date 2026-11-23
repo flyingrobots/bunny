@@ -55,7 +55,11 @@ fn bounds_tp_014_trace_bounds_hand_derived() {
     let collinear = trace_triangle([0, 0, 0], [2, 2, 2], [1, 1, 1]);
     assert_eq!(corners(&collinear.bounds()), ([0; 3], [2; 3]));
     let wide = trace_triangle([-DOMAIN; 3], [DOMAIN; 3], [DOMAIN, -DOMAIN, 0]);
-    assert_eq!(corners(&wide.bounds()), ([-DOMAIN; 3], [DOMAIN; 3]), "the vertices survive the edges");
+    assert_eq!(
+        corners(&wide.bounds()),
+        ([-DOMAIN; 3], [DOMAIN; 3]),
+        "the vertices survive the edges"
+    );
 }
 
 fn next(state: &mut u64) -> u64 {
@@ -80,7 +84,8 @@ fn bounds_tp_015_seeded_trace_bounds_match_the_oracle_and_the_geometry_helpers()
         let got = corners(&trace_sphere(centre, radius).bounds());
         let want = (centre.map(|c| c - radius), centre.map(|c| c + radius));
         assert_eq!(got, want, "sphere {centre:?} r={radius}; {ctx}");
-        let geom = FixedAabb3::from_sphere(&FixedSphere3::new(v(centre), FixedQ32_32::from_raw(radius)));
+        let geom =
+            FixedAabb3::from_sphere(&FixedSphere3::new(v(centre), FixedQ32_32::from_raw(radius)));
         assert_eq!(geom.map(|b| corners(&b)), Ok(got), "from_sphere agrees; {ctx}");
 
         let [a, b, c] = [0; 3].map(|_| [0; 3].map(|_| in_domain(&mut state)));

@@ -162,9 +162,10 @@ fn next(state: &mut u64) -> u64 {
     *state >> 11 ^ *state << 53 ^ *state
 }
 
-/// Any raw value, every magnitude: a uniform pattern shifted right by 0 to 63 bits.
+/// Any raw value, every magnitude: a uniform pattern shifted right by 0 to 63 bits, and one
+/// time in four by 0 to 2 bits, so the range edges are reached often.
 fn raw_any(state: &mut u64) -> i64 {
-    let shift = next(state) % 64;
+    let shift = if next(state).is_multiple_of(4) { next(state) % 3 } else { next(state) % 64 };
     i64::from_ne_bytes(next(state).to_ne_bytes()) >> shift
 }
 
@@ -177,11 +178,21 @@ fn random_box(state: &mut u64) -> (Raw3, Raw3) {
     let (a, b) = (triple(state), triple(state));
     let lo = [0, 1, 2].map(|i| a[i].min(b[i]));
     let hi = [0, 1, 2].map(|i| a[i].max(b[i]));
-    if next(state) % 8 == 0 && lo != hi {
+    if next(state).is_multiple_of(8) && lo != hi {
         (hi, lo)
     } else {
         (lo, hi)
     }
+}
+
+/// A box whose corners are within `2^k` raw of the range ends, `k` from 0 to 62, so radii
+/// near `i64::MAX` occur on both sides of it.
+fn near_full_box(state: &mut u64) -> (Raw3, Raw3) {
+    let inset =
+        |state: &mut u64| i64::try_from(next(state) >> (1 + next(state) % 63)).expect("< 2^63");
+    let lo = [0; 3].map(|_| MIN + inset(state));
+    let hi = [0; 3].map(|_| MAX - inset(state));
+    (lo, hi)
 }
 
 // ---- hand-derived -------------------------------------------------------------------------
@@ -370,7 +381,11 @@ fn bounds_tp_008_seeded_points_merge_and_expand_match_the_oracle() {
         let pts: Vec<Raw3> = (0..n).map(|_| triple(&mut state)).collect();
         let ctx = format!("seed={SEED:#x} case={case}");
         let got = FixedAabb3::from_points(&pts.iter().map(|p| v(*p)).collect::<Vec<_>>());
-        assert_eq!(got.map(|b| corners(&b)), oracle_points(&pts).ok_or(BoundsError::NoPoints), "{ctx}");
+        assert_eq!(
+            got.map(|b| corners(&b)),
+            oracle_points(&pts).ok_or(BoundsError::NoPoints),
+            "{ctx}"
+        );
         let tri = [triple(&mut state), triple(&mut state), triple(&mut state)];
         let got = corners(&FixedAabb3::from_triangle(tri.map(v)));
         assert_eq!(Some(got), oracle_points(&tri), "triangle; {ctx}");
@@ -382,7 +397,11 @@ fn bounds_tp_008_seeded_points_merge_and_expand_match_the_oracle() {
                 assert!((0..3).all(|i| lo[i] <= min[i] && max[i] <= hi[i]), "contains; {ctx}");
             }
         }
-        let m = if next(&mut state) % 2 == 0 { triple(&mut state) } else { [raw_any(&mut state); 3] };
+        let m = if next(&mut state).is_multiple_of(2) {
+            triple(&mut state)
+        } else {
+            [raw_any(&mut state); 3]
+        };
         let got = aabb(a.0, a.1).expand_axes(v(m)).map(|e| corners(&e));
         assert_eq!(got, oracle_expand(a, m), "expand {a:?} by {m:?}; {ctx}");
         if m[0] == m[1] && m[1] == m[2] {
@@ -406,14 +425,18 @@ fn bounds_tp_008_seeded_points_merge_and_expand_match_the_oracle() {
 
 /// Outcomes of the 10 000 seeded `expand_axes` calls: in range, inverted input, shrink
 /// inverts, out of range.
-const EXPECTED_EXPAND_COUNTS: [usize; 4] = [0, 0, 0, 0];
+const EXPECTED_EXPAND_COUNTS: [usize; 4] = [5_308, 1_272, 3_217, 203];
 
 #[wasm_bindgen_test(unsupported = test)]
 fn bounds_tp_009_seeded_spheres_contain_every_corner() {
     let mut state = SEED ^ 9;
     let (mut fit, mut over) = (0_usize, 0_usize);
     for case in 0..CASES {
-        let (lo, hi) = random_box(&mut state);
+        let (lo, hi) = if next(&mut state).is_multiple_of(4) {
+            near_full_box(&mut state)
+        } else {
+            random_box(&mut state)
+        };
         let ctx = format!("seed={SEED:#x}^9 case={case} box={lo:?} {hi:?}");
         let b = aabb(lo, hi);
         if !oracle_ordered(lo, hi) {
@@ -446,4 +469,4 @@ fn bounds_tp_009_seeded_spheres_contain_every_corner() {
 }
 
 /// Of the ordered seeded boxes: bounding spheres in range, and radii too large for `i64`.
-const EXPECTED_SPHERE_COUNTS: (usize, usize) = (0, 0);
+const EXPECTED_SPHERE_COUNTS: (usize, usize) = (6_936, 2_080);

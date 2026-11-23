@@ -17,6 +17,12 @@ queries, collision detection, and ray-casting.
   clipping and convex polygon clipping (`clip_polygon`, into a caller buffer)
   to the closed front half-space; see
   `docs/topics/plane-clipping/README.md`.
+* **Bounds helpers** (`bunny-bounds/1`): `FixedAabb3::from_points`,
+  `from_triangle`, `merge`, `expand`, `expand_axes`, `from_sphere` and
+  `bounding_sphere`, exact on raw values, with typed `BoundsError` refusals for
+  no points, inverted boxes, inverting shrinks, negative radii and the raw range;
+  the bounding sphere's radius is rounded outward so it contains every corner.
+  See `docs/topics/bounding-volumes/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects
