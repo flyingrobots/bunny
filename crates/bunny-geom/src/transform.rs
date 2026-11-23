@@ -39,7 +39,7 @@ impl fmt::Display for TransformError {
     }
 }
 
-impl std::error::Error for TransformError {}
+impl core::error::Error for TransformError {}
 
 /// A ray mapped by [`FixedRay3::checked_transform`]: its direction is **not renormalised**.
 ///
