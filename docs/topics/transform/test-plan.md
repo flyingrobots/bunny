@@ -22,11 +22,11 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 
 | ID | Requirement | Current Source |
 | --- | --- | --- |
-| TRS-REQ-001 | `from_trs(t, R, s)` is `T * R * S` with column vectors and right-to-left composition: a point is scaled, then rotated, then translated; the linear part is `R * diag(s)` and the translation is `t`, copied. | planned: `README.md` |
-| TRS-REQ-002 | Each `from_trs` linear entry is `R_ij * s_j` rounded once to nearest, ties to even, within 1/2 raw of the exact product; the result is `None` exactly when a rounded entry is outside the `i64` raw range; zero and negative scales are accepted. | planned: `README.md` |
-| TRS-REQ-003 | `rotate_about_point(p, R)` is `T(p) * R * T(-p)`: linear part `R`, translation `p - R p` with `R p` from `checked_mul_vec3`, within 3/2 raw of the exact value; `checked_transform_point(p)` is exactly `p`; `None` exactly when a rounded product, a partial sum or the subtraction leaves the range. | planned: `README.md` |
-| TRS-REQ-004 | `scale_about_point(p, s)` is `T(p) * S * T(-p)`: linear part `diag(s)`, translation `p_i - s_i p_i` rounded once, within 1/2 raw; the pivot maps onto itself exactly; `None` exactly on overflow; zero and negative scales are accepted. | planned: `README.md` |
-| TRS-REQ-005 | For three affine transforms, each entry of `(A * B) * C` and of `A * (B * C)` by `checked_mul_affine` is within the documented bound of the exact product `A B C`. | planned: `README.md` |
+| TRS-REQ-001 | `from_trs(t, R, s)` is `T * R * S` with column vectors and right-to-left composition: a point is scaled, then rotated, then translated; the linear part is `R * diag(s)` and the translation is `t`, copied. | `README.md#convention` |
+| TRS-REQ-002 | Each `from_trs` linear entry is `R_ij * s_j` rounded once to nearest, ties to even, within 1/2 raw of the exact product; the result is `None` exactly when a rounded entry is outside the `i64` raw range; zero and negative scales are accepted. | `README.md#rounding-and-bounds` |
+| TRS-REQ-003 | `rotate_about_point(p, R)` is `T(p) * R * T(-p)`: linear part `R`, translation `p - R p` with `R p` from `checked_mul_vec3`, within 3/2 raw of the exact value; `checked_transform_point(p)` is exactly `p`; `None` exactly when a rounded product, a partial sum or the subtraction leaves the range. | `README.md#rounding-and-bounds` |
+| TRS-REQ-004 | `scale_about_point(p, s)` is `T(p) * S * T(-p)`: linear part `diag(s)`, translation `p_i - s_i p_i` rounded once, within 1/2 raw; the pivot maps onto itself exactly; `None` exactly on overflow; zero and negative scales are accepted. | `README.md#refusals` |
+| TRS-REQ-005 | For three affine transforms, each entry of `(A * B) * C` and of `A * (B * C)` by `checked_mul_affine` is within the documented bound of the exact product `A B C`. | `README.md#composition` |
 
 ```toml
 [[requirement]]
@@ -106,7 +106,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_001_scale_then_rotate_then_translate"
 oracle = "Hand-derived scale, rotate, translate of one point; the swapped order; the literal T * R * S composition."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-002"
@@ -115,7 +115,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_002_rotation_and_scale_about_a_point_fix_the_pivot"
 oracle = "Hand-derived half turn and scale about a pivot; the literal T(p) R T(-p) composition."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-003"
@@ -124,7 +124,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_003_products_on_a_half_round_to_even"
 oracle = "Hand-derived exact halves at 60 degrees rounded to even."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-004"
@@ -133,7 +133,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_004_pinned_goldens"
 oracle = "Raw goldens from the Python model, each checked in Fraction against the exact value."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-005"
@@ -142,7 +142,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_005_seeded_constructors_match_the_oracle_and_fix_the_pivot"
 oracle = "Independent i128 oracle and exact bounds over 10 000 seeded full-range cases."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-006"
@@ -151,7 +151,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_006_overflow_is_none_one_raw_unit_past_each_threshold"
 oracle = "Hand-derived and bisected thresholds, one raw unit either side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-007"
@@ -160,7 +160,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_007_zero_and_negative_scales_are_accepted"
 oracle = "Exact determinants and images of zero and negative scales."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-008"
@@ -169,7 +169,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/transform_tests.rs::trs_tp_008_composition_is_associative_within_the_rounding_bound"
 oracle = "Exact i128 product of three transforms over 10 000 seeded triples."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-009"
@@ -178,7 +178,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/transform/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations
