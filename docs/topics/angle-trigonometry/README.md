@@ -1,8 +1,9 @@
 # Angles And Trigonometry
 
 This chapter is the current reference for how Bunny represents angles, evaluates sine
-and cosine, converts angles out to turns, degrees and radians, and finds the angle of a
-direction with `atan2`. The [test plan](test-plan.md) says how it is verified. It answers issue #110.
+and cosine, converts angles out to turns, degrees and radians (unsigned and signed), finds
+the angle of a direction with `atan2`, and inverts a single ratio with `atan`, `asin` and
+`acos`. The [test plan](test-plan.md) says how it is verified. It answers issue #110.
 
 ## Canonical Angle
 
@@ -51,8 +52,9 @@ about 2³¹ turns. Both conversions round the magnitude and then apply the sign,
 ## Conversions Out
 
 Each conversion multiplies the raw angle by a scale exactly in `u128` and rounds once to
-Q32.32, to nearest with ties to even. The results are non-negative: an angle is read as a
-fraction of a turn in `[0, 1)`, counter-clockwise.
+Q32.32, to nearest with ties to even. The results of these three are non-negative: an
+angle is read as a fraction of a turn in `[0, 1)`, counter-clockwise. The signed forms
+below read it in `[-1/2, 1/2)`.
 
 | Method | Exact value | Result | Bound |
 | --- | --- | --- | --- |
@@ -78,6 +80,37 @@ Round trips:
 - `from_turns(to_turns(a))` is `a` rounded to the nearest multiple of `2^32` units (ties to
   even), wrapping a full turn to zero.
 - The degree and radian round trips are not exact: each direction rounds.
+
+### Signed Conversions Out
+
+The signed forms read the raw angle as an `i64`, which is the half-open turn
+`[-1/2, 1/2)`: the half turn is `-1/2`, and an angle just below it is just below `+1/2`.
+Each rounds the exact signed value once to Q32.32, to nearest with ties to even. The
+magnitude is rounded exactly as the unsigned form rounds it and the sign applied after;
+ties to even is symmetric under negation, so this is the same as rounding the signed value.
+
+| Method | Exact value | Result | Bound |
+| --- | --- | --- | --- |
+| `to_turns_signed()` | `s / 2^64` turn | `[-1/2, 1/2]` | correctly rounded: within 1/2 raw unit |
+| `to_degrees_signed()` | `s × 360 / 2^64` | `[-180, 180]` | correctly rounded: within 1/2 raw unit |
+| `to_radians_signed()` | `s × 2π / 2^64` | `[-π, π]`, rounded | within `1/2 + 2^-30` raw units |
+
+Here `s` is the raw angle read as an `i64`, in `[-2^63, 2^63)`.
+
+- Which ends are included: the exact value includes `-1/2` turn (`-180`, `-π`) and
+  excludes `+1/2`. The rounded result can still be `+1/2` turn or `+180`: angles within
+  half a raw unit below a half turn round up to it, exactly as angles just below a full
+  turn round up to `1.0` in the unsigned form. `FixedAngle::HALF_TURN` gives exactly
+  `-0.5` and `-180`, and `HALF_TURN - 1` gives `+0.5` and `+180` (AT-TP-037).
+- Below a half turn each signed form equals the unsigned one bit for bit. From a half
+  turn up, `to_turns_signed` is exactly `to_turns - 1.0` and `to_degrees_signed` exactly
+  `to_degrees - 360`, because a whole turn is an even integer number of raw units in both
+  and so moves neither the rounding nor its ties. `to_radians_signed` is `to_radians`
+  less `26_986_075_409` or `26_986_075_410` raw units: two roundings of parts that add up
+  to the kernel's `2π`, about `26_986_075_409.04` raw, so the difference is one of the
+  two integers either side.
+- `a.wrapping_neg()` converts to exactly the negation of `a`, for all three, except at the
+  half turn, which is its own negation and reads as `-1/2`.
 
 ## Atan2
 
@@ -128,6 +161,82 @@ The truncated shifts move the vector by at most one unit of a value of at least 
 per step, an angle under `10⁻¹⁶` units over all 72 steps. The bound adds these to the
 final half unit: `1/2 + 0.0013 + 10⁻⁸ < 1/2 + 2^-9`. AT-TP-013 checks the bound against
 an independent oracle; it does not measure a tighter one, and none is claimed.
+
+## Single-Ratio Atan
+
+`FixedAngle::atan(x)` is the angle whose tangent is the Q32.32 ratio `x`. It is defined as
+`atan2(x, 1.0)` and is bit for bit that call: `1.0` is exact in Q32.32, so the composition
+adds no rounding, and the result keeps the `atan2` bound, **within `1/2 + 2^-9` angle
+units of the exact angle**. Every input is accepted.
+
+Range: read as a signed `i64`, the raw result is strictly inside `(-2^62, 2^62)`, a
+quarter turn either side of zero, with the sign of `x`. A negative ratio therefore gives
+an angle just below a full turn read unsigned; read the raw value as `i64`, or use
+`to_turns_signed`, to see it as negative. The extremes stay well inside: the largest
+ratio, about `2^31`, is `π/2 - 2^-31` radians, about `2^33 / 2π ≈ 1.4 × 10⁹` angle units
+short of the quarter turn, and `i64::MIN` raw as far past three quarters.
+
+Exact: `atan(0)` is `ZERO` and `atan(±1.0)` exactly `±1/8` turn. `atan(-x)` is exactly
+`atan(x).wrapping_neg()`, from the conjugation symmetry of `atan2`, for every `x` but
+`i64::MIN` raw, which has no negation.
+
+## Asin And Acos
+
+`FixedAngle::asin(x)` and `FixedAngle::acos(x)` are the angles whose sine and cosine are
+`x`. The domain is `|x| <= 1.0`, raw `[-2^32, 2^32]`, both ends included; every other
+input, from one raw unit outside onward, returns `None`, as `atan2` does at the origin.
+
+| Function | Direction given to the `atan2` kernel | Result |
+| --- | --- | --- |
+| `asin(x)` | `(sqrt(1 - x²), x)` | `[-1/4, 1/4]` turn read as a signed `i64` |
+| `acos(x)` | `(x, sqrt(1 - x²))` | `[0, 1/2]` turn read unsigned |
+
+`acos(-1.0)` is exactly `HALF_TURN`, which read as a signed `i64` is `-1/2`; read
+`acos` unsigned (or with `to_turns`) to keep it in `[0, 1/2]`.
+
+**Error bound: within `2/3` of an angle unit of the exact angle.** This is not a single
+rounding: the result is the nearest angle or, when the exact angle is within about `1/6`
+of a unit of a midpoint, its other neighbour. `acos(-0.875)` is one such case
+(AT-TP-038). Measured over the AT-TP-033 set, the largest error is `0.6484` units, at
+`x` raw `-4_251_451_392` (about `-0.99`).
+
+### How asin and acos are computed
+
+With `r` the raw ratio, the exact legs scaled by `2^64` are `|r| 2^32` and
+`sqrt((2^64 - r²) 2^64)`. The kernel carries both 32 bits wider than Q32.32:
+
+1. `|r| 2^32` is at most `2^64`. The radicand `(2^64 - r²) 2^64` is exact in `u128`
+   and, for `r ≠ 0`, at most `2^128 - 2^64`; its floor square root `S` is at most
+   `2^64 - 1`. At `r = 0` the direction is an axis, and `1` stands in for the root.
+2. The two legs go to the `atan2` kernel: the octant fold, then both scaled so the larger
+   has its top bit at bit 123, then the same 72 CORDIC steps and one final rounding.
+
+The bound has two parts. The `atan2` kernel is within `1/2 + 2^-9` units of the angle of
+the direction it is given, `(S, R)` with `R = |r| 2^32`. The floor moves the leg by
+`δ = C - S`, under one unit of `2^-64`, from the exact `C`; with `R² + C² = 2^128`, that
+turns the direction by at most `R δ / (R² + S²) ≤ 2^64 / (2^128 - 2^65)` radians, which
+is `1/(2π) × (1 + 2^-62) < 0.15916` angle units. In all,
+`1/2 + 2^-9 + 0.15916 < 0.6612 < 2/3`. The floor term grows with `|x|`, about
+`|x| / 2π` units, so the error is largest near `|x| = 1`; at `|x| = 1` itself the root
+is exactly zero.
+
+Without the 32 extra bits, a Q32.32 floor root would turn the direction by up to
+`2^-32` radians, about `6.8 × 10⁸` angle units; the mutation check that drops them fails
+AT-TP-033.
+
+Exact by construction:
+
+- `asin(0)` is `ZERO`, `asin(±1.0)` exactly `±1/4` turn, `acos(1.0)` `ZERO`, `acos(0)`
+  exactly a quarter turn and `acos(-1.0)` exactly `HALF_TURN`.
+- `asin(x).wrapping_add(acos(x))` is exactly `QUARTER_TURN` for every `x` in the domain:
+  the two directions are each other's mirror in the diagonal, and the `atan2` fold maps
+  that mirror to `QUARTER_TURN - a` exactly.
+- `asin(-x)` is exactly `asin(x).wrapping_neg()` and `acos(-x)` exactly
+  `HALF_TURN - acos(x)`.
+
+One raw unit inside each end the angle is about `2^-15.5` radians off the pole, and one
+raw unit either side of zero about `2^32 / 2π ≈ 6.8 × 10⁸` units off `0` or the quarter
+turn (AT-TP-034).
 
 ## Sine And Cosine
 
@@ -181,8 +290,7 @@ not deterministic across targets. Method, command and caveats are in the
 
 ## Non-Goals
 
-Not provided yet: tangent, the inverse functions `asin`, `acos` and single-ratio `atan`,
-signed conversions out (radians or degrees in `(-π, π]`), angle interpolation (#111),
-and rotation types (#109). Each needs its own error bound and golden vectors when it
-lands (flyingrobots/bunny#244). Rotation matrices from a `FixedAngle` are in
+Not provided yet: tangent, a retained tool that sweeps the maximum `sin_cos` error,
+angle interpolation (#111), and rotation types (#109). Each needs its own error bound and
+golden vectors when it lands (flyingrobots/bunny#244). Rotation matrices from a `FixedAngle` are in
 [Rotation](../rotation/README.md).

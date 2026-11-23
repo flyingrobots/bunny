@@ -1,11 +1,13 @@
-//! Fixed-point planes and segment clipping.
+//! Fixed-point planes, shape classification and segment clipping.
 
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
 mod polygon;
+mod span;
 
 pub use polygon::{PolygonClip, PolygonClipError};
+pub use span::PlaneSpan;
 
 /// Which side of a plane a point lies on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

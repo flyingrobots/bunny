@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-geom`: classify a segment, a triangle or an AABB against a
+  `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
+  return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
+  each defined by the existing point rule `classify` at the endpoints, vertices
+  or eight corners; a shape touching the plane from one side takes that side,
+  and `None` means a vertex's signed distance overflows. `classify_aabb`
+  evaluates two corners, chosen per axis by the sign of the normal component,
+  and equals the eight-corner result bit for bit, `None` included (seeded
+  sweeps of 70 000 boxes, ends of the range included). Inverted boxes are the
+  box with the same corners; degenerate triangles are classified, not refused.
+  Additive: `classify`, `clip_segment` and `clip_polygon` are unchanged. See
+  `docs/topics/plane-clipping/` (PC-REQ-014 to -019, PC-TP-025 to -037). Closes
+  flyingrobots/bunny#162.
+
 * `bunny-num`: inverse lerp, remap and an exact checked clamp under
   `bunny-lerp/1`. `FixedQ32_32::inverse_lerp(a, b, x)` is
   `round_half_even((x - a) * 2^32 / (b - a))` on raw values: exactly `0` at
@@ -43,6 +57,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   units of the exact spline, exactly every point at whole `u`, tangents
   bit-equal at joints where defined, `None` outside the range. Closes
   flyingrobots/bunny#309.
+
+* `bunny-optics`: an orthographic camera under the identity
+  `bunny-orthographic-camera/1` (`ORTHOGRAPHIC_CAMERA_ID`).
+  `OrthographicCamera::new(&OrthographicSpec)` takes the pinhole camera's
+  inputs with the tangent replaced by `half_height`, half the view
+  rectangle's height in `(0, 256]` (`ORTHOGRAPHIC_HALF_HEIGHT_LIMIT_RAW`), and
+  derives the pinhole camera's basis bit for bit. `ray(sample)` looks along
+  the unit `forward` from `position + o`, with
+  `o_i = round((a h R_i + b h U_i) / (height 2^64))` to nearest, ties to even,
+  from the exact numerator: within half a raw unit. Each invalid input is its
+  own `OrthographicError`, including a view whose rounded corner leaves the
+  trace domain. A projection round-trip check carries points along pinhole
+  and orthographic rays through `FixedMat4::try_look_at`, `try_perspective`
+  or `try_orthographic` and `Viewport` back to their samples, within a bound
+  derived for each case and below `2^-10` pixel; the conventions agree. The
+  optics chapter now proves the camera basis orthogonal within
+  `2.6 * 2^32` raw-squared units and the pinhole camera's forward corner check
+  unreachable, and shows the thin-lens forward check deciding an extreme
+  aperture. No existing output changes. The thin lens was already done
+  (flyingrobots/bunny#364). Closes flyingrobots/bunny#257.
 
 * `cargo xtask perf --evidence <file>` writes every round of both sides (case,
   side, round, p50, p95, p99) and the build identity (base reference, full base
@@ -173,6 +207,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `UnboundedReason`; a degenerate triangle, a sample or lens sample
   outside its range, and a hit ray parallel to the plane or with the plane
   not ahead return a `RayFootprintError`. Closes flyingrobots/bunny#383.
+
+* `bunny-num`: `FixedAngle::atan`, `asin`, `acos` and signed conversions out.
+  `atan(x)` is exactly `atan2(x, 1.0)`, within `1/2 + 2^-9` angle units, strictly
+  inside a quarter turn either side of zero. `asin(x)` and `acos(x)` take
+  `|x| <= 1.0` and return `None` otherwise; they run the `atan2` kernel on the
+  legs `|x|` and the floor square root of `1 - x^2`, both with 32 bits more than
+  Q32.32, and are within `2/3` of an angle unit (measured worst `0.648`). They are
+  exact at `0` and `±1.0`, and `asin(x) + acos(x)` is exactly a quarter turn.
+  `to_turns_signed`, `to_degrees_signed` and `to_radians_signed` read the angle in
+  `[-1/2, 1/2)` turn and round once like the unsigned forms, which they equal below
+  a half turn. Golden vectors, independent oracles and mutation checks; tangent
+  is not included. Refs flyingrobots/bunny#244.
 
 * `bunny-num`: conversions out of `FixedAngle` and `FixedAngle::atan2`.
   `to_turns` (`[0, 1]`) and `to_degrees` (`[0, 360]`) are the exact value
