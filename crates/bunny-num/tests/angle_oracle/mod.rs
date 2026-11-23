@@ -7,8 +7,8 @@
 //! value is within `2^-110` of the exact real number, far below the margins the tests check.
 
 /// Fractional bits of the oracle's fixed point.
-const FRAC: u32 = 124;
-const ONE: u128 = 1 << FRAC;
+pub(crate) const FRAC: u32 = 124;
+pub(crate) const ONE: u128 = 1 << FRAC;
 const LOW_64: u128 = (1 << 64) - 1;
 
 /// Extra fractional bits the oracle keeps below an output's raw unit.
@@ -16,7 +16,7 @@ pub(crate) const EXTRA_BITS: u32 = 32;
 
 /// `floor(n * 2^bits / d)` by binary long division, for `0 < d < 2^127` and a result
 /// below `2^128`.
-fn ratio(n: u128, d: u128, bits: u32) -> u128 {
+pub(crate) fn ratio(n: u128, d: u128, bits: u32) -> u128 {
     let mut quotient = n / d;
     let mut remainder = n % d;
     for _ in 0..bits {
@@ -68,7 +68,7 @@ impl Oracle {
     }
 
     /// `atan(n / d)` for `0 <= n <= d`, `d > 0`: the series, or `pi/4 - atan((1-z)/(1+z))`.
-    fn atan(&self, n: u128, d: u128) -> u128 {
+    pub(crate) fn atan(&self, n: u128, d: u128) -> u128 {
         let z = ratio(n, d, FRAC);
         if z <= ONE / 2 {
             return atan_series(z);
@@ -77,7 +77,7 @@ impl Oracle {
     }
 
     /// `angle / (2 pi)` in units of `2^-(64 + EXTRA_BITS)` turn, for `angle <= pi / 4`.
-    fn turn_units(&self, angle: u128) -> u128 {
+    pub(crate) fn turn_units(&self, angle: u128) -> u128 {
         ratio(angle, 2 * self.pi, 64 + EXTRA_BITS)
     }
 

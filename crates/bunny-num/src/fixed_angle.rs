@@ -18,6 +18,7 @@ use crate::FixedQ32_32;
 
 mod atan2;
 mod conversions_out;
+mod inverse_ratio;
 
 /// Quarter-wave segments in the sine table (`2^SEGMENT_BITS`).
 const SEGMENT_BITS: u32 = 10;

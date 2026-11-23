@@ -41,12 +41,26 @@ impl FixedAngle {
         if y == 0 && x == 0 {
             return None;
         }
-        let (across, along) = (y.unsigned_abs(), x.unsigned_abs());
-        let swapped = across > along;
-        let octant =
-            if swapped { first_octant(along, across) } else { first_octant(across, along) };
-        Some(Self(unfold(octant, swapped, x < 0, y < 0)))
+        let (across, along) = (u128::from(y.unsigned_abs()), u128::from(x.unsigned_abs()));
+        Some(Self(direction_angle(across, along, x < 0, y < 0)))
     }
+}
+
+/// The angle of the direction with magnitudes `along` (x) and `across` (y), not both zero
+/// and each at most `2^64`, and the given signs, in angle units, wrapping.
+///
+/// `atan2` passes its raw inputs; `asin` and `acos` pass legs with 32 more bits. Both
+/// magnitudes are scaled to the same fixed width before CORDIC, so any input this wide
+/// keeps the bound of `atan2`.
+pub(super) fn direction_angle(
+    across: u128,
+    along: u128,
+    x_negative: bool,
+    y_negative: bool,
+) -> u64 {
+    let swapped = across > along;
+    let octant = if swapped { first_octant(along, across) } else { first_octant(across, along) };
+    unfold(octant, swapped, x_negative, y_negative)
 }
 
 /// Rebuilds the full angle from its first-octant angle by exact reflections: about the
@@ -61,12 +75,13 @@ const fn unfold(octant: u64, swapped: bool, x_negative: bool, y_negative: bool) 
     }
 }
 
-/// `atan(near / far)` in angle units, in `[0, 2^61]`, for `0 <= near <= far` and `far > 0`.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn first_octant(near: u64, far: u64) -> u64 {
+/// `atan(near / far)` in angle units, in `[0, 2^61]`, for `0 <= near <= far`, `far > 0`
+/// and `far < 2^124`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+fn first_octant(near: u128, far: u128) -> u64 {
     // Put the top bit of `far` at bit 123; the vector then stays below 2^126 in magnitude.
-    let shift = far.leading_zeros() + 60;
-    let (mut x, mut y) = (i128::from(far) << shift, i128::from(near) << shift);
+    let shift = far.leading_zeros() - 4;
+    let (mut x, mut y) = ((far << shift) as i128, (near << shift) as i128);
     let mut turned = 0_i128;
     for (i, &step) in (0_u32..).zip(ATAN_STEPS_Q96.iter()) {
         let (dx, dy) = (y >> i, x >> i);

@@ -44,6 +44,60 @@ impl FixedAngle {
         // Below 2^64 * 2^64: exact in u128.
         rounded(self.0 as u128 * TAU_Q61, 93)
     }
+
+    /// The angle in turns read as signed, in `[-1/2, 1/2]`: the raw angle as an `i64` over
+    /// `2^64`, rounded to Q32.32, ties to even.
+    ///
+    /// The angle is read in the half-open turn `[-1/2, 1/2)`: [`Self::HALF_TURN`] gives
+    /// exactly `-0.5`, and angles within half a raw unit below it round up to `+0.5`. The
+    /// result is correctly rounded. Below a half turn it equals [`Self::to_turns`]; from a
+    /// half turn up it is exactly `1.0` less.
+    #[must_use]
+    pub const fn to_turns_signed(self) -> FixedQ32_32 {
+        let (magnitude, negative) = self.signed_magnitude();
+        with_sign(rounded(magnitude, 32), negative)
+    }
+
+    /// The angle in degrees read as signed, in `[-180, 180]`, rounded to Q32.32, ties to even.
+    ///
+    /// The angle is read in `[-1/2, 1/2)` turn: [`Self::HALF_TURN`] gives exactly `-180`, and
+    /// angles within half a raw unit below it round up to `+180`. The result is correctly
+    /// rounded. Below a half turn it equals [`Self::to_degrees`]; from a half turn up it is
+    /// exactly `360` less.
+    #[must_use]
+    pub const fn to_degrees_signed(self) -> FixedQ32_32 {
+        let (magnitude, negative) = self.signed_magnitude();
+        with_sign(rounded(magnitude * 45, 29), negative)
+    }
+
+    /// The angle in radians read as signed, in `[-pi, pi]`: within `1/2 + 2^-30` raw units
+    /// of the exact value of the raw angle as an `i64` times `2 pi / 2^64`.
+    ///
+    /// The magnitude is rounded exactly as [`Self::to_radians`] rounds it and the sign
+    /// applied after, so below a half turn the two are equal, and
+    /// `a.wrapping_neg().to_radians_signed()` is the negation of `a.to_radians_signed()`
+    /// for every angle but the half turn, which reads as `-pi`.
+    #[must_use]
+    pub const fn to_radians_signed(self) -> FixedQ32_32 {
+        let (magnitude, negative) = self.signed_magnitude();
+        with_sign(rounded(magnitude * TAU_Q61, 93), negative)
+    }
+
+    /// The magnitude of the raw angle read as an `i64`, at most `2^63`, and its sign.
+    #[allow(clippy::cast_possible_wrap)]
+    const fn signed_magnitude(self) -> (u128, bool) {
+        let signed = self.0 as i64;
+        (signed.unsigned_abs() as u128, signed < 0)
+    }
+}
+
+/// `value`, negated when `negative`; every caller's value is at most `180 * 2^32`.
+const fn with_sign(value: FixedQ32_32, negative: bool) -> FixedQ32_32 {
+    if negative {
+        FixedQ32_32::from_raw(-value.raw())
+    } else {
+        value
+    }
 }
 
 /// `value / 2^shift` rounded to nearest with ties to even, as raw Q32.32.
