@@ -224,6 +224,9 @@ parallel inputs went from `Ok` to `ParallelUp`, and inputs whose finished
 translation fits went from `Overflow` to `Ok`. Every other `Ok` result keeps all
 its bits; the fidelity test compares against the retained 0.7.0 code.
 
+`FixedMat3::try_look_rotation(forward, up)` reuses this basis without an eye;
+see [Look Rotation](../look-rotation/README.md).
+
 ## Required Tests
 
 The current repository must keep tests for:
