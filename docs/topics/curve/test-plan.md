@@ -92,9 +92,21 @@ status = "active"
   `sum C(n, i) c_i s^i (1 - s)^(n - i)` as an exact numerator in a 384-bit two's-complement
   integer written in the test, and decides `|result - exact| <= bound` without rounding.
 
-The golden vectors of CURVE-TP-002 come from a Python model (an integer port of the rule
-plus a `fractions` check of the bounds) posted in the pull request. Every test is a
-`wasm_bindgen_test`, so the WebAssembly job runs the golden vectors too.
+`crates/bunny-linalg/tests/catmull_rom_tests.rs` holds the Catmull-Rom references, also
+sharing no code with `bunny-linalg` or `bunny-num`:
+
+- **The rule port.** `port_segment` converts a segment with `i128` Euclidean division by 6
+  and ties to even, with its own neighbour indexing, and `port_at` and `port_derivative`
+  run de Casteljau on the result with their own `port_lerp`; `port_new` decides the
+  refusals. The kernel must equal them bit for bit.
+- **The exact Catmull-Rom cubic.** `exact` evaluates the power form
+  `(2 P1 + (P2 - P0) t + (2 P0 - 5 P1 + 4 P2 - P3) t^2 + (3 P1 - P0 - 3 P2 + P3) t^3) / 2`
+  and its derivative, not the Bezier form, as exact numerators in a 384-bit two's-complement
+  integer, and `within` decides `|result - exact| <= bound` without rounding.
+
+The golden vectors of CURVE-TP-002 and CURVE-TP-021 come from Python models (an integer
+port of the rule plus a `fractions` check of the bounds) posted in their pull requests.
+Every test is a `wasm_bindgen_test`, so the WebAssembly job runs the golden vectors too.
 
 ## Test Cases
 
@@ -110,7 +122,7 @@ plus a `fractions` check of the bounds) posted in the pull request. Every test i
 | CURVE-TP-020 | CURVE-REQ-011, CURVE-REQ-013, CURVE-REQ-014 | Hand-derived: six collinear points `P_i = i d`, `d = (6, 12, -6)`, give `at(u) = u d` and derivative `d` exactly at `u = k/8` on the interior segments, `d g(t)` with `g(t) = (t + 2 t^2 - t^3) / 2` on the first segment and its mirror on the last, end tangents `d / 2`, and every point at integer `u`. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_020_hand_derived_collinear_and_through_points` |
 | CURVE-TP-021 | CURVE-REQ-011, CURVE-REQ-013, CURVE-REQ-014 | Raw golden control points of every segment of an open five-point and a closed three-point spline, and raw golden points and derivatives at ten `u` (one 1.4999999979 raw from exact), the closed seam's point and tangent. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_021_golden_vectors` |
 | CURVE-TP-022 | CURVE-REQ-010, CURVE-REQ-012 | Zero and one point open, two closed: `TooFewPoints`; two and three equal points: `AllPointsEqual`; two points open, three closed and repeated-but-not-all-equal points accepted; `u` of `i64::MIN`, `-1.0`, -1 raw, the end plus 1 raw, the end plus `1.0` and `i64::MAX` refused, 0 and the end accepted, the end owned by the last segment at `t = 1.0`. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_022_refusals_and_the_parameter_range` |
-| CURVE-TP-023 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-014 | A control point at exactly `MAX + 1/2` (ties to the even `MAX + 1`, refused) and `MIN - 1/2` (ties to the even `MIN`, accepted), with the inputs one raw unit either side; a knot tangent of `3 * 3 074 457 345 618 258 602 = MAX - 1` defined, and the neighbouring inputs whose tie goes the other way refused, arriving and leaving alike. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_023_overflow_on_and_past_each_threshold` |
+| CURVE-TP-023 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-014 | A control point at exactly `MAX + 1/2` (ties to the even `MAX + 1`, refused) and `MIN - 1/2` (ties to the even `MIN`, accepted), with the inputs one raw unit either side; a knot tangent of `3 * 3 074 457 345 618 258 602 = MAX - 1` defined, and the neighbouring inputs whose tie goes the other way refused, arriving and leaving alike; a knot whose arriving segment's middle difference is `2^63` (refused) or `2^63 - 1` (defined), the leaving tangent defined for both. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_023_overflow_on_and_past_each_threshold` |
 | CURVE-TP-024 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-012, CURVE-REQ-013, CURVE-REQ-014 | 20 000 seeded point lists of 1 to 6 points, open or closed (seed printed): `new` equals the port's outcome; for each valid spline the segments equal the port, four `u` each equal the port and are within 15/8 and 9/2 raw units of the exact power form; every point is hit exactly, tangents agree bit for bit at joints, knot tangents are within 3/2 of `(P[k + 1] - P[k - 1]) / 2`, closed seams are exact; both outcomes are reached and errors past 3/2 and 3 raw units occur. | `crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_024_seeded_splines_match_both_oracles` |
 | CURVE-TP-025 | CURVE-REQ-010, CURVE-REQ-011, CURVE-REQ-012, CURVE-REQ-013 | Each Catmull-Rom rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
 
@@ -185,7 +197,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_020_hand_derived_collinear_and_through_points"
 oracle = "Hand-derived raw values of collinear equally spaced points."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-021"
@@ -194,7 +206,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_021_golden_vectors"
 oracle = "Raw golden vectors from an independent Python model of the rule, checked with fractions."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-022"
@@ -203,7 +215,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_022_refusals_and_the_parameter_range"
 oracle = "Typed refusals and None on and one raw unit outside each end of [0, segment_count]."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-023"
@@ -212,7 +224,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_023_overflow_on_and_past_each_threshold"
 oracle = "Hand-derived i64 thresholds of the control points and of the knot tangent, on ties."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-024"
@@ -221,7 +233,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/catmull_rom_tests.rs::curve_tp_024_seeded_splines_match_both_oracles"
 oracle = "Independent rule port and exact 384-bit power form over 20 000 seeded point lists."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CURVE-TP-025"
@@ -230,7 +242,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/curve/test-plan.md#mutation-checks"
 oracle = "Each Catmull-Rom rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -255,3 +267,23 @@ source passed every case.
 
 The lerp-direction mutations change results only on ties, which is why the seeded
 parameters include multiples of 1/8.
+
+The Catmull-Rom rules were broken the same way in
+`crates/bunny-linalg/src/catmull_rom3.rs`, with `cargo test --locked --no-fail-fast -p
+bunny-linalg --test catmull_rom_tests`:
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| Ties round up (`rest >= 3`) | Ties to even | 023, 024 |
+| `P1 + round((P2 - P0) / 6)`, rounding the sixth instead of the control point | One rounding of the exact control point | 023, 024 |
+| An open spline's phantom neighbour is the next point, not the end point | Duplicated end points | 020, 021, 023, 024 |
+| A closed spline clamps its last neighbour instead of wrapping | Closed neighbours wrap | 021, 024 |
+| `u = segment_count` refused | The end belongs to the last segment | 020, 021, 022, 024 |
+| A whole `u = k` owned by the arriving segment at `t = 1.0` | A point belongs to the segment leaving it | 023 |
+| The control-point range not checked in `new` | `ControlPointOutOfRange` | 023, 024 |
+| `AllPointsEqual` not checked | All points equal is refused | 022 |
+| `b2` from `P3` toward `P1` (`P2 + (P3 - P1) / 6`) | The second inner control point | 020, 021, 023, 024 |
+| A closed spline of 2 points accepted | At least 3 points closed | 022, 024 |
+
+Owning a point by the arriving segment changes no position and, by the exact tangent
+continuity, no defined derivative; only CURVE-TP-023's one-sided overflow sees it.

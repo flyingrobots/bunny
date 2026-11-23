@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: uniform Catmull-Rom splines under `bunny-curve/1`, part 2.
+  `CatmullRom3::new(points, closed)` borrows a `&[FixedVec3]` (no allocation)
+  and returns `CatmullRomError::TooFewPoints` for fewer than 2 points (3
+  closed), `AllPointsEqual`, or `ControlPointOutOfRange { segment }`. Open
+  splines duplicate their end points as phantom neighbours; closed ones wrap.
+  `segment(i)` and `to_beziers()` give each segment as a `CubicBezier3` with
+  inner control points `(6 P1 + P2 - P0) / 6` and `(6 P2 + P1 - P3) / 6`, each
+  rounded once to nearest, ties to even. `at(u)` and `derivative_at(u)` split
+  `u` in `[0, segment_count]` into segment and fraction (the end owned by the
+  last segment) and evaluate through `CubicBezier3`: within 15/8 and 9/2 raw
+  units of the exact spline, exactly every point at whole `u`, tangents
+  bit-equal at joints where defined, `None` outside the range. Closes
+  flyingrobots/bunny#309.
+
 * `bunny-linalg`: translate, rotate and scale composition under the contract
   identity `bunny-transform/1` (`TRANSFORM_CONTRACT_ID`).
   `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S`: a point

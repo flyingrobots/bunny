@@ -80,9 +80,17 @@ impl<'a> CatmullRom3<'a> {
     /// [`CatmullRomError::ControlPointOutOfRange`] when an inner control point of
     /// [`Self::segment`] is outside the Q32.32 range, checked in that order.
     pub fn new(points: &'a [FixedVec3], closed: bool) -> Result<Self, CatmullRomError> {
-        // Stub: the failing-test commit of flyingrobots/bunny#309.
-        let _ = (inner(points[0], points[0], points[0]), Self::locate);
-        Ok(Self { points, closed })
+        if points.len() < if closed { 3 } else { 2 } {
+            return Err(CatmullRomError::TooFewPoints);
+        }
+        if points.iter().all(|point| Some(point) == points.first()) {
+            return Err(CatmullRomError::AllPointsEqual);
+        }
+        let spline = Self { points, closed };
+        match (0..spline.segment_count()).find(|&i| spline.segment(i).is_none()) {
+            Some(segment) => Err(CatmullRomError::ControlPointOutOfRange { segment }),
+            None => Ok(spline),
+        }
     }
 
     /// The points the spline passes through.
@@ -130,8 +138,12 @@ impl<'a> CatmullRom3<'a> {
     /// Returns `None` when `index >= segment_count()`.
     #[must_use]
     pub fn segment(self, index: usize) -> Option<CubicBezier3> {
-        let _ = (self.neighbours(index), CubicBezier3::new);
-        self.locate(FixedQ32_32::ZERO).and(None).filter(|_: &CubicBezier3| index > 0)
+        if index >= self.segment_count() {
+            return None;
+        }
+        let [p0, p1, p2, p3] = self.neighbours(index).map(|i| self.points.get(i).copied());
+        let (p0, p1, p2, p3) = (p0?, p1?, p2?, p3?);
+        Some(CubicBezier3::new(p1, inner(p1, p2, p0)?, inner(p2, p1, p3)?, p2))
     }
 
     /// Every segment in order, `segment_count()` of them (`bunny-curve/1`).
@@ -162,7 +174,8 @@ impl<'a> CatmullRom3<'a> {
     /// Returns `None` only when `u` is outside `[0, segment_count]`.
     #[must_use]
     pub fn at(self, u: FixedQ32_32) -> Option<FixedVec3> {
-        self.locate(u).and(None)
+        let (index, t) = self.locate(u)?;
+        self.segment(index)?.at(t)
     }
 
     /// The derivative with respect to `u` at `u`: [`CubicBezier3::derivative_at`] of its
@@ -177,6 +190,7 @@ impl<'a> CatmullRom3<'a> {
     /// [`CubicBezier3::derivative_at`] of the segment overflows.
     #[must_use]
     pub fn derivative_at(self, u: FixedQ32_32) -> Option<FixedVec3> {
-        self.locate(u).and(None)
+        let (index, t) = self.locate(u)?;
+        self.segment(index)?.derivative_at(t)
     }
 }

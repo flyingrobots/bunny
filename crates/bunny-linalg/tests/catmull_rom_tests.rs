@@ -425,6 +425,18 @@ fn curve_tp_023_overflow_on_and_past_each_threshold() {
         assert_eq!(arriving, expected, "p1={p1}: the same tangent arriving");
         assert!(at(s, U).is_some() && at(s, U + H).is_some(), "evaluation is defined");
     }
+    // A point is owned by the segment leaving it. Points (P0, 2^62, 2^62): segment 0's middle
+    // difference b2 - b1 is 2^63 for P0 = MIN, one past MAX, so its derivative is refused at
+    // every t, and MAX for P0 = MIN + 1; the leaving tangent 3 * 2^61 is defined for both.
+    let tangent = Some([3 << 61, 0, 0]);
+    for (p0, arriving_expected) in [(MIN, None), (MIN + 1, tangent)] {
+        let points = [[p0, 0, 0], [1 << 62, 0, 0], [1 << 62, 0, 0]].map(vec3);
+        let s = spline(&points, false);
+        assert_eq!(derivative(s, U), tangent, "p0={p0}: the leaving segment");
+        let arriving = s.segment(0).and_then(|c| c.derivative_at(FixedQ32_32::ONE)).map(raw_of);
+        assert_eq!(arriving, arriving_expected, "p0={p0}");
+        assert_eq!(derivative(s, U - 1).is_some(), arriving_expected.is_some(), "p0={p0}");
+    }
 }
 
 /// Checks one spline against both references at its knots and at `samples` local parameters.
@@ -520,4 +532,9 @@ fn curve_tp_024_seeded_splines_match_both_oracles() {
         beyond[0], beyond[1]
     );
     assert!(valid >= 5_000 && refused >= 2_000, "both classes are reached");
+    assert!(beyond[0] > 0, "points past the 3/2 bound of CubicBezier3::at are reached");
+    assert!(
+        beyond[1] > 0,
+        "derivatives past the 3 bound of CubicBezier3::derivative_at are reached"
+    );
 }
