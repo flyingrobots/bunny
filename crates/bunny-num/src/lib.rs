@@ -26,6 +26,7 @@ extern crate std;
 // dojo: allow std-env -- Cargo sets CARGO_PKG_VERSION from the workspace manifest, not the host
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub mod ease;
 pub mod fixed_angle;
 pub mod fixed_divisor;
 pub mod fixed_q32_32;
@@ -33,6 +34,7 @@ pub mod lerp;
 pub mod u32_div_round_even;
 pub mod u32_ellipse_classify;
 
+pub use ease::EASE_CONTRACT_ID;
 pub use fixed_angle::FixedAngle;
 pub use fixed_divisor::FixedDivisor;
 pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};

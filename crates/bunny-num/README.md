@@ -31,6 +31,11 @@ ecosystem to guarantee bit-level CPU determinism.
   `None` only outside Q32.32; `FixedQ32_32::from_ratio(n, d)` is the nearest
   Q32.32 value to `n / d` for `u32` operands, `None` for `d = 0` or a result
   of `2^31` or more.
+* **Power Eases and Steps (`bunny-ease/1`)**: `ease::power_in`, `power_out`
+  and `power_in_out` (`t^n`, `1 - (1 - t)^n` and the two-halved in-out curve,
+  `n` in `2..=5`) are each exact value rounded once to nearest, ties to even,
+  exact at both ends, non-decreasing, with bit-exact reflections;
+  `ease::steps(n, t)` is `floor(n t) / n`. `t` outside `[0, 1]` is `None`.
 * **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
   arithmetic, exact or symmetric-rounding conversions from turns, degrees and
   radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
