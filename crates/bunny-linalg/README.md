@@ -55,6 +55,11 @@ math for graphics pipelines.
   `lerp_channels(a, b, t)` for `[FixedQ32_32; 3]` colour channels apply
   `FixedQ32_32::lerp` to each component; `None` when any component is out of
   range. No colour space is assumed.
+* **Cubic Bezier Curves (`bunny-curve/1`)**: `CubicBezier3` with `at(t)` by
+  de Casteljau over `FixedVec3::lerp` (within 3/2 raw units of the exact
+  cubic, exact at the ends), `derivative_at(t)` (within 3 raw units, `None` on
+  overflow) and `split(t)` into the de Casteljau halves; `None` for `t`
+  outside `[0, 1]`.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
   multiplication, determinant, and inverse APIs return `None` for singular or
   overflowing cases; transpose is infallible and returns a matrix directly.
