@@ -40,6 +40,10 @@
 //! [`SurfaceHit::dielectric_scatter`] (`bunny-dielectric/1`) gives the reflected or refracted
 //! continuation ray at a smooth boundary between two refractive indices.
 //!
+//! [`interpolate_uv`] gives a triangle's texture coordinates at a hit from its barycentric
+//! numerators, and [`bilinear`] the four texels and weights of a bilinear lookup, with
+//! [`TextureWrap`] repeat or clamp (`bunny-texture-bilinear/1`).
+//!
 //! The pixel-value functions turn the radiance samples into output codes: a
 //! [`PixelAccumulator`] sums linear samples exactly and resolves their mean, a [`ToneCurve`]
 //! maps linear radiance to a display value, and [`quantize_8`], [`quantize_16`] and
@@ -69,6 +73,7 @@ mod point;
 mod sampler;
 #[allow(unreachable_pub)]
 mod shading;
+mod texture;
 mod xoroshiro;
 
 pub use camera::{
@@ -91,4 +96,5 @@ pub use shading::{
     MAX_NORMAL_TRIANGLES, MAX_REFRACTIVE_INDEX_RAW, MIN_BOUNCE_COSINE_RAW, PI, SHADING_ID,
     SHADOW_T_MAX, SMOOTH_NORMAL_ID, SMOOTH_SHADING_ID, SPECULAR_REFLECTION_ID, VERTEX_NORMALS_ID,
 };
+pub use texture::{bilinear, interpolate_uv, BilinearTaps, TextureWrap, TEXTURE_BILINEAR_ID};
 pub use xoroshiro::Xoroshiro128Plus;

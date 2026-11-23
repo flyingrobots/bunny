@@ -1,7 +1,8 @@
 # ASCII PLY Triangle Meshes
 
-This chapter defines the contract of `parse_ascii_ply` in `bunny-codec`: the
-ASCII PLY profile `bunny-ascii-ply-triangle-mesh/1`, and the conversion rule
+This chapter defines the contract of `parse_ascii_ply` and `parse_ascii_ply_v2` in
+`bunny-codec`: the ASCII PLY profiles `bunny-ascii-ply-triangle-mesh/1` and
+`bunny-ascii-ply-triangle-mesh/2` (which adds texture coordinates), and the conversion rule
 `bunny-decimal-q32-32/1` that turns the decimal text of a coordinate into a
 Q32.32 raw value exactly, with integer arithmetic only.
 
@@ -10,8 +11,12 @@ Q32.32 raw value exactly, with integer arithmetic only.
 This is a living topic chapter, not a proposal. It is implemented in
 `crates/bunny-codec/src/ply_ascii.rs` and the modules beside it, and exported as:
 
+- `parse_ascii_ply_v2`, `parse_ascii_ply_v2_with_limits` and `ASCII_PLY_PROFILE_V2_ID`
+  (`"bunny-ascii-ply-triangle-mesh/2"`); see [Texture Coordinates](#texture-coordinates);
 - `parse_ascii_ply`, `AsciiPlyMesh` (`vertex_count`, `face_count`, `vertices`,
-  `triangles`), `AsciiPlyVertices`, `AsciiPlyTriangles`, `AsciiPlyVertex`;
+  `triangles`, `has_texture_coordinates`, `texture_coordinates`), `AsciiPlyVertices`,
+  `AsciiPlyTriangles`, `AsciiPlyVertex`, `AsciiPlyTextureCoordinates` and
+  `AsciiPlyTextureCoordinate` (`u`, `v`); see [Texture Coordinates](#texture-coordinates);
 - `parse_ascii_ply_with_limits`, `AsciiPlyLimits` (`DEFAULT`, `UNLIMITED`, `new`),
   `AsciiPlyLimitedError`, `AsciiPlyLimitExceeded` (`limit`, `maximum`, `observed`,
   `line`) and `AsciiPlyLimit`; see [Limits](#limits);
@@ -32,7 +37,7 @@ differ in what they return and how they are read:
 | --- | --- | --- |
 | Input | `&[u8]`, `binary_little_endian 1.0` | `&[u8]`, `ascii 1.0` |
 | Vertex type | `f32` x, y, z | `FixedQ32_32` x, y, z |
-| Extra vertex properties | refused | skipped by their declaration |
+| Extra vertex properties | refused | skipped by their declaration (`/2` reads `s`, `t` or `u`, `v` as texture coordinates) |
 | Access | O(1) `vertex(i)`, `triangle(i)` | forward iterators over a re-read of the text |
 | Errors | `PlyError`, no position | `AsciiPlyError`, kind and 1-based line |
 | Allocation | none after warm-up | none after warm-up |
@@ -85,6 +90,33 @@ see [`test-plan.md`](test-plan.md#feature-configurations).
    element before the vertex element, or before `x`, `y` and `z` are all declared, is
    `MissingVertexElement`, reported at the `element face` line.
 5. A body of exactly `N` vertex records, then `M` face records, one record per line.
+
+### Texture Coordinates
+
+Texture coordinates belong to the profile `bunny-ascii-ply-triangle-mesh/2`, read by
+`parse_ascii_ply_v2` and `parse_ascii_ply_v2_with_limits`. It is `/1` with this section
+added, and everything else in this chapter (line rules, faces, counts, limits and their
+order, errors) applies to it unchanged. `/1` is not changed and not deprecated:
+`parse_ascii_ply` and `parse_ascii_ply_with_limits` skip `s`, `t`, `u` and `v` like any other
+extra column, unchecked, and never return texture coordinates. `/2` is a new identity
+because it refuses inputs `/1` accepts, as listed below.
+
+Under `/2` the vertex element may declare one pair of texture coordinates: `s` and `t`, or `u` and
+`v`, each once, with type `float`, `float32`, `double` or `float64`, in any order and at any
+position among the other properties. Their text is converted by
+[`bunny-decimal-q32-32/1`](#the-conversion-rule), as positions are, and a value that fails
+the conversion is refused at its body line with the same kinds (`InvalidNumber`,
+`NumberOverflow`, `NumberTooLong`). `AsciiPlyMesh::texture_coordinates` returns them in vertex
+order as `AsciiPlyTextureCoordinate { u, v }`: `u` from `s` or `u`, `v` from `t` or `v`.
+
+A vertex element that declares none of the four names has no texture coordinates under
+`/2`: `has_texture_coordinates` is false, `texture_coordinates` is `None`, and the file reads
+to the same mesh as under `/1`. Under `/2`, anything else is `UnsupportedProperty` at the
+line of the last of the four names declared (`/1` accepts all of these and skips the columns): one name of a pair without the other (`s` alone,
+`t` alone, `s` with `v`), names from both pairs, a name declared twice, or an integer type.
+
+No other name is a texture coordinate: `texture_u`, `texcoord` and the like are skipped
+columns. Per-face (wedge) texture coordinates are not part of the profile.
 
 ### Faces
 
@@ -178,7 +210,7 @@ newline search, the blank test, the token count, one lookup per coordinate and t
 conversion of each coordinate token). The limits bound what one declaration or one line can
 claim; a line is still scanned once to find its end before its length is compared.
 
-**Skipped columns.** The text of an extra vertex column is counted, never parsed, with or
+**Skipped columns.** The text of an extra vertex column (other than a `/2` texture coordinate) is counted, never parsed, with or
 without limits, as stated in [The Profile](#the-profile): the header gives a type, but no
 type's value grammar is part of this profile, and the binary reader refuses extra
 properties instead of reading them. Behaviour is unchanged.
@@ -209,7 +241,7 @@ line after the last line of the input. Its `Display` is `line <n>: <message>`.
 | `MissingVertexElement` | no vertex element, or `x`, `y`, `z` not all declared; a face element declared before either |
 | `MissingFaceElement` | no face element or no `vertex_indices` property |
 | `UnsupportedElement` | a non-empty extra element, or a repeated vertex or face element |
-| `UnsupportedProperty` | wrong type, duplicate coordinate, list property in a vertex, wrong face property |
+| `UnsupportedProperty` | wrong type, duplicate coordinate, list property in a vertex, wrong face property; under `/2`, a texture coordinate pair that is incomplete, mixed, repeated or not float-typed |
 | `PayloadTooShort` | fewer vertex or face records than declared |
 | `TrailingData` | a record after the last declared one |
 | `VertexFieldCount` | a vertex line with other than one value per declared property |

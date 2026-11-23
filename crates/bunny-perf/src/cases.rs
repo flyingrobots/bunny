@@ -4,18 +4,71 @@
 //! revisions for before/after comparisons. Inputs come from a fixed-seed generator, so
 //! every run times the same work.
 
+// Only the groups whose cases call it: with any other group alone it would be an unused import.
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "prepared",
+    feature = "trace",
+    feature = "angle",
+    feature = "pixel"
+))]
 use std::hint::black_box;
 
 #[cfg(feature = "query")]
 use bunny_geom::FixedSphere3;
 #[cfg(any(feature = "query", feature = "prepared", feature = "trace"))]
 use bunny_geom::{FixedAabb3, FixedRay3};
+#[cfg(any(feature = "linalg", feature = "query", feature = "prepared", feature = "trace"))]
 use bunny_linalg::FixedVec3;
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "prepared",
+    feature = "trace",
+    feature = "angle"
+))]
 use bunny_num::fixed_q32_32::ONE_RAW;
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "prepared",
+    feature = "trace",
+    feature = "angle",
+    feature = "pixel"
+))]
 use bunny_num::FixedQ32_32;
 
 /// Calls per timed batch.
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "angle",
+    feature = "prepared",
+    feature = "scene",
+    feature = "trace",
+    feature = "sample",
+    feature = "pixel",
+    feature = "trace_compact",
+    feature = "trace_counted",
+    feature = "shade",
+    feature = "texture",
+    feature = "normals"
+))]
 pub(crate) const BATCH: usize = 1024;
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "prepared",
+    feature = "trace",
+    feature = "angle",
+    feature = "pixel"
+))]
 const PERF_SEED: u64 = 0xB002_9E2F_0000_0001;
 
 /// A named kernel; `run` makes `calls` calls and returns a checksum. Each call's whole result
@@ -70,6 +123,8 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::normals::normal_cases());
     #[cfg(feature = "smooth")]
     cases.extend(crate::smooth::smooth_cases());
+    #[cfg(feature = "texture")]
+    cases.extend(crate::texture::texture_cases());
     cases
 }
 
@@ -85,16 +140,33 @@ pub(crate) fn all() -> Vec<Case> {
     feature = "pixel",
     feature = "trace_compact",
     feature = "trace_counted",
-    feature = "build",
-    feature = "sah",
-    feature = "shade"
+    feature = "shade",
+    feature = "texture"
 ))]
 pub(crate) fn case(name: &'static str, run: impl Fn() -> i64 + 'static) -> Case {
     Case { name, calls: BATCH, run: Box::new(run) }
 }
 
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "prepared",
+    feature = "trace",
+    feature = "angle",
+    feature = "pixel"
+))]
 struct Seeds(u64);
 
+#[cfg(any(
+    feature = "num",
+    feature = "linalg",
+    feature = "query",
+    feature = "prepared",
+    feature = "trace",
+    feature = "angle",
+    feature = "pixel"
+))]
 impl Seeds {
     fn next(&mut self) -> u64 {
         self.0 =
@@ -104,11 +176,20 @@ impl Seeds {
 
     /// A value in `[-range, range)` Bunny units.
     #[allow(clippy::cast_possible_wrap)]
+    #[cfg(any(
+        feature = "num",
+        feature = "linalg",
+        feature = "query",
+        feature = "prepared",
+        feature = "trace",
+        feature = "angle"
+    ))]
     fn fixed(&mut self, range: i64) -> FixedQ32_32 {
         let span = (2 * range * ONE_RAW).unsigned_abs();
         FixedQ32_32::from_raw((self.next() % span) as i64 - range * ONE_RAW)
     }
 
+    #[cfg(any(feature = "linalg", feature = "query", feature = "prepared", feature = "trace"))]
     fn vec3(&mut self, range: i64) -> FixedVec3 {
         FixedVec3::new(self.fixed(range), self.fixed(range), self.fixed(range))
     }

@@ -87,6 +87,11 @@ every buffer.
   direction is within one raw unit of Snell's law about the frame normal, and
   its ray starts at the nearest point strictly on the far side of the exact
   plane. The result is a `DielectricScatter` holding a `SpecularSample`.
+* `interpolate_uv` and `bilinear` (`bunny-texture-bilinear/1`): a
+  triangle's texture coordinates at a hit, rounded once from the exact
+  barycentric interpolation, and the four texels and weights of a bilinear
+  lookup (texel centres at `(i + 1/2) / size`, `TextureWrap::Repeat` or
+  `Clamp` per axis, weights summing to exactly 1.0), as a `BilinearTaps`.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.
