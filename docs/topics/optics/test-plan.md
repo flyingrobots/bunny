@@ -212,6 +212,13 @@ formatting.
 | OPTICS-REQ-112 | On a plane facing an exact camera at depth `d`, with texture coordinates the world `x` and `y` times `s`, every pixel has `du/dx = s d 2 tan / height`, `dv/dy = -du/dx` and zero cross terms; on a plane tilted toward a neighbouring ray the footprint is the closed-form secant, whose long axis grows without bound as the plane nears that ray's direction. | `README.md#ray-footprint` |
 | OPTICS-REQ-113 | A neighbouring ray with `D' . N` exactly zero gives `Unbounded { axis, reason: Parallel }`, one whose `D' . N` has the sign opposite to the hit ray's gives `Behind`, and one whose component rounds outside `i64` gives `TooLarge`, checked for the right neighbour (parallel, behind, `u`, `v`) and then the down neighbour; nothing wraps or panics for any accepted camera, sample, triangle and texture coordinates. | `README.md#ray-footprint` |
 | OPTICS-REQ-114 | `TexturedTriangle::new` refuses a triangle whose `(v1 - v0) x (v2 - v0)` is exactly zero (`DegenerateTriangle`); `footprint` refuses, in this order, a sample outside the image (`SampleOutsideImage`), a thin-lens sample outside `[0, 1)^2` (`LensSampleOutsideUnitSquare`), a hit ray with `D . N` exactly zero (`RayParallelToPlane`) and a plane with `(v0 - O) . N` zero or of the sign opposite to `D . N` (`PlaneNotAhead`). | `README.md#ray-footprint` |
+| OPTICS-REQ-120 | `equirect_from_direction` (`bunny-environment-equirect/1`) maps a nonzero direction of any length to `u`, the longitude `atan2(-x, z)` in turns: `FixedAngle::atan2(x, z).wrapping_neg()` rounded once to Q32.32 by `to_turns` (nearest, ties to even), a full turn wrapped to 0. `+z` is `u = 0` (the seam), `-x` is 1/4, `-z` is 1/2 (the image centre) and `+x` is 3/4; `u` is in `[0, 1)`. | `README.md#environment-coordinates` |
+| OPTICS-REQ-121 | `v` is the polar angle from `+y` in half turns: `FixedAngle::atan2(R, Y)` with `R = floor(sqrt(x^2 + z^2) 2^k)`, `Y = floor(y 2^k)` and `k = 62 - max(bits(\|y\|), ceil(bits(x^2 + z^2) / 2))` of either sign, its raw angle divided by `2^31` and rounded once to nearest, ties to even. `+y` is `v = 0` (the top row), the horizon 1/2 and `-y` is 1; `v` is in `[0, 1]`. | `README.md#environment-coordinates` |
+| OPTICS-REQ-122 | For every nonzero direction, components of `i64::MIN` included, `u` is within `1/2 + 2^-32` raw units of the exact longitude measured around the circle and `v` within `1/2 + 2^-29` raw units of the exact polar angle; the axes and the diagonals map exactly; doubling a direction, where it still fits, gives the same bits, and negating `x` gives `1 - u` (mod 1) and the same `v`. | `README.md#environment-coordinates` |
+| OPTICS-REQ-123 | The seam is `x = 0` exactly with `z > 0`, which gives `u = 0`; one raw unit of `x` either side gives `u` within one raw unit of 0 around the circle for `z >= 1.0`, and `u` is continuous across it around the circle. At the poles, `x = z = 0` exactly, `u` is 0 and `v` is 0 (`y > 0`) or 1 (`y < 0`). | `README.md#environment-coordinates` |
+| OPTICS-REQ-124 | `equirect_from_direction` refuses only the zero vector (`EquirectError::ZeroDirection`); a direction of one raw unit is accepted, and the input need not be a unit vector. | `README.md#environment-coordinates` |
+| OPTICS-REQ-125 | `direction_from_equirect` maps `(u, v)` to `(-sin theta sin phi, cos theta, sin theta cos phi)` with `theta = v` half turns (raw angle `v 2^31`, exact) and `phi = FixedAngle::from_turns(u)` (any `u`; whole turns discarded), `FixedAngle::sin_cos` for both and each product rounded once to nearest, ties to even: `x` and `z` within `5/2` raw units and `y` within one raw unit of the exact direction, so the length is within `3.68` raw units of 1.0; `v = 0` and `v = 1` give `(0, 1, 0)` and `(0, -1, 0)` exactly for every `u`; `v` below 0 or above 1.0 (raw outside `0..=2^32`) is refused (`EquirectError::VOutsideUnitInterval`). | `README.md#environment-coordinates` |
+| OPTICS-REQ-126 | Direction to coordinates to direction returns a vector within `42/5` raw units (Euclidean) of the unit vector along the original, at the seam and at both poles included. Coordinates to direction to coordinates returns `v` within one raw unit, `u` within `1/2 + 0.29 2^32 / m` raw units around the circle where `m = min(v, 1 - v)` raw is at least `2^16`, and exactly `(0, 0)` or `(0, 1)` at the poles. Neither round trip is claimed exact. | `README.md#environment-coordinates` |
 
 ```toml
 [[requirement]]
@@ -648,6 +655,41 @@ status = "active"
 id = "OPTICS-REQ-114"
 summary = "TexturedTriangle::new refuses a triangle whose (v1 - v0) x (v2 - v0) is exactly zero (DegenerateTriangle); footprint refuses, in this order, a sample outside the image (SampleOutsideImage), a thin-lens sample outside [0, 1)^2 (LensSampleOutsideUnitSquare), a hit ray with D . N exactly zero (RayParallelToPlane) and a plane with (v0 - O) . N zero or of the sign opposite to D . N (PlaneNotAhead)."
 status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-120"
+summary = "equirect_from_direction (bunny-environment-equirect/1) maps a nonzero direction of any length to u, the longitude atan2(-x, z) in turns: FixedAngle::atan2(x, z).wrapping_neg() rounded once to Q32.32 by to_turns (nearest, ties to even), a full turn wrapped to 0. +z is u = 0 (the seam), -x is 1/4, -z is 1/2 (the image centre) and +x is 3/4; u is in [0, 1)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-121"
+summary = "v is the polar angle from +y in half turns: FixedAngle::atan2(R, Y) with R = floor(sqrt(x^2 + z^2) 2^k), Y = floor(y 2^k) and k = 62 - max(bits(|y|), ceil(bits(x^2 + z^2) / 2)) of either sign, its raw angle divided by 2^31 and rounded once to nearest, ties to even. +y is v = 0 (the top row), the horizon 1/2 and -y is 1; v is in [0, 1]."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-122"
+summary = "For every nonzero direction, components of i64::MIN included, u is within 1/2 + 2^-32 raw units of the exact longitude measured around the circle and v within 1/2 + 2^-29 raw units of the exact polar angle; the axes and the diagonals map exactly; doubling a direction, where it still fits, gives the same bits, and negating x gives 1 - u (mod 1) and the same v."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-123"
+summary = "The seam is x = 0 exactly with z > 0, which gives u = 0; one raw unit of x either side gives u within one raw unit of 0 around the circle for z >= 1.0, and u is continuous across it around the circle. At the poles, x = z = 0 exactly, u is 0 and v is 0 (y > 0) or 1 (y < 0)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-124"
+summary = "equirect_from_direction refuses only the zero vector (EquirectError::ZeroDirection); a direction of one raw unit is accepted, and the input need not be a unit vector."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-125"
+summary = "direction_from_equirect maps (u, v) to (-sin theta sin phi, cos theta, sin theta cos phi) with theta = v half turns (raw angle v 2^31, exact) and phi = FixedAngle::from_turns(u) (any u; whole turns discarded), FixedAngle::sin_cos for both and each product rounded once to nearest, ties to even: x and z within 5/2 raw units and y within one raw unit of the exact direction, so the length is within 3.68 raw units of 1.0; v = 0 and v = 1 give (0, 1, 0) and (0, -1, 0) exactly for every u; v below 0 or above 1.0 (raw outside 0..=2^32) is refused (EquirectError::VOutsideUnitInterval)."
+status = "active"
+
+[[requirement]]
+id = "OPTICS-REQ-126"
+summary = "Direction to coordinates to direction returns a vector within 42/5 raw units (Euclidean) of the unit vector along the original, at the seam and at both poles included. Coordinates to direction to coordinates returns v within one raw unit, u within 1/2 + 0.29 2^32 / m raw units around the circle where m = min(v, 1 - v) raw is at least 2^16, and exactly (0, 0) or (0, 1) at the poles. Neither round trip is claimed exact."
+status = "active"
 ```
 
 ## Fixtures
@@ -850,6 +892,24 @@ texture coordinates they give, and the difference of the neighbour's and the
 hit's over their common denominator, rounded to nearest with ties to even by
 bisection on the integer `r` with `r (2 y) <= 2 x + y`. It refuses and
 reports unbounded results by its own tests on `D . N` and `(v0 - O) . N`.
+
+### The Equirectangular Oracle
+
+`crates/bunny-optics/tests/equirect_oracle/mod.rs` computes the exact
+coordinates and directions of `bunny-environment-equirect/1` in 124-bit
+fixed point with no floating point and nothing shared with the kernel, which
+calls `bunny-num`'s CORDIC `atan2` and table `sin_cos`: `pi` by Machin's
+formula, `atan` by its Taylor series after one argument reduction, `sin` and
+`cos` by their Taylor series after an octant reduction. The longitude is the
+oracle's `atan2(-x, z)`. The horizontal length is irrational, so the polar
+angle is an interval: `j = 120 - bits(max |component|)` (not the kernel's
+rule), `r_lo = isqrt((x^2 + z^2) 4^j)` by a bit-by-bit square root over the
+shared `tests/exact` big integers, and the interval runs between the angles of
+`(r_lo, y 2^j)` and `(r_lo + 1, y 2^j)`, which contains the exact one because
+the angle is monotone in `r`. A result passes only when it is within its
+bound of both ends, after four units of `2^-96` turn for the oracle's own
+error. Each oracle value is within a few units of `2^-118` of the exact real
+number.
 
 ### The GGX Oracles
 
@@ -1126,6 +1186,21 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-219 | Extremes | OPTICS-REQ-113 | Tangent 256 on 1 by 1, 32 768 by 1, 1 by 32 768, 32 768 by 32 768 and 3 by 2 images, cameras at trace-domain corners, every image corner at sub-pixel offsets 0 and `1 - 2^-32` (so the neighbours lie past the edge), triangles at trace-domain corners, texture coordinates of `i64::MIN`, `i64::MAX`, 0 and -1, pinhole and thin lens (its lens centre `2^31` raw inside the corner): no call panics in a test build, which checks every `i128` overflow; at least 1 000 results with bounded and `TooLarge` among them (2 000 on the committed seed) and at least 50 thin-lens cameras (200); the seed is printed. | `crates/bunny-optics/tests/ray_footprint_tests.rs::optics_tp_219_extreme_cameras_triangles_and_coordinates_neither_wrap_nor_panic` |
 | OPTICS-TP-220 | The quotient at the `i64` boundary | OPTICS-REQ-111, OPTICS-REQ-113 | Hand-computed: numerators of `(2^64 - 1) d` and `(2^64 + 1) d` over `2 d` (the ties `2^63 - 1/2` and `2^63 + 1/2`) and one raw unit either side, both signs: `i64::MAX`, then outside; `i64::MIN + 1`, `i64::MIN`, `i64::MIN`; `i64::MIN`, `i64::MIN`, then outside; a quotient of `2^64` is refused early. | `crates/bunny-optics/src/footprint/wide.rs::tests::the_range_boundary_is_exact_one_unit_either_side` |
 | OPTICS-TP-221 | Ray-footprint mutations | OPTICS-REQ-110, OPTICS-REQ-111, OPTICS-REQ-112, OPTICS-REQ-113, OPTICS-REQ-114 | Each of fifteen rules broken on purpose fails at least one case above. | [Ray-footprint mutation checks](#ray-footprint-mutation-checks) |
+| OPTICS-TP-230 | Interval oracle | OPTICS-REQ-120, OPTICS-REQ-121, OPTICS-REQ-122 | 12 000 seeded directions, 2 000 of each of six kinds (components within 1.0, any magnitude, near a pole, near the seam, any `i64`, a small lattice): `u` in `[0, 1)`, `v` in `[0, 1]`, and both within their bound of every point of the [equirectangular oracle](#the-equirectangular-oracle)'s interval; the seed is printed. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_230_seeded_directions_agree_with_the_interval_oracle` |
+| OPTICS-TP-231 | Exact values | OPTICS-REQ-120, OPTICS-REQ-121, OPTICS-REQ-122 | The six axes, the four horizontal diagonals and four vertical diagonals at five scales up to `2^62` raw give multiples of 1/8 exactly, by hand; `(3, 5, 4)` and `(4, -5, 3)` at four scales give `v` of exactly 1/4 and 3/4. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_231_axes_and_diagonals_are_exact` |
+| OPTICS-TP-232 | The seam | OPTICS-REQ-123, OPTICS-REQ-122 | For `z` of 1.0, `2^40`, `2^62` and `i64::MAX` raw and five `y`: `x = 0` gives `u = 0`, `x = -1` and `+1` raw give `u` within one raw unit of 0 around the circle and `v` within one raw unit, `x = ±z/8` fall either side of the image centre and sum to 1.0; all checked against the oracle. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_232_the_seam_is_at_u_zero_and_continuous_one_raw_unit_either_side` |
+| OPTICS-TP-233 | The poles | OPTICS-REQ-123, OPTICS-REQ-122 | `(0, y, 0)` for `y` of 1, 1.0, `2^62`, `i64::MAX` raw and their negations and `i64::MIN` give `(0, 0)` and `(0, 1)`; six directions one raw unit off each of four poles give `v` within one raw unit of the pole and agree with the oracle. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_233_the_poles_have_u_zero_and_their_neighbours_are_continuous` |
+| OPTICS-TP-234 | Refusal and length | OPTICS-REQ-124 | The zero vector is `ZeroDirection`; one raw unit along each axis maps exactly; `(i64::MIN, i64::MIN, i64::MIN)` maps to the bits of `(-1, -1, -1)` raw. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_234_the_zero_direction_is_refused_and_any_other_length_accepted` |
+| OPTICS-TP-235 | Doubling and mirror | OPTICS-REQ-122 | 4 000 seeded directions shifted below `2^61`: doubling gives the same bits; negating `x` keeps `v` and gives `u + u' = 0` (mod 1.0); the seed is printed. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_235_doubling_gives_the_same_bits_and_the_mirror_reflects_u` |
+| OPTICS-TP-236 | Extremes | OPTICS-REQ-122 | All 511 nonzero directions with components from `i64::MIN`, `i64::MIN + 1`, -1.0, -1, 0, 1, 1.0, `i64::MAX` raw: no panic in a test build (which checks overflow) and agreement with the oracle. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_236_extreme_components_neither_wrap_nor_panic` |
+| OPTICS-TP-237 | Inverse oracle | OPTICS-REQ-125 | 6 000 seeded `(u, v)` (half with any `i64` `u`, two in seven within `2^16` raw of a pole) and 42 constructed ones: `x` and `z` within `5/2` and `y` within one raw unit of the oracle's Taylor `sin` and `cos` products, and `625 \|d\|^2` between `(25 2^32 - 92)^2` and `(25 2^32 + 92)^2`; the seed is printed. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_237_seeded_coordinates_invert_within_the_bound` |
+| OPTICS-TP-238 | Inverse exact values and wrap | OPTICS-REQ-125 | 500 seeded `u`: `v = 0` gives `(0, 1.0, 0)` and `v = 1.0` gives `(0, -1.0, 0)` exactly, and `u` plus -3, -1, 1 and 5 turns gives the bits of `u`; the four horizontal axes at `v = 1/2` are exact; the seed is printed. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_238_poles_and_axes_invert_exactly_and_u_wraps` |
+| OPTICS-TP-239 | Inverse refusals | OPTICS-REQ-125 | `v` of -1 raw, `i64::MIN`, 1.0 plus one raw unit and `i64::MAX` are `VOutsideUnitInterval`; 0 and 1.0 are accepted; both errors have distinct nonempty messages and are a `std::error::Error`; the identity string is `bunny-environment-equirect/1`. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_239_v_outside_the_unit_interval_is_refused` |
+| OPTICS-TP-240 | Round trip from a direction | OPTICS-REQ-126 | 6 000 seeded directions and 65 constructed at and one raw unit either side of the seam and at and next to both poles: the inverse of the forward map is within `42/5` raw units (Euclidean) of the unit vector along the original, decided exactly by comparing squares; the seed is printed. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_240_direction_to_coordinates_to_direction_is_within_the_bound` |
+| OPTICS-TP-241 | Round trip from coordinates | OPTICS-REQ-126 | 6 000 seeded and 25 constructed `(u, v)` with `m >= 2^16` raw, the seam `u = 0` and `u = 1 - 2^-32` included: `v` returns within one raw unit and `u` within `1/2 + 0.29 2^32 / m` raw around the circle; 200 seeded `u` at each pole return `(0, 0)` and `(0, 1.0)`; the seed is printed. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_241_coordinates_to_direction_to_coordinates_is_within_the_bound` |
+| OPTICS-TP-242 | Ties to even | OPTICS-REQ-120, OPTICS-REQ-121, OPTICS-REQ-125 | Directions found by search whose `FixedAngle::atan2` is exactly a rounding tie: four polar angles `(2q + 1) 2^30` (and the same pair four times larger plus one raw unit in `y`, which the floor of the right shift restores) give the even `v`; four longitudes `p + 1/2` raw, one at `2^32 - 1/2`, give the even `u`, wrapping to 0; eight inverse products of a polar sine with 15 trailing zero bits and a sine or cosine with 16 give the even value, with floors of both parities. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_242_exact_ties_round_to_even` |
+| OPTICS-TP-243 | Golden vectors | OPTICS-REQ-120, OPTICS-REQ-121, OPTICS-REQ-125 | Twelve forward results equal the correctly rounded `(u, v)` of a 60-digit decimal model, each exact value at least 0.011 raw units from a midpoint, so the bound forces them; six inverse results are pinned kernel outputs, bounded by OPTICS-TP-237's oracle. | `crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_243_golden_vectors_are_bit_exact` |
+| OPTICS-TP-244 | Equirectangular mutations | OPTICS-REQ-120, OPTICS-REQ-121, OPTICS-REQ-122, OPTICS-REQ-123, OPTICS-REQ-124, OPTICS-REQ-125 | Each of nineteen rules broken on purpose fails at least one case above. | [Equirectangular mutation checks](#equirectangular-mutation-checks) |
 
 ```toml
 [[case]]
@@ -2783,6 +2858,141 @@ artifact = "docs/topics/optics/test-plan.md#ray-footprint-mutation-checks"
 oracle = "Fifteen rules of footprint.rs, footprint/wide.rs, camera.rs and thin_lens.rs broken on purpose; each fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-230"
+requirements = ["OPTICS-REQ-120", "OPTICS-REQ-121", "OPTICS-REQ-122"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_230_seeded_directions_agree_with_the_interval_oracle"
+oracle = "12 000 seeded directions, 2 000 of each of six kinds (components within 1.0, any magnitude, near a pole, near the seam, any i64, a small lattice): u in [0, 1), v in [0, 1], and both within their bound of every point of the [equirectangular oracle](#the-equirectangular-oracle)'s interval; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-231"
+requirements = ["OPTICS-REQ-120", "OPTICS-REQ-121", "OPTICS-REQ-122"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_231_axes_and_diagonals_are_exact"
+oracle = "The six axes, the four horizontal diagonals and four vertical diagonals at five scales up to 2^62 raw give multiples of 1/8 exactly, by hand; (3, 5, 4) and (4, -5, 3) at four scales give v of exactly 1/4 and 3/4."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-232"
+requirements = ["OPTICS-REQ-123", "OPTICS-REQ-122"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_232_the_seam_is_at_u_zero_and_continuous_one_raw_unit_either_side"
+oracle = "For z of 1.0, 2^40, 2^62 and i64::MAX raw and five y: x = 0 gives u = 0, x = -1 and +1 raw give u within one raw unit of 0 around the circle and v within one raw unit, x = +-z/8 fall either side of the image centre and sum to 1.0; all checked against the oracle."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-233"
+requirements = ["OPTICS-REQ-123", "OPTICS-REQ-122"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_233_the_poles_have_u_zero_and_their_neighbours_are_continuous"
+oracle = "(0, y, 0) for y of 1, 1.0, 2^62, i64::MAX raw and their negations and i64::MIN give (0, 0) and (0, 1); six directions one raw unit off each of four poles give v within one raw unit of the pole and agree with the oracle."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-234"
+requirements = ["OPTICS-REQ-124"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_234_the_zero_direction_is_refused_and_any_other_length_accepted"
+oracle = "The zero vector is ZeroDirection; one raw unit along each axis maps exactly; (i64::MIN, i64::MIN, i64::MIN) maps to the bits of (-1, -1, -1) raw."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-235"
+requirements = ["OPTICS-REQ-122"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_235_doubling_gives_the_same_bits_and_the_mirror_reflects_u"
+oracle = "4 000 seeded directions shifted below 2^61: doubling gives the same bits; negating x keeps v and gives u + u' = 0 (mod 1.0); the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-236"
+requirements = ["OPTICS-REQ-122"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_236_extreme_components_neither_wrap_nor_panic"
+oracle = "All 511 nonzero directions with components from i64::MIN, i64::MIN + 1, -1.0, -1, 0, 1, 1.0, i64::MAX raw: no panic in a test build (which checks overflow) and agreement with the oracle."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-237"
+requirements = ["OPTICS-REQ-125"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_237_seeded_coordinates_invert_within_the_bound"
+oracle = "6 000 seeded (u, v) (half with any i64 u, two in seven within 2^16 raw of a pole) and 42 constructed ones: x and z within 5/2 and y within one raw unit of the oracle's Taylor sin and cos products, and 625 |d|^2 between (25 2^32 - 92)^2 and (25 2^32 + 92)^2; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-238"
+requirements = ["OPTICS-REQ-125"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_238_poles_and_axes_invert_exactly_and_u_wraps"
+oracle = "500 seeded u: v = 0 gives (0, 1.0, 0) and v = 1.0 gives (0, -1.0, 0) exactly, and u plus -3, -1, 1 and 5 turns gives the bits of u; the four horizontal axes at v = 1/2 are exact; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-239"
+requirements = ["OPTICS-REQ-125"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_239_v_outside_the_unit_interval_is_refused"
+oracle = "v of -1 raw, i64::MIN, 1.0 plus one raw unit and i64::MAX are VOutsideUnitInterval; 0 and 1.0 are accepted; both errors have distinct nonempty messages and are a std::error::Error; the identity string is bunny-environment-equirect/1."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-240"
+requirements = ["OPTICS-REQ-126"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_240_direction_to_coordinates_to_direction_is_within_the_bound"
+oracle = "6 000 seeded directions and 65 constructed at and one raw unit either side of the seam and at and next to both poles: the inverse of the forward map is within 42/5 raw units (Euclidean) of the unit vector along the original, decided exactly by comparing squares; the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-241"
+requirements = ["OPTICS-REQ-126"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_241_coordinates_to_direction_to_coordinates_is_within_the_bound"
+oracle = "6 000 seeded and 25 constructed (u, v) with m >= 2^16 raw, the seam u = 0 and u = 1 - 2^-32 included: v returns within one raw unit and u within 1/2 + 0.29 2^32 / m raw around the circle; 200 seeded u at each pole return (0, 0) and (0, 1.0); the seed is printed."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-242"
+requirements = ["OPTICS-REQ-120", "OPTICS-REQ-121", "OPTICS-REQ-125"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_242_exact_ties_round_to_even"
+oracle = "Directions found by search whose FixedAngle::atan2 is exactly a rounding tie: four polar angles (2q + 1) 2^30 (and the same pair four times larger plus one raw unit in y, which the floor of the right shift restores) give the even v; four longitudes p + 1/2 raw, one at 2^32 - 1/2, give the even u, wrapping to 0; eight inverse products of a polar sine with 15 trailing zero bits and a sine or cosine with 16 give the even value, with floors of both parities."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-243"
+requirements = ["OPTICS-REQ-120", "OPTICS-REQ-121", "OPTICS-REQ-125"]
+evidence = "test"
+test = "crates/bunny-optics/tests/environment_equirect_tests.rs::optics_tp_243_golden_vectors_are_bit_exact"
+oracle = "Twelve forward results equal the correctly rounded (u, v) of a 60-digit decimal model, each exact value at least 0.011 raw units from a midpoint, so the bound forces them; six inverse results are pinned kernel outputs, bounded by OPTICS-TP-237's oracle."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "OPTICS-TP-244"
+requirements = ["OPTICS-REQ-120", "OPTICS-REQ-121", "OPTICS-REQ-122", "OPTICS-REQ-123", "OPTICS-REQ-124", "OPTICS-REQ-125"]
+evidence = "manual-audit"
+artifact = "docs/topics/optics/test-plan.md#equirectangular-mutation-checks"
+oracle = "Nineteen rules of environment.rs broken on purpose; each fails at least one case."
+tier = "manual"
+status = "planned"
 ```
 
 ## Mutation Checks
@@ -3270,6 +3480,41 @@ case fail; the restored source passed every case.
 | The thin lens without its correction | The camera's directions | OPTICS-TP-214 |
 | The thin lens from the lens centre | The lens point held fixed | OPTICS-TP-214 |
 
+## Equirectangular Mutation Checks
+
+Each rule below was broken on purpose in
+`crates/bunny-optics/src/environment.rs`, and the tests were run with
+`cargo test --locked -q -p bunny-optics --no-fail-fast --test
+environment_equirect_tests` per mutation, the source restored after each.
+Every mutation made at least one case fail; the restored source passed every
+case.
+
+| Mutation | Rule broken | Failing cases |
+| --- | --- | --- |
+| `u` from `atan2(x, z)`, not negated | `u = atan2(-x, z)`: `-x` at 1/4 | OPTICS-TP-230, OPTICS-TP-231, OPTICS-TP-232, OPTICS-TP-233, OPTICS-TP-234, OPTICS-TP-236, OPTICS-TP-240, OPTICS-TP-241, OPTICS-TP-242, OPTICS-TP-243 |
+| A full turn not wrapped to 0 | `u` in `[0, 1)` | OPTICS-TP-230, OPTICS-TP-232, OPTICS-TP-236, OPTICS-TP-242, OPTICS-TP-243 |
+| `u = 1/2` at the poles | `u = 0` at the poles | OPTICS-TP-230, OPTICS-TP-231, OPTICS-TP-233, OPTICS-TP-234, OPTICS-TP-236, OPTICS-TP-241 |
+| `v` floored | `v` rounded to nearest | OPTICS-TP-230, OPTICS-TP-232, OPTICS-TP-233, OPTICS-TP-236, OPTICS-TP-242, OPTICS-TP-243 |
+| `v` ties away from zero | `v` ties to even | OPTICS-TP-242 |
+| `v` ties to odd | `v` ties to even | OPTICS-TP-242 |
+| The polar pair not scaled up (`k = 0`) | `k = 62 - L` of either sign | OPTICS-TP-230, OPTICS-TP-234, OPTICS-TP-235, OPTICS-TP-236, OPTICS-TP-240, OPTICS-TP-243 |
+| The polar pair scaled to 40 bits | The larger in `[2^61, 2^62)` | OPTICS-TP-230, OPTICS-TP-242 |
+| The square root one too large | `R = floor(r 2^k)` | OPTICS-TP-242 |
+| The right-shifted `y` rounded up | `Y = floor(y 2^k)` | OPTICS-TP-242 |
+| `x` of the inverse not negated | `x = -sin theta sin phi` | OPTICS-TP-237, OPTICS-TP-238, OPTICS-TP-240, OPTICS-TP-241, OPTICS-TP-242, OPTICS-TP-243 |
+| The inverse's products floored | Each product rounded to nearest | OPTICS-TP-242, OPTICS-TP-243 |
+| The inverse's products with ties away from zero | Ties to even | OPTICS-TP-242 |
+| The inverse's products with ties to odd | Ties to even | OPTICS-TP-242 |
+| `v = 1.0` refused | `v` in `[0, 1]`, closed | OPTICS-TP-237, OPTICS-TP-238, OPTICS-TP-239, OPTICS-TP-240, OPTICS-TP-241 |
+| `v = 0` refused | `v` in `[0, 1]`, closed | OPTICS-TP-237, OPTICS-TP-238, OPTICS-TP-239, OPTICS-TP-240, OPTICS-TP-241 |
+| The polar angle `v` turns, not half turns | `theta = v` half turns | OPTICS-TP-237, OPTICS-TP-238, OPTICS-TP-240, OPTICS-TP-241, OPTICS-TP-242, OPTICS-TP-243 |
+| The longitude's sine and cosine swapped | `(sin phi, cos phi)` placement | OPTICS-TP-237, OPTICS-TP-238, OPTICS-TP-240, OPTICS-TP-241, OPTICS-TP-242, OPTICS-TP-243 |
+| The zero direction accepted | `ZeroDirection` | OPTICS-TP-234 |
+Two of them stay inside the stated bound and are caught only by pinned bits:
+a square root one too large and a right-shifted `y` rounded up both move the
+angle by under two units of `2^-64` turn, which the bound allows; OPTICS-TP-242
+fails for each because it fixes the exact tie the documented floors produce.
+
 ## Decode Mutation Check
 
 In a container run of `cargo test --locked -p bunny-optics --test
@@ -3545,3 +3790,5 @@ case with a stable test name.
 | A choice of sampler pair for the lens in a renderer (the camera takes any pair; pair 0 is the sub-pixel offset). | None; the renderer decides. |
 | A seeded footprint that is exactly `Parallel`: an exact zero `D' . N` is too rare for random planes, so `OPTICS-TP-213` and `OPTICS-TP-214` see none; `OPTICS-TP-212` and `OPTICS-TP-217` construct it. | None; a seeded generator that builds the plane from the neighbour's direction exactly. |
 | A timing case for `bunny-ray-footprint/1` in `bunny-perf`. | None; a follow-up case. |
+| A timing case for `bunny-environment-equirect/1` in `bunny-perf`. | None; a follow-up case. |
+| A bound on the `u` round trip from coordinates within `2^16` raw units of a pole, where the longitude is ill-conditioned: OPTICS-TP-241 checks only `v` and the exact poles there. | None; the bound grows as `1 / m` and is stated for `m >= 2^16`. |
