@@ -72,7 +72,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if options.stats {
         #[cfg(feature = "trace")]
         {
-            print!("{}", profile::report());
+            print!("{}", profile::report()?);
             return Ok(());
         }
         #[cfg(not(feature = "trace"))]

@@ -937,11 +937,12 @@ A closest-hit search pops every entry it pushes, so also `box_entries =
 popped_skipped + interior_visits + leaf_visits`; an any-hit search stops at
 its first accepted primitive and leaves the rest of the stack unpopped. An empty
 tree counts nothing; a ray that misses the root box counts one box test.
-These are the definitions of the benchmark profile's replica (`box_calls`,
-`box_some`, `skipped_at_pop`, `interior_visited`, `leaf_visited`, `tri_tests`,
-`stack_peak` in `crates/bunny-perf/src/profile.rs`), which counts on the
-`BvhNode` tree: a compact tree makes the same box tests in the same order, and
-`TRACE-TP-418` checks that every count and answer agrees with the replica on
+The benchmark profile (`box_calls`, `box_some`, `skipped_at_pop`,
+`interior_visited`, `leaf_visited`, `tri_tests`, `stack_peak` in
+`crates/bunny-perf/src/profile.rs`) takes these counts from the counted searches
+on the compact copy of its tree. Its replica of the search on the `BvhNode` tree
+makes the same box tests in the same order, and `TRACE-TP-418` checks that every
+answer and the number of box and primitive tests agree with the replica on
 all 1 024 benchmark rays (20 238 box tests over the `closest_hit` searches, the
 profile table's 19.76 per ray). The profile's "nodes popped" is
 `popped_skipped + interior_visits + leaf_visits`.
