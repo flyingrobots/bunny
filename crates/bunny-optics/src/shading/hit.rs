@@ -33,8 +33,9 @@ impl SurfaceHit {
     /// The hit of `ray` on the triangle prepared as `surface`, where `hit` is the
     /// `TriangleHit` that `ray.hit_triangle` returned for it.
     ///
-    /// **Facing.** The frame is `surface.facing_frame(hit.front_face)`: its normal points to
-    /// the side the ray arrived from.
+    /// **Facing.** The frame is `surface.facing_frame(hit.front_face)`: the frame of the side
+    /// the ray arrived from. The exact plane normal satisfies `d . N < 0` for a front-face hit;
+    /// the frame's rounded unit normal need not, at a grazing angle.
     ///
     /// **Start point.** `point_at(ray, hit.distance)`, then moved by the fewest whole raw units
     /// (zero, one or two) along the axis of the plane normal's largest component (the lowest

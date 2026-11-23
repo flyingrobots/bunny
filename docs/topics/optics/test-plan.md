@@ -1046,6 +1046,9 @@ A direction exactly parallel to the normal is not reached by the generator;
 | OPTICS-TP-063 | Refusal mutations | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | Each side of the fast/diagnostic pair broken alone (the stepped-point domain check of either, the overflow guard of the fast path, the beyond-reach check of the diagnostic path), the stepped start point reported as the unstepped one, and a sample coordinate of exactly 1.0 accepted, each make at least one case above fail. | [Shading mutation checks](#shading-mutation-checks) |
 | OPTICS-TP-064 | Agreement from a fresh seed | OPTICS-REQ-041, OPTICS-REQ-042, OPTICS-REQ-043 | The check of OPTICS-TP-062 from a seed drawn per run (`RandomState`), printed in every failure message, so coverage accumulates across runs; 30 consecutive runs passed. On `wasm32-unknown-unknown` the standard library's hash keys are fixed, so there the seed repeats. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_064_option_and_result_forms_agree_from_a_fresh_seed` |
 | OPTICS-TP-065 | Defensive bounce refusal | OPTICS-REQ-041 | `BounceRayRefused` built directly (no input reaches it through the public API; OPTICS-TP-062 and OPTICS-TP-064 count zero occurrences): its values and `Display` text. | `crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_defensive_bounce_refusal_names_its_ray` |
+| OPTICS-TP-270 | Facing sign | OPTICS-REQ-032 | The grazing witness of flyingrobots/bunny#299 (raw triangle, origin and direction in the case): a front-face hit whose exact `d . N` is in `-6e21..-5.5e21` raw squared (`i128`, negative as claimed) while `d . n` with the frame's rounded unit normal is exactly `+65 823 548` raw squared, so the README's guarantee is about `N`, not `n`. | `crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_270_the_facing_sign_is_exact_for_the_plane_normal_not_the_rounded_unit_normal` |
+| OPTICS-TP-271 | Changed distance | OPTICS-REQ-033, OPTICS-REQ-041 | A ground hit from `(0, 2, 0)` along `(0, -1, 0)`: the reported hit starts at `(0, 1, 0)` raw; the distance changed to 1.0 gives `Some` (start `(0, 1.0, 0)`, equal to `try_new`'s value); changed to 3.0 (1.0 below the plane) gives `None`. So `new` refuses a hit off the arrival side, not a hit the kernel did not report. | `crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_271_a_changed_distance_is_refused_only_off_the_arrival_side` |
+| OPTICS-TP-272 | Sine table through the bounce | OPTICS-REQ-034 | `cosine_direction` on the ground frame at `v = k / 4096` turns for `k = 0..=4096` (every knot of the sine table; `k = 4096` as the last raw value below 1.0) and four `u` values (16 388 directions), folded by FNV-1a to a pinned digest. A regression pin, not an oracle: `AT-TP-004` holds the error bound. Mutation: one table entry (`k = 300`) raised by `2^33`, `2^31` and `2^30` in the 62-bit table (about 8, 0.5 and 0.25 raw units) each change the digest; `OPTICS-TP-044` alone caught only the first. | `crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_272_the_bounce_direction_pins_every_knot_of_the_sine_table` |
 | OPTICS-TP-066 | Hand-derived vertex normals | OPTICS-REQ-044 | The identity string; a flat 3 by 3 grid in `z = 0` gives `+Z` at every vertex; the same grid on the plane `3y + 4z = 0` gives raw `(0, 2 576 980 378, 3 435 973 837)` (`(0, 0.6, 0.8)` rounded) at every vertex, whether it has 1, 2, 3 or 6 faces; a four-face fan around `+Z` gives the axis at its apex and `(+-0.6, 0, 0.8)`, `(0, +-0.6, 0.8)` at its base; a fold of a face with cross product `(0, 0, 8)` and one with `(6, 0, 0)`, both right-angled at the shared vertex, gives `(0.6, 0, 0.8)` there (equal or angle weights would give `(1, 0, 1) / sqrt(2)`). | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_066_hand_derived_meshes_give_exact_vertex_normals` |
 | OPTICS-TP-067 | Vertices without a normal | OPTICS-REQ-046 | An empty mesh has no normals; an unreferenced vertex, the vertices of only zero-area faces (collinear corners, a repeated index) and of one triangle wound both ways have `None`; the fold with its shared vertex duplicated gives each copy only its own face's normal. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_067_vertices_without_faces_or_with_a_zero_sum_have_no_normal` |
 | OPTICS-TP-068 | Refusals in order | OPTICS-REQ-046 | Positions at `+-2^40` raw and the extreme raw values are refused as `PositionOutsideTraceDomain` naming the first such vertex, and `2^40 - 1` is accepted; the first triangle with an out-of-range index and its first such corner are named in `IndexOutOfRange`; a mesh with both is refused for its position first; the `Display` texts. | `crates/bunny-optics/tests/vertex_normal_tests.rs::optics_tp_068_meshes_outside_the_domain_are_refused_in_order` |
@@ -1718,6 +1721,33 @@ requirements = ["OPTICS-REQ-041"]
 evidence = "test"
 test = "crates/bunny-optics/tests/shading_refusal_tests.rs::optics_tp_065_the_defensive_bounce_refusal_names_its_ray"
 oracle = "Specified: the variant carries the origin and direction it is given, and its Display text names both as raw components."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-270"
+requirements = ["OPTICS-REQ-032"]
+evidence = "test"
+test = "crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_270_the_facing_sign_is_exact_for_the_plane_normal_not_the_rounded_unit_normal"
+oracle = "Exact i128 plane normal and ray direction from the issue witness; the expected d . n is the raw-squared value found by the issue search and reproduced here."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-271"
+requirements = ["OPTICS-REQ-033", "OPTICS-REQ-041"]
+evidence = "test"
+test = "crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_271_a_changed_distance_is_refused_only_off_the_arrival_side"
+oracle = "Hand derived: the ground plane y = 0, the point at distance d is 2 - d above it."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "OPTICS-TP-272"
+requirements = ["OPTICS-REQ-034"]
+evidence = "test"
+test = "crates/bunny-optics/tests/optics_docs_claims_tests.rs::optics_tp_272_the_bounce_direction_pins_every_knot_of_the_sine_table"
+oracle = "Regression pin: a digest of the current outputs; not independent of the kernel."
 tier = "fast"
 status = "implemented"
 
