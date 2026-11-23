@@ -285,8 +285,11 @@ seeded hits (barycentric `det` in `[2^99, 2^100)`, the size of a trace-domain hi
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
 the search loop in `crates/bunny-perf/src/profile.rs`, built on public APIs only, so the core
-crates carry no counters; a test checks that it tests the same primitives in the same order as
-the shipped functions on every ray. The same module provides the `trace/kernel_*` cases, which
+crates carry no counters beyond the counted searches; a test checks that it tests the same
+primitives in the same order as the shipped functions on every ray. The node, box and leaf
+counts are not the replica's: they are what `compact_closest_hit_counted` and
+`compact_any_hit_counted` return for the same ray, so `--stats` needs the `trace_counted` group.
+The replica supplies the per-stage triangle counters, the child counts and the recorded calls. The same module provides the `trace/kernel_*` cases, which
 replay the box and triangle tests the search makes and time them in isolation. See the
 [profile](#profile-of-closest_hit-on-the-benchmark-scene).
 
@@ -305,8 +308,9 @@ every ray, and exits with the differing ray indices if not.
 The `trace_counted` group (`crates/bunny-perf/src/counted.rs`) times the counted compact
 searches on the same tree and rays: `trace/closest_hit_compact_counted` and
 `trace/any_hit_compact_counted`, each summing the answers and the box tests so neither is
-optimized away. A unit test in `profile.rs` (`TRACE-TP-418`) checks that their answers and
-counts equal the profile replica's on every ray.
+optimized away. A unit test in `profile.rs` (`TRACE-TP-418`) checks that their answers equal the
+profile replica's, and as many box and primitive tests as it recorded, on every ray; `PERF-TP-057`
+checks that the profile's counts are theirs.
 
 `trace/triangle_hit` and `trace/triangle_beyond_limit` time `TraceRay::hit_triangle` alone
 on the scene: each camera ray that hits something against the triangle it hits first,
@@ -1566,10 +1570,16 @@ experiments can be chosen by evidence. No library function changed.
 
 ### Method
 
-- **Counters live in the harness.** `crates/bunny-perf/src/profile.rs` replicates the search
-  loop of `closest_hit` and `any_hit` using only public items (`TraceRay::box_entry`,
-  `BvhNode`, `TraceRay::hit_triangle`) and counts events. The core crates carry no counters.
-  `bunny-perf --stats` prints the tables below.
+- **Counters come from the counted searches and the harness.** The node, box and leaf
+  counts (`popped`, `skipped_at_pop`, `interior_visited`, `leaf_visited`, `box_calls`,
+  `box_some`, `box_none`, `stack_peak`, `tri_tests`) are what `compact_closest_hit_counted` and
+  `compact_any_hit_counted` return on the compact copy of the tree (flyingrobots/bunny#344; the
+  tables below were first produced by a replica and are byte-for-byte unchanged).
+  `crates/bunny-perf/src/profile.rs` still replicates the search loop of `closest_hit` and
+  `any_hit` using only public items (`TraceRay::box_entry`, `BvhNode`,
+  `TraceRay::hit_triangle`) for what the counted searches do not give: the per-stage triangle
+  counters, the child counts and the recorded calls the kernel replays need.
+  `bunny-perf --stats` prints the tables below and needs the `trace_counted` group.
 - **The replica is checked against the shipped functions.** On every one of the 1 024 rays
   the replica calls the primitive test with the same primitives, the same limits and in the
   same order as `closest_hit` (the same primitives in the same order as `any_hit`), and
