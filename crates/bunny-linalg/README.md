@@ -60,6 +60,14 @@ math for graphics pipelines.
   cubic, exact at the ends), `derivative_at(t)` (within 3 raw units, `None` on
   overflow) and `split(t)` into the de Casteljau halves; `None` for `t`
   outside `[0, 1]`.
+* **Arc Length (`bunny-curve/1`, part 3)**: `ArcLengthTable::build(curve,
+  segments_per_span, storage)` over any `Curve3` (implemented by
+  `CubicBezier3`) stores cumulative chord lengths in caller storage, each chord
+  kept to `2^-16` raw and each entry rounded once; `param_at_distance(s)` finds
+  the parameter by binary search and one rounded interpolation, exact at 0 and
+  at `total()`, non-decreasing, `None` outside `[0, total]`. Typed refusals in
+  `ArcLengthError`; the bounds and measured errors are in
+  `docs/topics/curve/README.md#arc-length`.
 * **Checked Matrix Operations**: Matrix-vector and matrix-matrix
   multiplication, determinant, and inverse APIs return `None` for singular or
   overflowing cases; transpose is infallible and returns a matrix directly.

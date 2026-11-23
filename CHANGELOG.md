@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-linalg`: arc length for `bunny-curve/1`, part 3. `Curve3` is a
+  two-method interface (`span_count`, `at`) that `CubicBezier3` implements with
+  one span. `ArcLengthTable::build(curve, segments_per_span, storage)` samples
+  `u_k = from_ratio(k, m)` for `m` in `1..=4096`, keeps each chord as
+  `floor(2^16 |c|)` from its exact squared length, sums exactly and rounds each
+  cumulative entry once to nearest, ties to even, into caller-provided
+  storage; each entry is within `1/2 + k / 2^16` raw units of the sampled
+  polyline. `param_at_distance(s)` is a binary search and one half-even
+  rounding of the linear interpolation, exactly 0 at 0 and `end()` at
+  `total()`, non-decreasing, `None` outside `[0, total]`. Refusals are typed
+  (`ArcLengthError`), including chord and total overflow and zero length. The
+  table exceeds the true arc length by at most `3 sqrt(3) K + 1/2` raw units
+  (proven); its error below it is measured for three curves. Closes
+  flyingrobots/bunny#307.
+
 * `cargo xtask perf --evidence <file>` writes every round of both sides (case,
   side, round, p50, p95, p99) and the build identity (base reference, full base
   and candidate SHAs, target triple, flags, and whether the working tree was
