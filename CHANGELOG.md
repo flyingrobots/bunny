@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-perf` builds with each feature group alone. Helpers shared by several
+  groups (`Seeds`, `PERF_SEED`, the `black_box` and `case` imports, `BATCH`) are
+  now gated on the groups that use them, so the `cargo xtask perf` per-group
+  fallback no longer reports a buildable group as new. The full gate runs the
+  new `code-dojo-perf-groups` check, which builds the harness once per group
+  alone and once with all groups. Closes flyingrobots/bunny#272.
+
 * `bunny-optics`: the rounding of the incidence cosine in
   `bunny-specular-reflection/1` is now tested. The rule is the documented one:
   the exact `-(u . n)`, in units of `2^-64`, rounded once to nearest raw unit

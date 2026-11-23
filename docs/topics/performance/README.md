@@ -234,6 +234,14 @@ exercises. A case for a new API goes in a new feature group (declared in the har
 Use seeded inputs only, pass every result through `black_box`, and return a checksum of
 the results so the work is not optimized away.
 
+Every group must build on its own: `cargo xtask perf` falls back to building each group
+alone when the base revision cannot build them all, and a group that fails to build would be
+reported as `new` instead of compared. A helper, import or constant shared by some groups
+is therefore gated with `#[cfg(any(feature = ...))]` on exactly the groups that use it,
+because the workspace denies warnings. `cargo run --locked -p xtask -- code-dojo-perf-groups`
+checks the harness once per group alone and once with all groups, and the full gate
+(`code-dojo`) runs it. A new group is picked up from the harness manifest automatically.
+
 The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere of 27 648
 triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
 rays (a 32 by 32 grid). Where a case measures an old API against a new one, the harness
