@@ -17,6 +17,13 @@ queries, collision detection, and ray-casting.
   segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
   polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
   half-space; see `docs/topics/plane-clipping/README.md`.
+* **FixedLine3 / FixedTriangle3 / FixedCapsule3 / FixedObb3**: the infinite
+  line (the ray's unit-direction rule), the triangle with an exact degeneracy
+  test over the full raw range, the capsule (segment and non-negative radius)
+  and the oriented box (centre, axis columns within the rotation contracts'
+  length and orthogonality tolerances, non-negative half extents), refusing
+  with `ShapeError`; each, and the segment and plane, has a `try_from_float`.
+  See `docs/topics/shape-library/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects

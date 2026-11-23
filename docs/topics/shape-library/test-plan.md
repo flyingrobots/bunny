@@ -118,7 +118,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_line_capsule_tests.rs::shape_tp_001_lines_keep_their_representation"
 oracle = "Stored fields and the unit axis constants."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-002"
@@ -127,7 +127,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_line_capsule_tests.rs::shape_tp_002_line_directions_follow_the_ray_rule"
 oracle = "FixedRay3::try_new and FixedUnitVec3::new on constructed and 20 000 seeded directions."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-003"
@@ -136,7 +136,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_triangle_tests.rs::shape_tp_003_hand_built_degenerate_and_near_degenerate_triangles"
 oracle = "Independent 256-bit cross product on hand-built triangles at the ends of the raw range."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-004"
@@ -145,7 +145,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_triangle_tests.rs::shape_tp_004_seeded_triangles_match_the_exact_oracle"
 oracle = "Independent 256-bit cross product on 30 000 seeded triangles in six vertex orders."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-005"
@@ -154,7 +154,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_line_capsule_tests.rs::shape_tp_005_capsule_radius_and_degenerate_capsules"
 oracle = "Hand-derived radius thresholds and degenerate capsules."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-006"
@@ -163,7 +163,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_obb_tests.rs::shape_tp_006_hand_built_boxes_on_and_beside_each_threshold"
 oracle = "Independent 256-bit lengths and dot products on hand-built thresholds."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-007"
@@ -172,7 +172,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_obb_tests.rs::shape_tp_007_every_sampled_rotation_constructor_result_is_accepted"
 oracle = "Independent 256-bit verdict on seeded rotation constructor results."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-008"
@@ -181,7 +181,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_obb_tests.rs::shape_tp_008_seeded_boxes_match_the_exact_oracle"
 oracle = "Independent 256-bit verdict on 30 000 seeded matrices."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-009"
@@ -190,7 +190,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_float_tests.rs::shape_tp_009_float_constructors_round_then_validate"
 oracle = "Fixed constructors on FixedQ32_32::try_from_f32 components; hand-derived f32 range edges."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-010"
@@ -199,7 +199,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_float_tests.rs::shape_tp_010_segments_and_planes_accept_their_degenerate_cases"
 oracle = "Fixed constructors on FixedQ32_32::try_from_f32 components; the documented zero-normal distance."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-011"
@@ -208,7 +208,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/shape_float_tests.rs::shape_tp_011_shape_error_is_an_error_with_messages"
 oracle = "The stated messages."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "SHAPE-TP-012"
@@ -217,7 +217,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/shape-library/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations
