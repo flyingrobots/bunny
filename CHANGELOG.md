@@ -79,6 +79,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   segments' control boxes, not the box of the points. Closes
   flyingrobots/bunny#152.
 
+* `bunny-geom`: box helpers on `FixedAabb3` under `bunny-bounds/1`
+  (`BOUNDS_CONTRACT_ID`). `from_points(&[FixedVec3])` and `from_triangle` are
+  each axis's exact minimum and maximum (no points is `BoundsError::NoPoints`);
+  `merge` is the smallest box containing both; `expand(margin)` and
+  `expand_axes` move each face by the margin, exact in `i128`, refusing
+  `InvertedBox`, then `ShrinkInvertsBox`, then `OutOfRange`, never saturating;
+  `from_sphere` is `centre -/+ r` (`NegativeRadius`, `OutOfRange`);
+  `bounding_sphere` rounds each midpoint once, ties to even, and takes the
+  ceiling of the exact root to the farthest corner, so it contains all eight
+  corners (`OutOfRange` above `i64::MAX`). Every helper refuses an inverted box,
+  as `FixedAabb3::try_new` does. `bunny-mesh`: `mesh_bounds` bounds the vertices
+  a mesh's triangles use (`MeshBoundsError::EmptyMesh`, `IndexOutOfRange {
+  triangle }`). Dedicated tests pin the existing `union_aabb`,
+  `TraceSphere::bounds` and `TraceTriangle::bounds` as they behave today. Closes
+  flyingrobots/bunny#151.
+
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
   `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI
