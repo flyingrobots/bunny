@@ -17,6 +17,7 @@
 // dojo: allow float-boundary -- imports the f32 DTO alias for Vec2 and Vec3 below
 use bunny_num::{FixedQ32_32, Scalar};
 
+mod cubic_bezier3;
 mod fixed_affine2;
 mod fixed_affine3;
 mod fixed_mat2;
@@ -32,6 +33,7 @@ mod lerp;
 pub(crate) mod matrix_common;
 mod viewport;
 
+pub use cubic_bezier3::{CubicBezier3, CURVE_CONTRACT_ID};
 pub use fixed_affine2::FixedAffine2;
 pub use fixed_affine3::FixedAffine3;
 pub use fixed_mat2::FixedMat2;
