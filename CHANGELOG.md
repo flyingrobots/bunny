@@ -25,6 +25,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/topics/plane-clipping/` (PC-REQ-014 to -019, PC-TP-025 to -037). Closes
   flyingrobots/bunny#162.
 
+* `bunny-num`: inverse lerp, remap and an exact checked clamp under
+  `bunny-lerp/1`. `FixedQ32_32::inverse_lerp(a, b, x)` is
+  `round_half_even((x - a) * 2^32 / (b - a))` on raw values: exactly `0` at
+  `a` and `1.0` at `b`, extrapolating, `None` for `a == b` or a result outside
+  Q32.32. `lerp(a, b, inverse_lerp(a, b, x))` is exactly `x` when
+  `|b - a| <= 1.0` and `inverse_lerp(a, b, lerp(a, b, t))` exactly `t` when
+  `|b - a| >= 1.0`, each within a stated bound otherwise.
+  `FixedQ32_32::remap(x, [in_lo, in_hi], [out_lo, out_hi])` rounds its exact
+  step once from a `u128` product (within half a raw unit whatever the
+  ranges), is exact at both ends, equals `lerp` and `inverse_lerp` on unit
+  ranges, and is `None` for `in_lo == in_hi` or a result outside Q32.32.
+  `x.checked_clamp(lo, hi)` is exact and `None` when `lo > hi`. Refs
+  flyingrobots/bunny#111.
+
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
   `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI
