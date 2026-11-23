@@ -350,9 +350,16 @@ fn check_threshold(
     }
     let names: Vec<String> = slow
         .iter()
-        .map(|row| format!("{} ({:+.1}%)", row.case, row.best_change_percent().unwrap_or_default()))
+        .map(|row| {
+            format!(
+                "{} ({:+.1}% floor, {:+.1}% median)",
+                row.case,
+                row.floor_change_percent().unwrap_or_default(),
+                row.change_percent().unwrap_or_default()
+            )
+        })
         .collect();
-    Err(format!("best p50 regressed past {limit}%: {}", names.join(", ")).into())
+    Err(format!("floor and median p50 both regressed past {limit}%: {}", names.join(", ")).into())
 }
 
 #[cfg(test)]
@@ -472,13 +479,13 @@ mod tests {
     }
 
     #[test]
-    fn the_gate_message_reports_the_best_p50_change_it_tested() {
-        // Median change is -35 %, best change +30 %: the gate fails on the best, and says so.
+    fn the_gate_message_reports_the_floor_and_median_change_it_tested() {
+        // Three rounds: the floor is the lowest p50. Floor +30 %, median +30 %.
         let rows = crate::perf_report::compare(
-            &runs("a", &[100.0, 200.0, 200.0]),
+            &runs("a", &[100.0, 100.0, 100.0]),
             &runs("a", &[130.0, 130.0, 130.0]),
         );
         let err = check_threshold(&rows, Some(20.0)).expect_err("regressed");
-        assert!(err.to_string().contains("a (+30.0%)"), "{err}");
+        assert!(err.to_string().contains("a (+30.0% floor, +30.0% median)"), "{err}");
     }
 }
