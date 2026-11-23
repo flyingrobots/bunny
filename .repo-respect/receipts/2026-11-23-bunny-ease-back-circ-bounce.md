@@ -5,8 +5,10 @@ flyingrobots/bunny#305: `bunny-ease/1`, part 2, in `bunny-num`. `ease::back_in`,
 and `back_in_out(overshoot, t)`, `circ_in`, `circ_out` and `circ_in_out(t)`, and `bounce_in`,
 `bounce_out` and `bounce_in_out(t)`, with `BACK_DEFAULT_OVERSHOOT` (GSAP's 1.70158, raw
 7 308 230 452). Back and bounce are GSAP's definitions as exact rationals rounded once to
-nearest, ties to even. Circ subtracts the floor of the exact 128-bit root of `2^64 - t_raw^2`
-from `1.0`, with nothing rounded before the root: within one raw unit on a stated side. "Out"
+nearest, ties to even. Circ takes the floor of an exact 128-bit root, with nothing rounded before it: `circ_in` is
+`2^32 - isqrt(2^64 - t_raw^2)`, `circ_out` is its reflection, and `circ_in_out` is
+`2^31 - isqrt(2^62 - t_raw^2)` below `1/2` and reflected from there. Each is within one raw
+unit on a stated side. "Out"
 and "in-out" are reflections, so the symmetries hold bit for bit. Additive: no part-1 item,
 golden, digest or ID changes.
 

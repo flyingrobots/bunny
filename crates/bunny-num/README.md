@@ -39,8 +39,11 @@ ecosystem to guarantee bit-level CPU determinism.
   Part 2 adds GSAP's `ease::back_in`, `back_out` and `back_in_out(overshoot, t)`
   (default `BACK_DEFAULT_OVERSHOOT`, 1.70158) and `bounce_in`, `bounce_out` and
   `bounce_in_out`, each exact value rounded once, and `circ_in`, `circ_out` and
-  `circ_in_out`, the floor of the exact root of `2^64 - t_raw^2` subtracted
-  exactly: within one raw unit on a stated side. Reflections are bit-exact.
+  `circ_in_out`, each the floor of an exact 128-bit root with nothing rounded
+  before it (`circ_in` is `2^32 - isqrt(2^64 - t_raw^2)`, `circ_out` its
+  reflection, `circ_in_out` `2^31 - isqrt(2^62 - t_raw^2)` below `1/2` and
+  reflected from there): within one raw unit on a stated side. Reflections
+  are bit-exact.
   `ease::sine_in`, `sine_out` and `sine_in_out` read `FixedAngle::sin_cos` at
   an exact angle, within one raw unit, exact at both ends and at in-out's
   `1/2`, with bit-exact reflections.

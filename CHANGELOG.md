@@ -63,10 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw 7 308 230 452), and `bounce_in`, `bounce_out` and `bounce_in_out` are
   GSAP's four-piece bounce with breakpoints `1/2.75`, `2/2.75` and `2.5/2.75`:
   each exact rational is rounded once to nearest, ties to even, within half a
-  raw unit. `circ_in`, `circ_out` and `circ_in_out` subtract the floor of the
-  exact 128-bit square root of `2^64 - t_raw^2` (nothing rounded before the
-  root), within one raw unit on a stated side; at raw `t` 4 294 920 955 that is
-  0.58 raw units, where rounding `1 - t^2` first would give 54.58. The ends are
+  raw unit. Circ takes the floor of an exact 128-bit square root, with nothing
+  rounded before it: `circ_in` is `2^32 - isqrt(2^64 - t_raw^2)`, `circ_out`
+  is its reflection `isqrt(2^64 - (2^32 - t_raw)^2)`, and `circ_in_out` is
+  `2^31 - isqrt(2^62 - t_raw^2)` below `1/2` and the reflection of that from
+  `1/2`, so `circ_in_out(1/2)` is exactly `1/2`. Each is within one raw unit
+  on a stated side; for `circ_in` at raw `t` 4 294 920 955 that is 0.58 raw
+  units, where rounding `1 - t^2` first would give 54.58. The ends are
   exact, the out and in-out reflections hold bit for bit and circ is
   non-decreasing; back and bounce are not monotone. `t` outside `[0, 1]` is
   `None`. Closes flyingrobots/bunny#305.
