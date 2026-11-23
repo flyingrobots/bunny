@@ -26,8 +26,13 @@ local `+X` to `right`. The rotation is the transpose of the upper 3x3 of
 Forward `(1, 0, 0)` with up `+Y` gives `right = (0, 0, 1)`, `true_up = (0, 1,
 0)` and `back = (-1, 0, 0)`, so the rows are `(0, 0, -1)`, `(0, 1, 0)` and `(1,
 0, 0)`: a quarter turn of -90 degrees about `+Y`, determinant 1. Forward `-Z`
-with up `+Y` is the identity. Only directions matter: scaling `forward` or `up`
-by a positive factor gives the same matrix.
+with up `+Y` is the identity. The result is not exactly scale invariant: each
+input is rounded when it is normalized, so scaling `forward` or `up` by a
+positive factor can change its rounded direction by one raw unit. The matrix
+can then differ within the bounds below, or the call can be refused under the
+rounded-forward rule in [Refusals](#refusals). For up `(1, 0, 0)`, forward
+`(2^61, 2^28 - 1, 0)` raw rounds to `(2^32, 1, 0)` and is accepted; three
+times it rounds to `(2^32, 0, 0)` and is refused with `ParallelUp` (LR-TP-006).
 
 ## Rounding And Orthonormality
 

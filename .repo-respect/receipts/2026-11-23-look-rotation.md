@@ -29,7 +29,7 @@ Files edited:
 
 Topic docs:
 - `docs/topics/look-rotation/README.md`: new chapter (convention, rounding and bounds, refusals).
-- `docs/topics/look-rotation/test-plan.md`: LR-REQ-001 to LR-REQ-003, LR-TP-001 to LR-TP-005, the Python model's results, seven recorded mutations.
+- `docs/topics/look-rotation/test-plan.md`: LR-REQ-001 to LR-REQ-003, LR-TP-001 to LR-TP-006, the Python model's results, seven recorded mutations.
 - `docs/topics/matrix-types/README.md`: a pointer from the look-at section.
 
 Generated artifacts:
