@@ -36,6 +36,14 @@ ecosystem to guarantee bit-level CPU determinism.
   `n` in `2..=5`) are each exact value rounded once to nearest, ties to even,
   exact at both ends, non-decreasing, with bit-exact reflections;
   `ease::steps(n, t)` is `floor(n t) / n`. `t` outside `[0, 1]` is `None`.
+  Part 2 adds GSAP's `ease::back_in`, `back_out` and `back_in_out(overshoot, t)`
+  (default `BACK_DEFAULT_OVERSHOOT`, 1.70158) and `bounce_in`, `bounce_out` and
+  `bounce_in_out`, each exact value rounded once, and `circ_in`, `circ_out` and
+  `circ_in_out`, each the floor of an exact 128-bit root with nothing rounded
+  before it (`circ_in` is `2^32 - isqrt(2^64 - t_raw^2)`, `circ_out` its
+  reflection, `circ_in_out` `2^31 - isqrt(2^62 - t_raw^2)` below `1/2` and
+  reflected from there): within one raw unit on a stated side. Reflections
+  are bit-exact.
   `ease::sine_in`, `sine_out` and `sine_in_out` read `FixedAngle::sin_cos` at
   an exact angle, within one raw unit, exact at both ends and at in-out's
   `1/2`, with bit-exact reflections.
@@ -45,7 +53,10 @@ ecosystem to guarantee bit-level CPU determinism.
   unit of the exact value. Conversions out: `to_turns` and `to_degrees` are
   correctly rounded and `to_radians` is within `1/2 + 2^-30` raw units;
   `FixedAngle::atan2(y, x)` is within `1/2 + 2^-9` angle units of the exact angle
-  of `(x, y)` by integer CORDIC, `None` only at the origin.
+  of `(x, y)` by integer CORDIC, `None` only at the origin. `FixedAngle::atan(x)`
+  is exactly `atan2(x, 1.0)`; `asin` and `acos` take `|x| <= 1.0` (else `None`)
+  and are within `2/3` of an angle unit; `to_turns_signed`, `to_degrees_signed`
+  and `to_radians_signed` read the angle in `[-1/2, 1/2)` turn.
 * **Zero Dependency & No-Unsafe**: Compiled under `#![deny(unsafe_code)]` with
   zero external runtime dependencies.
 * **`no_std`**: With default features off the crate is `#![no_std]` and needs

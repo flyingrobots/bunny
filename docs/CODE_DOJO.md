@@ -429,6 +429,16 @@ target add`, then builds `-p bunny-num --no-default-features` for
 `cargo test` in that configuration. See
 [`topics/no-std/`](topics/no-std/README.md).
 
+### Rustdoc Check
+
+The full gate, and `cargo run --locked -p xtask -- code-dojo-rustdoc` on its
+own, runs `cargo doc --locked --workspace --no-deps --all-features` with
+`RUSTDOCFLAGS="-D warnings"`. An unresolved or ambiguous intra-doc link, or a
+public item that links to a private one, is a build error naming the file and
+line. Only `-D warnings` is passed, so the pinned toolchain and a newer one run
+the same flags. The step is `handle_rustdoc` in `xtask/src/code_dojo.rs`; its
+command is `rustdoc_command` in `xtask/src/feature_configs.rs`.
+
 ### Where It Runs
 
 - `cargo run --locked -p xtask -- code-dojo --all` runs the source rules on

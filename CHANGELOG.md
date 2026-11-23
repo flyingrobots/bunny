@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
+  runs `cargo doc --locked --workspace --no-deps --all-features` with
+  `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI
+  (flyingrobots/bunny#467).
+
 * `bunny-linalg`: uniform Catmull-Rom splines under `bunny-curve/1`, part 2.
   `CatmullRom3::new(points, closed)` borrows a `&[FixedVec3]` (no allocation)
   and returns `CatmullRomError::TooFewPoints` for fewer than 2 points (3
@@ -91,6 +96,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   product of three transforms by the existing `checked_mul_affine`. Normals
   under a non-uniform scale are out of scope. Closes flyingrobots/bunny#312.
 
+* `bunny-num`: back, circ and bounce eases under `bunny-ease/1`, part 2, in
+  `bunny_num::ease`. `back_in`, `back_out` and `back_in_out(overshoot, t)` are
+  GSAP's back for any Q32.32 overshoot (`BACK_DEFAULT_OVERSHOOT` is 1.70158,
+  raw 7 308 230 452), and `bounce_in`, `bounce_out` and `bounce_in_out` are
+  GSAP's four-piece bounce with breakpoints `1/2.75`, `2/2.75` and `2.5/2.75`:
+  each exact rational is rounded once to nearest, ties to even, within half a
+  raw unit. Circ takes the floor of an exact 128-bit square root, with nothing
+  rounded before it: `circ_in` is `2^32 - isqrt(2^64 - t_raw^2)`, `circ_out`
+  is its reflection `isqrt(2^64 - (2^32 - t_raw)^2)`, and `circ_in_out` is
+  `2^31 - isqrt(2^62 - t_raw^2)` below `1/2` and the reflection of that from
+  `1/2`, so `circ_in_out(1/2)` is exactly `1/2`. Each is within one raw unit
+  on a stated side; for `circ_in` at raw `t` 4 294 920 955 that is 0.58 raw
+  units, where rounding `1 - t^2` first would give 54.58. The ends are
+  exact, the out and in-out reflections hold bit for bit and circ is
+  non-decreasing; back and bounce are not monotone. `t` outside `[0, 1]` is
+  `None`. Closes flyingrobots/bunny#305.
+
 * `bunny-num`: power eases and steps under the contract identity
   `bunny-ease/1` (`EASE_CONTRACT_ID`), in `bunny_num::ease`. `power_in(n, t)`
   is `t^n`, `power_out(n, t)` is `1 - (1 - t)^n` and `power_in_out(n, t)` is
@@ -157,6 +179,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `UnboundedReason`; a degenerate triangle, a sample or lens sample
   outside its range, and a hit ray parallel to the plane or with the plane
   not ahead return a `RayFootprintError`. Closes flyingrobots/bunny#383.
+
+* `bunny-num`: `FixedAngle::atan`, `asin`, `acos` and signed conversions out.
+  `atan(x)` is exactly `atan2(x, 1.0)`, within `1/2 + 2^-9` angle units, strictly
+  inside a quarter turn either side of zero. `asin(x)` and `acos(x)` take
+  `|x| <= 1.0` and return `None` otherwise; they run the `atan2` kernel on the
+  legs `|x|` and the floor square root of `1 - x^2`, both with 32 bits more than
+  Q32.32, and are within `2/3` of an angle unit (measured worst `0.648`). They are
+  exact at `0` and `±1.0`, and `asin(x) + acos(x)` is exactly a quarter turn.
+  `to_turns_signed`, `to_degrees_signed` and `to_radians_signed` read the angle in
+  `[-1/2, 1/2)` turn and round once like the unsigned forms, which they equal below
+  a half turn. Golden vectors, independent oracles and mutation checks; tangent
+  is not included. Refs flyingrobots/bunny#244.
 
 * `bunny-num`: conversions out of `FixedAngle` and `FixedAngle::atan2`.
   `to_turns` (`[0, 1]`) and `to_degrees` (`[0, 360]`) are the exact value
@@ -251,6 +285,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Broken intra-doc links in `bunny-query` (`ray/prepared.rs`) and
+  `bunny-broadphase` (`compact.rs`, `compact_hit.rs`) now resolve, so `cargo doc`
+  with warnings denied is clean (flyingrobots/bunny#467).
 * `bunny-query`: the sphere kernel's normal is corrected under the same
   identity, `bunny-ray-sphere/1`, now public as `RAY_SPHERE_ID`.
   **Breaking for the type:** `SphereHit::normal` returns a `FixedUnitVec3`, not
