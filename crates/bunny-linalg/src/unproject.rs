@@ -9,7 +9,7 @@
 mod frustum;
 mod wide;
 
-use std::fmt;
+use core::fmt;
 
 use bunny_num::fixed_q32_32::ONE_RAW;
 use bunny_num::FixedQ32_32;
@@ -78,7 +78,7 @@ impl fmt::Display for UnprojectError {
     }
 }
 
-impl std::error::Error for UnprojectError {}
+impl core::error::Error for UnprojectError {}
 
 impl Viewport {
     /// The world-space ray through the continuous viewport coordinate `coordinate`
