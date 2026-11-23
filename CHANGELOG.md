@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-num`: a default `std` feature. With default features off the crate is
+  `#![no_std]` and needs only `core`, with every public item and the same
+  bits; the default build is unchanged. `FloatConversionError` implements
+  `core::error::Error`, which `std::error::Error` re-exports. Code Dojo's full
+  gate and the new `code-dojo-no-std` command build `bunny-num
+  --no-default-features` for `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`
+  and the host, and lint and test it. Closes flyingrobots/bunny#198.
+
 * `bunny-num` and `bunny-linalg`: exact interpolation and ratios under the
   contract identity `bunny-lerp/1` (`LERP_CONTRACT_ID`).
   `FixedQ32_32::lerp(a, b, t)` is `a + round_half_even((b - a) * t / 2^32)`

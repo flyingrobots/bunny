@@ -42,6 +42,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "code-dojo-commit-msg" => code_dojo::handle_commit_msg(args),
         "code-dojo-perf-groups" => code_dojo::handle_perf_groups(),
         "code-dojo-generated" => code_dojo::handle_generated(),
+        "code-dojo-no-std" => code_dojo::handle_no_std(),
         "repo-respect" => repo_respect::handle(args),
         "topic-docs" => topic_docs::handle(),
         "perf" => perf::handle(args),
@@ -77,6 +78,8 @@ fn print_help() {
     println!("                  Check the committed contract artifacts against bunny-wesley");
     println!("  code-dojo-perf-groups");
     println!("                  Build the timing harness with each feature group alone");
+    println!("  code-dojo-no-std");
+    println!("                  Build bunny-num without default features for a no-std target");
     println!("  repo-respect   Create or validate repo-respect receipts");
     println!("  topic-docs      Check topic test-plan requirement metadata");
     println!(

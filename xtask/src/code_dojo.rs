@@ -248,6 +248,7 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
         run_command_strings(&command)?;
     }
     handle_perf_groups()?;
+    handle_no_std()?;
     println!("Code Dojo: full gate clean");
     Ok(())
 }
@@ -256,6 +257,14 @@ pub(super) fn handle_full(args: impl IntoIterator<Item = String>) -> Result<(), 
 pub(super) fn handle_perf_groups() -> Result<(), DynError> {
     let manifest = std::fs::read_to_string(git_root()?.join("crates/bunny-perf/Cargo.toml"))?;
     for command in crate::feature_configs::perf_group_commands(&manifest) {
+        run_command_strings(&command)?;
+    }
+    Ok(())
+}
+
+/// Builds `bunny-num` with default features off for a target that has no `std`.
+pub(super) fn handle_no_std() -> Result<(), DynError> {
+    for command in crate::feature_configs::no_std_commands() {
         run_command_strings(&command)?;
     }
     Ok(())

@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(unsafe_code)]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
@@ -13,6 +14,13 @@
 #![deny(missing_docs)]
 
 //! Deterministic numeric profiles for Bunny graphics primitives.
+//!
+//! The default `std` feature links `std`. Without it the crate is `no_std` and uses only
+//! `core`, with the same public items and the same bits.
+
+// Unit tests run on `std` in every configuration.
+#[cfg(all(test, not(feature = "std")))]
+extern crate std;
 
 /// Semantic version of `bunny-num` compiled from `Cargo.toml`.
 // dojo: allow std-env -- Cargo sets CARGO_PKG_VERSION from the workspace manifest, not the host
@@ -167,7 +175,7 @@ mod tests {
 
     #[wasm_bindgen_test(unsupported = test)]
     fn two_divides_matches_core_isqrt_around_the_split_and_correction_points() {
-        let mut cases = vec![
+        let mut cases = std::vec![
             0_u128,
             u128::MAX,
             u128::from(u64::MAX),
