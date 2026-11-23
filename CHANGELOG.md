@@ -50,6 +50,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `t` outside `[0, 1]`, `n` outside `2..=5` (or `0` for `steps`) are `None`.
   Closes flyingrobots/bunny#304.
 
+* `bunny-linalg`: cubic Bezier curves under the contract identity
+  `bunny-curve/1` (`CURVE_CONTRACT_ID`), part 1. `CubicBezier3 { p0, p1, p2,
+  p3 }` has `at(t)`, the de Casteljau recurrence over `FixedVec3::lerp`
+  (`bunny-lerp/1`) in a stated order, six lerps per component, within 3/2 raw
+  units of the exact cubic and exactly `p0` and `p3` at the ends;
+  `derivative_at(t)`, 3 times the de Casteljau quadratic of the checked
+  differences, within 3 raw units, exactly `3 (p1 - p0)` and `3 (p3 - p2)` at
+  the ends and `None` when a difference or the product by 3 overflows; and
+  `split(t)`, the de Casteljau halves sharing `at(t)` bit for bit. Every
+  function returns `None` for `t` outside `[0, 1]`. Closes
+  flyingrobots/bunny#308.
+
 * `bunny-linalg`: rotations from a `FixedAngle` under the contract identity
   `bunny-rotation/1` (`ROTATION_CONTRACT_ID`). `FixedMat3::rotation_x`,
   `rotation_y` and `rotation_z` copy `FixedAngle::sin_cos` into the axis
