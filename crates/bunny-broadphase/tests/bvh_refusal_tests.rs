@@ -47,7 +47,8 @@ fn boxes(seeds: &mut Seeds, count: usize) -> Vec<FixedAabb3> {
     (0..count)
         .map(|_| {
             let corner = [0; 3].map(|_| seeds.signed(40 * ONE));
-            let size = [0; 3].map(|_| seeds.signed(3 * ONE).abs() * i64::from(seeds.next() % 4 != 0));
+            let size = [0; 3]
+                .map(|_| seeds.signed(3 * ONE).abs() * i64::from(!seeds.next().is_multiple_of(4)));
             aabb(corner, [corner[0] + size[0], corner[1] + size[1], corner[2] + size[2]])
         })
         .collect()
@@ -70,7 +71,8 @@ fn buffer_rule(nodes: usize, indices: usize, primitives: usize) -> Option<BvhBui
 /// result against the oracle, the two forms against each other, and the buffer rule.
 fn check(primitives: &[FixedAabb3], nodes_len: usize, indices_len: usize, context: &str) -> bool {
     let n = primitives.len();
-    let (mut try_nodes, mut try_indices) = (vec![stale_node(); nodes_len], vec![SENTINEL; indices_len]);
+    let (mut try_nodes, mut try_indices) =
+        (vec![stale_node(); nodes_len], vec![SENTINEL; indices_len]);
     let (mut old_nodes, mut old_indices) = (try_nodes.clone(), try_indices.clone());
     let result = try_build_bvh_sah(&mut try_nodes, &mut try_indices, primitives);
     let old = build_bvh_sah(&mut old_nodes, &mut old_indices, primitives);
@@ -78,27 +80,24 @@ fn check(primitives: &[FixedAabb3], nodes_len: usize, indices_len: usize, contex
     assert_eq!(old, result.ok(), "{context}: Option form differs");
     assert_eq!(words(&try_nodes), words(&old_nodes), "{context}: node buffers differ");
     assert_eq!(try_indices, old_indices, "{context}: index buffers differ");
-    match result {
-        Ok(used) => {
-            let mut written: Vec<u32> = try_indices[..n].to_vec();
-            written.sort_unstable();
-            let all: Vec<u32> = (0..u32::try_from(n).expect("small")).collect();
-            assert_eq!(written, all, "{context}: the first n entries are 0..n, each once");
-            assert!(try_indices[n..].iter().all(|&e| e == SENTINEL), "{context}: tail untouched");
-            assert!(
-                words(&try_nodes[used..]).iter().all(|w| *w == node_words(&stale_node())),
-                "{context}: unused nodes untouched"
-            );
-            true
-        }
-        Err(_) => {
-            assert!(try_indices.iter().all(|&e| e == SENTINEL), "{context}: indices untouched");
-            assert!(
-                words(&try_nodes).iter().all(|w| *w == node_words(&stale_node())),
-                "{context}: nodes untouched"
-            );
-            false
-        }
+    if let Ok(used) = result {
+        let mut written: Vec<u32> = try_indices[..n].to_vec();
+        written.sort_unstable();
+        let all: Vec<u32> = (0..u32::try_from(n).expect("small")).collect();
+        assert_eq!(written, all, "{context}: the first n entries are 0..n, each once");
+        assert!(try_indices[n..].iter().all(|&e| e == SENTINEL), "{context}: tail untouched");
+        assert!(
+            words(&try_nodes[used..]).iter().all(|w| *w == node_words(&stale_node())),
+            "{context}: unused nodes untouched"
+        );
+        true
+    } else {
+        assert!(try_indices.iter().all(|&e| e == SENTINEL), "{context}: indices untouched");
+        assert!(
+            words(&try_nodes).iter().all(|w| *w == node_words(&stale_node())),
+            "{context}: nodes untouched"
+        );
+        false
     }
 }
 
@@ -144,7 +143,8 @@ fn bvh_tp_032_option_and_result_forms_agree_on_generated_buffers() {
         };
         let nodes_len = shift(&mut seeds, (2 * n).saturating_sub(1));
         let indices_len = shift(&mut seeds, n);
-        let context = format!("seed {BUFFER_SEED:#x}, case {case}: n {n}, {nodes_len}, {indices_len}");
+        let context =
+            format!("seed {BUFFER_SEED:#x}, case {case}: n {n}, {nodes_len}, {indices_len}");
         let slot = match buffer_rule(nodes_len, indices_len, n) {
             None => 0,
             Some(BvhBuildError::NodeBufferTooSmall { .. }) => 1,
@@ -171,7 +171,10 @@ fn bvh_tp_033_the_index_buffer_holds_only_indices_of_the_input() {
     for node in nodes[..used].iter().filter(|node| node.prim_count > 0) {
         let first = usize::try_from(node.first_child_or_prim_idx).expect("u32");
         let count = usize::try_from(node.prim_count).expect("u32");
-        assert!(indices[first..first + count].iter().all(|&index| index < n), "a leaf names an input");
+        assert!(
+            indices[first..first + count].iter().all(|&index| index < n),
+            "a leaf names an input"
+        );
     }
 }
 

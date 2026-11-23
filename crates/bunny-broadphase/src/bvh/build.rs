@@ -23,13 +23,21 @@ pub(super) fn validated_range(
     prim_indices: &[u32],
     primitives: &[FixedAabb3],
 ) -> Option<PrimRange> {
-    let count = primitives.len();
+    validated_lengths(nodes.len(), prim_indices.len(), primitives.len())
+}
+
+/// [`validated_range`] from the three lengths alone, which is all it reads.
+pub(super) fn validated_lengths(
+    nodes_len: usize,
+    indices_len: usize,
+    count: usize,
+) -> Option<PrimRange> {
     if count == 0 {
         return Some(PrimRange::new(0, 0));
     }
 
     let required_nodes = count.checked_mul(2)?.checked_sub(1)?;
-    if !buffers_fit(nodes.len(), prim_indices.len(), count, required_nodes)? {
+    if !buffers_fit(nodes_len, indices_len, count, required_nodes)? {
         return None;
     }
     Some(PrimRange::new(0, count))

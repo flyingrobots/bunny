@@ -30,7 +30,10 @@ fn trace_tp_728_traversal_errors_display_their_condition_and_are_errors() {
 fn trace_tp_729_compact_errors_display_their_condition_and_are_errors() {
     let cases = [
         (CompactError::InvalidNodeIndex, "an interior node names children outside the node buffer"),
-        (CompactError::OutputTooSmall, "the output buffer holds fewer nodes than the tree's interior"),
+        (
+            CompactError::OutputTooSmall,
+            "the output buffer holds fewer nodes than the tree's interior",
+        ),
         (CompactError::NotATree, "more interior nodes are reached than a tree of this size has"),
         (CompactError::TooDeep, "more than 64 interior subtrees would wait at once"),
     ];

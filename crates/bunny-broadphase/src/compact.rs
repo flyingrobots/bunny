@@ -6,6 +6,8 @@
 //! search it and return what [`crate::closest_hit`] and [`crate::any_hit`] return on the
 //! source tree. See `docs/topics/ray-tracing/README.md`.
 
+use core::fmt;
+
 use bunny_geom::FixedAabb3;
 
 use crate::bvh::BvhNode;
@@ -71,6 +73,19 @@ pub enum CompactError {
     /// one).
     TooDeep,
 }
+
+impl fmt::Display for CompactError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::InvalidNodeIndex => "an interior node names children outside the node buffer",
+            Self::OutputTooSmall => "the output buffer holds fewer nodes than the tree's interior",
+            Self::NotATree => "more interior nodes are reached than a tree of this size has",
+            Self::TooDeep => "more than 64 interior subtrees would wait at once",
+        })
+    }
+}
+
+impl core::error::Error for CompactError {}
 
 /// Converts a BVH from [`crate::build_bvh`] into the compact layout.
 ///

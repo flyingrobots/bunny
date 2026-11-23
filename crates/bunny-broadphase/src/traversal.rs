@@ -1,5 +1,7 @@
 //! BVH tree traversal queries (AABB overlap and ray intersection queries).
 
+use core::fmt;
+
 use bunny_geom::{FixedAabb3, FixedRay3};
 
 use crate::bvh::BvhNode;
@@ -20,6 +22,22 @@ pub enum TraversalError {
     /// A leaf node references primitives outside the primitive-index slice.
     InvalidPrimitiveRange,
 }
+
+impl fmt::Display for TraversalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::StackOverflow => "traversal needed more than its 64 stack entries",
+            Self::InvalidNodeIndex => {
+                "a node names a child outside the node buffer, or a node is reached twice"
+            }
+            Self::InvalidPrimitiveRange => {
+                "a leaf names primitives outside the primitive-index buffer"
+            }
+        })
+    }
+}
+
+impl core::error::Error for TraversalError {}
 
 fn leaf_indices<'a>(node: &BvhNode, prim_indices: &'a [u32]) -> Result<&'a [u32], TraversalError> {
     let start = node.first_child_or_prim_idx as usize;

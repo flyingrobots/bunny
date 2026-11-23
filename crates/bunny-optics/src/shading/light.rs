@@ -142,7 +142,8 @@ impl Albedo {
     /// directions the cosine and `1 / pi` cancel against the density, so the bounce term is
     /// albedo times incoming radiance and has no `pi`.
     ///
-    /// Returns `None` when a sum is not representable. Every product is at most its sum in
+    /// Returns `None` when a sum is not representable, exactly when [`Self::try_reflect`]
+    /// returns an error, which names the channel. Every product is at most its sum in
     /// magnitude, because albedo is at most 1.0.
     #[must_use]
     pub fn reflect(

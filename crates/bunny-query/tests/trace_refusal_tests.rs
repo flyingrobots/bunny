@@ -61,9 +61,7 @@ fn ray_rule(origin: [i64; 3], direction: [i64; 3]) -> RayRule {
 
 /// The index of the first vertex with a coordinate outside the trace domain, if any.
 fn triangle_rule(vertices: [[i64; 3]; 3]) -> Option<usize> {
-    vertices
-        .iter()
-        .position(|v| v.iter().any(|&c| i128::from(c).abs() >= i128::from(COORD_LIMIT)))
+    vertices.iter().position(|v| v.iter().any(|&c| i128::from(c).abs() >= i128::from(COORD_LIMIT)))
 }
 
 /// Checks one ray against the oracle and the `Option` form; returns the rule it fell under.
@@ -224,7 +222,7 @@ impl Seeds {
     /// A coordinate: mostly inside the domain, often on or one raw unit either side of its
     /// limit, sometimes at the ends of `i64`.
     fn coordinate(&mut self, limit: i64) -> i64 {
-        let sign = if self.next() % 2 == 0 { 1 } else { -1 };
+        let sign = if self.next().is_multiple_of(2) { 1 } else { -1 };
         match self.next() % 8 {
             0 => sign * (limit - 1),
             1 => sign * limit,
@@ -236,7 +234,7 @@ impl Seeds {
 
     /// A coordinate that is usually inside: one in `rare` draws comes from [`Self::coordinate`].
     fn mostly_inside(&mut self, limit: i64, rare: u64) -> i64 {
-        if self.next() % rare == 0 {
+        if self.next().is_multiple_of(rare) {
             self.coordinate(limit)
         } else {
             self.signed(limit - 1)
@@ -263,7 +261,9 @@ fn trace_tp_725_ray_option_and_result_forms_agree_on_generated_inputs() {
         let rule = check_ray(origin, direction, &context);
         counts[rule as usize] += 1;
     }
-    println!("seed {REFUSAL_SEED:#x}: {RAY_CASES} rays, [accepted, origin, direction, zero] {counts:?}");
+    println!(
+        "seed {REFUSAL_SEED:#x}: {RAY_CASES} rays, [accepted, origin, direction, zero] {counts:?}"
+    );
     assert!(counts.iter().all(|&n| n >= 1_000), "every outcome is reached often: {counts:?}");
 }
 
@@ -288,7 +288,10 @@ fn trace_tp_726_triangle_option_and_result_forms_agree_on_generated_inputs() {
 fn trace_tp_727_trace_refusals_display_their_raw_values_and_are_errors() {
     let origin = vec3([COORD_LIMIT, -2, 3]);
     let ray = TraceRayError::OriginOutsideTraceDomain { origin };
-    assert_eq!(ray.to_string(), "ray origin raw (1099511627776, -2, 3) is outside the trace domain");
+    assert_eq!(
+        ray.to_string(),
+        "ray origin raw (1099511627776, -2, 3) is outside the trace domain"
+    );
     let direction = vec3([0, 4_294_967_297, 0]);
     let large = TraceRayError::DirectionComponentTooLarge { direction };
     assert_eq!(

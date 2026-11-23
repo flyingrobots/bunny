@@ -32,6 +32,7 @@
 //! microfacet normal visible from the incoming ray, the mirror about it, and the weight
 //! `F G2 / G1`, as a [`GgxScatter`].
 
+mod albedo_refusal;
 mod dielectric;
 mod frame;
 mod ggx;
@@ -51,6 +52,7 @@ mod visible_normal;
 mod wide;
 mod wide256;
 
+pub use albedo_refusal::AlbedoReflectError;
 pub use dielectric::{
     DielectricBoundary, DielectricReflectance, DielectricScatter, RefractiveIndexError,
     DIELECTRIC_ID, MAX_REFRACTIVE_INDEX_RAW,

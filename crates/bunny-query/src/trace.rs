@@ -36,12 +36,14 @@ const RECIPROCAL_SHIFT: u32 = RECIPROCAL_BITS - FixedQ32_32::FRACTIONAL_BITS;
 mod box_hit;
 mod cylinder;
 mod disc;
+mod refusal;
 mod sphere;
 mod wide;
 
 pub use box_hit::{BoxHit, TraceBox, TraceBoxError, RAY_BOX_ID};
 pub use cylinder::{CylinderHit, TraceCylinder, TraceCylinderError, RAY_CYLINDER_ID};
 pub use disc::{DiscHit, TraceDisc, TraceDiscError, RAY_DISC_ID};
+pub use refusal::{TraceRayError, TraceTriangleError};
 pub use sphere::{SphereHit, TraceSphere, TraceSphereError, RAY_SPHERE_ID};
 
 type Wide3 = [i128; 3];
@@ -63,7 +65,9 @@ impl TraceRay {
     ///
     /// Returns `None` when an origin coordinate is outside the trace domain
     /// ([`TRACE_COORD_LIMIT_RAW`]), a direction component exceeds 1.0 in magnitude
-    /// ([`TRACE_DIRECTION_LIMIT_RAW`]), or the direction is zero.
+    /// ([`TRACE_DIRECTION_LIMIT_RAW`]), or the direction is zero: exactly when
+    /// [`Self::try_new`] returns an error. This is the fast path; `try_new` is the diagnostic
+    /// path that says why.
     #[must_use]
     pub fn new(origin: FixedVec3, direction: FixedVec3) -> Option<Self> {
         Self::prepare(origin, direction, TRACE_DIRECTION_LIMIT_RAW)
@@ -198,7 +202,8 @@ impl TraceTriangle {
     /// Prepares a triangle.
     ///
     /// Returns `None` when a vertex coordinate is outside the trace domain
-    /// ([`TRACE_COORD_LIMIT_RAW`]).
+    /// ([`TRACE_COORD_LIMIT_RAW`]): exactly when [`Self::try_new`] returns an error, which
+    /// names the vertex.
     #[must_use]
     pub fn new(v0: FixedVec3, v1: FixedVec3, v2: FixedVec3) -> Option<Self> {
         let (v0, v1, v2) = (raw3(v0), raw3(v1), raw3(v2));

@@ -10,6 +10,10 @@ use crate::footprint::{measure, RayFootprint, RayFootprintError, TexturedTriangl
 use crate::plane::{Lens, Offset, Plane, Wide3};
 use crate::CameraError;
 
+mod refusal;
+
+pub use refusal::CameraRayError;
+
 /// The largest accepted image width or height, in pixels (32 768).
 pub const MAX_IMAGE_DIMENSION: u32 = 1 << 15;
 
@@ -108,7 +112,9 @@ impl PinholeCamera {
     /// row at or past the image size, or a sub-pixel offset outside `[0, 1)`.
     ///
     /// Every in-range sample of a constructed camera yields a ray: each direction component is
-    /// at most 1.0 in magnitude and the direction points ahead of the camera.
+    /// at most 1.0 in magnitude and the direction points ahead of the camera. `None` comes
+    /// exactly when [`Self::try_ray`] returns an error, which names the coordinate; this is the
+    /// fast path and `try_ray` the diagnostic path.
     #[must_use]
     pub fn ray(&self, sample: PixelSample) -> Option<TraceRay> {
         let [dx, dy, dz] = sample_direction(&self.plane, &self.lens, sample)?.map(narrow);

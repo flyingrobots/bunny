@@ -131,17 +131,22 @@ fn optics_tp_333_the_first_failing_sample_condition_is_reported() {
     assert_eq!(check_ray(&camera, sample(0, 0, 0, ONE), "sub_y alone"), 4);
 }
 
-/// Exact `round_half_even(a * s / 2^32)` in `i128`, independent of `FixedQ32_32`'s multiply.
-fn product_oracle(a: i64, s: i128) -> i64 {
-    let p = i128::from(a) * s;
-    let (q, r) = (p >> 32, p & ((1 << 32) - 1));
+/// Exact `round_half_even(albedo * sum / 2^32)` in `i128`, independent of `FixedQ32_32`'s
+/// multiply.
+fn product_oracle(albedo: i64, sum: i128) -> i64 {
+    let product = i128::from(albedo) * sum;
+    let (floor, rest) = (product >> 32, product & ((1 << 32) - 1));
     let half = 1_i128 << 31;
-    let q = if r > half || (r == half && q & 1 == 1) { q + 1 } else { q };
-    i64::try_from(q).expect("albedo is at most 1.0, so the product fits")
+    let up = rest > half || (rest == half && floor & 1 == 1);
+    i64::try_from(floor + i128::from(up)).expect("albedo is at most 1.0, so the product fits")
 }
 
 /// The reflect rule from the raw channels: the first channel whose exact sum leaves `i64`.
-fn reflect_rule(channels: [i64; 3], direct: [i64; 3], indirect: [i64; 3]) -> Result<[i64; 3], usize> {
+fn reflect_rule(
+    channels: [i64; 3],
+    direct: [i64; 3],
+    indirect: [i64; 3],
+) -> Result<[i64; 3], usize> {
     let sums = [0, 1, 2].map(|c| i128::from(direct[c]) + i128::from(indirect[c]));
     let fits = |s: i128| i64::try_from(s).is_ok();
     match sums.iter().position(|&s| !fits(s)) {
@@ -213,7 +218,7 @@ impl Seeds {
 
     fn index(&mut self, size: u32) -> u32 {
         let near = [0, size.saturating_sub(1), size, size.saturating_add(1), u32::MAX];
-        if self.next() % 4 == 0 {
+        if self.next().is_multiple_of(4) {
             near[usize::try_from(self.next() % 5).expect("small")]
         } else {
             u32::try_from(self.below(u64::from(size))).expect("below a u32")
@@ -222,7 +227,7 @@ impl Seeds {
 
     fn sub(&mut self) -> i64 {
         let near = [-1, 0, 1, ONE - 1, ONE, ONE + 1, i64::MIN, i64::MAX];
-        if self.next() % 6 == 0 {
+        if self.next().is_multiple_of(6) {
             near[usize::try_from(self.next() % 8).expect("small")]
         } else {
             i64::try_from(self.below(1 << 32)).expect("below 2^32")
@@ -252,12 +257,15 @@ fn optics_tp_335_camera_option_and_result_forms_agree_on_generated_samples() {
         for draw in 0..SAMPLES_PER_CAMERA {
             let (x, y) = (seeds.index(width), seeds.index(height));
             let s = sample(x, y, seeds.sub(), seeds.sub());
-            let context = format!("seed {REFUSAL_SEED:#x}, camera {case} ({width}x{height}), draw {draw}");
+            let context =
+                format!("seed {REFUSAL_SEED:#x}, camera {case} ({width}x{height}), draw {draw}");
             counts[check_ray(&camera, s, &context)] += 1;
         }
     }
     let total = CAMERAS * SAMPLES_PER_CAMERA;
-    println!("seed {REFUSAL_SEED:#x}: {total} samples, [ray, column, sub_x, row, sub_y] {counts:?}");
+    println!(
+        "seed {REFUSAL_SEED:#x}: {total} samples, [ray, column, sub_x, row, sub_y] {counts:?}"
+    );
     assert!(counts.iter().all(|&n| n >= 1_000), "every outcome is reached often: {counts:?}");
 }
 

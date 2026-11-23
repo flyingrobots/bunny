@@ -124,3 +124,7 @@ pub use shading::{
 pub use texture::{bilinear, interpolate_uv, BilinearTaps, TextureWrap, TEXTURE_BILINEAR_ID};
 pub use thin_lens::{lens_disc_point, ThinLensCamera, ThinLensError, ThinLensSpec, THIN_LENS_ID};
 pub use xoroshiro::Xoroshiro128Plus;
+
+// Typed refusals of `PinholeCamera::try_ray` and `Albedo::try_reflect` (flyingrobots/bunny#445).
+pub use camera::CameraRayError;
+pub use shading::AlbedoReflectError;

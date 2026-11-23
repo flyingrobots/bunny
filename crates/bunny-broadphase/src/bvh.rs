@@ -1,8 +1,11 @@
 //! Flat array-backed Bounding Volume Hierarchy (BVH).
 
 mod build;
+mod refusal;
 mod sah;
 mod split;
+
+pub use refusal::BvhBuildError;
 
 use bunny_geom::FixedAabb3;
 
@@ -88,7 +91,15 @@ pub const SAH_INTERSECTION_COST: u128 = 1;
 /// exact, for nodes narrower than 8 192 units). Nothing is allocated and the build does
 /// not recurse.
 ///
-/// Returns the number of nodes used, or `None` if the buffers are too small.
+/// **The primitive-index buffer.** After a build of `n` primitives, `prim_indices[..n]`
+/// holds each index `0..n` of `primitives` exactly once, so every entry a leaf lists is an
+/// index of the input; whatever the buffer held before is overwritten, and entries from `n` on
+/// are left as they were, as are nodes past the count returned. A refused build writes
+/// nothing to either buffer.
+///
+/// Returns the number of nodes used, or `None` if the buffers are too small: exactly when
+/// [`try_build_bvh_sah`] returns an error, which names the buffer. This is the fast path;
+/// `try_build_bvh_sah` is the diagnostic path.
 #[must_use]
 pub fn build_bvh_sah(
     nodes: &mut [BvhNode],
@@ -96,4 +107,27 @@ pub fn build_bvh_sah(
     primitives: &[FixedAabb3],
 ) -> Option<usize> {
     sah::build_bvh_sah(nodes, prim_indices, primitives)
+}
+
+/// The diagnostic path of [`build_bvh_sah`]: the same build into the same buffers, with the
+/// reason for a refusal. `BVH-TP-032` checks over generated buffers that `build_bvh_sah`
+/// returns `Some(n)` exactly when this returns `Ok(n)`, with identical buffers afterwards.
+///
+/// # Errors
+///
+/// Checked in this order, from the lengths alone and before anything is written:
+/// [`BvhBuildError::NodeBufferTooSmall`] when `nodes` holds fewer than
+/// `2 * primitives.len() - 1` nodes; [`BvhBuildError::IndexBufferTooSmall`] when
+/// `prim_indices` holds fewer than `primitives.len()` entries;
+/// [`BvhBuildError::TooManyPrimitives`] when there are more than `2^31` primitives. No
+/// primitives build zero nodes whatever the buffers. The defensive
+/// [`BvhBuildError::InternalCheckFailed`] if the build fails a check of its own, which no input
+/// is known to reach.
+pub fn try_build_bvh_sah(
+    nodes: &mut [BvhNode],
+    prim_indices: &mut [u32],
+    primitives: &[FixedAabb3],
+) -> Result<usize, BvhBuildError> {
+    refusal::check_buffers(nodes.len(), prim_indices.len(), primitives.len())?;
+    sah::build_bvh_sah(nodes, prim_indices, primitives).ok_or(BvhBuildError::InternalCheckFailed)
 }
