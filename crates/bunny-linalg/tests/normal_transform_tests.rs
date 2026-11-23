@@ -134,14 +134,18 @@ fn trs_tp_027_normal_refusals_one_raw_unit_either_side() {
 #[wasm_bindgen_test(unsupported = test)]
 fn trs_tp_028_seeded_normals_match_the_oracle() {
     let mut state = SEED;
-    let mut counts = [0_usize; 2];
+    let mut counts = [0_usize; 3];
     for case in 0..CASES {
         let m = [vec(&mut state), vec(&mut state), vec(&mut state)];
         let n = vec(&mut state);
         let got = normal(linear(m), n);
         let want = matrix(m).try_inverse().and_then(|inv| oracle(rows(inv), n));
         assert_eq!(got, want, "seed {SEED:#x}, case {case}");
-        counts[usize::from(want.is_none())] += 1;
+        counts[match (want, matrix(m).try_inverse()) {
+            (Some(_), _) => 0,
+            (None, None) => 1,
+            (None, Some(_)) => 2,
+        }] += 1;
         let (Some(got), Some(inv)) = (got, matrix(m).try_inverse()) else { continue };
         for (i, value) in got.into_iter().enumerate() {
             let column = [rows(inv)[0][i], rows(inv)[1][i], rows(inv)[2][i]];
@@ -163,8 +167,8 @@ fn trs_tp_028_seeded_normals_match_the_oracle() {
     }
 }
 
-/// How many seeded normals are in range and how many are `None`.
-const EXPECTED_NORMAL_COUNTS: [usize; 2] = [0, 0];
+/// How many seeded normals are in range, `None` from `try_inverse`, and `None` from the product.
+const EXPECTED_NORMAL_COUNTS: [usize; 3] = [6_662, 3_335, 3];
 
 #[wasm_bindgen_test(unsupported = test)]
 fn trs_tp_030_pinned_normal_golden() {
@@ -194,9 +198,13 @@ fn trs_tp_030_pinned_normal_golden() {
     assert_eq!(dot(naive, t2), 20_572_443_100_177_235_819 << 2);
 }
 
-/// A raw component below 2^36 in magnitude (16 units).
+/// Raw components below 2^36 in magnitude (16 units): a uniform 64-bit pattern shifted right
+/// by 28 to 63 bits, so tiny entries (singular, nearly singular and overflowing inverses) occur.
 fn vec(state: &mut u64) -> [i64; 3] {
-    [signed(state) >> 28, signed(state) >> 28, signed(state) >> 28]
+    [0; 3].map(|_| {
+        let shift = 28 + next(state) % 36;
+        signed(state) >> shift
+    })
 }
 
 /// A raw component, a multiple of 2^12, below 2^40 in magnitude.

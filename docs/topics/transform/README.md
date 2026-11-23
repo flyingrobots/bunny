@@ -4,7 +4,10 @@
 `FixedAffine3::scale_about_point` build the affine transforms that local and world space need:
 translate, rotate and scale in a fixed order, and a rotation or scale about a pivot. The
 contract is named `bunny-transform/1` (`TRANSFORM_CONTRACT_ID` in `bunny-linalg`). The
-constructors return the existing `FixedAffine3`; there is no separate transform type.
+constructors return the existing `FixedAffine3`; there is no separate transform type. The
+[ray, box and normal transforms](#rays-boxes-and-normals) carry rays, axis-aligned boxes and
+surface normals through a `FixedAffine3`, and [non-uniform scale](#non-uniform-scale) explains
+what it does to normals and bounds.
 
 ## Convention
 
@@ -98,10 +101,113 @@ linear entry `(i, j)` and translation component `i` is within, in raw units:
 The first rounding error is carried through the next product by the other factor, so the two
 groupings agree within the sum of their bounds.
 
+## Rays, Boxes And Normals
+
+Three helpers carry other kinds of geometry through a `FixedAffine3`. They are built on
+`checked_transform_point` and `checked_transform_vector`, which are not changed: each output
+component is three products, each rounded once to nearest, ties to even, from the exact `i128`
+product, summed exactly (plus the translation for a point), so it is **within 3/2 raw of the
+exact value**. The point or vector is refused when a rounded product, a partial sum (in the
+order `x`, `y`, `z`) or the translation sum leaves the `i64` raw range, so a few inputs whose
+finished value would fit are refused. No helper saturates and none panics. They carry no
+contract identity of their own.
+
+The ray and box helpers are in `bunny-geom` and return the typed `TransformError`
+(`InvertedBox`, `OutOfRange`, `DegenerateDirection`); the normal helper is in `bunny-linalg`
+and returns `None`, like the point and vector transforms.
+
+### Rays
+
+`FixedRay3::checked_transform(&transform)` maps the origin as a point and the stored unit
+direction as a vector, and returns a `TransformedRay3 { origin, direction }`. The direction is
+**not renormalised**: a scale changes its length, so the parameter of a hit keeps its meaning.
+For every real `t`, each component of `origin' + t direction'` is within `3/2 (1 + abs(t))` raw
+of the exact image of `origin + t direction`: 3/2 raw from the origin and `3/2 abs(t)` from the
+direction. The bound is against the stored direction, which `FixedUnitVec3` holds within one raw
+unit of unit length.
+
+Worked example: scale `(2, 1, 1)`, then translate by `(1, 0, 0)`. The ray from `(1, 0, 0)` along
+`+X` maps to origin `(3, 0, 0)` and direction `(2, 0, 0)`. The original point at `t = 3` is
+`(4, 0, 0)`, whose image `(9, 0, 0)` is `origin' + 3 direction'`.
+
+`FixedRay3` requires a unit direction, so the image is a separate type.
+`TransformedRay3::try_into_ray` renormalises it with `FixedRay3::try_new`; after that the
+parameter no longer carries over (in the example, `t = 3` then reaches `(6, 0, 0)`). Refusals,
+checked in this order:
+
+- `OutOfRange` when the origin's point transform or the direction's vector transform is
+  `None`. With `m00 = i64::MAX` raw, the unit `+X` (`2^32` raw) maps to exactly `i64::MAX`, and
+  the unit vector `(2^32 + 1, 0, 0)` raw, which `FixedUnitVec3` accepts, is `OutOfRange`.
+- `DegenerateDirection` when the rounded direction is the zero vector: a singular transform, or
+  products that round to zero. With `m00 = 1` raw and every other entry zero, the image of `d_x`
+  is `round(d_x / 2^32)` raw: `d_x = 2^31` is a tie and rounds to even, 0, so it is refused;
+  `2^31 + 1` gives 1 raw, a nonzero direction, accepted.
+
+### Boxes
+
+`FixedAabb3::checked_transform(&transform)` returns the axis-aligned box that contains the
+mapped box: the per-axis minimum and maximum of the **eight corners** mapped by
+`checked_transform_point`. It contains every rounded corner exactly, by construction. Against
+the exact image, each face is within 3/2 raw of the face of the exact image's axis-aligned hull,
+inside or outside it: a box that must contain the exact image needs 2 raw more on each face, and
+one that must contain the rounded point transform of every point of the box needs 3 raw more.
+This helper adds no padding.
+
+- `InvertedBox` when a minimum is above its maximum on some axis, the rule of
+  `FixedAabb3::try_new`, checked before any arithmetic. An equal minimum and maximum is accepted.
+- `OutOfRange` when a corner's point transform is `None`.
+- A point box gives the point transform exactly, as a point box.
+
+### Normals
+
+`FixedAffine3::checked_transform_normal(normal)` maps a surface normal by the inverse transpose
+of the linear part, `L^-T n`; the translation is ignored. The result is `try_inverse()` of the
+linear part, transposed, times `n` by `checked_mul_vec3`, so each component is within 3/2 raw of
+the exact product of the **rounded inverse** and `n`. The rounded inverse carries `try_inverse`'s
+own rounding: rounded minors and determinant, then one division per entry rounded to nearest,
+ties to even. That error has no bound in raw units independent of the matrix (it grows as the
+determinant shrinks), so no bound against the exact `L^-T n` is claimed. Where the inverse
+entries and every product are exact, as for power-of-two scales and signed permutations, the
+result is exact.
+
+The result is **not renormalised**; its length changes with the scale. `None` when
+`try_inverse` is `None` (the rounded determinant is zero, which includes every singular matrix
+and some nonsingular ones: `diag(1, 1, 1)` raw has a minor that rounds to zero; or the inverse
+overflows: the entry `1 / (2 raw)` is `2^63` raw) or when a rounded product or partial sum
+leaves the range.
+
+## Non-Uniform Scale
+
+A rotation and a uniform scale change lengths by one factor in every direction and keep angles.
+A non-uniform scale does not, and that changes how normals and bounds transform.
+
+**Normals.** A normal `n` is perpendicular to every tangent `t` of its surface. The tangent maps
+as a vector, `L t`. The normal must map by the inverse transpose, because `(L^-T n) . (L t) = n
+. t`, which is zero. Mapping the normal by `L` itself keeps it perpendicular only when `L` is a
+rotation times a uniform scale, where `L^-T` is `L` divided by the square of the scale.
+
+Worked example: scale `(2, 1, 1)`. The surface through the origin with normal `(1, 1, 0)` holds
+the tangent `(1, -1, 0)`, which maps to `(2, -1, 0)`. The inverse transpose maps the normal to
+`(1/2, 1, 0)`; the dot product is `1 - 1 = 0`. The linear part alone gives `(2, 1, 0)`, whose dot
+product with the tangent is `4 - 1 = 3`: no longer perpendicular. The inverse transpose also
+changes the normal's length (here from `sqrt 2` to `sqrt 5 / 2`), so a caller that needs a unit
+normal renormalises it, with `FixedUnitVec3::new` for example. A reflection keeps the outward
+side: under the scale `(-1, 1, 1)` the outward normal `+X` maps to `-X`.
+
+**Bounds.** An affine map takes a box to a parallelepiped. Its axis-aligned box is a hull of
+the image and in general larger than it. Worked example: an eighth turn about `+Z` (entries `c =
+round(2^32 / sqrt 2)` raw, `c - c` and `c + c` exact) maps the unit cube's corners to `x` in
+`{0, c, -c, 0}` and `y` in `{0, c, c, 2c}`, so the hull is `(-c, 0, 0)` to `(c, 2c, 1)`: about
+`1.414` by `1.414` by 1, twice the cube's volume. Composing several such transforms and taking
+the hull after each can grow the box at every step; taking the hull once, of the corners mapped by
+the composed transform, does not. A bounding sphere does not stay a sphere under a non-uniform
+scale: its image is an ellipsoid, and a sphere that contains it needs the radius times the
+largest scale factor (the largest singular value of `L`). No sphere transform is provided.
+
 ## Limitations
 
-These constructors transform points and vectors only. Under a non-uniform scale, a surface
-normal needs the inverse transpose of the linear part; no normal transform is provided. There
-is no decomposition of a `FixedAffine3` back into translation, rotation and scale, and no
-inverse beyond the general `FixedAffine3::try_inverse`. A composed linear part is not exactly
-a rotation times a scale: its entries carry the rounding above.
+There is no decomposition of a `FixedAffine3` back into translation, rotation and scale, and no
+inverse beyond the general `FixedAffine3::try_inverse`, whose error has no stated bound. A
+composed linear part is not exactly a rotation times a scale: its entries carry the rounding
+above. The box transform has no padded or faster centre-and-extents form, and spheres,
+triangles and meshes have no transform helper.

@@ -22,10 +22,12 @@ use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
 mod conversions;
 mod plane;
+mod transform;
 
 pub use plane::{
     FixedPlane3, FixedSegment3, PlaneSide, PolygonClip, PolygonClipError, SegmentClip,
 };
+pub use transform::{TransformError, TransformedRay3};
 
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

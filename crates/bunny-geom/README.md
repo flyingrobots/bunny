@@ -17,6 +17,12 @@ queries, collision detection, and ray-casting.
   clipping and convex polygon clipping (`clip_polygon`, into a caller buffer)
   to the closed front half-space; see
   `docs/topics/plane-clipping/README.md`.
+* **Ray and box transforms**: `FixedRay3::checked_transform` maps a ray by a
+  `FixedAffine3` into a `TransformedRay3` whose direction is not renormalised,
+  so a hit parameter `t` carries over (within `3/2 (1 + |t|)` raw);
+  `FixedAabb3::checked_transform` returns the hull of the eight mapped
+  corners. Typed `TransformError` refusals for inverted boxes, overflow and a
+  zero direction; see `docs/topics/transform/README.md#rays-boxes-and-normals`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects

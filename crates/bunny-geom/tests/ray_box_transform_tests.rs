@@ -195,7 +195,7 @@ fn trs_tp_022_seeded_rays_match_the_oracle_and_the_parameter_bound() {
         let (o2, d2) = image(moved.expect("the moderate domain is in range"));
         // In units of 2^-96: the transformed ray at t against the exact image of the original
         // ray at t, within 3/2 (1 + |t|) raw.
-        for axis in 0..3 {
+        for axis in [0, 1, 2] {
             let got = (i128::from(o2[axis]) << 64) + along * i128::from(d2[axis]) * (1 << 32);
             let mut want = i128::from(t[axis]) << 64;
             for ((entry, oj), dj) in m[axis].into_iter().zip(origin).zip(d) {
@@ -208,7 +208,7 @@ fn trs_tp_022_seeded_rays_match_the_oracle_and_the_parameter_bound() {
 }
 
 /// How many seeded full-range rays are in range, out of range and degenerate.
-const EXPECTED_RAY_COUNTS: [usize; 3] = [0, 0, 0];
+const EXPECTED_RAY_COUNTS: [usize; 3] = [4_115, 4_790, 0];
 
 fn oracle_ray(
     m: Rows,
@@ -251,7 +251,7 @@ fn trs_tp_023_box_hull_of_a_rotated_cube_and_a_point() {
 #[wasm_bindgen_test(unsupported = test)]
 fn trs_tp_024_box_refusals_one_raw_unit_either_side() {
     let identity = FixedAffine3::IDENTITY;
-    for axis in 0..3 {
+    for axis in [0, 1, 2] {
         let mut max = [ONE; 3];
         max[axis] = -1;
         let inverted = aabb([0; 3], max);
@@ -302,7 +302,7 @@ fn trs_tp_025_seeded_boxes_contain_every_rounded_corner() {
         };
         in_range_count += 1;
         let (lo, hi) = got.expect("every corner is in range");
-        for axis in 0..3 {
+        for axis in [0, 1, 2] {
             let values = corners.iter().map(|c| c[axis]);
             assert_eq!(lo[axis], values.clone().min().unwrap_or_default(), "case {case}");
             assert_eq!(hi[axis], values.max().unwrap_or_default(), "case {case}");
@@ -315,7 +315,7 @@ fn trs_tp_025_seeded_boxes_contain_every_rounded_corner() {
 }
 
 /// How many of the seeded full-range boxes are in range.
-const EXPECTED_BOXES_IN_RANGE: usize = 0;
+const EXPECTED_BOXES_IN_RANGE: usize = 2_370;
 
 #[wasm_bindgen_test(unsupported = test)]
 fn trs_tp_029_pinned_goldens() {

@@ -21,6 +21,7 @@ mod catmull_rom3;
 mod cubic_bezier3;
 mod fixed_affine2;
 mod fixed_affine3;
+mod fixed_affine3_normal;
 mod fixed_affine3_trs;
 mod fixed_mat2;
 mod fixed_mat3;
