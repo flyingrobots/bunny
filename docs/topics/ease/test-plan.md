@@ -10,8 +10,7 @@ flyingrobots/bunny#304.
 - `bunny_num::ease::{back_in, back_out, back_in_out, circ_in, circ_out, circ_in_out,
   bounce_in, bounce_out, bounce_in_out}` and `BACK_DEFAULT_OVERSHOOT` (part 2,
   flyingrobots/bunny#305)
-
-Out of scope: the sine eases (flyingrobots/bunny#306), which extend the same module.
+- `bunny_num::ease::{sine_in, sine_out, sine_in_out}` (part 3, flyingrobots/bunny#306)
 
 ## Requirements
 
@@ -26,6 +25,9 @@ Out of scope: the sine eases (flyingrobots/bunny#306), which extend the same mod
 | EASE-REQ-012 | `circ_in` is `2^32 - isqrt(2^64 - r^2)`, `circ_out` is `isqrt(2^64 - (2^32 - r)^2)`, and `circ_in_out` is `2^31 - isqrt(2^62 - r^2)` below `1/2` and its reflection from it, with nothing rounded before the floor root: `circ_in` and the lower half of `circ_in_out` are in `[exact, exact + 1)`, and `circ_out` and the upper half in `(exact - 1, exact]`. | `README.md#circ` |
 | EASE-REQ-013 | `bounce_out` is GSAP's four pieces with the breakpoints `1/2.75`, `2/2.75` and `2.5/2.75`, each owned by the piece on its right, and `bounce_in` and `bounce_in_out` are GSAP's `1 - bounce_out(1 - t)` and `(1 -/+ bounce_out(1 -/+ 2t)) / 2`, each its exact value rounded once to nearest, ties to even; the pieces meet with the value 1, and either side of a breakpoint the result is within one raw unit of 1 carried along that side's slope. | `README.md#bounce` |
 | EASE-REQ-014 | Every part-2 ease is exactly `0` at `t = 0` and `1.0` at `t = 1` for every overshoot; `f_out(t) == 1 - f_in(1 - t)` and `f_in_out(1 - t) == 1 - f_in_out(t)` bit for bit and `f_in_out(1/2) = 1/2`; circ is non-decreasing, and back and bounce are not monotone. | `README.md#part-2-properties` |
+| EASE-REQ-020 | `sine_in`, `sine_out` and `sine_in_out` are `None` for `t` outside `[0, 1]` (raw outside `0..=2^32`). | `README.md#sine-eases` |
+| EASE-REQ-021 | `sine_in` is `U - cos(r 2^30)`, `sine_out` is `U - sine_in(1 - t)` (equal to `sin(r 2^30)`), and `sine_in_out` is `round_half_even((U - cos(r 2^31)) / 2)` below `1/2` and its reflection from `1/2`, reading `FixedAngle::sin_cos` at an exact angle; each is within one raw unit of `1 - cos(t pi/2)`, `sin(t pi/2)` and `(1 - cos(t pi)) / 2`. | `README.md#sine-eases` |
+| EASE-REQ-022 | Each sine ease is exactly `0` at `t = 0` and `1.0` at `t = 1`, `sine_in_out(1/2) = 1/2`; `sine_out(t) = 1 - sine_in(1 - t)` and `sine_in_out(1 - t) = 1 - sine_in_out(t)` bit for bit, and both equal the direct formulas; non-decreasing over the tested points. | `README.md#sine-eases` |
 
 ```toml
 [[requirement]]
@@ -72,6 +74,21 @@ status = "active"
 id = "EASE-REQ-014"
 summary = "Exact ends, bit-exact reflections and in-out symmetry, exact 1/2; circ monotone, back and bounce not."
 status = "active"
+
+[[requirement]]
+id = "EASE-REQ-020"
+summary = "The sine eases are None for t outside [0, 1]."
+status = "active"
+
+[[requirement]]
+id = "EASE-REQ-021"
+summary = "The sine eases read sin_cos at an exact angle, halve in-out once ties to even, and are within one raw unit."
+status = "active"
+
+[[requirement]]
+id = "EASE-REQ-022"
+summary = "Sine eases: exact ends and 1/2, bit-exact reflections equal to the direct formulas, monotone over the tested points."
+status = "active"
 ```
 
 ## Oracles
@@ -110,6 +127,15 @@ printed the three pinned FNV-1a digests (grid, seeded and overshoot pairs) and t
 values. It also measured each circ result against a 50-digit `decimal` square root, giving the
 maxima recorded in the [chapter](README.md#circ).
 
+The sine eases have their own oracle in `crates/bunny-num/tests/ease_sine_tests.rs`:
+`oracle_sin` is the exact `sin(pi r / 2^33)` in unsigned fixed point with 124 fractional bits,
+from `pi` by Machin's formula and the Taylor series of `sin`, and gives every exact sine ease
+(`1 - sin((1 - t) pi/2)`, `sin(t pi/2)`, `sin(t pi/2)^2`) to about `2^-90` raw units. It shares
+nothing with `sin_cos`'s table and interpolation, and it is written there rather than taken
+from `tests/angle_oracle`, which has no sine. A separate Python model, posted on the pull
+request, ports `sin_cos` and evaluates `decimal` sine series at 40 digits: it printed the two
+pinned digests and the golden raw values, and measured the same worst cases as EASE-TP-042.
+
 ## Test Cases
 
 | ID | Requirements | Oracle | Test |
@@ -134,6 +160,13 @@ maxima recorded in the [chapter](README.md#circ).
 | EASE-TP-029 | EASE-REQ-013 | The oracle's adjacent pieces are exactly 1 at `4/11`, `8/11` and `10/11` (and at 1); one raw unit either side of each breakpoint, `bounce_out` is within one raw unit of 1 carried along that side's slope; over every raw `t` near each breakpoint and end, one raw unit moves each bounce ease by at most 6 raw units, and each grid step by at most `5.5 2^16 + 1`. | `crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_029_bounce_is_continuous_at_each_breakpoint` |
 | EASE-TP-030 | EASE-REQ-011, EASE-REQ-014 | For `s` of the default, 1, 3 and 10: the least `back_in` near `t* = 2s / (3(s + 1))`, the greatest `back_out` near `1 - t*` and the least `back_in_out` near `t*/2` are within `1/2 + 2^-16` raw units of `-k`, `1 + k` and `-k/2` for `k = 4 s^3 / (27 (s + 1)^2)`, checked in exact `i128`; `back_out(s, 1) = 1.0` exactly at five overshoots. | `crates/bunny-num/tests/ease_back_circ_bounce_tests.rs::ease_tp_030_back_overshoots_by_the_closed_form` |
 | EASE-TP-031 | EASE-REQ-010, EASE-REQ-011, EASE-REQ-012, EASE-REQ-013, EASE-REQ-014 | Each part-2 rule broken on purpose fails at least one case above, the issue's wrong bounce breakpoint among them. | [Part 2 mutation checks](#part-2-mutation-checks) |
+| EASE-TP-040 | EASE-REQ-021 | The identity string; 12 golden `t` (the ends, `1/2` and one raw unit either side, one raw unit from each end, `1/4`, `3/4`, three full-resolution values) for all three eases, each from the Python model and within one raw unit of `oracle_sin`; four halving ties, `U - cos` of 1, 3, 5 and 7, going to 0, 2, 2 and 4. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_040_golden_vectors_and_the_halving_tie_go_to_even` |
+| EASE-TP-041 | EASE-REQ-020, EASE-REQ-022 | `sin_cos` exact at 0, a quarter and a half turn; `f(0) = 0` and `f(1) = 1.0` for each ease, `sine_in_out(1/2) = 1/2`; `None` at raw `-1`, `2^32 + 1`, `-2^32`, `2^33` and the ends of `i64`. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_041_the_domain_is_refused_outside_and_the_ends_and_middle_are_exact` |
+| EASE-TP-042 | EASE-REQ-021 | Every `t = k / 2^20` (1 048 577 points, 3 145 731 cases) within one raw unit of `oracle_sin`, each ease's largest error and its `k` printed; the outputs' digest equals the Python model's. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_042_the_sweep_over_every_k_over_2_20_is_within_one_raw_unit` |
+| EASE-TP-043 | EASE-REQ-021 | 100 000 seeded full-resolution `t` (seed printed) and every raw `t` within 4 096 of 0, `1/2` and 1 (16 387 points) within one raw unit of `oracle_sin`; the seeded outputs' digest equals the Python model's. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_043_seeded_and_boundary_points_are_within_one_raw_unit` |
+| EASE-TP-044 | EASE-REQ-022 | Non-decreasing over every `t = k / 2^20` and over every `t = k / 2^16` and one raw unit either side (196 609 points); equal grid neighbours only within 128 grid steps of an end, counted and printed. | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_044_every_sine_ease_is_monotone_non_decreasing` |
+| EASE-TP-045 | EASE-REQ-022 | At 169 634 grid, seeded and near-zero points, both reflections hold bit for bit and each ease equals its direct formula read from `sin_cos` (`sin(r 2^30)` for out, the lower in-out formula on the whole interval). | `crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_045_reflections_and_the_direct_formulas_agree_bit_for_bit` |
+| EASE-TP-046 | EASE-REQ-020, EASE-REQ-021, EASE-REQ-022 | Each sine rule broken on purpose fails at least one case above. | [Sine mutation checks](#sine-mutation-checks) |
 
 ```toml
 [[case]]
@@ -315,6 +348,69 @@ artifact = "docs/topics/ease/test-plan.md#part-2-mutation-checks"
 oracle = "Each part-2 rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "EASE-TP-040"
+requirements = ["EASE-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_040_golden_vectors_and_the_halving_tie_go_to_even"
+oracle = "Golden raw values from the Python model, each within one raw unit of the independent series oracle; halving ties."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "EASE-TP-041"
+requirements = ["EASE-REQ-020", "EASE-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_041_the_domain_is_refused_outside_and_the_ends_and_middle_are_exact"
+oracle = "Exact ends and 1/2; refusals one raw unit past each end of the domain."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "EASE-TP-042"
+requirements = ["EASE-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_042_the_sweep_over_every_k_over_2_20_is_within_one_raw_unit"
+oracle = "Independent Machin and sine-series oracle at all 1 048 577 points of k / 2^20, and the Python model's digest."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "EASE-TP-043"
+requirements = ["EASE-REQ-021"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_043_seeded_and_boundary_points_are_within_one_raw_unit"
+oracle = "Independent series oracle at 100 000 seeded and 16 387 boundary points, and the Python model's digest."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "EASE-TP-044"
+requirements = ["EASE-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_044_every_sine_ease_is_monotone_non_decreasing"
+oracle = "Order of consecutive outputs over the 2^20 grid and one raw unit either side of the 2^16 grid."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "EASE-TP-045"
+requirements = ["EASE-REQ-022"]
+evidence = "test"
+test = "crates/bunny-num/tests/ease_sine_tests.rs::ease_tp_045_reflections_and_the_direct_formulas_agree_bit_for_bit"
+oracle = "Bit-exact reflections and agreement with the direct formulas read from sin_cos."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "EASE-TP-046"
+requirements = ["EASE-REQ-020", "EASE-REQ-021", "EASE-REQ-022"]
+evidence = "manual-audit"
+artifact = "docs/topics/ease/test-plan.md#sine-mutation-checks"
+oracle = "Each sine rule broken on purpose makes at least one implemented case fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -366,3 +462,26 @@ The source was restored after each. The unmutated source passed every case.
 | Circ out evaluated at `t`, not reflected at `1 - t` | The out construction | 020, 021, 022, 023, 024, 026, 027, 028 |
 | `t` one raw unit above `1.0` accepted (shared domain check) | `None` outside `[0, 1]` | 021 |
 | Each bounce breakpoint owned by the piece on its left (`<` read as `<=`) | none, as proved: no raw `t` lies on a breakpoint, because `11` does not divide `k 2^32` ([bounce](README.md#bounce)) | none |
+
+## Sine Mutation Checks
+
+Each rule below was broken on purpose in a local copy of `crates/bunny-num/src/ease/sine.rs`,
+and `cargo test --locked -q -p bunny-num --no-fail-fast --test ease_sine_tests` was run; the
+source was restored after each. The unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `sine_in` reads a half turn, `r 2^31` (the issue's mutation) | The quarter-turn angle | 040, 041 (`sine_in(1) = U - cos(half) = 2.0`), 042, 043, 044, 045 |
+| `sine_out` reads `sin(r 2^31)` | The quarter-turn angle | 040, 041, 042, 043, 044, 045 |
+| `sine_in_out` reads a quarter turn, `r 2^30` | The half-turn angle | 040, 041 (`sine_in_out(1/2)`), 042, 043, 044, 045 |
+| `sine_in` reads `sin`, not `cos` | The formula | 040, 041, 042, 043, 044, 045 |
+| The halving truncates | Ties to even | 040 (`U - cos = 3` gives 1), 042, 043, 045 |
+| A halving tie goes half up | Ties to even | 040 (`U - cos = 1` gives 1), 042, 043, 045 |
+| A halving tie goes to the odd neighbour | Ties to even | 040, 042, 043, 045 |
+| The halving is dropped | `(1 - cos) / 2` | 040, 041, 042, 043, 044, 045 |
+| `t` outside `[0, 1]` clamped, not refused | `None` outside `[0, 1]` | 041 |
+| The in-out upper half is not reflected (`f(1 - t)`) | The in-out reflection | 040, 041, 042, 043, 044, 045 |
+| `sine_out` is `sine_in(t)` | The out reflection | 040, 042, 043, 045 |
+| In-out takes its lower half at `t <= 1/2` | none, as proved: both halves are exactly `1/2` there | none |
+| In-out reads the lower formula on all of `[0, 1]` | none, as proved: `cos(half - a) == -cos(a)` bit for bit in `sin_cos` and `U` is even ([sine eases](README.md#sine-eases)) | none |
+| `sine_out` reads `sin(r 2^30)` directly | none, as proved: `cos(quarter - a) == sin(a)` bit for bit in `sin_cos` | none |

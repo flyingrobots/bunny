@@ -7,6 +7,9 @@
 
 use crate::fixed_q32_32::{FixedQ32_32, FRAC_BITS};
 
+mod sine;
+pub use sine::{sine_in, sine_in_out, sine_out};
+
 /// Stable contract identifier for the eases in this module.
 pub const EASE_CONTRACT_ID: &str = "bunny-ease/1";
 

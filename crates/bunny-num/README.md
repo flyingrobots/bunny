@@ -41,6 +41,9 @@ ecosystem to guarantee bit-level CPU determinism.
   `bounce_in_out`, each exact value rounded once, and `circ_in`, `circ_out` and
   `circ_in_out`, the floor of the exact root of `2^64 - t_raw^2` subtracted
   exactly: within one raw unit on a stated side. Reflections are bit-exact.
+  `ease::sine_in`, `sine_out` and `sine_in_out` read `FixedAngle::sin_cos` at
+  an exact angle, within one raw unit, exact at both ends and at in-out's
+  `1/2`, with bit-exact reflections.
 * **FixedAngle**: A binary angle (`2^64` units per turn) with wrapping
   arithmetic, exact or symmetric-rounding conversions from turns, degrees and
   radians, and deterministic `sin`, `cos` and `sin_cos` within one raw Q32.32
