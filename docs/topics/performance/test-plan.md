@@ -44,6 +44,9 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-008 | Memory and layout experiments time comparable work: every replica kernel and every alternative tree or layout returns the shipped function's exact result on every benchmark call or ray. | `README.md#memory-share-of-a-box-test` |
 | PERF-REQ-009 | The SAH-tree trace cases time comparable work: closest_hit and any_hit give the same answer on every benchmark ray in the build_bvh tree and the build_bvh_sah tree. | `README.md#adding-a-case` |
 | PERF-REQ-010 | The harness builds with each feature group alone and with all groups, so the per-group fallback of `cargo xtask perf` compares every group the base can build. | `README.md#adding-a-case` |
+| PERF-REQ-011 | With `--evidence <file>`, `cargo xtask perf` writes every round of both sides (case, side, round, p50, p95, p99) as `bunny-perf-evidence/1` JSON Lines, from which the report table and the gate's floor p50s are recomputed exactly; the file is the same for the same rounds whatever order they were recorded in, and non-finite numbers are refused. | `README.md#evidence-files` |
+| PERF-REQ-012 | The evidence file names the base reference, the full base and candidate SHAs, the target triple, the flags (rounds, code alignment, `RUSTFLAGS`, harness arguments, runner, threshold) and whether the working tree was dirty by `git status --porcelain`. | `README.md#evidence-files` |
+| PERF-REQ-013 | Evidence is opt-in: without `--evidence` the command prints the same table, appends the same summary and exits with the same status as before, and an existing evidence file is never overwritten. | `README.md#evidence-files` |
 
 ```toml
 [[requirement]]
@@ -94,6 +97,21 @@ status = "active"
 [[requirement]]
 id = "PERF-REQ-010"
 summary = "The harness builds with each feature group alone and with all groups, so the per-group fallback of `cargo xtask perf` compares every group the base can build."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-011"
+summary = "With `--evidence <file>`, `cargo xtask perf` writes every round of both sides (case, side, round, p50, p95, p99) as `bunny-perf-evidence/1` JSON Lines, from which the report table and the gate's floor p50s are recomputed exactly; the file is the same for the same rounds whatever order they were recorded in, and non-finite numbers are refused."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-012"
+summary = "The evidence file names the base reference, the full base and candidate SHAs, the target triple, the flags (rounds, code alignment, `RUSTFLAGS`, harness arguments, runner, threshold) and whether the working tree was dirty by `git status --porcelain`."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-013"
+summary = "Evidence is opt-in: without `--evidence` the command prints the same table, appends the same summary and exits with the same status as before, and an existing evidence file is never overwritten."
 status = "active"
 ```
 
@@ -158,6 +176,14 @@ No external fixtures. Tests build synthetic `bunny-perf` output and manifests in
 | PERF-TP-055 | Gate | PERF-REQ-003 | Three fast base rounds of seven against no fast head round, equal medians: no regression at the 20 % threshold. | `xtask/src/perf_report.rs::tests::a_floor_that_regresses_while_the_median_does_not_passes` |
 | PERF-TP-056 | Gate | PERF-REQ-003 | The floor is the lowest p50 for four rounds, the second-lowest for five, and a fast mode in two rounds is kept. | `xtask/src/perf_report.rs::tests::the_floor_skips_the_lowest_round_only_from_five_rounds` |
 | PERF-TP-057 | Profile | PERF-REQ-007 | On all 1 024 rays and both modes, the profile's popped, skipped_at_pop, interior_visited, leaf_visited, box_calls, box_some, box_none, stack_peak and tri_tests equal what the counted compact searches return for the ray, and the replica's recorded box and triangle calls number as many as the library's box_tests and primitive_tests. Setting leaf_visited one too high fails this case and PERF-TP-030. | `crates/bunny-perf/src/profile.rs::tests::the_profile_takes_its_counts_from_the_counted_searches` |
+| PERF-TP-058 | Evidence | PERF-REQ-011 | A reader written in the test, sharing no helper with `perf_report`, parses the file and rebuilds the whole report table byte for byte, and each case's floor p50s, for 1, 2, 4, 5 and 7 rounds over constructed cases with ties, identical sides, a case on one side only, zero timings and decimals that need 17 digits; every round of every case and side is present. | `xtask/src/perf_evidence/tests.rs::an_independent_reading_of_the_evidence_recomputes_the_report_table` |
+| PERF-TP-059 | Evidence | PERF-REQ-011, PERF-REQ-012 | The exact text of a one-round file: key order, line order, JSON escaping of quotes, backslashes and control characters, `null` and empty arrays, and shortest round-trip numbers. | `xtask/src/perf_evidence/tests.rs::the_evidence_format_is_pinned_line_by_line` |
+| PERF-TP-060 | Evidence | PERF-REQ-011 | Rounds recorded in reverse give the same file and table; lines are sorted by case, side and round. | `xtask/src/perf_evidence/tests.rs::the_evidence_is_the_same_whatever_order_the_rounds_were_recorded_in` |
+| PERF-TP-061 | Evidence | PERF-REQ-012 | Empty `git status --porcelain` output is clean; a modified, staged or untracked entry is dirty; both states reach the build line. | `xtask/src/perf_evidence/tests.rs::the_dirty_flag_follows_git_status` |
+| PERF-TP-062 | Evidence | PERF-REQ-011 | Infinite or NaN timings, which the report parses, and an infinite threshold are refused rather than written. | `xtask/src/perf_evidence/tests.rs::non_finite_numbers_are_refused` |
+| PERF-TP-063 | Evidence | PERF-REQ-012 | The host triple is the `host:` line of `rustc -vV`, with or without a carriage return; no line, no triple. | `xtask/src/perf_evidence/tests.rs::the_host_triple_comes_from_rustc_verbose_version` |
+| PERF-TP-064 | Evidence | PERF-REQ-013 | No `--evidence`, no evidence path; the option takes a value; an existing file is refused and a missing one accepted. | `xtask/src/perf.rs::tests::the_evidence_option_is_opt_in` |
+| PERF-TP-065 | Evidence | PERF-REQ-013 | Recording rounds accumulates the same runs as `add_run` did, and the report is `render` of `compare` with the heading labels `handle` used before; a malformed line is still an error. | `xtask/src/perf.rs::tests::the_report_is_rendered_as_before` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
 
 ```toml
@@ -627,6 +653,78 @@ test = "crates/bunny-perf/src/profile.rs::tests::the_profile_takes_its_counts_fr
 oracle = "The library's own counted searches (TRACE-TP-417 ties them to the uncounted searches); the replica's recorded calls as a cross-check."
 tier = "fast"
 status = "implemented"
+
+[[case]]
+id = "PERF-TP-058"
+requirements = ["PERF-REQ-011"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests.rs::an_independent_reading_of_the_evidence_recomputes_the_report_table"
+oracle = "A reader written in the test, sharing no helper with `perf_report`, parses the file and rebuilds the whole report table byte for byte, and each case's floor p50s, for 1, 2, 4, 5 and 7 rounds over constructed cases with ties, identical sides, a case on one side only, zero timings and decimals that need 17 digits; every round of every case and side is present."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-059"
+requirements = ["PERF-REQ-011", "PERF-REQ-012"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests.rs::the_evidence_format_is_pinned_line_by_line"
+oracle = "The exact text of a one-round file: key order, line order, JSON escaping of quotes, backslashes and control characters, `null` and empty arrays, and shortest round-trip numbers."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-060"
+requirements = ["PERF-REQ-011"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests.rs::the_evidence_is_the_same_whatever_order_the_rounds_were_recorded_in"
+oracle = "Rounds recorded in reverse give the same file and table; lines are sorted by case, side and round."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-061"
+requirements = ["PERF-REQ-012"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests.rs::the_dirty_flag_follows_git_status"
+oracle = "Empty `git status --porcelain` output is clean; a modified, staged or untracked entry is dirty; both states reach the build line."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-062"
+requirements = ["PERF-REQ-011"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests.rs::non_finite_numbers_are_refused"
+oracle = "Infinite or NaN timings, which the report parses, and an infinite threshold are refused rather than written."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-063"
+requirements = ["PERF-REQ-012"]
+evidence = "test"
+test = "xtask/src/perf_evidence/tests.rs::the_host_triple_comes_from_rustc_verbose_version"
+oracle = "The host triple is the `host:` line of `rustc -vV`, with or without a carriage return; no line, no triple."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-064"
+requirements = ["PERF-REQ-013"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::the_evidence_option_is_opt_in"
+oracle = "No `--evidence`, no evidence path; the option takes a value; an existing file is refused and a missing one accepted."
+tier = "fast"
+status = "planned"
+
+[[case]]
+id = "PERF-TP-065"
+requirements = ["PERF-REQ-013"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::the_report_is_rendered_as_before"
+oracle = "Recording rounds accumulates the same runs as `add_run` did, and the report is `render` of `compare` with the heading labels `handle` used before; a malformed line is still an error."
+tier = "fast"
+status = "planned"
 ```
 
 ## Determinism Obligations And Evidence
