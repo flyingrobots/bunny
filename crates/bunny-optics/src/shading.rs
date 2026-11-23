@@ -19,6 +19,10 @@
 //! [`SurfaceHit::point_light_sample`] (`bunny-point-light/1`) gives a [`PointLight`]'s term,
 //! with inverse-square falloff, and a shadow ray that ends at the light.
 //!
+//! [`DirectionalLight::from_angles`] and [`DirectionalLight::from_direction`]
+//! (`bunny-light-direction/1`) build a directional light from an azimuth and an elevation or
+//! from any nonzero vector, scaled so its largest component is exactly 1.0.
+//!
 //! [`SurfaceHit::dielectric_scatter`] (`bunny-dielectric/1`) reflects or refracts a ray at a
 //! smooth boundary between two refractive indices ([`DielectricBoundary`]), chosen by one
 //! sampler value with the exact Fresnel reflectance as the probability, as a
@@ -33,6 +37,7 @@ mod frame;
 mod ggx;
 mod hit;
 mod light;
+mod light_direction;
 mod point_light;
 mod refusal;
 mod smith;
@@ -56,6 +61,7 @@ pub use ggx::{
 };
 pub use hit::SurfaceHit;
 pub use light::{Albedo, DirectionalLight, LightSample, SkyLight};
+pub use light_direction::{LightDirectionError, LIGHT_DIRECTION_ID};
 pub use point_light::{PointLight, PointLightError, MIN_LIGHT_DISTANCE_RAW, POINT_LIGHT_ID};
 pub use refusal::SecondaryRayError;
 pub use smooth_hit::{SmoothBounce, SmoothHit, SMOOTH_SHADING_ID};
