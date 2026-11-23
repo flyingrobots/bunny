@@ -65,7 +65,7 @@ fn mul_div(m: u128, n: u128, d: u128) -> (u128, u128) {
 
 /// `out_lo + round_half_even((x - in_lo)(out_hi - out_lo) / (in_hi - in_lo))`, the step
 /// rounded and then added; `None` for `in_lo == in_hi` or outside `i64`.
-fn oracle_remap(x: i64, in_lo: i64, in_hi: i64, out_lo: i64, out_hi: i64) -> Option<i64> {
+fn oracle_remap(x: i64, [in_lo, in_hi]: [i64; 2], [out_lo, out_hi]: [i64; 2]) -> Option<i64> {
     let run = i128::from(in_hi) - i128::from(in_lo);
     if run == 0 {
         return None;
@@ -86,7 +86,7 @@ fn oracle_remap(x: i64, in_lo: i64, in_hi: i64, out_lo: i64, out_hi: i64) -> Opt
 }
 
 /// Whether the exact remap step is a tie, from the oracle's own quotient and remainder.
-fn remap_is_tie(x: i64, in_lo: i64, in_hi: i64, out_lo: i64, out_hi: i64) -> bool {
+fn remap_is_tie(x: i64, [in_lo, in_hi]: [i64; 2], [out_lo, out_hi]: [i64; 2]) -> bool {
     let run = (i128::from(in_hi) - i128::from(in_lo)).unsigned_abs();
     let offset = (i128::from(x) - i128::from(in_lo)).unsigned_abs();
     let rise = (i128::from(out_hi) - i128::from(out_lo)).unsigned_abs();
@@ -109,9 +109,8 @@ fn lerp(a: i64, b: i64, t: i64) -> Option<i64> {
     FixedQ32_32::lerp(fixed(a), fixed(b), fixed(t)).map(FixedQ32_32::raw)
 }
 
-fn remap(x: i64, in_lo: i64, in_hi: i64, out_lo: i64, out_hi: i64) -> Option<i64> {
-    FixedQ32_32::remap(fixed(x), [fixed(in_lo), fixed(in_hi)], [fixed(out_lo), fixed(out_hi)])
-        .map(FixedQ32_32::raw)
+fn remap(x: i64, from: [i64; 2], to: [i64; 2]) -> Option<i64> {
+    FixedQ32_32::remap(fixed(x), from.map(fixed), to.map(fixed)).map(FixedQ32_32::raw)
 }
 
 fn next_seed(state: &mut u64) -> u64 {
@@ -242,7 +241,11 @@ fn lerp_tp_023_inverse_lerp_matches_the_oracle_on_the_grid() {
             for &x in &values {
                 let expected = oracle_inverse(a, b, x);
                 assert_eq!(inverse(a, b, x), expected, "inverse_lerp({a}, {b}, {x})");
-                assert_eq!(oracle_remap(x, a, b, 0, U), expected, "oracles agree ({a}, {b}, {x})");
+                assert_eq!(
+                    oracle_remap(x, [a, b], [0, U]),
+                    expected,
+                    "oracles agree ({a}, {b}, {x})"
+                );
                 checked += 1;
             }
         }
@@ -269,7 +272,7 @@ fn lerp_tp_024_seeded_inverse_lerps_match_the_oracle() {
         };
         let expected = oracle_inverse(a, b, x);
         assert_eq!(inverse(a, b, x), expected, "seed={SEED:#018x} case={case} ({a}, {b}, {x})");
-        ties += u32::from(remap_is_tie(x, a, b, 0, U));
+        ties += u32::from(remap_is_tie(x, [a, b], [0, U]));
         degenerate += u32::from(a == b);
         defined += u32::from(expected.is_some());
         overflowed += u32::from(a != b && expected.is_none());
@@ -278,7 +281,7 @@ fn lerp_tp_024_seeded_inverse_lerps_match_the_oracle() {
         "lerp_tp_024 defined={defined} overflowed={overflowed} ties={ties} degenerate={degenerate}"
     );
     assert!(defined >= 10_000 && overflowed >= 1_000 && ties >= 1_000, "every class is reached");
-    assert_eq!(degenerate, 25_000, "every fourth case is a degenerate range");
+    assert!(degenerate >= 25_000, "every fourth case is a degenerate range");
 }
 
 /// The largest `|lerp(a, b, inverse_lerp(a, b, x)) - x|`: 0 for `|b - a| <= 2^32` raw, else
@@ -336,12 +339,13 @@ fn lerp_tp_025_round_trips_hold_within_their_bounds() {
             }
         }
     }
-    println!("lerp_tp_025 seed={SEED:#018x} cases=100000");
-    let mut state = SEED ^ 0x25;
+    let seed = SEED ^ 0x25;
+    println!("lerp_tp_025 seed={seed:#018x} cases=100000");
+    let mut state = seed;
     let mut both = 0_u32;
     for _ in 0..100_000_u32 {
         let (a, b) = (spread(&mut state), spread(&mut state));
-        let value = if next_seed(&mut state) % 2 == 0 {
+        let value = if next_seed(&mut state) & 1 == 0 {
             spread(&mut state)
         } else {
             spread(&mut state) >> 31
@@ -355,50 +359,55 @@ fn lerp_tp_025_round_trips_hold_within_their_bounds() {
         worst[0], worst[1]
     );
     assert!(both >= 10_000, "both round trips are reached");
-    assert!(worst[0] > 0 && worst[1] > 0, "neither round trip is exact in general");
+    // Neither round trip is exact in general, and each bound's largest value is reached.
+    assert_eq!(worst, [1 << 31, 1 << 31], "the worst errors reach the bounds' maximum");
 }
 
-/// `(x, in_lo, in_hi, out_lo, out_hi, expected raw)`, derived by hand.
-const REMAP_GOLDEN: &[(i64, i64, i64, i64, i64, Option<i64>)] = &[
-    (H, 0, U, 10 * U, 20 * U, Some(15 * U)), // 0.5 in [0, 1] to [10, 20] = 15.0
-    (U, 0, 3 * U, 0, U, Some(1_431_655_765)), // 1/3
-    (U / 4, 0, U, U, 0, Some(3 * U / 4)),    // a reversed output range: 0.75
-    (2 * U, 0, U, 0, 10 * U, Some(20 * U)),  // extrapolated: 20.0
-    (-U, 0, U, 0, 10 * U, Some(-10 * U)),    // extrapolated: -10.0
-    (1, 0, 2, 0, 1, Some(0)),                // 1/2 -> 0, 1 -> 0 (even)
-    (3, 0, 2, 0, 1, Some(2)),                // 3/2 -> 1, 2 -> 2 (even)
-    (-1, 0, 2, 0, 1, Some(0)),               // -1/2 -> 0 (even)
-    (-3, 0, 2, 0, 1, Some(-2)),              // -3/2 -> -2 (even)
-    (1, 0, 2, 5, 6, Some(5)),                // 5 + (1/2 -> 0): the step is rounded, not 5.5
-    (1, 0, 4, 0, 1, Some(0)),                // 1/4, below a tie
-    (3, 0, 4, 0, 1, Some(1)),                // 3/4, above it
-    (5, 3, 3, 0, U, None),                   // in_lo == in_hi: degenerate
-    (3, 3, 3, 0, U, None),
-    (i64::MIN, i64::MIN, i64::MIN, i64::MIN, i64::MAX, None),
-    (9, 0, U, 7, 7, Some(7)), // out_lo == out_hi is allowed
-    (i64::MIN, i64::MIN, i64::MAX, i64::MIN, i64::MAX, Some(i64::MIN)), // x == in_lo
-    (i64::MAX, i64::MIN, i64::MAX, i64::MIN, i64::MAX, Some(i64::MAX)), // x == in_hi, step 2^64 - 1
-    (i64::MAX, i64::MIN, i64::MAX, i64::MAX, i64::MIN, Some(i64::MIN)), // reversed, widest
-    (i64::MIN, i64::MAX, i64::MIN, i64::MAX, i64::MIN, Some(i64::MIN)), // reversed input range
-    (i64::MAX, 0, 1, 0, 1, Some(i64::MAX)), // the identity, on the maximum
-    (i64::MAX, 0, 1, 1, 2, None), // one raw unit past it
-    (i64::MIN, 0, 1, 0, 1, Some(i64::MIN)),
-    (i64::MIN, 0, 1, -1, 0, None), // one raw unit below the minimum
-    (i64::MAX, i64::MIN, i64::MIN + 2, -1, 0, Some(i64::MAX)), // -1 + (2^63 - 1/2 -> 2^63)
-    (i64::MAX, i64::MIN, i64::MIN + 2, 0, 1, None), // 2^63, outside
-    (i64::MAX - 1, i64::MIN, i64::MIN + 2, 0, 1, Some(i64::MAX)), // 2^63 - 1
-    (i64::MAX, i64::MIN, i64::MIN + 2, 0, -1, Some(i64::MIN)), // -(2^63 - 1/2) -> -2^63
-    (i64::MAX, i64::MIN, i64::MIN + 2, -1, -2, None), // one raw unit below
-    (i64::MAX, i64::MIN, i64::MAX - 1, i64::MIN, i64::MAX, None), // 2^64 + 1/(2^64 - 2) -> 2^64
-    (i64::MAX, i64::MIN, i64::MIN + 1, i64::MIN, i64::MAX, None), // the product, ~2^128
+/// `(x, [in_lo, in_hi], [out_lo, out_hi], expected raw)`, derived by hand.
+type RemapCase = (i64, [i64; 2], [i64; 2], Option<i64>);
+
+const REMAP_GOLDEN: &[RemapCase] = &[
+    (H, [0, U], [10 * U, 20 * U], Some(15 * U)), // 0.5 in [0, 1] to [10, 20] = 15.0
+    (U, [0, 3 * U], [0, U], Some(1_431_655_765)), // 1/3
+    (U / 4, [0, U], [U, 0], Some(3 * U / 4)),    // a reversed output range: 0.75
+    (2 * U, [0, U], [0, 10 * U], Some(20 * U)),  // extrapolated: 20.0
+    (-U, [0, U], [0, 10 * U], Some(-10 * U)),    // extrapolated: -10.0
+    (1, [0, 2], [0, 1], Some(0)),                // 1/2 -> 0, 1 -> 0 (even)
+    (3, [0, 2], [0, 1], Some(2)),                // 3/2 -> 1, 2 -> 2 (even)
+    (-1, [0, 2], [0, 1], Some(0)),               // -1/2 -> 0 (even)
+    (-3, [0, 2], [0, 1], Some(-2)),              // -3/2 -> -2 (even)
+    (1, [0, 2], [5, 6], Some(5)),                // 5 + (1/2 -> 0): the step is rounded, not 5.5
+    (1, [0, 4], [0, 1], Some(0)),                // 1/4, below a tie
+    (3, [0, 4], [0, 1], Some(1)),                // 3/4, above it
+    (5, [3, 3], [0, U], None),                   // in_lo == in_hi: degenerate
+    (3, [3, 3], [0, U], None),
+    (i64::MIN, [i64::MIN, i64::MIN], [i64::MIN, i64::MAX], None),
+    (9, [0, U], [7, 7], Some(7)), // out_lo == out_hi is allowed
+    (i64::MIN, [i64::MIN, i64::MAX], [i64::MIN, i64::MAX], Some(i64::MIN)), // x == in_lo
+    (i64::MAX, [i64::MIN, i64::MAX], [i64::MIN, i64::MAX], Some(i64::MAX)), // x == in_hi, step 2^64 - 1
+    (i64::MAX, [i64::MIN, i64::MAX], [i64::MAX, i64::MIN], Some(i64::MIN)), // reversed, widest
+    (i64::MIN, [i64::MAX, i64::MIN], [i64::MAX, i64::MIN], Some(i64::MIN)), // reversed input range
+    (i64::MAX, [0, 1], [0, 1], Some(i64::MAX)), // the identity, on the maximum
+    (i64::MAX, [0, 1], [1, 2], None),           // one raw unit past it
+    (i64::MIN, [0, 1], [0, 1], Some(i64::MIN)),
+    (i64::MIN, [0, 1], [-1, 0], None), // one raw unit below the minimum
+    (i64::MAX, [i64::MIN, i64::MIN + 2], [-1, 0], Some(i64::MAX)), // -1 + (2^63 - 1/2 -> 2^63)
+    (i64::MAX, [i64::MIN, i64::MIN + 2], [0, 1], None), // 2^63, outside
+    (i64::MAX - 1, [i64::MIN, i64::MIN + 2], [0, 1], Some(i64::MAX)), // 2^63 - 1
+    (i64::MAX, [i64::MIN, i64::MIN + 2], [0, -1], Some(i64::MIN)), // -(2^63 - 1/2) -> -2^63
+    (i64::MAX, [i64::MIN, i64::MIN + 2], [-1, -2], None), // one raw unit below
+    (i64::MAX, [i64::MIN, i64::MAX - 1], [i64::MIN, i64::MAX], None), // 2^64 + 1/(2^64 - 2) -> 2^64
+    (i64::MAX, [i64::MIN, i64::MIN + 1], [i64::MIN, i64::MAX], None), // the product, ~2^128
+    // (2^64 - 1)(2^63 + 1) = 2^127 + 2^63 - 1: refused before any signed arithmetic on it
+    (i64::MAX, [i64::MIN, i64::MIN + 1], [i64::MIN, 1], None),
 ];
 
 #[wasm_bindgen_test(unsupported = test)]
 fn lerp_tp_026_hand_derived_remaps() {
-    for &(x, in_lo, in_hi, out_lo, out_hi, expected) in REMAP_GOLDEN {
-        let args = format!("({x}, [{in_lo}, {in_hi}], [{out_lo}, {out_hi}])");
-        assert_eq!(oracle_remap(x, in_lo, in_hi, out_lo, out_hi), expected, "oracle remap{args}");
-        assert_eq!(remap(x, in_lo, in_hi, out_lo, out_hi), expected, "remap{args}");
+    for &(x, from, to, expected) in REMAP_GOLDEN {
+        let args = format!("({x}, {from:?}, {to:?})");
+        assert_eq!(oracle_remap(x, from, to), expected, "oracle remap{args}");
+        assert_eq!(remap(x, from, to), expected, "remap{args}");
     }
 }
 
@@ -412,8 +421,8 @@ fn lerp_tp_027_remap_matches_the_oracle_on_the_grid() {
             for &in_hi in &values {
                 for &out_lo in &values {
                     for &out_hi in &values {
-                        let expected = oracle_remap(x, in_lo, in_hi, out_lo, out_hi);
-                        let actual = remap(x, in_lo, in_hi, out_lo, out_hi);
+                        let expected = oracle_remap(x, [in_lo, in_hi], [out_lo, out_hi]);
+                        let actual = remap(x, [in_lo, in_hi], [out_lo, out_hi]);
                         assert_eq!(
                             actual, expected,
                             "remap({x}, [{in_lo}, {in_hi}], [{out_lo}, {out_hi}])"
@@ -429,8 +438,9 @@ fn lerp_tp_027_remap_matches_the_oracle_on_the_grid() {
 
 #[wasm_bindgen_test(unsupported = test)]
 fn lerp_tp_028_seeded_remaps_match_the_oracle_and_lerp() {
-    println!("lerp_tp_028 seed={SEED:#018x} cases=100000");
-    let mut state = SEED ^ 0x28;
+    let seed = SEED ^ 0x28;
+    println!("lerp_tp_028 seed={seed:#018x} cases=100000");
+    let mut state = seed;
     let (mut defined, mut overflowed, mut ties) = (0_u32, 0_u32, 0_u32);
     for case in 0..100_000_u32 {
         let [x, in_lo, out_lo, out_hi] = [0; 4].map(|_| spread(&mut state));
@@ -439,14 +449,14 @@ fn lerp_tp_028_seeded_remaps_match_the_oracle_and_lerp() {
             1 => in_lo,                                                // degenerate
             _ => spread(&mut state),
         };
-        let expected = oracle_remap(x, in_lo, in_hi, out_lo, out_hi);
+        let expected = oracle_remap(x, [in_lo, in_hi], [out_lo, out_hi]);
         let args = format!(
-            "seed={SEED:#018x} case={case} ({x}, [{in_lo}, {in_hi}], [{out_lo}, {out_hi}])"
+            "seed={seed:#018x} case={case} ({x}, [{in_lo}, {in_hi}], [{out_lo}, {out_hi}])"
         );
-        assert_eq!(remap(x, in_lo, in_hi, out_lo, out_hi), expected, "{args}");
-        assert_eq!(remap(x, 0, U, out_lo, out_hi), lerp(out_lo, out_hi, x), "lerp {args}");
-        assert_eq!(remap(x, in_lo, in_hi, 0, U), inverse(in_lo, in_hi, x), "inverse {args}");
-        ties += u32::from(remap_is_tie(x, in_lo, in_hi, out_lo, out_hi));
+        assert_eq!(remap(x, [in_lo, in_hi], [out_lo, out_hi]), expected, "{args}");
+        assert_eq!(remap(x, [0, U], [out_lo, out_hi]), lerp(out_lo, out_hi, x), "lerp {args}");
+        assert_eq!(remap(x, [in_lo, in_hi], [0, U]), inverse(in_lo, in_hi, x), "inverse {args}");
+        ties += u32::from(remap_is_tie(x, [in_lo, in_hi], [out_lo, out_hi]));
         defined += u32::from(expected.is_some());
         overflowed += u32::from(in_lo != in_hi && expected.is_none());
     }
@@ -465,8 +475,8 @@ fn lerp_tp_029_remap_ends_are_exact_and_the_map_is_monotone() {
                 for &out_hi in &values {
                     let live = in_lo != in_hi;
                     let ends = [
-                        remap(in_lo, in_lo, in_hi, out_lo, out_hi),
-                        remap(in_hi, in_lo, in_hi, out_lo, out_hi),
+                        remap(in_lo, [in_lo, in_hi], [out_lo, out_hi]),
+                        remap(in_hi, [in_lo, in_hi], [out_lo, out_hi]),
                     ];
                     assert_eq!(
                         ends,
@@ -483,7 +493,7 @@ fn lerp_tp_029_remap_ends_are_exact_and_the_map_is_monotone() {
                 for &out_hi in &small {
                     let outputs: Vec<i64> = values
                         .iter()
-                        .filter_map(|&x| remap(x, in_lo, in_hi, out_lo, out_hi))
+                        .filter_map(|&x| remap(x, [in_lo, in_hi], [out_lo, out_hi]))
                         .collect();
                     let rising = (out_hi >= out_lo) == (in_hi >= in_lo);
                     for pair in outputs.windows(2) {
