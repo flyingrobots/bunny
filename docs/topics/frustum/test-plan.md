@@ -132,7 +132,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_001_planes_are_held_as_given_in_order"
 oracle = "Hand-derived order, an empty and an unbounded six-plane set."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-002"
@@ -141,7 +141,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_002_boxes_inside_outside_intersecting_and_on_each_face"
 oracle = "Hand-derived boxes on and one raw unit either side of each face."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-003"
@@ -150,7 +150,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_003_flat_inverted_and_zero_extent_boxes"
 oracle = "Flat boxes in a face, inverted boxes against their upright boxes, zero-extent boxes against the point rule."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-004"
@@ -159,7 +159,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_004_the_six_plane_box_test_is_conservative"
 oracle = "A hand-derived box outside near an edge, reported Intersecting."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-005"
@@ -168,7 +168,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_005_spheres_inside_outside_intersecting_and_on_each_face"
 oracle = "Hand-derived spheres touching and one raw unit either side of each face."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-006"
@@ -177,7 +177,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_006_sphere_radius_rules_and_non_unit_normals"
 oracle = "The integer square root of 2^65 raw as the threshold radius; zero and negative radii."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-007"
@@ -186,7 +186,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_007_the_six_plane_sphere_test_is_conservative"
 oracle = "A hand-derived sphere outside near an edge, reported Intersecting."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-008"
@@ -195,7 +195,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_008_a_certain_outside_wins_over_overflow"
 oracle = "A hand-built overflowing plane beside a culling plane; the widest sphere comparisons."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-009"
@@ -204,7 +204,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_009_extracted_planes_are_exact_row_sums"
 oracle = "Hand-derived planes of power-of-two projections, the identity and an axis-aligned look-at."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-010"
@@ -213,7 +213,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_tests.rs::frustum_tp_010_extracted_faces_one_raw_unit_either_side_and_overflow"
 oracle = "Hand-derived ties at the near and far faces; overflow one raw unit past each threshold."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-011"
@@ -222,7 +222,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_sweep_tests.rs::frustum_tp_011_seeded_boxes_follow_the_rule_and_outside_is_certain"
 oracle = "The rule over six classify_aabb results and over an independent i128 eight-corner model; corner certainty by classify."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-012"
@@ -231,7 +231,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_sweep_tests.rs::frustum_tp_012_seeded_spheres_match_the_wide_integer_model"
 oracle = "Schoolbook 32-bit-limb comparison over an independent i128 distance model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-013"
@@ -240,7 +240,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_sweep_tests.rs::frustum_tp_013_seeded_extraction_is_exact_and_within_three_halves_raw"
 oracle = "i128 row sums and exact i128 clip coordinates of the stored matrix entries."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-014"
@@ -249,29 +249,51 @@ evidence = "test"
 test = "crates/bunny-geom/tests/frustum_sweep_tests.rs::frustum_tp_014_seeded_cameras_classify_points_known_inside_and_outside"
 oracle = "View-space points inside or outside by construction with a 1/64 margin, through the repository's builders."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-015"
 requirements = ["FRUSTUM-REQ-002", "FRUSTUM-REQ-003", "FRUSTUM-REQ-004", "FRUSTUM-REQ-005"]
 evidence = "manual-audit"
+artifact = "docs/topics/frustum/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "FRUSTUM-TP-016"
 requirements = ["FRUSTUM-REQ-007"]
 evidence = "manual-audit"
+artifact = "docs/topics/frustum/README.md#what-is-deliberately-not-here"
 oracle = "Review of the public surface and the chapter's list of what is left out."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations
 
-Planned: each rule of the kernel broken on purpose, the frustum tests run, and the kernel
-restored; the table will list each mutation with the cases it fails.
+Each mutation was applied to the kernel, `frustum_tests` and `frustum_sweep_tests` run with
+`cargo test --locked -q -p bunny-geom --no-fail-fast`, and the kernel restored.
+
+| Mutation | Fails |
+| --- | --- |
+| Overflow checked before a `Behind` plane (`None` beats `Outside`) | FRUSTUM-TP-008, FRUSTUM-TP-011, FRUSTUM-TP-012 |
+| `Coplanar` counted as straddled | FRUSTUM-TP-002, -003, -006, -010, -011, -012 |
+| A point `On` a face counted as behind | FRUSTUM-TP-002, -003, -006, -010, -011, -012 |
+| A sphere touching a plane from behind counted as straddling | FRUSTUM-TP-005, -012 |
+| A sphere touching a plane from inside counted as straddling | FRUSTUM-TP-005, -006, -012 |
+| The sphere comparison assumes a unit normal (`\|N\|^2 = 2^64`) | FRUSTUM-TP-001, -006, -008, -012 |
+| The 256-bit product drops the carry of its low word | FRUSTUM-TP-012 |
+| A negative radius taken as its magnitude | FRUSTUM-TP-006, -012 |
+| Near plane `r3 + r2` (the `[-1, 1]` depth range) | FRUSTUM-TP-009, -010, -013, -014 |
+| Far plane `r3 + r2` | FRUSTUM-TP-009, -010, -013, -014 |
+| Left and right planes swapped | FRUSTUM-TP-009, -013 |
+| Offset `d` instead of `-d` | FRUSTUM-TP-009, -010, -013, -014 |
+
+One mutation survives and is equivalent: dropping the carry of the 256-bit product's middle
+sum. With `R^2 < 2^126` and `|N|^2 <= 3 * 2^126`, the middle sum is below `2^128`, so the
+carry is never set for any input; `sphere.rs` states the bound. The helper keeps the carry so
+that it is correct for any `u128` operands.
 
 ## Determinism Obligations And Evidence
 

@@ -51,12 +51,12 @@ fn model_mul(a: i64, b: i64) -> Option<i128> {
 }
 
 /// `((x + y) + z) - offset`, each step refused outside i64.
-fn model_distance(p: FixedPlane3, q: FixedVec3) -> Option<i128> {
-    let n = p.normal;
-    let x = model_mul(n.x.raw(), q.x.raw())?;
-    let y = model_mul(n.y.raw(), q.y.raw())?;
-    let z = model_mul(n.z.raw(), q.z.raw())?;
-    fits(fits(fits(x + y)? + z)? - i128::from(p.offset.raw()))
+fn model_distance(on: FixedPlane3, point: FixedVec3) -> Option<i128> {
+    let normal = on.normal;
+    let along_x = model_mul(normal.x.raw(), point.x.raw())?;
+    let along_y = model_mul(normal.y.raw(), point.y.raw())?;
+    let along_z = model_mul(normal.z.raw(), point.z.raw())?;
+    fits(fits(fits(along_x + along_y)? + along_z)? - i128::from(on.offset.raw()))
 }
 
 fn corners(b: FixedAabb3) -> Vec<FixedVec3> {
@@ -89,13 +89,13 @@ fn model_box_span(p: FixedPlane3, b: FixedAabb3) -> Option<PlaneSpan> {
 /// The stated rule, written out again: Behind anywhere is Outside; then overflow; then a
 /// straddled plane is Intersecting; otherwise Inside.
 fn model_combine(spans: &[Option<PlaneSpan>]) -> Option<FrustumClass> {
-    if spans.iter().any(|s| *s == Some(PlaneSpan::Behind)) {
+    if spans.contains(&Some(PlaneSpan::Behind)) {
         return Some(FrustumClass::Outside);
     }
     if spans.iter().any(Option::is_none) {
         return None;
     }
-    if spans.iter().any(|s| *s == Some(PlaneSpan::Straddling)) {
+    if spans.contains(&Some(PlaneSpan::Straddling)) {
         return Some(FrustumClass::Intersecting);
     }
     Some(FrustumClass::Inside)
@@ -225,7 +225,7 @@ impl Xorshift {
     /// `frustum_tests.rs` with each offset moved by up to one raw unit.
     fn frustum(&mut self, mode: u64) -> FixedFrustum {
         if mode == 3 {
-            let base = if self.next() % 2 == 0 { cube() } else { pyramid() };
+            let base = if self.next().is_multiple_of(2) { cube() } else { pyramid() };
             return FixedFrustum::new(
                 base.planes()
                     .map(|p| FixedPlane3::new(p.normal, raw(p.offset.raw() + self.range(1)))),
@@ -297,7 +297,7 @@ fn check_box(f: FixedFrustum, b: FixedAabb3, case: &str) -> Option<FrustumClass>
     assert_eq!(got, model_combine(&modelled), "{case}: independent eight-corner model");
     match got {
         Some(FrustumClass::Outside) => {
-            assert!(culling_plane_exists(f, b), "{case}: Outside not certain")
+            assert!(culling_plane_exists(f, b), "{case}: Outside not certain");
         }
         Some(FrustumClass::Inside) => {
             for c in corners(b) {
@@ -378,8 +378,8 @@ fn mat(rows: Rows) -> FixedMat4 {
 
 /// The six planes as `(a, b, c, d)` rows, in i128: `w + x`, `w - x`, `w + y`, `w - y`, `z`,
 /// `w - z`, with `z >= 0` the near plane of the 0..=1 depth range.
-fn model_rows(m: &Rows) -> [[i128; 4]; 6] {
-    let (x, y, z, w) = (m[0], m[1], m[2], m[3]);
+fn model_rows(rows: &Rows) -> [[i128; 4]; 6] {
+    let (x, y, z, w) = (rows[0], rows[1], rows[2], rows[3]);
     let comb = |a: [i64; 4], b: [i64; 4], sign: i128| -> [i128; 4] {
         std::array::from_fn(|k| i128::from(a[k]) + sign * i128::from(b[k]))
     };
@@ -428,11 +428,11 @@ fn frustum_tp_013_seeded_extraction_is_exact_and_within_three_halves_raw() {
     let (mut refused, mut decided, mut near_face) = (0_u32, 0_u32, 0_u32);
     for i in 0..10_000 {
         let mode = rng.next() % 3;
-        let m = random_rows(&mut rng, mode);
+        let rows = random_rows(&mut rng, mode);
         let case = format!("seed {EXTRACT_SEED:#x} case {i} mode {mode}");
-        let got = FixedFrustum::from_clip_matrix(mat(m));
-        assert_eq!(got.map(FixedFrustum::planes), model_extract(&m), "{case}: planes");
-        let Some(f) = got else {
+        let got = FixedFrustum::from_clip_matrix(mat(rows));
+        assert_eq!(got.map(FixedFrustum::planes), model_extract(&rows), "{case}: planes");
+        let Some(frustum) = got else {
             refused += 1;
             continue;
         };
@@ -440,27 +440,27 @@ fn frustum_tp_013_seeded_extraction_is_exact_and_within_three_halves_raw() {
             continue;
         }
         for _ in 0..4 {
-            let mut c = || match mode {
+            let mut coord = || match mode {
                 0 => rng.range(64 * UNIT),
                 _ => rng.range(16) * (UNIT / 4) + rng.pick(&[0, 0, 0, 1, -1]),
             };
-            let p = [c(), c(), c()];
-            let [x, y, z, w] = exact_clip(&m, p);
-            let exact = [w + x, w - x, w + y, w - y, z, w - z];
-            let point = pt(p[0], p[1], p[2]);
-            for (pl, e) in f.planes().iter().zip(exact) {
-                let s = pl.signed_distance(point).unwrap().raw();
+            let coords = [coord(), coord(), coord()];
+            let [cx, cy, cz, cw] = exact_clip(&rows, coords);
+            let exact = [cw + cx, cw - cx, cw + cy, cw - cy, cz, cw - cz];
+            let point = pt(coords[0], coords[1], coords[2]);
+            for (face, want) in frustum.planes().iter().zip(exact) {
+                let got = face.signed_distance(point).unwrap().raw();
                 assert!(
-                    2 * (i128::from(s) * i128::from(UNIT) - e).abs() <= 3 * i128::from(UNIT),
+                    2 * (i128::from(got) * i128::from(UNIT) - want).abs() <= 3 * i128::from(UNIT),
                     "{case}: bound"
                 );
             }
             let margin = 3 * i128::from(HALF);
             if exact.iter().all(|e| *e > margin) {
-                assert_eq!(f.contains_point(point), Some(true), "{case}: clearly inside");
+                assert_eq!(frustum.contains_point(point), Some(true), "{case}: clearly inside");
                 decided += 1;
             } else if exact.iter().any(|e| *e < -margin) {
-                assert_eq!(f.contains_point(point), Some(false), "{case}: clearly outside");
+                assert_eq!(frustum.contains_point(point), Some(false), "{case}: clearly outside");
                 decided += 1;
             } else {
                 near_face += 1;
@@ -508,7 +508,7 @@ impl Camera {
 }
 
 fn camera(rng: &mut Xorshift) -> Option<Camera> {
-    let near = if rng.next() % 2 == 0 { UNIT / 16 + rng.below(4 * UNIT) } else { 0 };
+    let near = if rng.next().is_multiple_of(2) { UNIT / 16 + rng.below(4 * UNIT) } else { 0 };
     let far = near + UNIT + rng.below(999 * UNIT);
     let (projection, perspective, ortho) = if near > 0 {
         let tan = UNIT / 4 + rng.below(15 * UNIT / 4);

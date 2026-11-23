@@ -17,6 +17,11 @@ queries, collision detection, and ray-casting.
   segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
   polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
   half-space; see `docs/topics/plane-clipping/README.md`.
+* **FixedFrustum**: Six planes facing into the frustum; `contains_point`,
+  `classify_aabb` and `classify_sphere` give `FrustumClass` (`Inside`,
+  `Intersecting`, `Outside`), with `Outside` certain and `Intersecting`
+  conservative, and `from_clip_matrix` extracts the planes of a clip matrix
+  exactly for Bunny's `[0, 1]` depth range; see `docs/topics/frustum/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects

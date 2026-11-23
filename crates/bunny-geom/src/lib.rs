@@ -32,6 +32,10 @@ pub use plane::{
     FixedPlane3, FixedSegment3, PlaneSide, PlaneSpan, PolygonClip, PolygonClipError, SegmentClip,
 };
 
+mod frustum;
+
+pub use frustum::{FixedFrustum, FrustumClass, FrustumSphereError};
+
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeomError {
