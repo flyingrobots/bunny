@@ -38,6 +38,11 @@ math for graphics pipelines.
   rotation that maps local `-Z` onto `forward` (columns right, true up, back),
   with the look-at basis, rounding and `LookAtError` refusals. Columns are
   orthonormal within 2 raw units, rows within 3 (length) and 4 (dot).
+* **Rotations (`bunny-rotation/1`)**: `FixedMat3::rotation_x`, `rotation_y`
+  and `rotation_z` copy `FixedAngle::sin_cos` into the axis matrices (exact at
+  quarter turns), and `rotation_axis_angle(axis, angle)` evaluates Rodrigues'
+  formula on a `FixedUnitVec3` axis with one ties-to-even rounding per entry.
+  Right-hand rule, column vectors; bounds in `docs/topics/rotation/`.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Exact Lerp (`bunny-lerp/1`)**: `FixedVec3::lerp(a, b, t)` and

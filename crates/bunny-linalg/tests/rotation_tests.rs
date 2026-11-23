@@ -57,21 +57,21 @@ fn oracle_round(numerator: i128) -> i64 {
 
 /// The Rodrigues matrix `c I + s [u]x + (1 - c) u u^T` on the raw axis, each entry the exact
 /// value over `2^64` rounded once. `[u]x` entry `(i, j)` is `-epsilon(i, j, k) u_k`.
-fn oracle_axis_angle(u: [i64; 3], a: FixedAngle) -> Rows {
-    let (sin, cos) = a.sin_cos();
-    let (s, c) = (i128::from(sin.raw()), i128::from(cos.raw()));
-    let t = i128::from(ONE) - c;
-    let w = u.map(i128::from);
+fn oracle_axis_angle(axis: [i64; 3], turn: FixedAngle) -> Rows {
+    let (sin, cos) = turn.sin_cos();
+    let (sine, cosine) = (i128::from(sin.raw()), i128::from(cos.raw()));
+    let versine = i128::from(ONE) - cosine;
+    let wide = axis.map(i128::from);
     let mut out = [[0; 3]; 3];
     for (i, row) in out.iter_mut().enumerate() {
         for (j, entry) in row.iter_mut().enumerate() {
-            let mut numerator = t * w[i] * w[j];
+            let mut numerator = versine * wide[i] * wide[j];
             if i == j {
-                numerator += c << 64;
+                numerator += cosine << 64;
             } else {
                 let k = 3 - i - j;
                 let epsilon = if (j + 3 - i) % 3 == 1 { 1 } else { -1 };
-                numerator -= epsilon * ((s * w[k]) << 32);
+                numerator -= epsilon * ((sine * wide[k]) << 32);
             }
             *entry = oracle_round(numerator);
         }
@@ -108,7 +108,8 @@ fn dot_within(a: [i64; 3], b: [i64; 3], bound: i128) -> bool {
 /// The exact determinant of the raw entries, a value with 96 fractional bits.
 fn determinant(m: Rows) -> i128 {
     let e = |i: usize, j: usize| i128::from(m[i][j]);
-    e(0, 0) * (e(1, 1) * e(2, 2) - e(1, 2) * e(2, 1)) - e(0, 1) * (e(1, 0) * e(2, 2) - e(1, 2) * e(2, 0))
+    e(0, 0) * (e(1, 1) * e(2, 2) - e(1, 2) * e(2, 1))
+        - e(0, 1) * (e(1, 0) * e(2, 2) - e(1, 2) * e(2, 0))
         + e(0, 2) * (e(1, 0) * e(2, 1) - e(1, 1) * e(2, 0))
 }
 
@@ -200,7 +201,11 @@ fn rot_tp_004_zero_is_the_identity_and_a_negated_angle_is_the_transpose() {
         let context = format!("seed={SEED:#x} case={case} axis={u:?}");
         let m = FixedMat3::rotation_axis_angle(unit(u), a);
         assert_eq!(FixedMat3::rotation_axis_angle(unit(u), FixedAngle::ZERO), FixedMat3::IDENTITY);
-        assert_eq!(FixedMat3::rotation_axis_angle(unit(u), a.wrapping_neg()), m.transpose(), "{context}");
+        assert_eq!(
+            FixedMat3::rotation_axis_angle(unit(u), a.wrapping_neg()),
+            m.transpose(),
+            "{context}"
+        );
         for build in [FixedMat3::rotation_x, FixedMat3::rotation_y, FixedMat3::rotation_z] {
             assert_eq!(build(a.wrapping_neg()), build(a).transpose(), "{context}");
         }
@@ -212,7 +217,10 @@ fn rot_tp_005_pinned_goldens() {
     // 30 degrees about +Z: sin is exactly 2^31 and cos 3719550787 raw (the angle goldens);
     // the entries are those values, copied.
     let (c, s) = (3_719_550_787, 2_147_483_648);
-    assert_eq!(rows(FixedMat3::rotation_z(angle(THIRTY_DEGREES))), [[c, -s, 0], [s, c, 0], [0, 0, ONE]]);
+    assert_eq!(
+        rows(FixedMat3::rotation_z(angle(THIRTY_DEGREES))),
+        [[c, -s, 0], [s, c, 0], [0, 0, ONE]]
+    );
     // 60 degrees about (2/7, 3/7, 6/7), each component rounded to nearest raw. The Decimal
     // ideal on that axis is, row by row, 2322788435.551 -2925229206.882 2120007557.226 /
     // 3451143569.678 2541919420.204 -273857251.899 / -1068178831.920 1851600340.287
@@ -242,8 +250,8 @@ fn rot_tp_007_axis_rotations_are_orthogonal_within_the_sine_and_cosine_error() {
     let mut state = SEED;
     for case in 0..CASES {
         let a = angle(next64(&mut state));
-        let (sin, cos) = a.sin_cos();
-        let sum = dot([sin.raw(), cos.raw(), 0], [sin.raw(), cos.raw(), 0]);
+        let (sine, cosine) = a.sin_cos();
+        let sum = dot([sine.raw(), cosine.raw(), 0], [sine.raw(), cosine.raw(), 0]);
         for build in [FixedMat3::rotation_x, FixedMat3::rotation_y, FixedMat3::rotation_z] {
             let m = rows(build(a));
             let cols = transpose(m);

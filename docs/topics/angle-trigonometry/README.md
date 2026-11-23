@@ -184,4 +184,5 @@ not deterministic across targets. Method, command and caveats are in the
 Not provided yet: tangent, the inverse functions `asin`, `acos` and single-ratio `atan`,
 signed conversions out (radians or degrees in `(-π, π]`), angle interpolation (#111),
 and rotation types (#109). Each needs its own error bound and golden vectors when it
-lands (flyingrobots/bunny#244).
+lands (flyingrobots/bunny#244). Rotation matrices from a `FixedAngle` are in
+[Rotation](../rotation/README.md).

@@ -69,7 +69,11 @@ ports `FixedAngle::sin_cos` (checked against its 20 golden vectors), applies the
 rules to the corpus below, and checks every result in `Decimal` at 40 digits against the
 exact sine and cosine of the exact angle. Its FNV-1a digest over the result stream is
 `0xB74D_1C11_AF2A_0E65`, which ROT-TP-008 pins, and the goldens of ROT-TP-005 and ROT-TP-009
-come from it. The model is posted on flyingrobots/bunny#311's pull request, not kept in the
+come from it. Over the corpus the largest values it saw, in raw units, were 0.99 (entry
+against the formula on the given axis, bound `3/2 + 2^-30`), 8.11 (entry against the exact
+rotation about the axis direction, bound `19/2 + 2^-28`), 8.16 and 8.10 (row and column
+length), 8.07 and 7.89 (row and column dot product) and 10.54 (determinant); for the axis
+rotations at the same angles, 0.70 (length) and 1.39 (determinant). The model is posted on flyingrobots/bunny#311's pull request, not kept in the
 tree.
 
 ## Fixtures
@@ -105,7 +109,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_001_quarter_turns_follow_the_right_hand_rule"
 oracle = "Hand-derived quarter turns from the coordinate law's cross products; the shipped look rotation."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-002"
@@ -114,7 +118,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_002_cardinal_angles_give_exact_zeros_and_ones"
 oracle = "Powers of the hand-derived quarter turn at and one angle unit either side of each cardinal angle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-003"
@@ -123,7 +127,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_003_axis_angle_about_the_coordinate_axes_matches_the_axis_rotations"
 oracle = "Bit equality with the axis rotations for the six signed unit axes."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-004"
@@ -132,7 +136,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_004_zero_is_the_identity_and_a_negated_angle_is_the_transpose"
 oracle = "Bit equality with the identity and with the transpose."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-005"
@@ -141,7 +145,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_005_pinned_goldens"
 oracle = "Angle goldens; raw rows from the Python model, each within 1/2 raw of the Decimal ideal, equal to the i128 oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-006"
@@ -150,7 +154,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_006_entries_on_a_half_round_to_even"
 oracle = "Hand-derived exact halves at 60 degrees rounded to even."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-007"
@@ -159,7 +163,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_007_axis_rotations_are_orthogonal_within_the_sine_and_cosine_error"
 oracle = "Exact i128 dot products, squared lengths and determinants over 10 000 seeded angles."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-008"
@@ -168,7 +172,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_008_seeded_axis_angle_rotations_match_the_oracle_and_the_bounds"
 oracle = "Independent i128 oracle and exact bounds over 10 000 seeded cases; digest equal to the Decimal-checked Python model."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-009"
@@ -177,7 +181,7 @@ evidence = "test"
 test = "crates/bunny-linalg/tests/rotation_tests.rs::rot_tp_009_the_longest_and_shortest_axes_bound_the_error"
 oracle = "Hand-derived half turns about the extreme FixedUnitVec3 axes, one raw unit inside the type's acceptance."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ROT-TP-010"
@@ -186,12 +190,28 @@ evidence = "manual-audit"
 artifact = "docs/topics/rotation/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations
 
-Planned: each mutation is applied to the kernel, the test file run, and the kernel restored.
+Each mutation was applied to the kernel, `rotation_tests` and `look_rotation_tests` run, and
+the kernel restored; each fails the named cases.
+
+| Mutation | Fails |
+| --- | --- |
+| `rotation_y` transposed (signs of `s` swapped) | ROT-TP-001, ROT-TP-003 |
+| `rotation_z` transposed | ROT-TP-001, ROT-TP-003, ROT-TP-005 |
+| `rotation_x` handedness flipped | ROT-TP-001, ROT-TP-003 |
+| `rotation_x` with `m00 = c` | ROT-TP-001, ROT-TP-002, ROT-TP-003, ROT-TP-007 |
+| Rodrigues skew term negated (the transposed matrix) | ROT-TP-003, ROT-TP-005, ROT-TP-008 |
+| Rodrigues with `t = c - 1` | ROT-TP-003, ROT-TP-005, ROT-TP-006, ROT-TP-008, ROT-TP-009 |
+| Rodrigues `m10` with `-z` (symmetric off-diagonal pair) | ROT-TP-003, ROT-TP-004, ROT-TP-005, ROT-TP-008 |
+| Floor instead of rounding to nearest | ROT-TP-005, ROT-TP-006, ROT-TP-008, ROT-TP-009 |
+| Ties up instead of to even | ROT-TP-006 |
+| Ties away from zero | ROT-TP-006 |
+
+Only ROT-TP-006 decides ties: no seeded case lands exactly on a half.
 
 ## Determinism Obligations And Evidence
 
