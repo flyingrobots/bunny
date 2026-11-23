@@ -142,11 +142,13 @@ constant. The structural checker, fingerprint and SAH cost live in
 | BVH-TP-017 | Overflow | BVH-REQ-007 | The widest box's scaled area is exactly 3 * (2^45 - 1)^2; its weighted area at u32::MAX primitives, split cost and leaf cost do not overflow; below 2^45 areas are exact. | `crates/bunny-broadphase/src/bvh/sah/tests/mod.rs::bvh_tp_017_costs_of_the_widest_boxes_and_largest_counts_do_not_overflow` |
 | BVH-TP-018 | Golden | BVH-REQ-003 | Node count and FNV-1a fingerprint of the SAH tree over 520 seeded boxes. | `crates/bunny-broadphase/tests/bvh_sah_golden.rs::bvh_tp_018_sah_tree_bytes_golden_vector` |
 | BVH-TP-019 | Golden | BVH-REQ-003, BVH-REQ-004 | Node count and FNV-1a fingerprint of the quartile tree over the same boxes. | `crates/bunny-broadphase/tests/bvh_sah_golden.rs::bvh_tp_019_quartile_tree_bytes_golden_vector` |
-| BVH-TP-021 | Allocation | BVH-REQ-001 | A counting allocator sees zero allocations during a build of 240 boxes, 40 of them identical. | `crates/bunny-broadphase/tests/bvh_sah_allocation_tests.rs::bvh_tp_021_build_bvh_sah_allocates_zero_times` |
+| BVH-TP-021 | Allocation | BVH-REQ-001 | A counting allocator sees zero allocations by the building thread during a build of 240 boxes, 40 of them identical ([measurement rule](#allocation-measurement-rule)). | `crates/bunny-broadphase/tests/bvh_sah_allocation_tests.rs::bvh_tp_021_build_bvh_sah_allocates_zero_times` |
 | BVH-TP-020 | Mutations | BVH-REQ-005, BVH-REQ-006 | The partition and the cost comparison, broken on purpose, make the cases above fail. | [Mutation checks](#mutation-checks) |
 | BVH-TP-022 | Depth cap reached | BVH-REQ-010, BVH-REQ-008 | 70 collinear point boxes inside the trace domain, at `2^40 - 1 - d_k` raw with `d_0 = 0` and `d_(k+1) = ceil(16 (d_k + 1) / 15)`: every node's lowest point is alone in the lowest bin and every cost is zero, so each level splits off one point and the tree is exactly 60 deep (a literal), with primitives 0 to 9 in one capped leaf at depth 60. The tree is well formed, needs at most 61 stack entries, and closest_hit, any_hit, intersect_aabb and the compact searches equal a test of every primitive. | `crates/bunny-broadphase/tests/bvh_depth_tests.rs::bvh_tp_022_seventy_collinear_points_reach_the_depth_cap` |
 | BVH-TP-023 | The review's witness | BVH-REQ-010 | Point boxes at raw `17^k` (k = 0..14) on each axis in turn plus 2^18 identical boxes at the origin (262 189 primitives) build a valid tree of depth 60 whose 32 768 leaves at depth 60 hold 8 primitives each. Measured once; its 14 s debug build is too slow for the fast tier, and BVH-TP-022 kills the same mutations. | [Depth cap evidence](#depth-cap-evidence) |
 | BVH-TP-024 | Quartile depth inside the domain | BVH-REQ-011, BVH-REQ-004 | 94 collinear point boxes inside the trace domain at `2^40 - 1 - 2^32 - d_k` raw with `d_0 = 0` and `d_(k+1) = ceil(4 (d_k + 1) / 3)`: every cost is zero and the first quartile plane leaves only the farthest point on its left, so build_bvh splits off one point per level until four remain, a tree exactly 90 deep. 94 thin triangles in the planes `x` of those points (bounds one raw unit in y and z) give a tree 70 deep (recorded from the frozen builder). On both, intersect_aabb, any_hit and closest_hit along `-x` return StackOverflow, and closest_hit along `+x` equals a test of every primitive. | `crates/bunny-broadphase/tests/bvh_depth_tests.rs::bvh_tp_024_build_bvh_exceeds_the_traversal_depth_inside_the_trace_domain` |
+| BVH-TP-027 | Measurement rule | BVH-REQ-001 | A second thread allocates in a loop (at least 1 000 blocks, guaranteed to fall inside the window) while a scope is measured: the scope counts 0. | `crates/bunny-broadphase/tests/thread_scoped_allocation_tests.rs::tscope_tp_001_foreign_thread_allocations_are_not_counted` |
+| BVH-TP-028 | Measurement rule | BVH-REQ-001 | The measuring thread's own allocation is counted: one `Vec` with capacity is one block. | `crates/bunny-broadphase/tests/thread_scoped_allocation_tests.rs::tscope_tp_002_own_thread_allocations_are_counted` |
 | BVH-TP-025 | Depth mutations | BVH-REQ-010 | `SAH_MAX_DEPTH = 64` fails BVH-TP-022 and a build stack of `SAH_MAX_DEPTH` entries fails BVH-TP-026. | [Mutation checks](#mutation-checks) |
 | BVH-TP-026 | Build stack at the cap | BVH-REQ-010 | The review's chains extended to `17^k` raw for `k` from 0 to 15 on each axis in turn (outside the trace domain), plus 2^14 identical boxes at the origin (16 432 boxes): every chain point is split off to the right and every halving keeps the second half waiting, so 59 right children wait above the deepest interior node and the build needs all 61 entries of its work stack. The tree is well formed and 60 deep (literals), and a box query reaches every primitive. About 0.9 s in a debug build. | `crates/bunny-broadphase/tests/bvh_depth_tests.rs::bvh_tp_026_a_left_spine_to_the_cap_fills_the_sah_build_stack` |
 
@@ -327,7 +329,7 @@ id = "BVH-TP-021"
 requirements = ["BVH-REQ-001"]
 evidence = "test"
 test = "crates/bunny-broadphase/tests/bvh_sah_allocation_tests.rs::bvh_tp_021_build_bvh_sah_allocates_zero_times"
-oracle = "dhat counts zero heap blocks during the build."
+oracle = "The calling thread allocates zero heap blocks during the build; other threads are not counted."
 tier = "fast"
 status = "implemented"
 
@@ -384,7 +386,40 @@ artifact = "docs/topics/bvh-construction/test-plan.md#mutation-checks"
 oracle = "Each deliberate mutation makes at least one case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "BVH-TP-027"
+requirements = ["BVH-REQ-001"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/thread_scoped_allocation_tests.rs::tscope_tp_001_foreign_thread_allocations_are_not_counted"
+oracle = "Another thread's allocations, forced into the measurement window, change the count by nothing: it stays 0."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "BVH-TP-028"
+requirements = ["BVH-REQ-001"]
+evidence = "test"
+test = "crates/bunny-broadphase/tests/thread_scoped_allocation_tests.rs::tscope_tp_002_own_thread_allocations_are_counted"
+oracle = "A deliberate allocation inside the scope on the measuring thread is counted exactly once."
+tier = "fast"
+status = "implemented"
 ```
+
+## Allocation Measurement Rule
+
+BVH-TP-021 and `bvh_allocation_tests.rs` count heap blocks with
+`allocation_counter::measure`, which counts only the allocations made by the
+thread that runs the measured closure. A process-wide count would also see the
+test harness and any other thread, and failed once in CI with a kernel that
+allocated nothing. The same rule holds for the codec's allocation tests
+(`ply_allocation_tests.rs`, `ply_ascii_allocation_tests.rs`). The instrument
+itself is checked in `thread_scoped_allocation_tests.rs`: besides BVH-TP-027
+and BVH-TP-028, a reallocation is counted on the measuring thread
+(`tscope_tp_003`), a block freed on another thread changes nothing
+(`tscope_tp_004`), and two threads measuring at once see only their own blocks
+(`tscope_tp_005`). Inside a scope the tests use only atomics to wait, because
+parking a thread allocates.
 
 ## Mutation Checks
 

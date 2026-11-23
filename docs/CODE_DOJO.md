@@ -34,6 +34,9 @@ Topic documentation contract metadata is checked through
 `cargo run --locked -p xtask -- topic-docs`.
 Repo-respect receipt templates and checks are handled through
 `cargo run --locked -p xtask -- repo-respect`.
+The full gate also builds the `bunny-perf` timing harness once per feature group
+alone and once with all groups; `cargo run --locked -p xtask -- code-dojo-perf-groups`
+runs just that check.
 
 ## CI
 

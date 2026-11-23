@@ -14,13 +14,29 @@
 
 //! Deterministic numeric profiles for Bunny graphics primitives.
 
+/// Semantic version of `bunny-num` compiled from `Cargo.toml`.
+// dojo: allow std-env -- Cargo sets CARGO_PKG_VERSION from the workspace manifest, not the host
+pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod fixed_angle;
 pub mod fixed_divisor;
 pub mod fixed_q32_32;
+pub mod u32_div_round_even;
+pub mod u32_ellipse_classify;
 
 pub use fixed_angle::FixedAngle;
 pub use fixed_divisor::FixedDivisor;
 pub use fixed_q32_32::{FixedQ32_32, FloatConversionError};
+pub use u32_div_round_even::{
+    div_round_even_u32, div_round_even_u32_bytes, div_round_even_u32_words, DivisionByZero,
+    U32_DIV_ROUND_EVEN_CONTRACT_ID, U32_DIV_ROUND_EVEN_STATUS_DIV_BY_ZERO,
+    U32_DIV_ROUND_EVEN_STATUS_OK,
+};
+pub use u32_ellipse_classify::{
+    classify_ellipse_u32, classify_ellipse_u32_bytes, classify_ellipse_u32_words, EllipseClass,
+    EllipseDomainError, U32_ELLIPSE_CLASSIFY_CONTRACT_ID, U32_ELLIPSE_MAX_COORD,
+    U32_ELLIPSE_STATUS_OK, U32_ELLIPSE_STATUS_OUT_OF_DOMAIN,
+};
 
 /// Bunny's first scalar representation.
 ///

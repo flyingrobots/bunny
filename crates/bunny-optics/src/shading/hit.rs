@@ -25,6 +25,8 @@ pub struct SurfaceHit {
     point: FixedVec3,
     frame: ShadingFrame,
     plane: Wide,
+    offset: i128,
+    front_face: bool,
 }
 
 impl SurfaceHit {
@@ -84,8 +86,8 @@ impl SurfaceHit {
         }
         let point = arrival_side(start, plane, offset)?;
         let inside = within(point, domain);
-        let frame = surface.facing_frame(hit.front_face);
-        inside.then(|| Self { point: narrow(point), frame, plane })
+        let (frame, front_face) = (surface.facing_frame(hit.front_face), hit.front_face);
+        inside.then(|| Self { point: narrow(point), frame, plane, offset, front_face })
     }
 
     /// The diagnostic path of [`Self::new`]: the same hit, with the reason for a refusal. Call
@@ -112,8 +114,9 @@ impl SurfaceHit {
         let distance = hit.distance;
         let start = point_at(ray, distance)
             .ok_or(SecondaryRayError::HitPointUnrepresentable { distance })?;
-        let point = diagnosed_start(start, plane, offset)?;
-        Ok(Self { point: narrow(point), frame: surface.facing_frame(hit.front_face), plane })
+        let point = narrow(diagnosed_start(start, plane, offset)?);
+        let (frame, front_face) = (surface.facing_frame(hit.front_face), hit.front_face);
+        Ok(Self { point, frame, plane, offset, front_face })
     }
 
     /// The start point of every secondary ray.
@@ -126,6 +129,32 @@ impl SurfaceHit {
     #[must_use]
     pub const fn frame(&self) -> ShadingFrame {
         self.frame
+    }
+
+    /// Whether the ray arrived on the triangle's front face, as `TriangleHit::front_face` said:
+    /// the side its vertices appear counter-clockwise from.
+    #[must_use]
+    pub const fn front_face(&self) -> bool {
+        self.front_face
+    }
+
+    /// The start point of a ray that continues through the surface: `p - j e`, with `p` this
+    /// hit's [`Self::point`], `e` one raw unit along the plane normal's dominant axis toward
+    /// the arrival side, and `j = floor((N . p - N . v0) / |N_k|) + 1` the fewest steps that
+    /// put it strictly on the far side of the triangle's exact plane.
+    ///
+    /// For a hit the trace kernel reported, `p` is less than `9 |N_k| / 2` above the plane
+    /// (plus `3 |N_k| / 2^32` for a `TraceRay::from_ray` direction with a component of
+    /// `2^32 + 1`; see `docs/topics/optics/README.md#smooth-dielectric`), below `5 |N_k|`
+    /// either way, so `j` is at most five. The
+    /// point can be outside the trace domain; the caller checks. Exact in `i128`: the plane
+    /// value is below `2^126`.
+    pub(crate) fn far_point(&self) -> Wide {
+        let (start, step) = (wide(self.point), dominant_step(self.plane));
+        let height = dot(self.plane, start) - self.offset;
+        // `plane . step` is the dominant magnitude, positive for a triangle with area.
+        let steps = height.checked_div(dot(self.plane, step)).unwrap_or(0) + 1;
+        [0, 1, 2].map(|i| pick(start, i) - steps * pick(step, i))
     }
 
     /// The exact normal of the face the ray arrived on: `(v1 - v0) x (v2 - v0)`, negated for the
@@ -207,7 +236,7 @@ fn arrival_side(start: Wide, plane: Wide, offset: i128) -> Option<Wide> {
 }
 
 /// Whether every coordinate magnitude of `point` is below `limit`.
-fn within(point: Wide, limit: u128) -> bool {
+pub fn within(point: Wide, limit: u128) -> bool {
     point.iter().all(|c| c.unsigned_abs() < limit)
 }
 

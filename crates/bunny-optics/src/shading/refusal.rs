@@ -1,5 +1,5 @@
-//! Why a surface hit, a bounce direction, a bounce ray or a mirror reflection could not be
-//! built.
+//! Why a surface hit, a bounce direction, a bounce ray, a mirror reflection or a dielectric
+//! sample could not be built.
 
 use core::fmt;
 
@@ -7,13 +7,14 @@ use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
 /// Why [`super::SurfaceHit::try_new`], [`super::SurfaceHit::try_bounce_ray`],
-/// [`super::SurfaceHit::try_specular_reflection`] or
+/// [`super::SurfaceHit::try_specular_reflection`],
+/// [`super::SurfaceHit::try_dielectric_scatter`] or
 /// [`super::ShadingFrame::try_cosine_direction`] refused its input. Each variant carries the
 /// values the check saw.
 ///
 /// The `Option` forms ([`super::SurfaceHit::new`], [`super::SurfaceHit::bounce_ray`],
-/// [`super::SurfaceHit::specular_reflection`], [`super::ShadingFrame::cosine_direction`])
-/// return `None` exactly when these return an error.
+/// [`super::SurfaceHit::specular_reflection`], [`super::SurfaceHit::dielectric_scatter`],
+/// [`super::ShadingFrame::cosine_direction`]) return `None` exactly when these return an error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SecondaryRayError {
@@ -52,14 +53,14 @@ pub enum SecondaryRayError {
         /// The sample `[u, v]`, as given.
         sample: [FixedQ32_32; 2],
     },
-    /// `TraceRay::new` refused the bounce ray or the reflected ray. This is a defensive
-    /// refusal: the start point of a [`super::SurfaceHit`] is inside the trace domain and every
-    /// bounce and reflected direction is nonzero with components in `-1.0..=1.0`, so no input
-    /// is known to reach it.
+    /// `TraceRay::new` refused the bounce ray, the reflected ray or the refracted ray. This is
+    /// a defensive refusal: the start point is inside the trace domain and every bounce,
+    /// reflected and refracted direction is nonzero with components in `-1.0..=1.0`, so no
+    /// input is known to reach it.
     BounceRayRefused {
         /// The ray's origin, the hit's start point.
         origin: FixedVec3,
-        /// The cosine-weighted bounce direction or the reflected direction.
+        /// The cosine-weighted bounce direction, the reflected or the refracted direction.
         direction: FixedVec3,
     },
     /// The incoming direction `d` is not strictly against the face the hit faces: `d . N >= 0`,
@@ -75,14 +76,27 @@ pub enum SecondaryRayError {
         /// The normalized reflected direction.
         direction: FixedVec3,
     },
+    /// The choice value of a dielectric sample is outside `[0, 1)`.
+    ChoiceOutsideUnitInterval {
+        /// The choice value, as given.
+        choice: FixedQ32_32,
+    },
+    /// The refracted direction is along or above the exact plane (`t . N >= 0`, exact): a
+    /// near-grazing refraction about the rounded unit normal that does not go through the
+    /// surface.
+    RefractionAboveSurface {
+        /// The normalized refracted direction.
+        direction: FixedVec3,
+    },
 }
 
 impl fmt::Display for SecondaryRayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::HitPointUnrepresentable { distance } => {
-                let distance = distance.raw();
-                write!(f, "hit point at distance raw {distance} is not representable in Q32.32")
+            Self::HitPointUnrepresentable { distance: v }
+            | Self::ChoiceOutsideUnitInterval { choice: v } => {
+                let (subject, reason) = self.value_message();
+                write!(f, "{subject} raw {} {reason}", v.raw())
             }
             Self::SampleOutsideUnitInterval { sample: [u, v] } => {
                 write!(f, "sample raw ({}, {}) is outside [0, 1)", u.raw(), v.raw())
@@ -95,8 +109,9 @@ impl fmt::Display for SecondaryRayError {
             | Self::NotOnArrivalSide { point: v }
             | Self::StartOutsideTraceDomain { start: v }
             | Self::ArrivesBelowSurface { direction: v }
-            | Self::ReflectionBelowSurface { direction: v } => {
-                let (subject, reason) = self.vector_message();
+            | Self::ReflectionBelowSurface { direction: v }
+            | Self::RefractionAboveSurface { direction: v } => {
+                let (subject, reason) = self.value_message();
                 write!(f, "{subject} raw {} {reason}", Raw(*v))
             }
         }
@@ -104,10 +119,14 @@ impl fmt::Display for SecondaryRayError {
 }
 
 impl SecondaryRayError {
-    /// The subject and the reason of a refusal that carries one vector; empty for the others,
-    /// whose messages [`fmt::Display`] writes itself.
-    const fn vector_message(&self) -> (&'static str, &'static str) {
+    /// The subject and the reason of a refusal that carries one value or one vector; empty for
+    /// the others, whose messages [`fmt::Display`] writes itself.
+    const fn value_message(&self) -> (&'static str, &'static str) {
         match self {
+            Self::HitPointUnrepresentable { .. } => {
+                ("hit point at distance", "is not representable in Q32.32")
+            }
+            Self::ChoiceOutsideUnitInterval { .. } => ("choice", "is outside [0, 1)"),
             Self::HitPointOutsideTraceDomain { .. } => ("hit point", "is outside the trace domain"),
             Self::NotOnArrivalSide { .. } => {
                 ("hit point", "is not within two steps of the arrival side")
@@ -118,6 +137,9 @@ impl SecondaryRayError {
             }
             Self::ReflectionBelowSurface { .. } => {
                 ("reflected direction", "does not leave the surface")
+            }
+            Self::RefractionAboveSurface { .. } => {
+                ("refracted direction", "does not go through the surface")
             }
             _ => ("", ""),
         }

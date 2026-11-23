@@ -38,6 +38,8 @@ mod scene;
 mod shade;
 #[cfg(feature = "smooth")]
 mod smooth;
+#[cfg(feature = "texture")]
+mod texture;
 mod timing;
 
 use std::error::Error;
@@ -70,7 +72,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if options.stats {
         #[cfg(feature = "trace")]
         {
-            print!("{}", profile::report());
+            print!("{}", profile::report()?);
             return Ok(());
         }
         #[cfg(not(feature = "trace"))]

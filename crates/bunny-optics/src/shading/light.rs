@@ -115,6 +115,9 @@ pub struct Albedo {
 }
 
 impl Albedo {
+    /// The albedo that reflects everything: 1.0 in each channel.
+    pub(crate) const WHITE: Self = Self { channels: [FixedQ32_32::ONE; 3] };
+
     /// An albedo.
     ///
     /// # Errors

@@ -62,13 +62,32 @@ Current behavior is implemented in `crates/bunny-optics/src` and exported as:
 - for [specular reflection](#specular-reflection)
   (`bunny-specular-reflection/1`): `SurfaceHit` (`specular_reflection`,
   `try_specular_reflection`), `SpecularSample` (`ray`, `throughput`),
-  `schlick_fresnel` and `SPECULAR_REFLECTION_ID`, with the
+  `reflect`, `schlick_fresnel` and `SPECULAR_REFLECTION_ID`, with the
   `SecondaryRayError` variants `ArrivesBelowSurface` and
-  `ReflectionBelowSurface`.
+  `ReflectionBelowSurface`;
+- for the [smooth dielectric](#smooth-dielectric) (`bunny-dielectric/1`):
+  `SurfaceHit` (`front_face`, `dielectric_reflectance`, `dielectric_scatter`,
+  `try_dielectric_scatter`), `DielectricBoundary` (`new`, `outside`,
+  `inside`), `RefractiveIndexError` (`index`), `DielectricReflectance`
+  (`Partial`, `Total`; `probability`), `DielectricScatter` (`Reflected`,
+  `Refracted`; `sample`), `DIELECTRIC_ID` and `MAX_REFRACTIVE_INDEX_RAW`,
+  with the `SecondaryRayError` variants `ChoiceOutsideUnitInterval` and
+  `RefractionAboveSurface`;
+- for [texture coordinates and bilinear weights](#texture-coordinates)
+  (`bunny-texture-bilinear/1`): `interpolate_uv`, `bilinear`, `TextureWrap`
+  (`Repeat`, `Clamp`), `BilinearTaps` (`texels`, `weights`) and
+  `TEXTURE_BILINEAR_ID`, with `bunny_query::BarycentricNumerators`;
+- for the [GGX rough conductor](#ggx-rough-conductor)
+  (`bunny-ggx-conductor/1`): `SurfaceHit` (`ggx_reflection`,
+  `try_ggx_reflection`), `GgxConductor` (`new`, `roughness`, `reflectance`),
+  `GgxScatter` (`Reflected`, `Absorbed`), `GgxRoughnessError` (`roughness`),
+  `MIN_GGX_ROUGHNESS_RAW` and `GGX_CONDUCTOR_ID`.
 
-Evidence is listed in the [test plan](test-plan.md). Rough reflection,
-refraction, attenuation and materials other than diffuse and the perfect
-mirror (the rest of #160) are not part of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
+Evidence is listed in the [test plan](test-plan.md). Rough (frosted)
+transmission, dispersion, absorption inside a medium, the evaluation of a
+rough conductor for a given pair of directions, and materials other than
+diffuse, the perfect mirror, the smooth dielectric and the rough conductor
+(the rest of #160) are not part of this chapter. The camera uses the same conventions as `FixedMat4::try_look_at`
 (right-handed, `right = forward x up`), `FixedMat4::try_perspective` (vertical
 field of view given by its tangent, aspect `width / height`) and `Viewport`
 (top-left origin, `y` down), but no test yet checks a ray against those
@@ -635,10 +654,15 @@ loading and vertex transforms, the acceleration structure and the
 closest-hit and any-hit queries (`bunny-broadphase`), which sampler pair each
 decision uses, the loop over pixels and samples, and the pixel value
 ([Pixel Values](#pixel-values)). Materials other than diffuse, other lights,
-textures, reflection and refraction are not defined here. Per-vertex normals
-for a mesh are ([Vertex Normals](#vertex-normals)), and so is their
-interpolation at a hit ([Smooth Normal](#smooth-normal)) and a hit shaded with
-it ([Smooth Shading](#smooth-shading)), including its bounce.
+reflection and refraction are not defined by this identity. Other sections of
+this chapter define per-vertex normals for a mesh
+([Vertex Normals](#vertex-normals)), their interpolation at a hit
+([Smooth Normal](#smooth-normal)), a hit shaded with it
+([Smooth Shading](#smooth-shading)) including its bounce, the perfect mirror
+([Specular Reflection](#specular-reflection)), the smooth dielectric
+([Smooth Dielectric](#smooth-dielectric)), and texture coordinates and
+bilinear lookups ([Texture Coordinates](#texture-coordinates)); the texel
+values and how they become an albedo are the renderer's.
 
 ### Shading Identity
 
@@ -1252,6 +1276,8 @@ shadow, and a camera ray that sees the sky).
 | Hit point | Each coordinate below `TRACE_COORD_LIMIT_RAW + 2` raw units in magnitude | `None`; `HitPointOutsideTraceDomain` |
 | Hit point | Within two raw-unit steps of the arrival side | `None`; `NotOnArrivalSide` |
 | Start point | Inside the trace domain after its step | `None`; `StartOutsideTraceDomain` |
+| Refractive index | In `1.0..=8.0` | `RefractiveIndexError` |
+| Choice value | In `[0, 1)` | `dielectric_scatter` returns `None`; `ChoiceOutsideUnitInterval` |
 
 **Fast path and diagnostic path.** Each of the three secondary-ray steps
 comes in two forms. The `Option` forms, `SurfaceHit::new`,
@@ -1355,14 +1381,33 @@ rule), each step and its rounding:
 | Reflection | `r = d (n . n) - 2 (d . n) n`, the exact reflection of `d` about the line of `n`, scaled by `n . n` | exact (`i128`, every term below `2^99`) |
 | Direction | `r'`, the unit vector along `r`, normalized as `TriangleSurface::new` normalizes a face normal, then clamped to `-1.0..=1.0` | the prescale floors (below `2^-27` raw units); each component within one raw unit of the exact unit vector along the prescaled `r` |
 | Leaving test | `r' . N > 0`, else `ReflectionBelowSurface` | exact |
-| Cosine | `c = -(u . n)`, with `u` the unit vector along `d` (normalized the same way), clamped to `0..=1.0` | once, to nearest, ties to even; within three raw units of the exact `-(d . n) / \|d\|` |
+| Cosine | `c = -(u . n)`, with `u` the unit vector along `d` (normalized the same way), clamped to `0..=1.0` | the exact `i128` dot product (units of `2^-64`) rounded once to nearest raw unit, ties to even; within three raw units of the exact `-(d . n) / \|d\|` |
 | Weight | `w = (1 - c)^5` | the exact 160-bit product, rounded once to nearest; no tie can occur (one needs `(1 - c)^5` raw to be an odd multiple of `2^127`, and 127 is not a multiple of five) |
 | Throughput | `schlick_fresnel(F0_c, c) = F0_c + (1 - F0_c) w` per channel | exact in units of `2^-64`, rounded once to nearest, ties to even |
+
+`reflect(direction, normal)` is the Reflection and Direction rows as a public
+function of any two vectors: the unit vector along `d (n . n) - 2 (d . n) n`,
+normalized and clamped as the table says. `normal` need not have unit length.
+It returns `None` when a component of either vector exceeds `2^32 + 1` raw in
+magnitude (the largest component of a unit vector) or when either vector is
+zero. The mirror calls it with the frame normal, and the
+[GGX rough conductor](#ggx-rough-conductor) with its microfacet normal.
 
 `schlick_fresnel(f0, cosine)` is public, for the samplers that will reuse it:
 both inputs are clamped to `0..=1.0`, the result is in `0..=1.0` and within
 one raw unit of Schlick's exact `f0 + (1 - f0)(1 - cosine)^5` on the clamped
 inputs, `f0` exactly at `cosine = 1.0` and 1.0 exactly at `cosine = 0`.
+
+**The cosine's rounding.** The dot product `-(u . n)` is exact: both
+vectors are raw Q32.32, so it is an integer in units of `2^-64`, below `2^66`.
+It is divided by `2^32` once. A remainder above half a raw unit rounds up, a
+remainder below it rounds down, and a remainder of exactly half goes to the
+even raw value. The result is then clamped to `0..=1.0`. No product is rounded
+before the sum, and nothing rounds the cosine again before `schlick_fresnel`.
+At low cosines one raw unit of `c` changes the throughput, so the rule is
+observable there. The test plan pins it with kernel hits one `2^-64` unit
+under a tie, on ties above even and odd floors, and one unit over a tie
+(OPTICS-REQ-090).
 
 **Normal incidence.** For `d` along `-n`, `u` is within a raw unit of `-n`,
 `c` within a few raw units of 1.0 and `w` rounds to zero, so the throughput is
@@ -1385,6 +1430,560 @@ input is known to reach. `specular_reflection` returns `None` exactly when
 **The normal.** The reflection is about the frame normal of the
 `SurfaceHit`, the geometric normal. Reflection about a smooth-shading normal
 is not part of this identity.
+
+## Smooth Dielectric
+
+`SurfaceHit::dielectric_scatter(&incoming, &boundary, choice)` gives the
+continuation ray at a smooth boundary between two transparent media: the
+reflected ray or the refracted ray, chosen by one sampler value. Its identity
+is `bunny-dielectric/1` (`DIELECTRIC_ID`); nothing in
+`bunny-specular-reflection/1` or `bunny-diffuse-shading/1` changes.
+`try_dielectric_scatter` is the diagnostic path: the same result, with the
+reason for a refusal. `dielectric_reflectance(&incoming, &boundary)` gives the
+reflectance alone.
+
+**Inputs.** `incoming` is the ray the hit was built from. `boundary` is a
+`DielectricBoundary::new(outside, inside)`: the refractive index of the medium
+on the side of the triangle's front face and of the medium behind it, each a
+Q32.32 in `1.0..=8.0` (`MAX_REFRACTIVE_INDEX_RAW`); an index outside that
+range is refused with a `RefractiveIndexError` that carries it. The hit's
+facing decides the order: a ray that arrived on the front face
+(`SurfaceHit::front_face()`) goes from `outside` into `inside`, a ray that
+arrived on the back face from `inside` into `outside`. Below, `a` is the index
+the ray arrives through and `b` the other. Neither side is assumed to be air:
+a caller that tracks nested media passes the pair that meets at this surface.
+`choice` is a sampler value in `[0, 1)`, such as `PixelStream::fraction`.
+
+**Result.** A `DielectricScatter`: `Reflected(sample)` or `Refracted(sample)`,
+each holding a `SpecularSample`, the type the mirror returns, so a renderer
+continues a path the same way for a mirror and for glass. `sample()` gives it
+without matching. `Refracted` tells the caller that the ray is now in the
+other medium.
+
+With `d` the incoming direction, `n` the facing frame normal (the rounded unit
+normal of the face the ray arrived on), `N` that face's exact normal, and
+every value a raw integer (`d . d` and `n . n` below `2^66`, `a` and `b` in
+`2^32..=2^35`):
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Arrival test | `d . N < 0`, else `ArrivesBelowSurface` | exact (`i128`) |
+| Grazing | `m = -(d . n)`; when `m <= 0` the reflectance is 1.0 | exact |
+| Snell's law | `K = b^2 (d.d)(n.n) - a^2 ((d.d)(n.n) - (d.n)^2)` | exact (256-bit integers, every product below `2^203`) |
+| Total internal reflection | exactly when `K <= 0` | exact; no rounded value takes part |
+| Root | `q = floor(sqrt(K))` | the exact floor of the square root |
+| Amplitude ratios | `r_s = (a m - q) / (a m + q)`, `r_p = (b^2 m - a q) / (b^2 m + a q)`, as magnitudes | numerator and denominator exact; both divided by the power of two that leaves the denominator below `2^64` (truncated), then the quotient floored to 62 fraction bits |
+| Reflectance | `R = (r_s^2 + r_p^2) / 2` | exact in units of `2^-125`, rounded once to nearest, ties to even, and clamped to `0..=1.0` |
+| Choice | reflected when `choice.raw() < R.raw()`, else refracted | exact |
+| Refracted vector | `T = a (d (n.n) - (d.n) n) - q n` | exact (256-bit) |
+| Refracted direction | the unit vector along `T`, clamped to `-1.0..=1.0` | each component magnitude of `T` divided by the power of two that puts the largest in `[2^61, 2^62)`, truncated toward zero; then `FixedUnitVec3::new`: the length is the floor of its square root and each quotient rounds to nearest, ties to even |
+| Leaving test | `t . N < 0` for the direction `t`, else `RefractionAboveSurface` | exact |
+| Start point | the first point strictly on the far side of the exact plane (below) | exact |
+
+**Where the formulas come from.** `((d.d)(n.n) - (d.n)^2) / ((d.d)(n.n))` is
+the squared sine of the angle between `d` and the line of `n`, so
+`K / (b^2 (d.d)(n.n)) = 1 - (a / b)^2 sin^2` is the squared cosine of the
+refracted angle that Snell's law `a sin_i = b sin_t` gives, and no refracted
+ray exists when it is not positive. At `K = 0` the refracted ray would run
+along the surface and the Fresnel reflectance is 1, so that case is counted
+as total. With unit vectors, the refracted direction is
+`(a / b) d_perp - cos_t n`, where `d_perp` is the part of the unit incoming
+direction across `n`; multiplied by the positive number `b (n.n) |d|` it is
+`T`, so `|T| = b (n.n) |d|`, at least `2^95`. Multiplying the two Fresnel
+ratios `(a cos_i - b cos_t) / (a cos_i + b cos_t)` and
+`(b cos_i - a cos_t) / (b cos_i + a cos_t)` through by `|d| |n|`, and by `b`
+for the second, gives `r_s` and `r_p` above: one square root serves the
+decision, the reflectance and the direction.
+
+**Fresnel, not Schlick.** The reflectance is the exact unpolarized Fresnel
+formula. Schlick's polynomial is an approximation of it that is several
+percent off for glass at some angles, and it has no total internal
+reflection: used from the dense side it needs the refracted cosine, the same
+square root. Since the root is needed for the direction, the exact formula
+costs two divisions more and removes the approximation. `schlick_fresnel`
+stays the term of the mirror and of conductors.
+
+**Accuracy of the reflectance.** `R` is within one raw unit of the exact
+formula on `d`, `n`, `a` and `b`: half a raw unit from the final rounding,
+plus at most `2^-8` of a raw unit from the steps before it. Each ratio is
+within `2^-61` of its exact quotient (the truncation moves a quotient that is
+at most one by at most `2^-62`, the floor by `2^-62`). Flooring the root
+moves `r_s` by at most `2 / (a m + q)` and `r_p` by at most
+`2 a / (b^2 m + a q)`; when `a < b`, `q^2 = K >= (b^2 - a^2)(d.d)(n.n)` is at
+least `2^96`, and when `a > b` a refracted ray needs
+`(a m)^2 > (a^2 - b^2)(d.d)(n.n) >= 2^96`, so both are below `2^-41`, and far
+smaller unless the direction is a few raw units long. Equal indices give
+`q = a m` exactly and `R = 0` when `m > 0`; the grazing rule comes first, so
+at `m <= 0` the reflectance is 1.0 for equal indices too.
+
+**The choice and the weights.** `R` raw is an integer in `0..=2^32`. The `R`
+choice values `0..R` reflect and the other `2^32 - R` refract, so for a
+uniform choice value the probability of reflection is exactly `R / 2^32` and
+the two probabilities sum to one. The reflected ray should carry the fraction
+`R` of the energy and is chosen with probability `R`; the refracted ray
+carries `1 - R` and is chosen with probability `1 - R`; so each branch's
+throughput is the share divided by the probability, exactly 1.0 in every
+channel, and no rounding enters the weights. Total internal reflection
+reflects for every choice value. A reflectance that rounds to 1.0 short of
+the critical angle also reflects for every choice value (the refracted share
+is below `2^-33`), and so does a ray that arrives against the exact face but
+along or behind the plane of the rounded normal (`m <= 0`, the grazing row
+above), for which no refraction is computed. A `Partial` reflectance below
+1.0 always has some choice value that selects refraction, but building that ray
+can still end in a refusal listed under **Refusals** below: in the test plan's
+grazing-refraction case the reflectance is zero and every choice value is
+refused with `RefractionAboveSurface`.
+
+**The radiance factor is not applied.** The throughput of 1.0 is a weight for
+power. Radiance also changes with the index: a path traced from the camera
+that refracts from the medium of index `a` into the medium of index `b` must
+multiply its throughput by `(a / b)^2` to carry radiance. From air into glass
+(`a = 1.0`, `b = 1.5`) that is `4 / 9`, and from glass back into air `9 / 4`.
+Over a whole path the factors multiply to `(first index / last index)^2`, so
+they cancel on a path that enters a medium and leaves it again, as a camera
+path through a closed glass object does; a renderer needs the factor only
+when a path's two ends lie in media of different index. For light, which
+travels the other way, the factor is the reciprocal, `(b / a)^2` on entering
+index `b` from index `a`. `DielectricScatter::Refracted` states the same rule.
+
+**Reflected branch.** `try_specular_reflection(incoming, white)` with a base
+reflectance of 1.0 in every channel, for which Schlick's term is exactly 1.0
+at every angle: the ray, the start point and the refusals of
+[Specular Reflection](#specular-reflection), unchanged.
+
+**Refracted direction.** Each component is within one raw unit of the exact
+refracted unit vector for `d`, `n`, `a` and `b` (half a raw unit from the
+division, plus at most `2^-26` from the truncated prescale, the floored
+length and the floored root). The refraction is about the line of the
+rounded normal `n`, as the mirror's reflection is.
+
+**Start point of the refracted ray.** The hit's start point `p`
+([Facing And Secondary Rays](#facing-and-secondary-rays)) is strictly on the
+arrival side, so a ray that goes through the surface from it would meet the
+same triangle again at once. The refracted ray starts at `p - j e`, with `e`
+one raw unit along the plane normal's dominant axis toward the arrival side,
+as in the start-point rule, and `j = floor((N . p - N . v0) / |N_k|) + 1`:
+the nearest point to `p` on that axis that is strictly on the far side
+(`N . point < N . v0`, exact). The refracted direction has `t . N < 0`, so
+the ray never meets the plane of the triangle it left: not its own triangle,
+a coplanar neighbour or a coincident duplicate.
+
+For a hit the trace kernel reported, `j` is at most five. The floored
+distance is less than `2^-32` short of the true one, so with every direction
+component at most `2^32` raw (as `TraceRay::new` admits) the exact point at
+`hit.distance` is less than one raw unit per axis before the true hit point,
+so less than `|N|_1` above the plane; `point_at` adds at most `|N|_1 / 2`; so
+the unstepped point is below `3 |N|_1 / 2 <= 9 |N_k| / 2` above the plane,
+and a stepped one at most `|N_k|`. The far-side start is therefore within 1.5
+raw units of the true hit point on the other two axes and within 6.5 on the
+dominant axis (1.5 plus up to five steps). `TraceRay::from_ray` also admits a
+component of `2^32 + 1` raw; the per-axis gap is then below `1 + 2^-32`, the
+unstepped point below `(9 / 2 + 3 / 2^32) |N_k|` above the plane, still below
+`5 |N_k|`, so `j` is still at most five, and the 1.5 and 6.5 distances each
+grow by less than `2^-31`. A surface closer than that behind the one hit may
+be skipped.
+The rule uses only the hit's exact plane, its point and a step count, so it
+does not depend on the triangle.
+
+**Refusals.** Checked in this order. `ChoiceOutsideUnitInterval { choice }`
+when `choice` is outside `[0, 1)`. `ArrivesBelowSurface { direction }` when
+`d . N >= 0`, as for the mirror. Then, when reflected, the refusals of
+`try_specular_reflection`. When refracted: `RefractionAboveSurface
+{ direction }` when `t . N >= 0`, a near-grazing refraction about the rounded
+normal that does not go through the exact plane (the test plan has such a
+case, found by search; none of its seeded kernel hits reaches it);
+`StartOutsideTraceDomain { start }` when the far-side start point is outside
+the trace domain, possible only for a face on the domain's boundary; and the
+defensive `BounceRayRefused`. `dielectric_scatter` returns `None` exactly when
+`try_dielectric_scatter` returns an error. `dielectric_reflectance` refuses
+only `ArrivesBelowSurface`.
+
+**A parallel slab.** A ray that enters a slab through one face and leaves
+through a parallel face comes out along its original direction: the second
+refraction undoes the first. With rounding, each component of the outgoing
+direction is within
+
+```text
+1 + 6 (h / c)  raw units
+```
+
+of the unit vector along the original direction, where `h >= 1` is the ratio
+of the larger index to the smaller and `c` the cosine of the angle between
+the ray and the normal in the rarer medium (outside a dense slab, inside a
+rarer one), for `c >= 2^-10`. The derivation, to first order in the errors:
+both faces' normals are within `e = sqrt(3) (1 + 2^-26)` raw units of the
+true unit normal, and each refracted direction within `e` of its exact
+value. Refraction with index ratio `g` from cosine `c_1` to cosine `c_2`
+magnifies an error of the incoming direction by at most `g max(1, c_1 / c_2)`
+and an error of the normal by `|g c_1 - c_2| / c_2`. Applying both to the
+first refraction's errors as they pass through the second gives at most
+`3 e (h / c)` for a dense slab and `e (2 + 1 / c)` for a rarer one, both at
+most `3 sqrt(3) (h / c) < 5.2 (h / c)` raw units; the last normalization adds
+one. The second-order terms are smaller by a factor `e h / c^2 2^-32`, below
+`2^-8` in the stated range, and the constant 6 covers them. The bound is
+loose because it assumes every error pulls the same way: the largest
+deviation over the test plan's seeded slabs is far inside it. The bound grows
+without limit toward grazing incidence, where a small change of the inner
+direction is a large change of the outer one.
+
+**Not modelled.** Rough (frosted) transmission, dispersion (one index for all
+channels) and absorption inside the medium. A shadow ray does not pass
+through a dielectric: `SurfaceHit::light_sample` is unchanged. The refraction
+is about the geometric normal.
+
+## Texture Coordinates
+
+`interpolate_uv(uvs, weights)` gives a triangle's texture coordinates at a
+hit and `bilinear(uv, [width, height], [wrap_u, wrap_v])` the four texels and
+weights of a bilinear lookup there. Their identity is `bunny-texture-bilinear/1`
+(`TEXTURE_BILINEAR_ID`). Texel storage, mip maps and anisotropic filtering
+are not part of this identity; the caller reads the texels and sums
+`weight * texel`.
+
+**Interpolation.** `uvs` are the vertex coordinates of `v0`, `v1`, `v2` (each
+a `FixedVec2`, `x` is `u` and `y` is `v`) and `weights` the hit's
+`BarycentricNumerators` `(u, v, det)`, whose numerators
+`n = (det - u - v, u, v)` give the exact weights `n / det`. Each component is
+`(n0 t0 + n1 t1 + n2 t2) / det`, computed exactly and rounded once to nearest
+raw unit, ties to even. The weights are nonnegative and sum to one, so the
+result lies between the smallest and largest vertex component and is always
+representable, for every accepted `BarycentricNumerators` (any `det` up to
+`i128::MAX`). A corner gives its vertex's coordinates exactly. It never
+fails.
+
+**Texel centres.** Column `i` of a texture `width` texels wide covers
+`u` in `[i / width, (i + 1) / width)`, and its centre is
+`u = (i + 1/2) / width`; rows are the same along `v` with `height`. Row 0 is
+at `v = 0`: Bunny does not flip `v`, and a caller whose images store the top
+row first decides the orientation when it loads them.
+
+**Lookup.** Each step and its rounding:
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Position | `x = u width - 1/2`, `y = v height - 1/2` | exact (`i128`; `\|u width\|` below `2^95`) |
+| Split | `x0 = floor(x)`, `fx = x - x0` in `[0, 1)`; the same for `y` | exact |
+| Wrap | columns `x0`, `x0 + 1` by `wrap_u`; rows `y0`, `y0 + 1` by `wrap_v`; each on its own | exact |
+| Corner weights | `w11 = fx fy`, `w10 = fx (1 - fy)` | each once, to nearest raw unit, ties to even |
+| Complements | `w01 = fy - w11`, `w00 = (1 - fy) - w10` | exact |
+
+The four weights are in `0..=1.0`, each within half a raw unit of its exact
+product, and sum to exactly 1.0. `BilinearTaps::texels()` gives them as
+`[column, row]` in the order `(x0, y0)`, `(x1, y0)`, `(x0, y1)`, `(x1, y1)`,
+and `weights()` in the same order.
+
+**Wrap rules.** Each axis has its own rule: `wrap_u` for the columns and
+`wrap_v` for the rows, so a texture can repeat along `u` and clamp along `v`.
+`TextureWrap::Repeat` takes each index modulo the size,
+Euclidean, so index `-1` is the last texel and the texture tiles in both
+directions. `TextureWrap::Clamp` clamps each index to `0..=size - 1`, so the
+edge texels extend outward; the weights are the same as for repeat, so two
+taps can name one texel. Each index is wrapped on its own, after the split:
+under repeat `x0 + 1` past the last column is column 0.
+
+**At a texel centre** that is exactly a raw value, `fx = fy = 0`: the first
+tap is that texel with weight exactly 1.0 and the other three have weight
+zero, under both wrap rules. Every centre is a raw value when the size is a
+power of two up to `2^31`; other centres are rounded when written as raw
+values, and the nearest raw value can fall just below the centre. In a
+texture 3 wide, texel 2's centre `5/6` is `3 579 139 413.33` raw; at the
+nearest raw `u = 3 579 139 413`, `x = 2 - 2^-32`, so the columns are `[1, 2]`
+with weights `(2^-32, 1 - 2^-32)` along `u` and the texel is the second tap.
+The largest weight is not a sure guide either: rounded weights can tie for
+texels at different distances. At raw `uv = (1 431 655 765, 0)` in a 3 by 2
+texture, column 0 is nearer (`x = 1/2 - 2^-32`), but all four weights round
+to `2^30`. A caller that needs the nearest texel computes it from the
+coordinate, as column `floor(u width)` and row `floor(v height)`, wrapped; that
+is not part of this identity.
+
+**Refusals.** `bilinear` returns `None` when `width` or `height` is zero.
+Any `uv`, negative or far outside `[0, 1)`, is accepted.
+
+## GGX Rough Conductor
+
+`SurfaceHit::ggx_reflection(&incoming, &conductor, sample)` gives one sample
+of a rough metal at a hit: a microfacet normal drawn from the GGX distribution
+of the normals visible from the incoming ray, the reflection of the ray about
+it, and the weight of the radiance that comes back. Its identity is
+`bunny-ggx-conductor/1` (`GGX_CONDUCTOR_ID`). It uses `reflect` and
+`schlick_fresnel` of `bunny-specular-reflection/1` unchanged; nothing in that
+identity or in `bunny-diffuse-shading/1` changes. `try_ggx_reflection` is the
+diagnostic path: the same result, with the reason for a refusal.
+
+A `GgxConductor` holds the roughness `alpha` and the base reflectance `F0`
+per channel (an `Albedo`). `alpha` is the width parameter of the GGX
+distribution itself. A metal-roughness map stores its square root; squaring a
+texel is the caller's step. Anisotropic roughness, transmission and
+compensation for multiple scattering are not part of this identity.
+
+The result is a `GgxScatter`:
+
+- `Reflected(SpecularSample)`: the path continues along `ray()`, from the
+  hit's start point, to be queried with a minimum distance of zero, and the
+  radiance it brings back is weighted by `throughput()` per channel, each in
+  `0..=1.0`;
+- `Absorbed`: the sampled direction does not leave the surface. The path ends
+  and carries no radiance. This is a result, not a refusal.
+
+The sampler is Heitz's ("Sampling the GGX Distribution of Visible Normals",
+JCGT 7(4), 2018), with one roughness for both axes. The density of the
+reflected direction `l` is `D_v(m) / (4 v . m)` with `D_v` the distribution of
+visible normals, and the reflectance is `f = F D G2 / (4 c_v c_l)`, so the
+weight `f c_l / density` is `F G2 / G1`: the distribution `D` cancels and is
+never computed. `G2` is the height-correlated Smith term,
+`1 / (1 + Lambda(v) + Lambda(l))`, and `G1 = 1 / (1 + Lambda(v))`. With
+`s(c) = sqrt(alpha^2 + (1 - alpha^2) c^2)`, `Lambda = (s(c) - c) / (2 c)` and
+
+```text
+G2 / G1 = c_l (c_v + s(c_v)) / (c_l s(c_v) + c_v s(c_l))
+```
+
+### Steps And Their Rounding
+
+`d` is the incoming direction, `v` the unit vector along `-d`, `n` the facing
+frame normal, `N` the exact normal of the face, `[u, w]` the sample and
+`alpha` the roughness. "Unit rule" means the vector is exact in `i128`, then
+normalized once as `TriangleSurface::new` normalizes a face normal: each
+component within one raw unit of the exact unit vector, plus the prescale's
+floor, below `2^-27` raw units. "To even" means rounded once to nearest, ties
+to even. Every sum and product not listed is exact in `i128`. Each cosine and
+the view sine follow the rule of the mirror's cosine (see "The cosine's
+rounding" above): the dot product of two raw Q32.32 unit vectors is exact in
+units of `2^-64`, divided by `2^32` once to nearest with ties to even, then
+clamped; nothing rounds it again before it is used.
+
+| Step | Value | Rounding |
+| --- | --- | --- |
+| Sample test | `u` and `w` in `[0, 1)`, else `SampleOutsideUnitInterval` | exact |
+| Arrival test | `d . N < 0`, else `ArrivesBelowSurface` | exact |
+| View | `v`, along `-d` | unit rule |
+| View cosine | `c_v = v . n`, clamped to `0..=1.0`; zero absorbs | to even |
+| Axes | `forward` along `(d . n) n - d (n . n)`, the horizontal part of `-d`; `across` along `d x n`; `(-bitangent, tangent)` of the frame when `d` is parallel to `n` | unit rule, each |
+| View sine | `s_v = v . forward`, clamped to `0..=1.0` | to even |
+| Stretched view | `(sigma, kappa)` along `(alpha s_v, c_v)`, clamped to `0..=1.0` | unit rule |
+| Disk radius | `r = sqrt(u)` | floored |
+| Disk angle | `(sin, cos)` of `w` turns, `FixedAngle::sin_cos` | within one raw unit (its own contract) |
+| Disk point | `t1 = r cos`, `t2' = r sin` | to even, each |
+| Warp | `q = sqrt(1 - t1^2)` | floored |
+| | `t2 = ((1 - kappa) q + (1 + kappa) t2') / 2` | to even |
+| | `t3 = sqrt(max(0, 1 - t1^2 - t2^2))` | floored |
+| Hemisphere point | `along = sigma t3 - kappa t2` on `forward`, `t1` on `across`, `up = max(0, sigma t2 + kappa t3)` on `n` | to even, each |
+| Microfacet normal | `m` along `alpha (along forward + t1 across) + up n`; `n` if that vector is zero | unit rule |
+| Direction | `r = reflect(d, m)`, along `d (m . m) - 2 (d . m) m`, clamped to `-1.0..=1.0` | unit rule |
+| Leaving test | `r . N > 0`, else absorbed | exact |
+| Light cosine | `c_l = r . n`, clamped to `0..=1.0`; zero absorbs | to even |
+| Smith roots | `s(c_v)` and `s(c_l)` in units of `2^-60`, from the radicand `1 - (1 - alpha^2)(1 - c^2)`, exact in units of `2^-120` | floored |
+| Smith ratio | `G = c_l (c_v + s(c_v)) / (c_l s(c_v) + c_v s(c_l))` | to even |
+| Fresnel cosine | `c_h = v . m`, clamped to `0..=1.0` | to even |
+| Fresnel term | `F_c = schlick_fresnel(F0_c, c_h)` | its own two roundings; within one raw unit of Schlick's formula |
+| Throughput | `F_c G` per channel | to even |
+
+The construction is Heitz's listing in the orthonormal axes
+`(forward, across, n)`, in which the view is `(s_v, 0, c_v)`: his `T1` is
+`across` and his `T2` is `(-kappa, 0, sigma)`. Taking the axes from `d` and
+`n` makes the sample independent of the frame's tangent, except when `d` is
+parallel to `n`, where the listing's own fallback `T1 = (1, 0, 0)` is the
+tangent.
+
+`reflect(direction, normal)` is public and is the one reflection of this
+crate: the mirror of `bunny-specular-reflection/1` calls it with the frame
+normal, and this sampler with the microfacet normal.
+
+### Roughness Range
+
+`GgxConductor::new` accepts `alpha` in `2^-16..=1.0` (raw
+`MIN_GGX_ROUGHNESS_RAW = 2^16` to `2^32`) and refuses any other value with a
+`GgxRoughnessError` that carries it.
+
+- **The minimum.** `2^-16` is the smallest roughness whose square, which the
+  Smith roots use, is at least one raw unit. It is the square of `1 / 256`, so
+  the square of every nonzero 8-bit roughness texel is accepted. Below it the
+  lobe is narrower than `2^16` raw units of direction, where the direction's
+  own rounding (a few raw units) is no longer small against the lobe, and
+  `1 - G` is below a raw unit except within about `2^-16` of grazing: the
+  sample would be the mirror with rounding noise. A caller with a roughness
+  below the minimum uses `specular_reflection`.
+- **The maximum.** `1.0` is the largest value a roughness map holds. The
+  arithmetic's stated widths assume `alpha <= 1.0` (the Smith radicand is
+  written as `1 - (1 - alpha^2)(1 - c^2)`, which needs `1 - alpha^2 >= 0`).
+
+### Absorption
+
+A sample is `Absorbed`, in this order, when the view cosine `c_v` is zero (the
+ray arrives above the exact plane but not above the rounded normal's horizon,
+so no microfacet is visible), when the reflected direction is along or below
+the exact plane (`r . N <= 0`), or when its cosine `c_l` rounds to zero. A
+reflected sample is therefore strictly above the exact plane and above the
+rounded normal's horizon, as a bounce ray is. A microfacet normal that faces
+away from the view (`v . m <= 0`, possible only through rounding at a grazing
+view) reflects below the horizon and is absorbed by these tests.
+
+Absorption is where a single-scattering model loses energy. A real rough
+surface reflects that light again from another facet; this model follows one
+reflection only. The loss is part of the expected albedo below.
+
+### The Weight
+
+`G` is within `1/2 + 2^-11` raw units of the exact Smith ratio at the rounded
+cosines `c_v` and `c_l`, and never above 1.0:
+
+- each root is floored in units of `2^-60`, so it is low by less than
+  `2^-60`, a relative error below `2^-60 / alpha <= 2^-44`, because
+  `s(c) >= alpha`;
+- the numerator `c_l (c_v + s(c_v))` and the denominator
+  `c_l s(c_v) + c_v s(c_l)` are then exact, each within a relative `2^-44` of
+  its real value, so their quotient is within a relative `2^-43`, below
+  `2^-11` raw units;
+- the quotient is rounded once, which adds at most half a raw unit;
+- the floored `s(c_l)` is at least `c_l` (as an integer, `c_l 2^28`), so the
+  numerator never exceeds the denominator.
+
+Each throughput channel is `F_c G` rounded once. Because `F_c` is within one
+raw unit of Schlick's formula at `c_h`, the channel is within `2 + 2^-11` raw
+units of the exact product of Schlick's formula and the Smith ratio at the
+rounded cosines. With `F0 = 1.0` the Fresnel term is 1.0 exactly and the
+channel is `G` itself.
+
+### The Mirror Limit
+
+At the minimum roughness `alpha = 2^-16`, for a sample with `u <= 1/2`:
+
+- each component of the direction is within `33 alpha` (raw `2 162 688`,
+  about `2^-11`) of the direction `specular_reflection` gives for the same
+  ray;
+- where that mirror direction has a cosine of at least `1/4` against `n`,
+  each throughput channel is within `81 alpha` (raw `5 308 416`, about
+  `2^-9.7`) of the mirror's;
+- where the mirror direction has a cosine of at least `2^-9`, the sample is
+  reflected, not absorbed.
+
+The derivation, in real numbers first. Write `q = sqrt(1 - t1^2)`,
+`t2 = q cos(psi)`, `t3 = q sin(psi)` and `(sigma, kappa) = (sin(beta),
+cos(beta))`. The warp keeps `t2` in `-kappa q ..= q`, so
+`0 <= psi <= pi - beta`, and the height is `up = q sin(psi + beta)`. With
+`s = (1 + kappa) / 2`, the unwarped coordinate is `t2' = (t2 - (1 - s) q) /
+s`, so `q - t2' = q (1 - cos(psi)) / s` and `q + t2' = q (cos(psi) +
+cos(beta)) / s`, and their product is `1 - t1^2 - t2'^2 = 1 - u`. Now
+`1 - cos(psi) <= 2 sin((psi + beta) / 2)` and `cos(psi) + cos(beta) <=
+2 cos((psi + beta) / 2)`, whose product is `2 sin(psi + beta)`; with
+`s >= 1/2`:
+
+```text
+1 - u <= 8 q^2 sin(psi + beta) = 8 q up <= 8 up
+```
+
+So `up >= (1 - u) / 8`, and `up >= 1/16` for `u <= 1/2`.
+
+The rounded steps change this by little. The kernel's disk point has
+`t1^2 + t2'^2 <= u + 2^-28` (the radius is floored; `sin^2 + cos^2 <= 1 +
+2^-30`; each product moves by half a raw unit), and for `u <= 1/2` the
+kernel's `up` is within 16 raw units of the real formula on the kernel's own
+disk point and stretched view: `q` is low by at most 1, `t2` moves by at most
+3 (its rounding, and the stretched view's 2 raw units), `t3` by at most 8
+(its floor, and `t2`'s 3 raw units through a root that is at least `1/2`),
+and `up` by its own rounding and `sigma`, `kappa` (4 more). So the kernel has
+`up >= 1/16 - 2^-27`.
+
+The vector normalized into `m` is `alpha h + up n` with `h = along forward +
+t1 across`. The three axes are orthonormal within a few raw units and
+`along^2 + t1^2 <= 1 + 2^-27`, so the part of that vector across `n` is at
+most `alpha (1 + 2^-26)` long and the part along `n` at least `1/16 - 2^-26`.
+The angle `theta` between `m` and `n` therefore has `tan(theta) <
+16.001 alpha`, plus the unit rule of `m` (under 2 raw units).
+
+Two exact reflections of one direction about lines `theta` apart are
+`2 theta` apart, a chord of at most `2 tan(theta) < 32.002 alpha`. `reflect`
+is within the unit rule of the exact reflection for `m` and for `n`, which
+adds about 6 raw units, far less than the `0.99 alpha = 64 880` raw units
+left. That is the `33 alpha`.
+
+For the weight: the Fresnel cosines `v . m` and `v . n` differ by at most
+`theta` plus the two roundings and unit rules, under `16.01 alpha + 5` raw
+units; Schlick's formula has a slope of at most 5 and the function is within
+one raw unit of it, so the two Fresnel terms differ by at most
+`80.05 alpha + 27`. Where the mirror's cosine is at least `1/4`, `c_l >=
+0.249`, and `1 - G <= alpha^2 / (2 c_l^2) + 1`, at most 10 raw units (from
+`s(c_l) <= c_l (1 + alpha^2 / (2 c_l^2))`). With the product's rounding the
+channels differ by less than `81 alpha`.
+
+For the last claim: if the mirror's cosine is at least `2^-9` (raw `2^23`),
+the sample's is at least `2^23 - sqrt(3) * 33 alpha > 0`, and against the
+exact plane it is lower by at most 2 raw units, the unit rule of `n`.
+
+For `u > 1/2` the same argument gives `up >= (1 - u) / 8` and a direction
+bound that grows as `16 alpha / (1 - u)`; the rounding near the rim (below)
+is not bounded here, so no bound is stated for `u > 1/2`. That is the nature
+of the distribution: GGX has long tails, and a sample near the rim of the
+disk is far from the mirror at any roughness.
+
+### Expected Albedo
+
+With `F = 1` the mean weight over the sample square is the directional albedo
+of the model, `Int f c_l dw_l`. It is below one: the masking-shadowing term
+removes light that a real surface would scatter again, and a
+single-scattering model does not follow it. The loss grows with the
+roughness.
+
+At roughness 1.0 the albedo has a closed form. `D = 1 / pi` and `s = 1`, so
+`f c_l = c_l / (2 pi (c_l + c_v))`, and integrating over the hemisphere gives
+
+```text
+albedo(c_v) = 1 - c_v ln(1 + 1 / c_v)
+```
+
+which is `1 - ln 2 = 0.3069` at normal incidence. For other roughness values
+the test plan's table comes from an integer quadrature of the reflectance
+integral that does not use the sampler.
+
+| Roughness | Albedo at `c_v = 1` | at `1 / sqrt(2)` | at `1 / sqrt(17)` |
+| --- | --- | --- | --- |
+| `2^-16` | 1.0000 | 1.0000 | 1.0000 |
+| 1/16 | 0.9957 | 0.9933 | 0.9597 |
+| 1/4 | 0.9158 | 0.8862 | 0.8409 |
+| 1/2 | 0.6878 | 0.6828 | 0.7686 |
+| 3/4 | 0.4639 | 0.5100 | 0.6851 |
+| 1 | 0.3069 | 0.3768 | 0.6038 |
+
+The mean weight of `2^16` samples at the centres of a 256 by 256 grid of the
+sample square is within `2^-11` of this table for all 18 entries. That figure
+is a measured tolerance, not a derived bound: the weights' rounding
+contributes less than `2^-29` (derived above), the table is exact at
+roughness 1.0 and its other entries are stable to `2^-18` under refinement
+(measured), and the rest is the error of a midpoint rule on the weight, for
+which no bound is derived here. The largest measured difference is
+`2.4 * 10^-4` (raw `1 026 800`), at roughness 1/16 and normal incidence, where
+the weight falls from one to zero within the last cell of `u`; it falls to
+`3.3 * 10^-5` on a 2 048 by 2 048 grid.
+
+### Accuracy Against The Ideal Map
+
+The contract is the sequence of integer steps above. How far its direction is
+from Heitz's map in real numbers is measured, not bounded: against a model of
+his listing with 60 fractional bits, over 7 600 seeded reflected samples
+(every roughness, grazing and short directions included), the largest
+difference per component is 7 raw units for `u <= 1/2` and 635 raw units for
+`1 - u >= 2^-12`.
+
+Nearer the rim of the disk the direction loses accuracy. `t3` is the floored
+root of `1 - t1^2 - t2^2`, a small number there, known only to about
+`2^-31`: for `1 - u` below about `2^-20` the height `up` has a large relative
+error, and with a small roughness the direction can differ from the ideal
+map by more than `2^-8`. These samples are the far tail of the distribution
+(one sample in a million), each is still a unit reflection about a unit
+normal, and its weight is the weight of the direction actually returned.
+
+### Refusals
+
+Checked in this order. `SampleOutsideUnitInterval { sample }` when a
+coordinate of the sample is outside `[0, 1)`. `ArrivesBelowSurface
+{ direction }` when `d . N >= 0`: the ray is not the one the hit was built
+from. The defensive `BounceRayRefused` if `TraceRay::new` refused the ray,
+which no input is known to reach. `ggx_reflection` returns `None` exactly
+when `try_ggx_reflection` returns an error.
+
+**The normal.** The lobe is about the frame normal of the `SurfaceHit`, the
+geometric normal. A lobe about a smooth-shading normal is not part of this
+identity.
 
 ## Pixel Values
 

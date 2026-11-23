@@ -7,9 +7,6 @@ use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
-#[global_allocator]
-static GLOBAL: dhat::Alloc = dhat::Alloc;
-
 fn unit_box(x: i64, y: i64) -> FixedAabb3 {
     let one = bunny_num::fixed_q32_32::ONE_RAW;
     let corner = |x: i64, y: i64, z: i64| {
@@ -32,10 +29,12 @@ fn bvh_tp_021_build_bvh_sah_allocates_zero_times() {
     let mut nodes = vec![empty; 2 * primitives.len() - 1];
     let mut prim_indices = vec![0_u32; primitives.len()];
 
-    let _profiler = dhat::Profiler::builder().testing().build();
-    let used = build_bvh_sah(&mut nodes, &mut prim_indices, &primitives);
-    let stats = dhat::HeapStats::get();
+    // Only this thread's allocations are counted, so the harness cannot fail the assertion.
+    let mut used = None;
+    let counts = allocation_counter::measure(|| {
+        used = build_bvh_sah(&mut nodes, &mut prim_indices, &primitives);
+    });
 
-    assert_eq!(stats.total_blocks, 0);
+    assert_eq!(counts.count_total, 0);
     assert!(used.is_some_and(|used| used > 1));
 }

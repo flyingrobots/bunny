@@ -82,6 +82,32 @@ every buffer.
   reflectance exactly at normal incidence), as a `SpecularSample`; a ray from
   below the face and a grazing reflection under the plane are refused with a
   `SecondaryRayError`.
+* `SurfaceHit::dielectric_scatter` (`bunny-dielectric/1`): the reflected or
+  refracted continuation ray at a smooth boundary between two refractive
+  indices (`DielectricBoundary`, each in `1.0..=8.0`, ordered by the hit's
+  facing), chosen by one sampler value. Total internal reflection is one exact
+  256-bit integer comparison; the reflectance is the exact unpolarized Fresnel
+  formula rounded once (within one raw unit) and is the probability of
+  reflection, so each branch's throughput is exactly 1.0; the refracted
+  direction is within one raw unit of Snell's law about the frame normal, and
+  its ray starts at the nearest point strictly on the far side of the exact
+  plane. The result is a `DielectricScatter` holding a `SpecularSample`. The
+  throughput of 1.0 is a weight for power: a camera path that refracts from
+  index `a` into index `b` must multiply it by `(a / b)^2` to carry radiance
+  (`4 / 9` from air into glass at 1.5); the factors cancel on a path that
+  enters a medium and leaves it.
+* `interpolate_uv` and `bilinear` (`bunny-texture-bilinear/1`): a
+  triangle's texture coordinates at a hit, rounded once from the exact
+  barycentric interpolation, and the four texels and weights of a bilinear
+  lookup (texel centres at `(i + 1/2) / size`, `TextureWrap::Repeat` or
+  `Clamp` per axis, weights summing to exactly 1.0), as a `BilinearTaps`.
+* `SurfaceHit::ggx_reflection` (`bunny-ggx-conductor/1`): one sample of a
+  rough metal. A GGX microfacet normal visible from the incoming ray (Heitz
+  2018) from one sampler pair, the reflection about it (`reflect`, shared with
+  the mirror), and the weight `schlick_fresnel` times the height-correlated
+  Smith ratio `G2 / G1`, as a `GgxScatter`: `Reflected(SpecularSample)`, or
+  `Absorbed` when the direction does not leave the surface. A `GgxConductor`
+  holds the base reflectance and the roughness `alpha` in `2^-16..=1.0`.
 * `PixelAccumulator`: exact, order-independent `i64` sums of linear radiance
   samples (each channel `0..=2^52` raw, up to 1 024 samples, so no sum
   exceeds `2^62`), merging, and the mean rounded to nearest with ties to even.

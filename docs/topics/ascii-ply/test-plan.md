@@ -172,7 +172,7 @@ status = "active"
 | APLY-TP-031 | Property, oracle | APLY-REQ-002, APLY-REQ-003 | 20,000 seeded inputs against an independent decimal-string-arithmetic oracle, all three outcomes reached. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_031_seeded_inputs_match_the_decimal_string_oracle` |
 | APLY-TP-032 | Exhaustive ties | APLY-REQ-002 | 2,000 consecutive exact ties against the even-neighbour rule and the oracle. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_032_every_tie_in_a_range_goes_to_even` |
 | APLY-TP-033 | Oracle check | APLY-REQ-002 | The oracle against hand-derived values. | `crates/bunny-codec/tests/ply_ascii_decimal_tests.rs::aply_tp_033_oracle_agrees_with_hand_derived_vectors` |
-| APLY-TP-040 | Allocation | APLY-REQ-009 | Zero allocation blocks for parse and iteration after warm-up, and for a huge declared count. | `crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up` |
+| APLY-TP-040 | Allocation | APLY-REQ-009 | Zero allocation blocks, counted on the measuring thread alone (`allocation_counter::measure`; other threads and the test harness are not counted), for parse and iteration after warm-up, and for a huge declared count. | `crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up` |
 | APLY-TP-051 | Real asset | APLY-REQ-011 | Exact length, 1889 vertices, 3851 faces and per-axis bounds equal to the conversion of the manifest's decimal bounds, for the committed Stanford fixture. | `crates/bunny-codec/tests/ply_ascii_stanford_tests.rs::aply_tp_051_geordi_stanford_bunny_asset_reads_with_exact_bounds` |
 | APLY-TP-050 | Sibling, unchanged | APLY-REQ-010 | The existing binary reader's golden test passes unchanged. | `crates/bunny-codec/tests/ply_tests.rs::parses_binary_triangle_ply_as_borrowed_view` |
 | APLY-TP-052 | Dependencies, negative | APLY-REQ-012 | A seeded `cargo tree` listing with a crates.io crate, a deduplicated crates.io crate and a git crate among path crates reports exactly those three. | `xtask/src/feature_configs.rs::tests::registry_and_git_crates_are_reported` |
@@ -463,7 +463,7 @@ id = "APLY-TP-040"
 requirements = ["APLY-REQ-009"]
 evidence = "test"
 test = "crates/bunny-codec/tests/ply_ascii_allocation_tests.rs::aply_tp_040_ascii_reader_allocates_zero_times_after_warm_up"
-oracle = "Zero allocation blocks for parse and iteration after warm-up, and for a huge declared count."
+oracle = "Zero allocation blocks on the measuring thread for parse and iteration after warm-up, and for a huge declared count; other threads are not counted."
 tier = "fast"
 status = "implemented"
 

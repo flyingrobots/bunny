@@ -9,8 +9,8 @@ use super::light::Albedo;
 use super::refusal::SecondaryRayError;
 use super::wide::{dot, narrow, pick, round_shift, unit, wide, Wide, ONE};
 
-/// The versioned name of [`schlick_fresnel`], [`SurfaceHit::specular_reflection`] and
-/// [`SurfaceHit::try_specular_reflection`]. `bunny-diffuse-shading/1` does not change.
+/// The versioned name of [`reflect`], [`schlick_fresnel`], [`SurfaceHit::specular_reflection`]
+/// and [`SurfaceHit::try_specular_reflection`]. `bunny-diffuse-shading/1` does not change.
 pub const SPECULAR_REFLECTION_ID: &str = "bunny-specular-reflection/1";
 
 /// A continuation ray and the throughput that weights the radiance arriving along it.
@@ -25,6 +25,11 @@ pub struct SpecularSample {
 }
 
 impl SpecularSample {
+    /// A sample from its parts; each kernel that returns one states its own rules.
+    pub(super) const fn new(ray: TraceRay, throughput: [FixedQ32_32; 3]) -> Self {
+        Self { ray, throughput }
+    }
+
     /// The continuation ray, from the hit's start point. Query it with a minimum distance of
     /// zero, as for [`SurfaceHit::bounce_ray`].
     #[must_use]
@@ -58,6 +63,26 @@ pub fn schlick_fresnel(f0: FixedQ32_32, cosine: FixedQ32_32) -> FixedQ32_32 {
     FixedQ32_32::from_raw(i64::try_from(raw).unwrap_or(0))
 }
 
+/// The reflection of `direction` about the line of `normal`, as a unit vector: step 1 of
+/// [`SurfaceHit::try_specular_reflection`] as a function of any two vectors, and the
+/// reflection every kernel of this crate uses.
+///
+/// `r = d (n . n) - 2 (d . n) n` is exact in `i128`; it is the exact reflection of `d` scaled
+/// by `n . n`, so `normal` need not have unit length. `r` is normalized once, as
+/// [`super::TriangleSurface`] normalizes a face normal (each component within one raw unit of
+/// the exact unit vector along `r`, plus the prescale's floor, below `2^-27` raw units), and
+/// each component is then clamped to `-1.0..=1.0`, so the result is a valid trace direction.
+///
+/// Returns `None` when a component of either vector exceeds `2^32 + 1` raw in magnitude (the
+/// largest component of a unit vector), or when either vector is zero.
+#[must_use]
+pub fn reflect(direction: FixedVec3, normal: FixedVec3) -> Option<FixedVec3> {
+    let (d, n) = (wide(direction), wide(normal));
+    let in_domain = d.iter().chain(&n).all(|c| c.abs() <= ONE + 1);
+    let reflected = reflect_about(d, n);
+    (in_domain && wide(reflected) != [0; 3]).then_some(reflected)
+}
+
 impl SurfaceHit {
     /// The perfect mirror at this hit for the ray `incoming` that reached it, with base
     /// reflectance `reflectance` (Schlick's `F0` per channel). Returns `None` exactly when
@@ -76,8 +101,8 @@ impl SurfaceHit {
     /// With `d` the incoming direction, `n` the facing frame normal ([`Self::frame`]) and `N`
     /// the exact normal of the face the ray arrived on:
     ///
-    /// 1. **Direction.** `r = d (n . n) - 2 (d . n) n`, exact in `i128`: the exact reflection of
-    ///    `d` about the line of `n`, scaled by `n . n`. It is normalized as
+    /// 1. **Direction.** [`reflect`]`(d, n)`: `r = d (n . n) - 2 (d . n) n`, exact in `i128`, the
+    ///    exact reflection of `d` about the line of `n`, scaled by `n . n`. It is normalized as
     ///    [`super::TriangleSurface`] normalizes a face normal (each component within one raw
     ///    unit of the exact unit vector along `r`, plus the prescale's floor, below `2^-27`
     ///    raw units) and clamped to `-1.0..=1.0`, so it is a valid trace direction.
@@ -107,7 +132,7 @@ impl SurfaceHit {
             return Err(SecondaryRayError::ArrivesBelowSurface { direction: d });
         }
         let n = wide(self.frame().normal());
-        let direction = mirror(wide(d), n);
+        let direction = reflect_about(wide(d), n);
         if dot(wide(direction), self.facing_normal()) <= 0 {
             return Err(SecondaryRayError::ReflectionBelowSurface { direction });
         }
@@ -121,9 +146,9 @@ impl SurfaceHit {
 }
 
 /// The unit vector along `d (n . n) - 2 (d . n) n`, clamped to `-1.0..=1.0` per component;
-/// zero if it cannot be normalized (never: `r = 0` needs `d = 2 d`). With `|d_i| <= 2^32` and
-/// `|n_i| <= 2^32 + 1`, every term is below `2^99`.
-fn mirror(d: Wide, n: Wide) -> FixedVec3 {
+/// zero if it cannot be normalized (only when `d` or `n` is zero: `r = 0` needs `d = 2 d`).
+/// With `|d_i|` and `|n_i|` at most `2^32 + 1`, every term is below `2^100`.
+pub(super) fn reflect_about(d: Wide, n: Wide) -> FixedVec3 {
     let (nn, dn) = (dot(n, n), dot(d, n));
     let r = [0, 1, 2].map(|i| pick(d, i) * nn - 2 * dn * pick(n, i));
     let direction = unit(r).map_or([0; 3], |u| wide(u.into_inner()));
