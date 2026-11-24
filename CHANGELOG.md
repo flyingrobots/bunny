@@ -603,6 +603,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-query`: `closest_point_triangle` returns the closest point of a
+  degenerate triangle (flyingrobots/bunny#500). **Results changed for degenerate
+  triangles only**: triangles whose raw vertices are repeated or collinear
+  (`FixedTriangle3::is_degenerate`). Every other triangle gives the same bits as
+  before, checked against a frozen copy of the previous routine on 100 000
+  seeded triangles. A degenerate triangle is now the segment between its two
+  farthest vertices, or a point, and the answer is `closest_points_segments`
+  on that segment. For `(0,0,0), (0,0,0), (2,0,0)` and the point `(1,1,0)`,
+  the previous answer was `(0,0,0)` and is now `(1,0,0)`. Before, a repeated
+  first edge (`v0 = v1`) returned a vertex, up to about 24 units from the
+  true answer in the seeded sweep, and collinear distinct vertices could be
+  misrouted, up to about 1 unit away. Repeated
+  `v1 = v2` or `v0 = v2` were within the stated bound, and a few of their
+  answers move by up to about 20 raw units. Three equal vertices are unchanged.
+  Below `2^45` raw each component is within
+  `1 + min(|d_k|, ceil(|d_k| / 2^33) + ceil(2^35 |d_k| / |d|^2))` raw units of
+  the exact answer. The signature and every other function are unchanged.
+  `docs/topics/closest-point/` (CLOSEST-REQ-001 to -004, CLOSEST-TP-001 to
+  -009).
+
 * Docs: the optics chapter no longer repeats the `### Orthonormal Frame`
   heading (flyingrobots/bunny#346), and the release-packaging chapter says
   that packaging does not build documentation and names the gate step that

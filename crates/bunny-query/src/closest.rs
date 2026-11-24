@@ -1,6 +1,6 @@
 //! Closest point and minimum-distance query math solvers.
 
-use bunny_geom::{FixedAabb3, FixedSphere3};
+use bunny_geom::{FixedAabb3, FixedSphere3, FixedTriangle3};
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
@@ -29,6 +29,30 @@ pub fn aabb_intersects_sphere(aabb: &FixedAabb3, sphere: &FixedSphere3) -> Optio
 }
 
 /// Computes the closest point on a triangle to a target point.
+///
+/// **Non-degenerate triangles** (the exact cross product `(v1 - v0) x (v2 - v0)` of the raw
+/// vertices is nonzero) go through the vertex, edge and face region tests, in that order,
+/// with the saturating, round-to-nearest-even Q32.32 operators. No error bound is stated for
+/// them, and their results are unchanged by flyingrobots/bunny#500.
+///
+/// **Degenerate triangles** ([`FixedTriangle3::is_degenerate`]: collinear or repeated vertices)
+/// are the segment between their two farthest vertices, or a point when all three are equal.
+/// The hull ends are the vertices with the least and the greatest coordinate on the first
+/// axis (x, then y, then z) on which the vertices are not all equal, the lower vertex index
+/// on a tie, taken in vertex order as `(a, b)`. The result is the second point of
+/// [`closest_points_segments`]`(p, p, a, b)`, which for a point query is
+/// `a + (b - a) * t`, with `t` the ratio of the dot products `(b - a) . (p - a)` and
+/// `(b - a) . (b - a)`, each product and the ratio rounded to nearest, ties to even, and `t`
+/// clamped to `[0, 1]`. Three equal vertices give that vertex exactly.
+///
+/// For a degenerate triangle with every coordinate of the vertices and of `p` below `2^45`
+/// raw in magnitude, no intermediate saturates, and each component `k` is within
+/// `1 + min(|d_k|, ceil(|d_k| / 2^33) + ceil(2^35 |d_k| / |d|^2))` raw units of the exact
+/// closest point, where `d = b - a` in raw units. The bound is checked against an exact
+/// oracle for coordinates below `2^40` raw. On a segment shorter than about `2^16` raw units
+/// the dot products cannot resolve the projection and the bound is the segment's own extent.
+/// Beyond `2^45` raw the operators saturate and the answer can be wrong
+/// (flyingrobots/bunny#116, decision D5).
 #[must_use]
 #[allow(clippy::similar_names)]
 pub fn closest_point_triangle(
@@ -37,6 +61,13 @@ pub fn closest_point_triangle(
     v2: FixedVec3,
     p: FixedVec3,
 ) -> FixedVec3 {
+    if FixedTriangle3::new(v0, v1, v2).is_degenerate() {
+        let (a, b) = degenerate_hull_ends(v0, v1, v2);
+        // The point goes first: with a zero-length second segment, `closest_points_segments`
+        // returns the start of the first segment, not its closest point
+        // (flyingrobots/bunny#506).
+        return closest_points_segments(p, p, a, b).1;
+    }
     let query = TriangleQuery::new(v0, v1, v2, p);
     let dots = TriangleDots::new(&query);
 
@@ -47,6 +78,33 @@ pub fn closest_point_triangle(
         return point;
     }
     triangle_face_region(&query, &dots)
+}
+
+/// The two ends of the segment that collinear vertices span: the vertices with the least and
+/// the greatest raw coordinate on the first axis where they are not all equal, in vertex
+/// order. On a line that is not constant on an axis, the order along the axis is the order
+/// along the line, so these are the two farthest vertices. All three equal gives `(v0, v0)`.
+fn degenerate_hull_ends(v0: FixedVec3, v1: FixedVec3, v2: FixedVec3) -> (FixedVec3, FixedVec3) {
+    let axes: [fn(&FixedVec3) -> i64; 3] = [|v| v.x.raw(), |v| v.y.raw(), |v| v.z.raw()];
+    let Some(coord) =
+        axes.into_iter().find(|coord| coord(&v1) != coord(&v0) || coord(&v2) != coord(&v0))
+    else {
+        return (v0, v0);
+    };
+    let (mut low, mut high) = ((0_u8, v0), (0_u8, v0));
+    for candidate in [(1, v1), (2, v2)] {
+        if coord(&candidate.1) < coord(&low.1) {
+            low = candidate;
+        }
+        if coord(&candidate.1) > coord(&high.1) {
+            high = candidate;
+        }
+    }
+    if low.0 < high.0 {
+        (low.1, high.1)
+    } else {
+        (high.1, low.1)
+    }
 }
 
 #[derive(Clone, Copy)]

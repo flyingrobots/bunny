@@ -10,7 +10,9 @@ targets.
 ## Features
 
 * Ray intersections for spheres, AABBs, and triangles.
-* Closest-point queries for AABBs, triangles, and segment pairs.
+* Closest-point queries for AABBs, triangles, and segment pairs. A degenerate
+  triangle (repeated or collinear vertices) is answered as the segment or point it
+  spans (`docs/topics/closest-point/`).
 * AABB-sphere overlap with deterministic contact point output.
 * Checked ray-intersection arithmetic: `ray_intersects_sphere` and
   `ray_intersects_triangle` return `None` when an intermediate Q32.32
