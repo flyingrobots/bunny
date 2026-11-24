@@ -28,8 +28,8 @@ use bunny_num::{is_finite, FixedQ32_32, Scalar};
 mod bounds;
 mod conversions;
 mod plane;
-mod transform;
 mod predicates;
+mod transform;
 
 pub use plane::{
     FixedPlane3, FixedSegment3, PlaneSide, PlaneSpan, PolygonClip, PolygonClipError, SegmentClip,
