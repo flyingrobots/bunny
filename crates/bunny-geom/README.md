@@ -32,6 +32,7 @@ queries, collision detection, and ray-casting.
   `FixedAabb3::checked_transform` returns the hull of the eight mapped
   corners. Typed `TransformError` refusals for inverted boxes, overflow and a
   zero direction; see `docs/topics/transform/README.md#rays-boxes-and-normals`.
+* **Transform-aware bounds**: `FixedAabb3::transformed_bounds`, `from_transformed_points`, `from_transformed_triangle` and `from_transformed_sphere` give the smallest raw box containing the exact image under a `FixedAffine3`, rounded only outward; see `docs/topics/transform/README.md#transform-aware-bounds`.
 * **FixedLine3 / FixedTriangle3 / FixedCapsule3 / FixedObb3**: the infinite
   line (the ray's unit-direction rule), the triangle with an exact degeneracy
   test over the full raw range, the capsule (segment and non-negative radius)

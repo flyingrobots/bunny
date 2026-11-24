@@ -6,8 +6,9 @@ translate, rotate and scale in a fixed order, and a rotation or scale about a pi
 contract is named `bunny-transform/1` (`TRANSFORM_CONTRACT_ID` in `bunny-linalg`). The
 constructors return the existing `FixedAffine3`; there is no separate transform type. The
 [ray, box and normal transforms](#rays-boxes-and-normals) carry rays, axis-aligned boxes and
-surface normals through a `FixedAffine3`, and [non-uniform scale](#non-uniform-scale) explains
-what it does to normals and bounds.
+surface normals through a `FixedAffine3`, the [transform-aware bounds](#transform-aware-bounds)
+give the smallest raw box containing the exact image of a box, points, a triangle or a sphere,
+and [non-uniform scale](#non-uniform-scale) explains what it does to normals and bounds.
 
 ## Convention
 
@@ -151,7 +152,8 @@ mapped box: the per-axis minimum and maximum of the **eight corners** mapped by
 the exact image, each face is within 3/2 raw of the face of the exact image's axis-aligned hull,
 inside or outside it: a box that must contain the exact image needs 2 raw more on each face, and
 one that must contain the rounded point transform of every point of the box needs 3 raw more.
-This helper adds no padding.
+This helper adds no padding; [`transformed_bounds`](#transform-aware-bounds) contains the exact
+image instead.
 
 - `InvertedBox` when a minimum is above its maximum on some axis, the rule of
   `FixedAabb3::try_new`, checked before any arithmetic. An equal minimum and maximum is accepted.
@@ -180,6 +182,66 @@ row equal to `8 / 2^32` times the sum of the first two, a rounded determinant of
 inverse that `try_inverse` returns. A result is therefore not proof that the linear part is
 invertible.
 
+## Transform-Aware Bounds
+
+Four helpers on `FixedAabb3` in `bunny-geom` bound a transformed shape without rounding any
+point first. Each returns the **smallest raw box that contains the exact image**: on each axis,
+the floor of the exact least image coordinate and the ceiling of the exact greatest. Every point
+of the input shape maps, exactly, inside the result, under any transform: rotation, non-uniform
+or negative scale, shear, a singular linear part. Each face is less than 1 raw outside the exact
+image's axis-aligned hull, and exactly on it when that face is a whole raw value, so identity
+and translation give exact results. They refuse with the existing `BoundsError` and carry no
+contract identity of their own.
+
+| Helper | Exact image hull on axis `i` | Refusals, in order |
+| --- | --- | --- |
+| `box.transformed_bounds(&a)` | `t_i + sum_j min(m_ij lo_j, m_ij hi_j) / 2^32` to the same with `max` | `InvertedBox` (the rule of `FixedAabb3::try_new`), before any arithmetic; `OutOfRange` |
+| `FixedAabb3::from_transformed_points(points, &a)` | the least and greatest `t_i + row_i . p / 2^32` over the points | `NoPoints` for an empty slice; `OutOfRange` |
+| `FixedAabb3::from_transformed_triangle(vertices, &a)` | `from_transformed_points` of the three vertices; degenerate triangles accepted | `OutOfRange` |
+| `FixedAabb3::from_transformed_sphere(&sphere, &a)` | `c'_i - r abs(row_i)` to `c'_i + r abs(row_i)`, with `c'` the exact image of the centre | `NegativeRadius`, first; `OutOfRange` |
+
+A mesh is bounded by passing its vertex slice to `from_transformed_points`, which bounds every
+vertex, used or not; transforming `mesh_bounds`' box with `transformed_bounds` is also
+conservative but can be larger, as any hull of a hull.
+
+**Exact arithmetic.** In raw units (value times `2^32`), an image coordinate is `t_i + (m_i0 p_0 +
+m_i1 p_1 + m_i2 p_2) / 2^32`. Each product of two raw values is exact in `i128` (at most `2^126`
+in magnitude). A sum of three can reach `3 * 2^126`, past `i128`, so each product is split into
+`q * 2^32 + r` with `0 <= r < 2^32` and the parts are summed apart: quotients below `2^96`,
+remainders below `3 * 2^32`. That gives the exact coordinate as a floor and a fraction, and the
+ceiling is the floor plus one when the fraction is not zero. A box's extremes are the per-axis
+sums of each product's least or greatest choice between `lo_j` and `hi_j`, the extremes of an
+affine map over a box.
+
+**The sphere.** The image is the ellipsoid `c' + L u` with `abs(u) <= r`; its extent on axis
+`i` is `r` times the length of row `i` of `L`, which is irrational in general. With `C = 2^32
+c'_i` (exact) and `X = R^2 (m_i0^2 + m_i1^2 + m_i2^2)` in raw units, the minimum face is the
+greatest integer `F` with `C - 2^32 F >= 0` and `(C - 2^32 F)^2 >= X`, and the maximum face the
+least `G` with `2^32 G - C >= 0` and `(2^32 G - C)^2 >= X`. `X` is below `2^254` and each
+candidate below `2^128`, so both sides are 256-bit integers, compared exactly; the face is found
+by bisection over at most `2^96` candidates, with no square root rounded. Worked example: the
+eighth turn of [non-uniform scale](#non-uniform-scale) has rows of length `c sqrt 2 = 2^32 +
+0.39` raw, so the unit sphere at the origin is bounded by `-2^32 - 1` to `2^32 + 1` raw on `x`
+and `y`, and by exactly `-2^32` to `2^32` on `z`. A zero radius gives the bounds of the exact
+image of the centre.
+
+**Overflow.** `OutOfRange` exactly when a face is outside the `i64` raw range, which is exactly
+when the exact image leaves it (the floor of a value at least
+`i64::MIN` is at least `i64::MIN`, the ceiling of a value at most `i64::MAX` is at most
+`i64::MAX`). No intermediate is range-checked, so these helpers bound inputs that
+`checked_transform_point` refuses because a product or partial sum overflows: the point `(2^62,
+2^62, 0)` raw under the row `(2, -2, 0)` has the exact image 0. Nothing wraps or saturates, and
+nothing panics. With `m00 = 1 + 2^-32` the box maximum `x = 0x7FFF_FFFF_7FFF_FFFF` raw has a
+ceiling of exactly `i64::MAX`, and one raw unit more is refused.
+
+**Against the rounded transforms.** The exact image is not the rounded one.
+`checked_transform_point` rounds each product to nearest, so a rounded point can lie up to 3/2
+raw outside the exact image, and outside these bounds; a box that must contain the rounded point
+transform of every point needs `expand` by 2 raw. The eight-corner hull
+`FixedAabb3::checked_transform` contains the rounded corners but can lie up to 3/2 raw inside
+the exact image: with `m00 = 1` raw, the image of `x = 2^31` raw is 1/2 raw, which
+`checked_transform_point` rounds to 0 (a tie to even) and these bounds widen to `[0, 1]`.
+
 ## Non-Uniform Scale
 
 A rotation and a uniform scale change lengths by one factor in every direction and keep angles.
@@ -206,12 +268,14 @@ round(2^32 / sqrt 2)` raw, `c - c` and `c + c` exact) maps the unit cube's corne
 the hull after each can grow the box at every step; taking the hull once, of the corners mapped by
 the composed transform, does not. A bounding sphere does not stay a sphere under a non-uniform
 scale: its image is an ellipsoid, and a sphere that contains it needs the radius times the
-largest scale factor (the largest singular value of `L`). No sphere transform is provided.
+largest scale factor (the largest singular value of `L`). No sphere transform is provided;
+`from_transformed_sphere` gives the ellipsoid's axis-aligned box.
 
 ## Limitations
 
 There is no decomposition of a `FixedAffine3` back into translation, rotation and scale, and no
 inverse beyond the general `FixedAffine3::try_inverse`, whose error has no stated bound. A
 composed linear part is not exactly a rotation times a scale: its entries carry the rounding
-above. The box transform has no padded or faster centre-and-extents form, and spheres,
-triangles and meshes have no transform helper.
+above. The transform-aware bounds contain the exact image, not the rounded point transform of
+every point. There is no transform helper for oriented boxes or capsules, and no bounding sphere
+of a transformed sphere.

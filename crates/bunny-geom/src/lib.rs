@@ -30,6 +30,7 @@ mod conversions;
 mod plane;
 mod predicates;
 mod transform;
+mod transform_bounds;
 // The 256-bit integer shared by the predicates and the 2D queries marks its crate-private
 // items `pub`, as `clippy::redundant_pub_crate` asks; the workspace's `unreachable_pub` lint
 // disagrees, and is allowed on the module, as in `bunny-optics`.
