@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-broadphase`: `refit_bvh(nodes, prim_indices, primitives)` gives a
+  built BVH new boxes for its primitives without changing its topology or
+  primitive order: every node's bounds become exactly the raw per-axis union of
+  its children's (a leaf: of its listed primitives' new boxes), so nothing is
+  rounded, and inverted boxes are taken as both builders take them. Both
+  builders store children after their parent (now stated and tested), so refit
+  is one pass from the last node to the first, with no scratch, no recursion
+  and no allocation. The buffer is validated whole before anything is written,
+  so a refusal (`RefitError`: children out of range or not after their parent,
+  a leaf range outside `prim_indices`, a leaf count other than interior plus
+  one, a box count other than the listed slots, a primitive with no box)
+  leaves it unchanged. On seeded corpora and motions that degrade the tree,
+  every search gives the same answer on refitted and rebuilt trees, equal to a
+  test of every primitive; refit preserves correctness, not quality, which is
+  not measured. A compact tree is re-converted after a refit
+  (BVH-REQ-020 to -026, BVH-TP-040 to -057). Refs flyingrobots/bunny#120:
+  insertion, removal and rebuild on degradation remain.
+
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;

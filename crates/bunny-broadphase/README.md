@@ -25,6 +25,10 @@ buffer is large enough for the requested operation.
 * Counted forms of the compact searches (`compact_closest_hit_counted`,
   `compact_any_hit_counted`) that also return a `TraversalCounts` record of
   the box tests, visits and primitive tests one search made.
+* Refit of a built tree to moved primitives (`refit_bvh`): exact new bounds
+  with the topology and primitive order unchanged, in one pass with no
+  allocation, refusing a malformed buffer without writing to it. See
+  `docs/topics/bvh-construction/` in the repository.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 

@@ -38,3 +38,5 @@ pub use compact_hit::{
 pub use counts::TraversalCounts;
 pub use sweep_and_prune::sweep_and_prune;
 pub use traversal::{intersect_aabb, intersect_ray, TraversalError};
+pub mod refit;
+pub use refit::{refit_bvh, RefitError};
