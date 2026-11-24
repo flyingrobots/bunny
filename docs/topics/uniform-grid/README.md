@@ -19,7 +19,9 @@ exported from `bunny_broadphase` (and `bunny_broadphase::uniform_grid`) as
 All arithmetic is integer arithmetic on raw Q32.32 values. There is no
 floating point, no hashing, no `unsafe` code, no allocation and no
 target-specific path, so every supported target gives the same output from
-the same input.
+the same input whenever the key count fits in `usize` on both. The one
+difference by target is that refusal: a key count that fits a 64-bit `usize`
+but not a 32-bit one is `KeyCountOverflow` on the 32-bit target only.
 
 ## Grid, Not Hash
 
