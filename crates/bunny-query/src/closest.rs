@@ -168,6 +168,44 @@ fn triangle_vc(dots: &TriangleDots) -> FixedQ32_32 {
 }
 
 /// Computes the closest points on two line segments, and returns the points (C1, C2).
+///
+/// `C1` is on the segment `p1 q1` and `C2` on `p2 q2`. The routine never refuses an input
+/// and has no error type.
+///
+/// **Arithmetic.** With `d1 = q1 - p1`, `d2 = q2 - p2` and `r = p1 - p2`, the dot products
+/// `a = d1 . d1`, `b = d1 . d2`, `e = d2 . d2`, `c = d1 . r` and `f = d2 . r`, their
+/// products, and the parameters `s` and `t` (ratios clamped to `[0, 1]`) use the Q32.32
+/// operators: each product and each ratio is rounded to nearest, ties to even, and each sum
+/// and difference saturates. A ratio with a zero divisor is `0`. The points are
+/// `p1 + d1 * s` and `p2 + d2 * t`, each component rounded the same way.
+///
+/// **A zero-length segment is a point.** With `p1 == q1` the result is `p1` and its closest
+/// point on the second segment: `t` is `f / e` clamped to `[0, 1]`. With `p2 == q2` the
+/// result is the mirror of the call with the point first,
+/// `closest_points_segments(p2, q2, p1, q1)`, swapped back (flyingrobots/bunny#506). With
+/// both of zero length the result is `(p1, p2)` exactly. When every coordinate is below `2^45`
+/// raw in magnitude nothing saturates, the point is returned exactly, and each component `k`
+/// of the other point is within
+/// `1 + min(|d_k|, ceil(|d_k| / 2^33) + ceil(2^35 |d_k| / |d|^2))` raw units of the exact
+/// closest point, where `d` is the raw direction of the segment of nonzero length. On a
+/// segment shorter than about `2^16` raw units the dot products cannot resolve the projection
+/// and the bound is the segment's own extent. The bound is derived from the roundings (3/2 raw
+/// per dot product, half a raw unit of `t`, half a raw unit for the final product) and checked
+/// against an exact oracle for coordinates below `2^40` raw.
+///
+/// **Parallel segments** (raw directions exactly parallel, by an exact cross product;
+/// collinear included) have many closest pairs. The rule is: `s = 0` and `t = f / e` when
+/// `0 <= f <= e`, which is `p1` and its projection onto the second segment; when `f < 0`,
+/// `t = 0` and `s = -c / a`, clamped, which is `p2` and its projection onto the first; when
+/// `f > e`, `t = 1` and `s = (b - c) / a`, clamped, which is `q2` and its projection. Below
+/// `2^45` raw each component of each point is within the larger of the two segments' bounds
+/// above of an exact closest pair. For parallel segments this bound is checked against the
+/// exact oracle for coordinates below `2^40` raw, not derived.
+///
+/// **Other segments** solve the two-line system with the rounded denominator `a e - b^2`, then
+/// clamp `s` and `t` in turn, each clamp recomputing the other parameter. No error bound is
+/// stated for them; their results are unchanged by flyingrobots/bunny#506. Beyond `2^45` raw
+/// the operators saturate and an answer can be wrong (flyingrobots/bunny#116, decision D5).
 #[must_use]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::suspicious_operation_groupings)]
@@ -178,9 +216,27 @@ pub fn closest_points_segments(
     p2: FixedVec3,
     q2: FixedVec3,
 ) -> (FixedVec3, FixedVec3) {
+    if p2 == q2 {
+        // A zero-length second segment is a point. The point-to-segment path is the call with
+        // the point first; answer that and swap back (flyingrobots/bunny#506).
+        let (on_point, on_first) = segment_pair(p2, q2, p1, q1);
+        return (on_first, on_point);
+    }
+    segment_pair(p1, q1, p2, q2)
+}
+
+fn segment_pair(
+    p1: FixedVec3,
+    q1: FixedVec3,
+    p2: FixedVec3,
+    q2: FixedVec3,
+) -> (FixedVec3, FixedVec3) {
     let query = SegmentQuery::new(p1, q1, p2, q2);
     let dots = SegmentDots::new(&query);
-    let params = SegmentParams::new(&dots).clamp_s(&dots).clamp_t(&dots);
+    // Exactly parallel directions take the parallel rule even when the rounded `a e - b^2` is
+    // not zero: the skew formulas divide rounding noise by rounding noise there.
+    let parallel = dots.denom == FixedQ32_32::ZERO || exactly_parallel(p1, q1, p2, q2);
+    let params = SegmentParams::new(&dots, parallel).clamp_s(&dots).clamp_t(&dots);
     let s = clamp(ratio_or_zero(params.s_num, params.s_denom), FixedQ32_32::ZERO, FixedQ32_32::ONE);
     let t = clamp(ratio_or_zero(params.t_num, params.t_denom), FixedQ32_32::ZERO, FixedQ32_32::ONE);
     (p1 + query.d1 * s, p2 + query.d2 * t)
@@ -232,8 +288,8 @@ struct SegmentParams {
 }
 
 impl SegmentParams {
-    fn new(dots: &SegmentDots) -> Self {
-        if dots.denom == FixedQ32_32::ZERO {
+    fn new(dots: &SegmentDots, parallel: bool) -> Self {
+        if parallel {
             return Self::parallel(dots);
         }
         Self::skew(dots).clamp_initial_s(dots)
@@ -291,6 +347,33 @@ impl SegmentParams {
         self.s_denom = max;
         self
     }
+}
+
+/// Whether the raw directions `q1 - p1` and `q2 - p2` are parallel, exactly: every component
+/// of their cross product, computed without rounding, is zero. A zero direction is parallel to
+/// every direction.
+fn exactly_parallel(p1: FixedVec3, q1: FixedVec3, p2: FixedVec3, q2: FixedVec3) -> bool {
+    let [ax, ay, az] = raw_difference(p1, q1);
+    let [bx, by, bz] = raw_difference(p2, q2);
+    same_product(ay, bz, az, by) && same_product(az, bx, ax, bz) && same_product(ax, by, ay, bx)
+}
+
+/// The exact raw difference `b - a`; every component has magnitude below `2^64`.
+fn raw_difference(a: FixedVec3, b: FixedVec3) -> [i128; 3] {
+    let diff = |a: FixedQ32_32, b: FixedQ32_32| i128::from(b.raw()) - i128::from(a.raw());
+    [diff(a.x, b.x), diff(a.y, b.y), diff(a.z, b.z)]
+}
+
+/// Whether `a * b == c * d` exactly, for operands of magnitude below `2^64`.
+fn same_product(a: i128, b: i128, c: i128, d: i128) -> bool {
+    exact_product(a, b) == exact_product(c, d)
+}
+
+/// The exact product as `(negative, magnitude)`, with zero never negative. Both magnitudes are
+/// below `2^64`, so their product is below `2^128` and fits `u128`.
+const fn exact_product(a: i128, b: i128) -> (bool, u128) {
+    let magnitude = a.unsigned_abs() * b.unsigned_abs();
+    (magnitude != 0 && (a < 0) != (b < 0), magnitude)
 }
 
 fn ratio_or_zero(numer: FixedQ32_32, denom: FixedQ32_32) -> FixedQ32_32 {
