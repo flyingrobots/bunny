@@ -178,6 +178,21 @@ pub fn closest_points_segments(
     p2: FixedVec3,
     q2: FixedVec3,
 ) -> (FixedVec3, FixedVec3) {
+    if p2 == q2 {
+        // A zero-length second segment is a point. The point-to-segment path is the call with
+        // the point first; answer that and swap back (flyingrobots/bunny#506).
+        let (on_point, on_first) = segment_pair(p2, q2, p1, q1);
+        return (on_first, on_point);
+    }
+    segment_pair(p1, q1, p2, q2)
+}
+
+fn segment_pair(
+    p1: FixedVec3,
+    q1: FixedVec3,
+    p2: FixedVec3,
+    q2: FixedVec3,
+) -> (FixedVec3, FixedVec3) {
     let query = SegmentQuery::new(p1, q1, p2, q2);
     let dots = SegmentDots::new(&query);
     let params = SegmentParams::new(&dots).clamp_s(&dots).clamp_t(&dots);

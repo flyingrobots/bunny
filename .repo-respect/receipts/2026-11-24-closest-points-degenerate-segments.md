@@ -20,6 +20,7 @@ Files read:
 - flyingrobots/bunny#116, draft flyingrobots/bunny#504 and draft flyingrobots/bunny#499
 
 Files edited:
+- `crates/bunny-query/src/closest.rs`
 - `crates/bunny-query/tests/closest_segments_degenerate_tests.rs` (new)
 - `docs/topics/closest-point/test-plan.md` (new: CLOSEST-REQ-010 to -014, CLOSEST-TP-020 to -028)
 - `.repo-respect/receipts/2026-11-24-closest-points-degenerate-segments.md`
@@ -36,6 +37,8 @@ Checks run:
 - First commit (tests and planned cases only): `cargo test --locked -p bunny-query --test
   closest_segments_degenerate_tests` fails five of eight tests on the unfixed kernel
   (CLOSEST-TP-020, -021, -025, -026, -027).
+- Zero-length fix: CLOSEST-TP-020, -021, -027 pass; -025 and -026 still fail on the parallel
+  pairs.
 
 Known risks:
 - A behaviour change to a public function for degenerate and exactly parallel inputs.
