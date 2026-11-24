@@ -234,7 +234,7 @@ fn planar_tp_004_circle_containment_is_closed_and_exact() {
     check_circle_point(circle(MIN, MIN, MAX), v(MAX, MAX), false);
     check_circle_point(circle(MAX, MAX, MAX), v(0, 0), false);
     // `dx = 2^64 - 1` and `dy = 6074001000`: the distance squared is
-    // `2^128 + 581896768`, which a 128-bit sum wraps to `581896768 < 2^80 = r^2`.
+    // `2^128 + 581896769`, which a 128-bit sum wraps to `581896769 < 2^80 = r^2`.
     check_circle_point(circle(MIN, 0, 1 << 40), v(MAX, 6_074_001_000), false);
     check_circle_point(circle(MIN, 0, MAX), v(MAX, 6_074_001_000), false);
 }

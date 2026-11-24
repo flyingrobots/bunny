@@ -52,6 +52,9 @@ newer-toolchain lints in the existing polygon_clip_tests.rs only).
 Mutations: twenty-eight applied to planar.rs, planar/segment.rs and wide.rs with the two
 planar test files run and the sources restored; twenty-seven fail at least one case, one is
 equivalent (test-plan table, with the argument).
+Correction commit (comment and docs only): the wrapped squared distance of the PLANAR-TP-004
+case is 2^128 + 581896769, not ...768, recomputed with Python; fmt, the planar tests,
+topic-docs and repo-respect check --branch rerun.
 Not run locally: wasm-pack (not installed; CI's WebAssembly job runs it), cargo deny and
 markdownlint-cli2 (not installed; CI's Dojo job runs them), code-dojo-no-std (needs rustup).
 

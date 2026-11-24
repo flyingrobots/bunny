@@ -80,9 +80,9 @@ below `2^129`, which fits neither `i128` nor `u128`; it is held in 256 bits, as 
 contained, `(3, 5)` is outside.
 
 At the ends of the range: with centre `(MIN, 0)` and radius `MAX`, `(-1, 0)` is at distance
-`2^63 - 1` and contained and `(0, 0)` is not. A distance squared of `2^128 + 581896768`
+`2^63 - 1` and contained and `(0, 0)` is not. A distance squared of `2^128 + 581896769`
 (`dx = 2^64 - 1`, `dy = 6074001000`) is outside every circle; a 128-bit sum would wrap it to
-`581896768`, inside a circle of radius `2^40` raw.
+`581896769`, inside a circle of radius `2^40` raw.
 
 `overlaps_circle(other)` compares the squared centre distance with the square of the exact
 radius sum, at most `2^64 - 2`. Tangent circles overlap: centres `(0, 0)` and `(6, 8)` with
