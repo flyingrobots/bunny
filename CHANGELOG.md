@@ -538,6 +538,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Docs: the optics chapter no longer repeats the `### Orthonormal Frame`
+  heading (flyingrobots/bunny#346), and the release-packaging chapter says
+  that packaging does not build documentation and names the gate step that
+  does, `code-dojo-rustdoc` (flyingrobots/bunny#155).
+
 * Broken intra-doc links in `bunny-query` (`ray/prepared.rs`) and
   `bunny-broadphase` (`compact.rs`, `compact_hit.rs`) now resolve, so `cargo doc`
   with warnings denied is clean (flyingrobots/bunny#467).
