@@ -208,8 +208,10 @@ name = "bunny-perf"
 version = "0.1.0"
 dependencies = [
  "bunny-broadphase",
+ "bunny-codec",
  "bunny-geom",
  "bunny-linalg",
+ "bunny-mesh",
  "bunny-num",
  "bunny-optics",
  "bunny-query",

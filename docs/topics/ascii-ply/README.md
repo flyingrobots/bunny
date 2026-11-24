@@ -51,8 +51,8 @@ rule (a returned mesh never fails later) and the face rules.
 With default features off, `bunny-codec` depends only on the Bunny crates
 `bunny-geom`, `bunny-linalg`, `bunny-mesh` and `bunny-num`, which have no crates.io
 dependencies in that configuration, and every reader in this crate is still there:
-`parse_ascii_ply`, `parse_decimal_q32_32`, `parse_binary_ply`, `parse_obj_text` and
-`decode_compressed_mesh`. A consumer that admits no third-party crates writes:
+`parse_ascii_ply`, `parse_decimal_q32_32`, `parse_binary_ply`, `parse_obj_text`,
+`decode_compressed_mesh` and `parse_binary_stl`. A consumer that admits no third-party crates writes:
 
 ```toml
 bunny-codec = { git = "https://github.com/flyingrobots/bunny", default-features = false }

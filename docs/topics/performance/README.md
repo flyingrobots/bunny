@@ -188,6 +188,13 @@ case's floor p50 and median p50 both slow by more than 20 % ([one lucky round](#
 the threshold is set to catch real regressions, not to referee single-digit changes. The
 workflow can also be started by hand (`workflow_dispatch`) or called from another workflow
 in this repository (`workflow_call`) with its own `base`, `max-regression` and `rounds`.
+`Perf / before and after` is not a required check for merging: the `main` ruleset requires
+`Dojo / Ubuntu x64`, the three `Determinism / …` jobs and `WebAssembly / Headless Node`.
+
+A case new to the harness is compared, not reported as `new`, whenever the base revision
+can build its group: the harness source always comes from the working tree, so only an API
+or crate missing at the base leaves a case on one side. Such a case has no base, is shown as
+`new`, and cannot fail the gate.
 
 A second, report-only job runs the same comparison on GitHub's hosted runners: x86-64
 Linux, ARM Linux, x86-64 Windows, Apple Silicon macOS, and WebAssembly under wasmtime on
@@ -329,6 +336,22 @@ because the workspace denies warnings. `cargo run --locked -p xtask -- code-dojo
 checks the harness once per group alone and once with all groups, and the full gate
 (`code-dojo`) runs it. A new group is picked up from the harness manifest automatically.
 
+`cargo xtask perf` does not build `crates/bunny-perf` in place. It copies the files of
+`crates/bunny-perf/src/` (not subdirectories) into a standalone crate under `target/perf/` and
+writes it a manifest that lists every group as an empty feature and depends on the crates in
+`BASE_CRATES` (`xtask/src/perf.rs`). Two consequences for a new case:
+
+- A group for a crate the harness did not use before needs that crate in `BASE_CRATES`, or the
+  group fails to build on both sides and is never measured. `PERF-TP-086` checks that every
+  `bunny-*` dependency of the harness is listed.
+- A case cannot read a file outside `src/`, such as a committed test fixture, because the path
+  does not resolve in the copy. Build its input in memory from a fixed seed, before timing.
+
+The `mesh` and `codec` groups are not in `default`: they take `bunny-mesh` and `bunny-codec`
+as optional dependencies, so the harness's default build does not pull in either crate or
+`sha2`. `cargo xtask perf` and `code-dojo-perf-groups` build every declared group, so both still
+run there; to run them with the harness directly, pass `--features mesh,codec`.
+
 The whole-scene cases live in `crates/bunny-perf/src/scene.rs`: a bumpy sphere of 27 648
 triangles plus two ground triangles in a BVH from `build_bvh`, seen through 1 024 camera
 rays (a 32 by 32 grid). Where a case measures an old API against a new one, the harness
@@ -368,6 +391,34 @@ selected), and `shade/smooth_hit_shading` beside `shade/flat_hit_shading_mesh` o
 seeded hits (barycentric `det` in `[2^99, 2^100)`, the size of a trace-domain hit's) and
 `texture/bilinear` on the coordinates it returns, in a 1 024 by 1 024 texture with repeat along
 `u` and clamp along `v`.
+
+The `convert` group (`crates/bunny-perf/src/convert.rs`) times the Q32.32 conversions at the
+`f32` boundary, one call per value over 1 024 seeded values in `[-1000, 1000)` units:
+`num/try_from_f32` on their `f32` images and `num/to_f32` on the values.
+
+The `mesh` and `codec` groups share a seeded height field (`crates/bunny-perf/src/grid.rs`): 64
+by 64 vertices a quarter unit apart, heights in `[-1, 1)` on a `2^-16` grid, 4 096 vertices and
+7 938 triangles, of the order of the committed Stanford bunny fixture (1 889 vertices, 3 851
+faces). Every coordinate is exact as Q32.32, as `f32` and as a short decimal, so every encoding
+holds the same mesh. The `mesh` group (`mesh.rs`) times `mesh/quantize_vertex` and
+`mesh/dequantize_vertex` on 1 024 of its vertices against its bounds, one call per vertex, and
+`mesh/hash`, one `compute_mesh_hash` of the whole quantized grid per call. The `codec` group
+(`codec.rs`) times one whole decode per call: the parse, then reading every vertex and triangle
+back through the returned view, for `codec/ply_ascii_decode` (245 KB of text),
+`codec/ply_binary_decode` (153 KB), `codec/obj_decode` (253 KB of text) and
+`codec/compressed_decode` (72 KB). The inputs are written by the harness, because `bunny-codec`
+has no encoders and the copy that `cargo xtask perf` builds cannot read the committed fixtures;
+the tests check that each decode returns every vertex and triangle of the grid, and that the
+ASCII PLY decode also reads the Stanford fixture whole.
+
+The `sweep` group (`crates/bunny-perf/src/sweep.rs`) times `broadphase/sweep_and_prune`: one
+`sweep_and_prune` per call over 27 648 seeded boxes (the size of the BVH scene), centres in a
+slab 256 units long and 8 across, half extents in `[1/8, 1/4)` units, into buffers allocated
+once. It finds 9 482 pairs, and a test checks them against a separate pair test.
+
+Each of these cases builds its input before timing, passes every result through `black_box`
+and folds what it read into the checksum: every coordinate and index for a decode, the digest
+for the hash, the pair count and the first and last pairs for the sweep.
 
 `bunny-perf --stats` prints, instead of timing, the BVH shape and the per-ray traversal counters of
 `closest_hit` and `any_hit` on this scene, split by what the ray hits. They come from a replica of
