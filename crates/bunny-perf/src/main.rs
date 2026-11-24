@@ -13,12 +13,20 @@
 #[path = "../../bunny-query/tests/support/box_entry_reference.rs"]
 mod box_entry_reference;
 mod cases;
+#[cfg(feature = "codec")]
+mod codec;
 #[cfg(feature = "trace_compact")]
 mod compact;
+#[cfg(feature = "convert")]
+mod convert;
 #[cfg(feature = "trace_counted")]
 mod counted;
+#[cfg(any(feature = "mesh", feature = "codec"))]
+mod grid;
 #[cfg(feature = "trace")]
 mod memory;
+#[cfg(feature = "mesh")]
+mod mesh;
 #[cfg(feature = "normals")]
 mod normals;
 #[cfg(feature = "trace")]
@@ -38,6 +46,8 @@ mod scene;
 mod shade;
 #[cfg(feature = "smooth")]
 mod smooth;
+#[cfg(feature = "sweep")]
+mod sweep;
 #[cfg(feature = "texture")]
 mod texture;
 mod timing;

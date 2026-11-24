@@ -62,3 +62,9 @@ The excluded tests still run in the repository, in `cargo test --workspace`.
 archive but fails when run is not found by this step; the repository's own test
 run covers behaviour. The step does not check that the excluded files are the
 only ones that differ: it checks that everything left compiles.
+
+This step does not build documentation. The rendered API documentation is checked by the
+full gate's rustdoc step, `cargo run --locked -p xtask -- code-dojo-rustdoc`, which builds
+every workspace crate's documentation with warnings denied (see
+[Rustdoc Check](../../CODE_DOJO.md#rustdoc-check)). Run the full gate before a release: an
+unresolved intra-doc link fails it.

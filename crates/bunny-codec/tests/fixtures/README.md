@@ -37,3 +37,21 @@ mesh profile v1 fixture:
 * Vertices are quantized `(0, 0, 0)`, `(65535, 0, 0)`, and `(0, 65535, 0)`.
 * The single triangle is `(0, 1, 2)`.
 * `compressed_tests.rs` asserts the fixture hex byte-for-byte before decoding it.
+
+## Generated Binary STL Meshes
+
+No STL file is checked in, and no third-party STL file was used. Every binary STL input of
+the tests is built in memory by `tests/stl_support/mod.rs`, from integers only:
+
+* Each coordinate and normal component is written as the little-endian bytes of an
+  IEEE-754 binary32 bit pattern stated in the source (`0x3F80_0000` is 1.0), so no test
+  reads or writes a float.
+* The header is 80 bytes: the given text padded with zero bytes (`bunny binary STL test
+  fixture` unless a test passes its own, such as `solid tetrahedron` or all `0xFF`).
+* The unit tetrahedron (`tetrahedron()`) has vertices `(0,0,0)`, `(1,0,0)`, `(0,1,0)`,
+  `(0,0,1)` and four facets, each counter-clockwise seen from outside, with unnormalised
+  outward normals and zero attribute byte counts: 284 bytes.
+* Generated files come from a 64-bit linear congruential generator (Knuth's MMIX
+  constants) with the seeds named in `stl_oracle_tests.rs` (`0x0571127` and
+  `0x0571127 ^ 0xF0`); each failing case prints its seed and index.
+

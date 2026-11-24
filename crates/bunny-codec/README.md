@@ -11,6 +11,7 @@
 | `parse_ascii_ply_with_limits` | The same profile, refusing a declared vertex or face count or a line past an `AsciiPlyLimits` | The same, and none either |
 | `parse_obj_text` | Supported OBJ text triangle mesh | Borrowed source view, zero allocations after warm-up |
 | `decode_compressed_mesh` | Bunny-native compressed mesh profile v1 | Borrowed byte-section view, zero allocations after warm-up |
+| `parse_binary_stl` | Binary STL triangle mesh, `bunny-binary-stl-triangle-mesh/1`, with Q32.32 positions from `try_from_f32` | Borrowed view and iterators, zero allocations after warm-up |
 
 The compressed profile decodes into `bunny-mesh` record concepts through checked
 accessors:
@@ -73,3 +74,23 @@ The compressed decoder is covered by:
   independent decimal-string oracle on seeded inputs, a refusal corpus with one
   typed error and line number per case, and a native allocation witness
   (`tests/ply_ascii_*.rs`).
+
+## Binary STL
+
+`parse_binary_stl` reads binary STL (`bunny-binary-stl-triangle-mesh/1`). The length must be
+exactly `84 + 50 n` for the declared count `n`; each vertex coordinate is converted by
+`FixedQ32_32::try_from_f32`, and a NaN, infinite or out-of-range coordinate is a typed
+`StlError` naming its triangle, vertex and axis. The stored vertex order is kept and vertex
+`3 i + k` is vertex `k` of triangle `i` (no welding); the header, stored normal and attribute
+byte count are not interpreted. ASCII STL is not supported. See
+[`docs/topics/binary-stl`](../../docs/topics/binary-stl/README.md).
+
+## Examples
+
+The inputs are built in memory and no example reads a file, so the examples
+ship in the published package with nothing missing.
+
+| Command | Shows |
+| --- | --- |
+| `cargo run -p bunny-codec --example decode_compressed_mesh` | A tetrahedron encoded in the compressed profile v1, decoded with `decode_compressed_mesh`, its vertices dequantized with `bunny_mesh::dequantize_vertex` and its triangles read back, and the typed refusal of a stream one byte short. |
+| `cargo run -p bunny-codec --example mesh_hash` | The same tetrahedron read from OBJ, ASCII PLY and binary PLY, converted to Q32.32 and quantized against `mesh_bounds`, giving one `compute_mesh_hash` value for all three. Needs the default `mesh-hash` feature. |
