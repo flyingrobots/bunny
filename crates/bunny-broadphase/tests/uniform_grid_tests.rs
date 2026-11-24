@@ -343,8 +343,10 @@ fn grid_tp_004_key_count_overflow_is_refused_with_the_box_index() {
     // 2^21 cells per axis is 2^63 keys: it fits a 64-bit usize, and two of them do not.
     let big = bx([0; 3], [(1 << 21) - 1; 3]);
     let first = usize::from(usize::BITS == 64);
-    if usize::BITS == 64 {
-        assert_eq!(grid_key_count(&[big], size(1)), Ok(1 << 63));
+    // The literal is built as a `u64`: `1 << 63` typed as `usize` does not compile on a 32-bit
+    // target, even inside a branch that never runs there.
+    if let Ok(keys) = usize::try_from(1_u64 << 63) {
+        assert_eq!(grid_key_count(&[big], size(1)), Ok(keys));
     }
     assert_eq!(
         grid_key_count(&[big, big], size(1)),
