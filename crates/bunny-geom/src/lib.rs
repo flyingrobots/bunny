@@ -213,3 +213,9 @@ pub use shapes::{
 mod planar;
 
 pub use planar::{FixedAabb2, FixedCircle2, FixedRay2, FixedSegment2, PLANAR_CONTRACT_ID};
+
+mod sat;
+
+pub use sat::{
+    sat_obb_obb, sat_triangle_aabb, ObbAxis, SatClass, TriangleAabbAxis, SAT_CONTRACT_ID,
+};
