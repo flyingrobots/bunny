@@ -262,7 +262,7 @@ fn near_polygon(state: &mut u64, vertices: &[FixedVec2]) -> FixedVec2 {
     if vertices.is_empty() || next(state).is_multiple_of(5) {
         return v(coordinate(state), coordinate(state));
     }
-    let i = usize::try_from(next(state)).expect("index") % vertices.len();
+    let i = usize::try_from(next(state) % vertices.len() as u64).expect("index");
     let (a, b) = (vertices[i], vertices[(i + 1) % vertices.len()]);
     let base = if next(state).is_multiple_of(2) {
         a
