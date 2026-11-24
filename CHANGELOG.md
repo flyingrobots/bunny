@@ -11,6 +11,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-mesh`: topology validation under the contract identity
+  `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
+  reports index-degenerate triangles, geometrically degenerate triangles
+  (collinear or coincident positions, decided exactly in `i64` on the `u16`
+  coordinates with no tolerance), exact and flipped duplicate faces, and
+  boundary, winding-inconsistent and non-manifold edges. It returns them as
+  `TopologyFinding` records in one total order (kind, then fields), each kind
+  with a fixed `TopologySeverity`. It does not allocate: the caller provides
+  `n` `FaceSlot`s and `3 n` `EdgeSlot`s of scratch and an output slice, and a
+  `TopologyReport` counts every finding, so a short output is detectable.
+  Refusals (`TopologyError`) reuse `IndexBufferLayout::is_valid` unchanged.
+  The Stanford bunny fixture has 10 exact and 73 flipped duplicate faces, 60
+  boundary edges and 141 non-manifold edges. `docs/topics/mesh-topology/`
+  (MTOPO-REQ-001 to -007, MTOPO-TP-001 to -016). Closes
+  flyingrobots/bunny#122.
+
+* `bunny-geom`: `FixedFrustum`, six `FixedPlane3` values (left, right, bottom,
+  top, near, far) each with its front facing into the frustum, the inside the
+  closed set in front of or on all six, held as given. `contains_point`
+  returns `Option<bool>`; `classify_aabb` returns `Option<FrustumClass>` and
+  `classify_sphere` `Result<FrustumClass, FrustumSphereError>` (`Inside`,
+  `Intersecting`, `Outside`) by one rule over the six `PlaneSpan` answers: a
+  `Behind` plane is `Outside` even when another plane overflows, then overflow
+  is `None` (`FrustumSphereError::Overflow` for spheres), then a straddled plane
+  is `Intersecting`. `Outside` and `Inside` are exact in the rounded distances;
+  `Intersecting` is conservative and includes shapes near an edge or corner
+  that meet no frustum point. Spheres compare `D^2 2^64` with `R^2 |N|^2`
+  exactly in 256 bits, with no square root; a negative radius is
+  `NegativeRadius`. `from_clip_matrix` extracts the planes `r3 + r0`,
+  `r3 - r0`, `r3 + r1`, `r3 - r1`, `r2` and `r3 - r2` of a clip matrix for the
+  `[0, 1]` depth range, exactly and unnormalised, `None` on overflow; each
+  computed distance is within 3/2 raw units of the exact clip inequality. See
+  `docs/topics/frustum/` (FRUSTUM-REQ-001 to -007, FRUSTUM-TP-001 to -016).
+  Additive. Refs flyingrobots/bunny#146.
+
+* `bunny-geom`: exact geometric predicates under the contract identity
+  `bunny-predicates/1` (`PREDICATES_CONTRACT_ID`). `orientation2(a, b, c)`
+  (`CounterClockwise`, `Clockwise`, `Collinear`, in the canonical `+Y`-up
+  plane) and `orientation3(a, b, c, d)` (`Front`, `Behind`, `Coplanar`, the
+  right-hand normal side) return the sign of the exact determinant for every
+  representable input, `i64::MIN` and `i64::MAX` included. The exact values
+  are `doubled_signed_area2` and `sextupled_signed_volume3`, an
+  `ExactDeterminant` held in a private 256-bit integer; `signed_area2_rounded`
+  and `signed_volume3_rounded` round them once to Q32.32, ties to even, `None`
+  outside `i64`, and round a nonzero value of at most half a raw unit to zero.
+  `barycentric2(p, a, b, c)` returns exact numerators over a positive
+  denominator (`None` for a zero-area triangle), with an exact
+  `TriangleLocation` (`Outside`, then `OnVertex`, `OnEdge`, `Inside`), the
+  closed and open containment forms, and `weights_rounded`, each weight rounded
+  once and their sum within one raw unit of 1.0. `barycentric3_coplanar` does
+  the same for a point exactly in the plane of a 3D triangle and refuses one
+  that is not. See `docs/topics/predicates/`. Closes flyingrobots/bunny#145.
+* `bunny-linalg`: unit quaternions under `bunny-quaternion/1`
+  (`QUATERNION_CONTRACT_ID`). `FixedUnitQuat` stores `(x, y, z, w)`, `w` the
+  scalar part, and every value has raw `x^2 + y^2 + z^2 + w^2` within
+  `[(2^32 - 1)^2, (2^32 + 1)^2]` (`QUAT_LENGTH_SQUARED_MIN_RAW` and `_MAX_RAW`).
+  `try_from_unit` accepts exactly that band (`QuatError::NotUnit` otherwise);
+  `try_normalize` rounds each exact `r / |p|` once to nearest, accepts every
+  nonzero input including the extremes of the raw range and refuses only
+  zero (`QuatError::Zero`). `a * b` is the exact Hamilton product normalised
+  in one rounding and applies `b` first. `rotate_vec3` rounds the exact
+  `q v q* / |q|^2` once per component (within 1/2 raw of the exact rotation,
+  `None` on overflow); `to_mat3` likewise, with lengths within 1, dot products
+  within 2 and the determinant within 3 raw units. `from_axis_angle(axis,
+  angle)` halves the signed angle toward zero. `conjugate`, `Neg` and
+  `canonical` are exact. No rounding of the contract can meet an exact half.
+  `docs/topics/quaternion/` (QUAT-REQ-001 to -010, QUAT-TP-001 to -017).
+  Closes flyingrobots/bunny#109.
+
 * `bunny-broadphase`: a uniform grid broadphase under `bunny-uniform-grid/1`.
   `uniform_grid_pairs(boxes, cell_size, keys, pairs)` reports every pair of
   overlapping `FixedAabb3` boxes (closed: touching counts) exactly once, as
@@ -54,6 +123,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Overflow`, `DegenerateRay`. Its rays agree with `PinholeCamera::ray` and
   `OrthographicCamera::ray` within a measured `2^6` raw. Refs
   flyingrobots/bunny#150.
+
+* `bunny-geom`: geometry-level shape types `FixedLine3`, `FixedTriangle3`,
+  `FixedCapsule3` and `FixedObb3`, refusing with a new `#[non_exhaustive]`
+  `ShapeError` (`GeomError` is unchanged). The line is a point and a
+  `FixedUnitVec3`, normalized by the ray's rule. The triangle keeps vertex
+  order; `is_degenerate` is the exact zero test of the raw cross product over
+  the full range (65-bit edges, 129-bit products compared as sign and `u128`
+  magnitude, no rounding), `new` accepts degenerate triangles and `try_new`
+  refuses them. The capsule is a segment and a radius; `try_new` refuses a
+  negative radius and accepts zero radii and zero-length segments. The
+  oriented box is a centre, a `FixedMat3` of axis columns and half extents;
+  `try_new` refuses negative half extents, column lengths more than 11 raw
+  units from one and column dot products beyond 12 raw units, exactly, the
+  `bunny-rotation/1` column contract, so the rotation and look-rotation
+  constructors' matrices are accepted. Each new shape, and `FixedSegment3` and
+  `FixedPlane3`, gains a `try_from_float` built on the existing component
+  conversions. Additive: no existing item changes. See
+  `docs/topics/shape-library/` (SHAPE-REQ-001 to -008, SHAPE-TP-001 to -012).
+  Refs flyingrobots/bunny#115.
 
 * `bunny-geom`: classify a segment, a triangle or an AABB against a
   `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`

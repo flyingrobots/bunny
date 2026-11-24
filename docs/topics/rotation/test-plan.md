@@ -11,7 +11,7 @@ flyingrobots/bunny#311.
   orthonormality and determinant bounds in raw units.
 
 Out of scope: composing rotations (`checked_mul_mat3` already exists and this contract adds
-nothing to it), quaternions (flyingrobots/bunny#109), and translate, rotate and scale
+nothing to it), quaternions (now [`bunny-quaternion/1`](../quaternion/README.md)), and translate, rotate and scale
 composition (flyingrobots/bunny#312).
 
 ## Requirements
