@@ -14,7 +14,12 @@ use bunny_num::FixedQ32_32;
 use crate::wide::Wide;
 use crate::GeomError;
 
+mod polygon;
+mod ray;
 mod segment;
+
+pub use polygon::{FixedPolygon2, PolygonLocation};
+pub use ray::RayHit2;
 
 /// The identity string of the 2D primitive and query contract.
 pub const PLANAR_CONTRACT_ID: &str = "bunny-planar/1";

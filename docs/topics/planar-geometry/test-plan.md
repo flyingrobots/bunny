@@ -1,21 +1,25 @@
 # 2D Primitives And Queries Test Plan
 
 This document defines how Bunny proves [`bunny-planar/1`](README.md): the 2D primitives
-`FixedSegment2`, `FixedRay2`, `FixedAabb2` and `FixedCircle2` in `bunny-geom`, their
-constructors, and the exact closed-boundary containment, overlap, segment-intersection and
-closest-point queries. It answers the first slice of flyingrobots/bunny#149.
+`FixedSegment2`, `FixedRay2`, `FixedAabb2`, `FixedCircle2` and `FixedPolygon2` in
+`bunny-geom`, their constructors, the exact closed-boundary containment, overlap,
+segment-intersection and closest-point queries, the ray queries and point in polygon. It
+answers the first two slices of flyingrobots/bunny#149.
 
 ## Scope
 
 - the four types, their `new` and `try_new` constructors and the refusals of `try_new`;
 - `FixedAabb2::is_ordered`, `contains_point`, `overlaps` and `closest_point`;
 - `FixedCircle2::contains_point`, `overlaps_circle` and `overlaps_aabb`;
-- `FixedSegment2::contains_point`, `intersects` and `closest_point`.
+- `FixedSegment2::contains_point`, `intersects` and `closest_point`;
+- `FixedRay2::intersects_aabb`, `intersects_circle` and `intersects_segment`, and
+  `hit_aabb`, `hit_circle` and `hit_segment` with their `RayHit2`;
+- `FixedPolygon2::new`, `classify_point` with its `PolygonLocation`, and `contains_point`.
 
-Out of scope, remaining for flyingrobots/bunny#149: polygons (point in polygon, polygon
-boundaries), ray queries (`FixedRay2` against a segment, box or circle), segment-to-segment
-closest points, intersection points, circle and box closest points to a segment, and float
-boundary constructors.
+Out of scope, remaining for flyingrobots/bunny#149: segment-to-segment closest points,
+intersection points, closest points on a circle, circle and box closest points to a
+segment, polygon queries other than point in polygon (polygon overlap, area, validation of
+simplicity), and float boundary constructors.
 
 ## Requirements
 
@@ -30,6 +34,12 @@ boundary constructors.
 | PLANAR-REQ-007 | `FixedSegment2::intersects` is true exactly when the closed segments share a point: a proper crossing, an endpoint on the other segment, or a collinear overlap of at least one point, decided from exact `orientation2` signs; zero-length segments included. | `README.md#segments` |
 | PLANAR-REQ-008 | `FixedSegment2::closest_point` clamps the exact parameter `n / d` (`n = (p - a) . (b - a)`, `d = \|b - a\|^2`) to `[0, 1]`, returns an endpoint exactly when the clamp applies or `d = 0`, and otherwise rounds each exact coordinate `(a d + (b - a) n) / d` once, to nearest with ties to even; each coordinate is within half a raw unit of the exact nearest point and in the endpoints' box, and it is never `None` for representable input. | `README.md#closest-point-on-a-segment` |
 | PLANAR-REQ-009 | Every query is independent of argument order: `overlaps`, `overlaps_circle` and `intersects` are symmetric, and reversing a segment's endpoints changes none of `contains_point`, `intersects` or `closest_point`. | `README.md#order-independence` |
+| PLANAR-REQ-010 | `FixedRay2::intersects_aabb` is true exactly when some point `o + t d`, `t >= 0`, with `d` the direction's raw value as given, is in the closed box, decided by exact slab intervals with no rounding; grazing an edge or a corner and an origin on or in the box count; an inverted box is never hit. | `README.md#ray-against-a-box` |
+| PLANAR-REQ-011 | `FixedRay2::intersects_circle` is true exactly when some point `o + t d`, `t >= 0`, is in the closed disc: the origin is in the disc, or `(c - o) . d > 0` and `\|d\|^2 r^2 - ((c - o) x d)^2 >= 0`, exact in 256 bits; a tangent counts; a negative radius is never hit. | `README.md#ray-against-a-circle` |
+| PLANAR-REQ-012 | `FixedRay2::intersects_segment` is true exactly when the ray and the closed segment share a point, from the exact solve `t = ((c - o) x s) / (d x s)`, `u = ((c - o) x d) / (d x s)` when `d x s != 0`; when `d x s = 0` (parallel, or a zero-length segment) the ray misses unless `(c - o) x d = 0`, and a collinear segment is hit exactly when its farther end along `d` is at `t >= 0`. Endpoint contacts count; endpoint order does not matter. | `README.md#ray-against-a-segment` |
+| PLANAR-REQ-013 | `hit_aabb`, `hit_circle` and `hit_segment` return `RayHit2::Miss` exactly when the matching `intersects_` is false; otherwise the least exact parameter `t >= 0` of a shared point, rounded once to nearest raw unit with ties to even (`At`, within half a raw unit), or `Beyond` exactly when that rounded value is above `i64::MAX`. The parameter is zero when the origin is in the shape. | `README.md#first-hit-parameter` |
+| PLANAR-REQ-014 | `FixedPolygon2::classify_point` returns `Boundary` exactly when the point is on an edge `v[i]`-`v[(i + 1) mod n]` (`FixedSegment2::contains_point`), and otherwise `Inside` exactly when the winding number from exact `orientation2` signs is nonzero, else `Outside`, for every representable input and either winding; `contains_point` is `classify_point != Outside`. | `README.md#point-in-polygon` |
+| PLANAR-REQ-015 | Degenerate and unvalidated polygons follow the same rule: no vertices is empty, one vertex a point, two vertices a segment, repeated consecutive vertices and collinear runs change nothing, a zero-area polygon has no inside, and self-intersecting input is not detected and is classified by the nonzero winding number. The result does not depend on the starting vertex or the winding. | `README.md#degenerate-and-self-intersecting-polygons` |
 
 ```toml
 [[requirement]]
@@ -76,6 +86,36 @@ status = "active"
 id = "PLANAR-REQ-009"
 summary = "Overlap and intersection are symmetric and segment queries do not depend on endpoint order."
 status = "active"
+
+[[requirement]]
+id = "PLANAR-REQ-010"
+summary = "Ray against box is the exact closed slab test on the direction as given; grazing counts and an inverted box is never hit."
+status = "active"
+
+[[requirement]]
+id = "PLANAR-REQ-011"
+summary = "Ray against circle is exact in 256 bits and closed; a tangent counts and a negative radius is never hit."
+status = "active"
+
+[[requirement]]
+id = "PLANAR-REQ-012"
+summary = "Ray against segment is exact and closed, with the parallel, collinear and zero-length cases specified."
+status = "active"
+
+[[requirement]]
+id = "PLANAR-REQ-013"
+summary = "The first hit parameter is Miss exactly on a miss, otherwise the exact least parameter rounded once, ties to even, or Beyond above i64::MAX."
+status = "active"
+
+[[requirement]]
+id = "PLANAR-REQ-014"
+summary = "Point in polygon is exact and three-way: boundary on an edge, otherwise inside exactly for a nonzero winding number."
+status = "active"
+
+[[requirement]]
+id = "PLANAR-REQ-015"
+summary = "Degenerate and self-intersecting polygons follow the same rule, independent of starting vertex and winding."
+status = "active"
 ```
 
 ## Oracles
@@ -98,6 +138,22 @@ arithmetic, no division), by a different formulation from the kernel's:
 - the nearest box point is chosen per axis among `min`, `max` and the coordinate itself;
 - the nearest segment point is the exact numerator over the exact denominator, and a rounded
   coordinate `r` is checked by multiplying back: `2 |n - r d| < d`, or `= d` with `r` even.
+
+`crates/bunny-geom/tests/planar_cast_oracle/mod.rs` answers the ray queries and point in
+polygon on the same unbounded integers, again by different formulations:
+
+- a ray meets a segment where the segment crosses the ray's line, found by interpolating
+  between the endpoints' signed distances from that line, and the parameter is the crossing
+  point's projection on the direction; the kernel solves with Cramer's rule;
+- a ray meets a box when the origin is in it or the ray meets one of its four edges, the
+  first parameter being the least over the edges; the kernel intersects slabs;
+- a ray meets a disc when the ray's nearest point to the centre is in it,
+  `|a w - b d|^2 <= a^2 r^2`; a rounded first parameter `T` is checked with no square root,
+  by the sign of the quadratic `|o + y d - c|^2 - r^2` at `y = (T -+ 1/2) 2^-32` and the
+  side of its vertex `y <= b / a`; the kernel takes an integer square root;
+- a point's winding number counts the edges crossing the horizontal half-line to its right,
+  at their exact rational crossing abscissa, up minus down; the kernel reads orientation
+  signs. A separate even-odd count confirms the pentagram case.
 
 The constructed cases are raw values inline in the tests, each with its derivation, and each
 is also checked against the oracle. A separate Python model of the closest-point goldens
@@ -123,6 +179,16 @@ run.
 | PLANAR-TP-010 | PLANAR-REQ-006, PLANAR-REQ-007, PLANAR-REQ-009 | 60 000 seeded quadruples (seed `0x0149_0001_0000_000A`, printed): on one lattice line, the same with one raw unit moved, small values with shared and repeated points, any magnitude and the ends of the range; intersection in every order and containment of each endpoint equal the oracle, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_010_seeded_segment_predicates_match_the_oracle` |
 | PLANAR-TP-011 | PLANAR-REQ-008, PLANAR-REQ-009 | 40 000 seeded segment and point pairs from the same generator (seed `0x0149_0001_0000_000B`, printed): each coordinate is the oracle's exact value rounded once, ties to even, the result is in the endpoints' box and the same for both endpoint orders, and the outcome counts (ties included) are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_011_seeded_segment_closest_points_match_the_oracle` |
 | PLANAR-TP-012 | PLANAR-REQ-001, PLANAR-REQ-002, PLANAR-REQ-003, PLANAR-REQ-004, PLANAR-REQ-005, PLANAR-REQ-006, PLANAR-REQ-007, PLANAR-REQ-008 | Each rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
+| PLANAR-TP-013 | PLANAR-REQ-010, PLANAR-REQ-013 | Constructed: boxes crossed, grazed along an edge and one raw unit past it, behind, around and touching the origin, along every axis direction, flat, point and inverted boxes, a corner the shallow direction `(1, 3 2^-32)` passes under by `2^-32` (which rounded slab bounds report as a hit) and one raw unit further, and parameters `2^63 - 1` and `2^63` from the ends of the range; the oracle. | `crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_013_ray_box_hits_are_closed_and_exact` |
+| PLANAR-TP-014 | PLANAR-REQ-011, PLANAR-REQ-013 | Constructed: chords and tangents from `3^2 + 4^2 = 5^2` and one raw unit short, circles behind, through and around the origin, zero and negative radii, irrational first roots along the shallow direction `(1, 2^-32)` including a near-tangent, parameters `2^63 - 1` and `2^63` at the ends of the range, and a first root `2^-64` raw units ahead of an origin just outside a circle of radius `2^63 - 1`; the oracle's quadratic check. | `crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_014_ray_circle_hits_are_closed_and_exact` |
+| PLANAR-TP-015 | PLANAR-REQ-012, PLANAR-REQ-013 | Constructed: crossings, endpoint contacts and one raw unit short, behind and through the origin, parallel off the line, collinear ahead, around and behind, zero-length segments, ties at `9/2` and `11/2` raw units, a shallow direction parallel one raw unit off, collinear and crossing, parameters `2^63 - 1` and `2^63`, and the anti-diagonal of the raw range; both endpoint orders and the oracle. | `crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_015_ray_segment_hits_are_closed_and_exact` |
+| PLANAR-TP-016 | PLANAR-REQ-014, PLANAR-REQ-015 | Constructed: a square, a diamond whose vertices are level with test points, a polygon with a notch and a spike vertex, the whole raw square and its corner triangle on `x + y = -1`; points inside, on edges and vertices and one raw unit outside; every starting vertex, both windings and the oracle. | `crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_016_point_in_polygon_is_exact_and_closed` |
+| PLANAR-TP-017 | PLANAR-REQ-014, PLANAR-REQ-015 | Constructed: zero, one and two vertices, repeated consecutive vertices, a collinear run, one repeated point, zero-area polygons doubling back, a bow tie, a pentagram whose centre has winding number 2 (inside; the oracle's even-odd count says outside), and a square traced twice; every starting vertex, both windings and the oracle. | `crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_017_polygon_degenerate_and_self_intersecting_inputs` |
+| PLANAR-TP-018 | PLANAR-REQ-010, PLANAR-REQ-011, PLANAR-REQ-012, PLANAR-REQ-013 | 30 000 seeded rays (seed `0x0149_0002_0000_0012`, printed) with axis, shallow and random directions, each against a box with a corner by a point on the ray, a circle near tangency to the ray's line, and a segment across, along or ending on that line, each moved by a raw unit; every hit decision and parameter equals the oracle, `intersects_` agrees with `hit_`, segment endpoint order does not matter, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_018_seeded_ray_queries_match_the_oracle` |
+| PLANAR-TP-019 | PLANAR-REQ-014, PLANAR-REQ-015 | 30 000 seeded polygons of zero to eight vertices (seed `0x0149_0002_0000_0013`, printed) on a small lattice, of any magnitude and from the ends of the range, with points on and a raw unit off their vertices and edge midpoints; every classification equals the oracle's winding number, is unchanged by reversal and rotation, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_019_seeded_point_in_polygon_matches_the_oracle` |
+| PLANAR-TP-021 | PLANAR-REQ-013 | Exhaustive small grid, checked by squaring with no square root: the circle root rounding over `a` in `1..=10`, `2^33`, `3 2^33` and `2^35`, every `b` in `1..=16` and every discriminant in `0..=b^2`, covering perfect and non-perfect squares, both halves of `(s, s + 1)`, and 114 exact ties (pinned). | `crates/bunny-geom/src/planar/ray/root.rs::tests::planar_tp_021_first_root_rounds_once_on_a_small_exhaustive_grid` |
+| PLANAR-TP-022 | PLANAR-REQ-013 | Constructed: the 256-bit integer square root of `k^2`, `k^2 - 1` and `k^2 + 2k` for `k` from 1 to `2^128 - 1` (so up to `2^256 - 1`), and of 0 to 4. | `crates/bunny-geom/src/wide.rs::tests::planar_tp_022_isqrt_is_exact_at_squares_and_one_either_side` |
+| PLANAR-TP-020 | PLANAR-REQ-010, PLANAR-REQ-011, PLANAR-REQ-012, PLANAR-REQ-013, PLANAR-REQ-014, PLANAR-REQ-015 | Each rule of the second slice broken on purpose fails at least one case above; one equivalent mutation is argued. | [Mutation checks of the second slice](#mutation-checks-of-the-second-slice) |
 
 ```toml
 [[case]]
@@ -232,6 +298,96 @@ artifact = "docs/topics/planar-geometry/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-013"
+requirements = ["PLANAR-REQ-010", "PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_013_ray_box_hits_are_closed_and_exact"
+oracle = "Constructed raw rays and boxes on and one raw unit either side of each contact, each also checked against the edge-by-edge oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-014"
+requirements = ["PLANAR-REQ-011", "PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_014_ray_circle_hits_are_closed_and_exact"
+oracle = "Pythagorean chords and tangents and irrational roots, each also checked against the nearest-point and square-root-free quadratic oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-015"
+requirements = ["PLANAR-REQ-012", "PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_015_ray_segment_hits_are_closed_and_exact"
+oracle = "Constructed raw rays and segments, parallel and collinear included, each also checked against the line-side interpolation oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-016"
+requirements = ["PLANAR-REQ-014", "PLANAR-REQ-015"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_016_point_in_polygon_is_exact_and_closed"
+oracle = "Constructed raw polygons and points on and one raw unit either side of edges and vertices, each also checked against the crossing-abscissa winding oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-017"
+requirements = ["PLANAR-REQ-014", "PLANAR-REQ-015"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_017_polygon_degenerate_and_self_intersecting_inputs"
+oracle = "Constructed degenerate and self-intersecting polygons, each also checked against the crossing-abscissa winding oracle."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-018"
+requirements = ["PLANAR-REQ-010", "PLANAR-REQ-011", "PLANAR-REQ-012", "PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_018_seeded_ray_queries_match_the_oracle"
+oracle = "Independent big-integer oracles over 30 000 seeded rays with contact-hugging boxes, circles and segments."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-019"
+requirements = ["PLANAR-REQ-014", "PLANAR-REQ-015"]
+evidence = "test"
+test = "crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_019_seeded_point_in_polygon_matches_the_oracle"
+oracle = "Independent crossing-abscissa winding oracle over 30 000 seeded polygons and boundary-hugging points."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-021"
+requirements = ["PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/src/planar/ray/root.rs::tests::planar_tp_021_first_root_rounds_once_on_a_small_exhaustive_grid"
+oracle = "Exhaustive small grid checked by squaring, with no square root."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-022"
+requirements = ["PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/src/wide.rs::tests::planar_tp_022_isqrt_is_exact_at_squares_and_one_either_side"
+oracle = "Squares built by multiplication and one either side, up to 2^256 - 1."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-020"
+requirements = ["PLANAR-REQ-010", "PLANAR-REQ-011", "PLANAR-REQ-012", "PLANAR-REQ-013", "PLANAR-REQ-014", "PLANAR-REQ-015"]
+evidence = "manual-audit"
+artifact = "docs/topics/planar-geometry/test-plan.md#mutation-checks-of-the-second-slice"
+oracle = "Each rule broken on purpose makes at least one implemented case fail."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -282,3 +438,56 @@ states the crossing rule directly.
 
 The `wide.rs` mutations also change the shared rounding of `bunny-predicates/1`, whose
 own mutation table records what they break there.
+
+## Mutation Checks Of The Second Slice
+
+Each rule below was broken on purpose in a local copy of `crates/bunny-geom/src/planar/ray.rs`,
+`crates/bunny-geom/src/planar/ray/root.rs`, `crates/bunny-geom/src/planar/polygon.rs` or
+`crates/bunny-geom/src/wide.rs`, and `cargo test --locked --no-fail-fast -p bunny-geom --lib
+--test planar_ray_tests --test planar_polygon_tests --test planar_cast_sweep_tests` was run
+with `RUSTFLAGS=--cap-lints=warn`, so that a mutation leaving code unused still compiles; the
+source was restored after each. The unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| A zero direction component ignores the origin's slab | Off-slab origin misses | 013, 018 |
+| The hit test is `entry < exit` | Grazing hits | 013, 018 |
+| The entry is not clamped at zero | `t >= 0` | 013, 018 |
+| Entry and exit are not swapped for `d < 0` | Slab order by sign | 013, 018 |
+| The box hit is decided on rounded bounds | Exact decision | 013 (the `(1, 3 2^-32)` corner), 018 |
+| `hit_aabb` returns the exit | Least parameter | 013, 018 |
+| A parameter above `i64::MAX` saturates to `At(MAX)` | `Beyond` | 013, 014, 015, 018 |
+| A tangent is a miss | Closed disc | 014, 018 |
+| A circle behind the origin is not refused | `b > 0` | 014, 018 |
+| The origin-in-disc case is dropped | Zero from inside | 014, 018 |
+| A negative radius is not refused | Negative radius is empty | 014, 018 |
+| The circle root is `b + sqrt(D)` | First root | 014, 018, 021 |
+| The floor root is rounded without the irrational adjustment | Rounded once from the exact root | 014 (the root `3/2 - 4.2 10^-20`), 021 |
+| The `V <= s^2 + s` test is inverted | Which half of `(s, s + 1)` | 021 |
+| `isqrt` returns one more | Exact square root | 021, 022 |
+| `u > 1` is accepted | Within the segment | 015, 018 |
+| `t < 0` is accepted | Ahead of the origin | 015, 018 |
+| `u < 0` is accepted | Within the segment | 015, 018 |
+| A parallel segment off the line is read as collinear | Parallel misses | 015, 018 |
+| A collinear segment returns its far end | Least parameter | 015, 018 |
+| A collinear entry is not clamped at zero | `t >= 0` | 015, 018 |
+| A collinear segment behind the origin is accepted | `t >= 0` | 015, 018 |
+| Ties go up (shared `round_div`) | Ties to even | 015, 018, 021 |
+| The quotient is truncated (shared `round_div`) | Round to nearest | 015, 018, 021 |
+| The polygon boundary test is skipped | Boundary is three-way | 016, 017, 019 |
+| The polygon boundary is only its vertices | Edges are boundary | 016, 017, 019 |
+| The closing edge is omitted | `v[n - 1]` to `v[0]` | 016, 017, 019 |
+| A rising edge is closed at the top | Half-open rule | 016, 017, 019 |
+| A rising edge is open at the bottom | Half-open rule | 016, 017, 019 |
+| Even-odd parity replaces the winding number | Nonzero rule | 017 (the pentagram, the square traced twice), 019 |
+| Falling edges are ignored | Signed winding | 016, 017, 019 |
+| A rising edge counts a point on its right | Orientation side | 016, 017, 019 |
+
+One mutation survived and is equivalent: removing the `is_ordered` refusal at the start of
+the ray-box test. On an axis where the box is inverted (`lo > hi`), a zero direction
+component cannot put the origin in `[lo, hi]`, which is empty, and a nonzero one gives an
+entry fraction above the exit fraction, so `max(entries) <= min(exits)` already fails. The
+explicit refusal is kept because it states the empty-set rule directly.
+
+The `wide.rs` mutations also change the shared rounding of `bunny-predicates/1` and of the
+segment closest point, whose own mutation tables record what they break there.

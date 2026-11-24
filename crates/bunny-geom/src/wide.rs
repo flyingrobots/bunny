@@ -10,6 +10,8 @@
 //! The 2D queries of `bunny-planar/1` (`crate::planar`) use it too, under the same kind of
 //! bound: a squared distance or squared radius sum is below `2^129`, and the largest value,
 //! a closest-point numerator `a d + (b - a) n`, is below `2^63 2^129 + 2^64 2^129 < 2^194`.
+//! The ray queries' largest value is `2^64` times a ray-circle discriminant, below `2^255`,
+//! whose integer square root ([`Wide::isqrt`]) is below `2^128`.
 //!
 //! This is one more private wide integer in the workspace; flyingrobots/bunny#424 tracks
 //! sharing one. Only the operations the predicates and the 2D queries need are here.
@@ -37,6 +39,11 @@ impl Wide {
     /// The value `2^k` for `k < 64`.
     pub const fn power_of_two(k: u32) -> Self {
         Self { negative: false, magnitude: [1 << k, 0, 0, 0] }
+    }
+
+    /// The value `magnitude`.
+    pub fn from_unsigned(magnitude: u128) -> Self {
+        Self::from_u128(false, magnitude)
     }
 
     fn from_u128(negative: bool, magnitude: u128) -> Self {
@@ -96,6 +103,20 @@ impl Wide {
     /// `self - rhs`, under the bound of [`Self::plus`].
     pub fn minus(self, rhs: Self) -> Self {
         self.plus(rhs.negated())
+    }
+
+    /// `floor(sqrt(self))` for a value in `[0, 2^256)`, digit by digit from the top: each
+    /// candidate is below `2^128`, so its square is below `2^256` and exact. A negative value
+    /// is read by its magnitude; no caller passes one.
+    pub fn isqrt(self) -> u128 {
+        let mut root = 0_u128;
+        for bit in (0..128).rev() {
+            let candidate = Self::from_unsigned(root | (1 << bit));
+            if !less(&self.magnitude, &candidate.times(candidate).magnitude) {
+                root |= 1 << bit;
+            }
+        }
+        root
     }
 
     /// `self / divisor` rounded once to nearest, ties to even, as an `i64`; `None` when the
@@ -180,4 +201,29 @@ fn divide(numerator: &Limbs, divisor: &Limbs) -> (Limbs, Limbs) {
         }
     }
     (quotient, remainder)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Wide;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    /// Oracle: squares built by multiplication, and one either side, from zero to the top of
+    /// the 256-bit range, where `(2^128 - 1)^2 + 2 (2^128 - 1) = 2^256 - 1`.
+    #[wasm_bindgen_test(unsupported = test)]
+    fn planar_tp_022_isqrt_is_exact_at_squares_and_one_either_side() {
+        let one = Wide::power_of_two(0);
+        for k in [1, 2, 3, 1 << 32, (1 << 64) - 1, 1 << 64, 1 << 127, u128::MAX - 1, u128::MAX] {
+            let root = Wide::from_unsigned(k);
+            let square = root.times(root);
+            // dojo: allow panic-path -- test assertion against squares built by multiplication
+            assert_eq!(square.isqrt(), k, "{k}");
+            // dojo: allow panic-path -- test assertion: one below a square has the root below
+            assert_eq!(square.minus(one).isqrt(), k - 1, "{k}");
+            // dojo: allow panic-path -- test assertion: up to 2k above a square keeps the root
+            assert_eq!(square.plus(root).plus(root).isqrt(), k, "{k}");
+        }
+        // dojo: allow panic-path -- test assertion: zero, and the values below four
+        assert_eq!([0, 1, 2, 3, 4].map(|v| Wide::from_unsigned(v).isqrt()), [0, 1, 1, 1, 2]);
+    }
 }

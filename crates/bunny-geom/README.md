@@ -59,7 +59,12 @@ queries, collision detection, and ray-casting.
   containment, overlap and closest point, circle containment and overlap with
   a circle or a box, segment containment and intersection from the exact
   `orientation2`, and the closest point on a segment rounded once per axis,
-  ties to even; see `docs/topics/planar-geometry/README.md`.
+  ties to even. `FixedRay2` against a box, a circle or a segment decides every
+  hit exactly on the direction as given and returns the first hit parameter
+  rounded once, ties to even (`RayHit2`). `FixedPolygon2` borrows a vertex
+  slice and classifies a point exactly as inside, on the boundary or outside
+  (`PolygonLocation`, the nonzero winding rule); see
+  `docs/topics/planar-geometry/README.md`.
 * **Separating-axis tests** (`bunny-sat/1`): `sat_obb_obb` and
   `sat_triangle_aabb` classify two oriented boxes, or a triangle against an
   axis-aligned box, as `Separated`, `Touching` or `Overlapping`, exactly (no
