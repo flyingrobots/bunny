@@ -139,8 +139,9 @@ are private, so every value satisfies the invariant; `center()`, `axes()` and
   dot product is in tolerance (`AxesNotOrthogonal { first, second }`, the first failing pair
   in the order `(0, 1)`, `(0, 2)`, `(1, 2)`).
 
-**Invariant.** Fixed point cannot hold an exactly orthonormal basis, so the box does not
-claim one. With lengths and dot products taken exactly on the raw entries (a dot product is
+**Invariant.** The box does not require an exactly orthonormal basis. Fixed point holds one
+only in special cases, such as the identity and the other signed axis permutations; the basis
+of a general rotation is not exactly orthonormal on the raw grid. With lengths and dot products taken exactly on the raw entries (a dot product is
 the exact sum of raw products divided by `2^32`, as in the
 [rotation](../rotation/README.md#orthonormality-and-determinant) and
 [look rotation](../look-rotation/README.md#rounding-and-orthonormality) chapters):

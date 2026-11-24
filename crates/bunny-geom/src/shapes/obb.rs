@@ -29,8 +29,10 @@ const DOT_MAX: u128 = DOT_TOLERANCE << 32;
 /// A 3D oriented box: the points `center + axes * l` for every local `l` with
 /// `abs(l_i) <= half_extents_i`, in fixed-point coordinates.
 ///
-/// The axes are the columns of `axes`. Fixed point cannot hold an exactly orthonormal basis,
-/// so the invariant is the checked bound the repository's rotation constructors guarantee:
+/// The axes are the columns of `axes`. An exactly orthonormal basis is not required: fixed
+/// point holds one only in special cases (the identity and the other signed axis
+/// permutations), not for a general rotation. The invariant is the checked bound the
+/// repository's rotation constructors guarantee:
 /// with lengths and dot products taken exactly on the raw entries (a dot product is the exact
 /// sum of raw products divided by `2^32`), every column's length is within
 /// [`OBB_AXIS_LENGTH_TOLERANCE_RAW`] raw units of one and every pair's dot product within
