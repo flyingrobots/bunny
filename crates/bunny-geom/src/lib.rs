@@ -186,3 +186,10 @@ impl FixedSphere3 {
         }
     }
 }
+
+mod shapes;
+
+pub use shapes::{
+    FixedCapsule3, FixedLine3, FixedObb3, FixedTriangle3, ShapeError, OBB_AXIS_DOT_TOLERANCE_RAW,
+    OBB_AXIS_LENGTH_TOLERANCE_RAW,
+};

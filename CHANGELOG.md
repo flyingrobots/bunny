@@ -40,6 +40,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OrthographicCamera::ray` within a measured `2^6` raw. Refs
   flyingrobots/bunny#150.
 
+* `bunny-geom`: geometry-level shape types `FixedLine3`, `FixedTriangle3`,
+  `FixedCapsule3` and `FixedObb3`, refusing with a new `#[non_exhaustive]`
+  `ShapeError` (`GeomError` is unchanged). The line is a point and a
+  `FixedUnitVec3`, normalized by the ray's rule. The triangle keeps vertex
+  order; `is_degenerate` is the exact zero test of the raw cross product over
+  the full range (65-bit edges, 129-bit products compared as sign and `u128`
+  magnitude, no rounding), `new` accepts degenerate triangles and `try_new`
+  refuses them. The capsule is a segment and a radius; `try_new` refuses a
+  negative radius and accepts zero radii and zero-length segments. The
+  oriented box is a centre, a `FixedMat3` of axis columns and half extents;
+  `try_new` refuses negative half extents, column lengths more than 11 raw
+  units from one and column dot products beyond 12 raw units, exactly, the
+  `bunny-rotation/1` column contract, so the rotation and look-rotation
+  constructors' matrices are accepted. Each new shape, and `FixedSegment3` and
+  `FixedPlane3`, gains a `try_from_float` built on the existing component
+  conversions. Additive: no existing item changes. See
+  `docs/topics/shape-library/` (SHAPE-REQ-001 to -008, SHAPE-TP-001 to -012).
+  Refs flyingrobots/bunny#115.
+
 * `bunny-geom`: classify a segment, a triangle or an AABB against a
   `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
   return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
