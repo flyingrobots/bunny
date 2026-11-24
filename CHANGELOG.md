@@ -108,6 +108,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overflow and short key scratch. `docs/topics/uniform-grid/` (GRID-REQ-001
   to -009, GRID-TP-001 to -015). Closes flyingrobots/bunny#121.
 
+* `bunny-perf`: benchmark cases for the areas flyingrobots/bunny#130 names that
+  had none. `num/try_from_f32` and `num/to_f32` (group `convert`);
+  `mesh/quantize_vertex`, `mesh/dequantize_vertex` and `mesh/hash` (group
+  `mesh`); `codec/ply_ascii_decode`, `codec/ply_binary_decode`,
+  `codec/obj_decode` and `codec/compressed_decode`, each one whole decode of a
+  seeded 4 096-vertex height field (group `codec`); and
+  `broadphase/sweep_and_prune` over 27 648 seeded boxes (group `sweep`). Every
+  input is built before timing from a fixed seed, and tests check that it is
+  the same bytes on every construction and that each decode reads the whole
+  mesh back. The `mesh` and `codec` groups take `bunny-mesh` and `bunny-codec`
+  as optional dependencies outside `default`; `cargo xtask perf` builds them,
+  and its `BASE_CRATES` now lists both crates. No timing was measured.
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;
