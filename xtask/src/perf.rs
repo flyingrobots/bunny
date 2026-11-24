@@ -22,8 +22,16 @@ const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_ROUNDS: usize = 5;
 /// The crates the harness may depend on. A crate missing from the base revision is left out
 /// of that side's manifest, and the groups that need it are reported as new.
-const BASE_CRATES: &[&str] =
-    &["bunny-broadphase", "bunny-geom", "bunny-linalg", "bunny-num", "bunny-optics", "bunny-query"];
+const BASE_CRATES: &[&str] = &[
+    "bunny-broadphase",
+    "bunny-codec",
+    "bunny-geom",
+    "bunny-linalg",
+    "bunny-mesh",
+    "bunny-num",
+    "bunny-optics",
+    "bunny-query",
+];
 
 struct PerfOptions {
     base: String,
@@ -487,6 +495,33 @@ mod tests {
             "bunny-optics",
             "bunny-query",
         ] {
+            assert!(manifest.contains(&format!("{name} = {{ path = ")), "{name} is missing");
+        }
+    }
+
+    /// Every Bunny crate the harness manifest depends on is one the generated manifest can
+    /// point at, so no group is left unbuilt (and unmeasured) on both sides. The `mesh` and
+    /// `codec` groups need `bunny-mesh` and `bunny-codec`.
+    #[test]
+    fn every_crate_the_harness_depends_on_is_a_base_crate() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("workspace root");
+        let manifest = fs::read_to_string(root.join("crates/bunny-perf/Cargo.toml"))
+            .expect("the harness manifest")
+            .replace("\r\n", "\n");
+        let used: Vec<&str> = manifest
+            .lines()
+            .skip_while(|line| line.trim() != "[dependencies]")
+            .skip(1)
+            .take_while(|line| !line.trim_start().starts_with('['))
+            .filter_map(|line| line.split_once('=').map(|(name, _)| name.trim()))
+            .filter(|name| name.starts_with("bunny-"))
+            .collect();
+        assert!(used.contains(&"bunny-mesh") && used.contains(&"bunny-codec"), "{used:?}");
+        for name in used {
+            assert!(BASE_CRATES.contains(&name), "{name} is not in BASE_CRATES");
+        }
+        let manifest = harness_manifest(Path::new("/tmp/base"), &["codec".to_owned()], BASE_CRATES);
+        for name in ["bunny-mesh", "bunny-codec"] {
             assert!(manifest.contains(&format!("{name} = {{ path = ")), "{name} is missing");
         }
     }

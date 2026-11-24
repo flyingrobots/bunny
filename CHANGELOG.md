@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-codec`: binary STL import under `bunny-binary-stl-triangle-mesh/1`.
+  `parse_binary_stl` reads an 80-byte header (not interpreted), a little-endian
+  `u32` triangle count and 50-byte records into a borrowed, fully validated
+  `StlMesh` with Q32.32 `StlVertex` positions, converted by
+  `FixedQ32_32::try_from_f32` unchanged. The length must be exactly
+  `84 + 50 n` (computed in `u64`; shorter, truncated or trailing bytes are
+  refused); NaN, infinite and out-of-range coordinates are typed `StlError`s
+  naming the triangle, vertex and axis. Stored vertex order is kept, triangle
+  `i` is `(3i, 3i+1, 3i+2)` with no welding, the stored normal and attribute
+  byte count are ignored, degenerate triangles are kept. ASCII STL is out of
+  scope. `docs/topics/binary-stl/` (STL-REQ-001 to -007, STL-TP-001 to -022
+  and -030). Closes flyingrobots/bunny#127.
+
+* Runnable examples for downstream users, each with in-memory inputs and a
+  test module pinning its output to independently derived values:
+  `bunny-codec` `decode_compressed_mesh` and `mesh_hash` (the latter needs
+  the default `mesh-hash` feature), `bunny-broadphase` `bvh_ray_query` and
+  `bunny-geom` `float_boundary`. The gate's `--all-targets` Clippy and test
+  commands build them and run their tests; see `docs/CODE_DOJO.md#examples`.
+  Closes flyingrobots/bunny#131.
+
 * `bunny-mesh`: topology validation under the contract identity
   `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
   reports index-degenerate triangles, geometrically degenerate triangles
@@ -26,6 +47,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boundary edges and 141 non-manifold edges. `docs/topics/mesh-topology/`
   (MTOPO-REQ-001 to -007, MTOPO-TP-001 to -016). Closes
   flyingrobots/bunny#122.
+
+* `bunny-geom`: `FixedFrustum`, six `FixedPlane3` values (left, right, bottom,
+  top, near, far) each with its front facing into the frustum, the inside the
+  closed set in front of or on all six, held as given. `contains_point`
+  returns `Option<bool>`; `classify_aabb` returns `Option<FrustumClass>` and
+  `classify_sphere` `Result<FrustumClass, FrustumSphereError>` (`Inside`,
+  `Intersecting`, `Outside`) by one rule over the six `PlaneSpan` answers: a
+  `Behind` plane is `Outside` even when another plane overflows, then overflow
+  is `None` (`FrustumSphereError::Overflow` for spheres), then a straddled plane
+  is `Intersecting`. `Outside` and `Inside` are exact in the rounded distances;
+  `Intersecting` is conservative and includes shapes near an edge or corner
+  that meet no frustum point. Spheres compare `D^2 2^64` with `R^2 |N|^2`
+  exactly in 256 bits, with no square root; a negative radius is
+  `NegativeRadius`. `from_clip_matrix` extracts the planes `r3 + r0`,
+  `r3 - r0`, `r3 + r1`, `r3 - r1`, `r2` and `r3 - r2` of a clip matrix for the
+  `[0, 1]` depth range, exactly and unnormalised, `None` on overflow; each
+  computed distance is within 3/2 raw units of the exact clip inequality. See
+  `docs/topics/frustum/` (FRUSTUM-REQ-001 to -007, FRUSTUM-TP-001 to -016).
+  Additive. Refs flyingrobots/bunny#146.
+
+* `bunny-geom`: exact geometric predicates under the contract identity
+  `bunny-predicates/1` (`PREDICATES_CONTRACT_ID`). `orientation2(a, b, c)`
+  (`CounterClockwise`, `Clockwise`, `Collinear`, in the canonical `+Y`-up
+  plane) and `orientation3(a, b, c, d)` (`Front`, `Behind`, `Coplanar`, the
+  right-hand normal side) return the sign of the exact determinant for every
+  representable input, `i64::MIN` and `i64::MAX` included. The exact values
+  are `doubled_signed_area2` and `sextupled_signed_volume3`, an
+  `ExactDeterminant` held in a private 256-bit integer; `signed_area2_rounded`
+  and `signed_volume3_rounded` round them once to Q32.32, ties to even, `None`
+  outside `i64`, and round a nonzero value of at most half a raw unit to zero.
+  `barycentric2(p, a, b, c)` returns exact numerators over a positive
+  denominator (`None` for a zero-area triangle), with an exact
+  `TriangleLocation` (`Outside`, then `OnVertex`, `OnEdge`, `Inside`), the
+  closed and open containment forms, and `weights_rounded`, each weight rounded
+  once and their sum within one raw unit of 1.0. `barycentric3_coplanar` does
+  the same for a point exactly in the plane of a 3D triangle and refuses one
+  that is not. See `docs/topics/predicates/`. Closes flyingrobots/bunny#145.
+* `bunny-linalg`: unit quaternions under `bunny-quaternion/1`
+  (`QUATERNION_CONTRACT_ID`). `FixedUnitQuat` stores `(x, y, z, w)`, `w` the
+  scalar part, and every value has raw `x^2 + y^2 + z^2 + w^2` within
+  `[(2^32 - 1)^2, (2^32 + 1)^2]` (`QUAT_LENGTH_SQUARED_MIN_RAW` and `_MAX_RAW`).
+  `try_from_unit` accepts exactly that band (`QuatError::NotUnit` otherwise);
+  `try_normalize` rounds each exact `r / |p|` once to nearest, accepts every
+  nonzero input including the extremes of the raw range and refuses only
+  zero (`QuatError::Zero`). `a * b` is the exact Hamilton product normalised
+  in one rounding and applies `b` first. `rotate_vec3` rounds the exact
+  `q v q* / |q|^2` once per component (within 1/2 raw of the exact rotation,
+  `None` on overflow); `to_mat3` likewise, with lengths within 1, dot products
+  within 2 and the determinant within 3 raw units. `from_axis_angle(axis,
+  angle)` halves the signed angle toward zero. `conjugate`, `Neg` and
+  `canonical` are exact. No rounding of the contract can meet an exact half.
+  `docs/topics/quaternion/` (QUAT-REQ-001 to -010, QUAT-TP-001 to -017).
+  Closes flyingrobots/bunny#109.
+
+* `bunny-broadphase`: a uniform grid broadphase under `bunny-uniform-grid/1`.
+  `uniform_grid_pairs(boxes, cell_size, keys, pairs)` reports every pair of
+  overlapping `FixedAabb3` boxes (closed: touching counts) exactly once, as
+  `(lower index, higher index)` in ascending lexicographic order, the form and
+  order of `sweep_and_prune`, with which it agrees on every tested input. A
+  cell is `floor(raw / cell_raw)` on each axis, exact for the whole raw range
+  (`GridCellSize::cell_of`); a box occupies the cells of its min to its max
+  inclusive. Candidates come from sorting (cell, box) `GridKey`s in caller
+  scratch, whose exact size `grid_key_count` computes with overflow detected;
+  there is no hashing and no allocation. A short pair buffer holds the first
+  pairs in order and `GridPairReport` counts them all. Typed refusals
+  (`UniformGridError`) for non-positive cell sizes, inverted boxes, key count
+  overflow and short key scratch. `docs/topics/uniform-grid/` (GRID-REQ-001
+  to -009, GRID-TP-001 to -015). Closes flyingrobots/bunny#121.
+
+* `bunny-perf`: benchmark cases for the areas flyingrobots/bunny#130 names that
+  had none. `num/try_from_f32` and `num/to_f32` (group `convert`);
+  `mesh/quantize_vertex`, `mesh/dequantize_vertex` and `mesh/hash` (group
+  `mesh`); `codec/ply_ascii_decode`, `codec/ply_binary_decode`,
+  `codec/obj_decode` and `codec/compressed_decode`, each one whole decode of a
+  seeded 4 096-vertex height field (group `codec`); and
+  `broadphase/sweep_and_prune` over 27 648 seeded boxes (group `sweep`). Every
+  input is built before timing from a fixed seed, and tests check that it is
+  the same bytes on every construction and that each decode reads the whole
+  mesh back. The `mesh` and `codec` groups take `bunny-mesh` and `bunny-codec`
+  as optional dependencies outside `default`; `cargo xtask perf` builds them,
+  and its `BASE_CRATES` now lists both crates. No timing was measured.
+* `bunny-broadphase`: `refit_bvh(nodes, prim_indices, primitives)` gives a
+  built BVH new boxes for its primitives without changing its topology or
+  primitive order: every node's bounds become exactly the raw per-axis union of
+  its children's (a leaf: of its listed primitives' new boxes), so nothing is
+  rounded, and inverted boxes are taken as both builders take them. Both
+  builders store children after their parent (now stated and tested), so refit
+  is one pass from the last node to the first, with no scratch, no recursion
+  and no allocation. The buffer is validated whole before anything is written,
+  so a refusal (`RefitError`: children out of range or not after their parent,
+  a leaf range outside `prim_indices`, a leaf count other than interior plus
+  one, a box count other than the listed slots, a primitive with no box)
+  leaves it unchanged. On seeded corpora and motions that degrade the tree,
+  every search gives the same answer on refitted and rebuilt trees, equal to a
+  test of every primitive; refit preserves correctness, not quality, which is
+  not measured. A compact tree is re-converted after a refit
+  (BVH-REQ-020 to -026, BVH-TP-040 to -057). Refs flyingrobots/bunny#120:
+  insertion, removal and rebuild on degradation remain.
 
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
