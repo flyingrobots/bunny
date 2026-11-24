@@ -39,3 +39,8 @@ workspace = true
 [dev-dependencies]
 allocation-counter = "0.8.1"
 wasm-bindgen-test = "0.3"
+
+# The hash example calls `compute_mesh_hash`, which only the `mesh-hash` feature provides.
+[[example]]
+name = "mesh_hash"
+required-features = ["mesh-hash"]

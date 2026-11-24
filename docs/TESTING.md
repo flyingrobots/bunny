@@ -86,6 +86,7 @@ Source files stay small. Public behavior is tested through integration tests:
 | --- | --- |
 | `crates/<crate>/src/` | Library implementation |
 | `crates/<crate>/tests/` | Public API and regression tests |
+| `crates/<crate>/examples/` | Runnable examples, each pinned by a test module that `--all-targets` runs |
 | `docs/goalposts/` | Acceptance evidence and completion notes |
 | `.github/workflows/code-dojo.yml` | Code Dojo, cross-platform, and WASM enforcement |
 | `.github/workflows/release.yml` | crates.io release publication |

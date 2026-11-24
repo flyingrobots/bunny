@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scope. `docs/topics/binary-stl/` (STL-REQ-001 to -007, STL-TP-001 to -022
   and -030). Closes flyingrobots/bunny#127.
 
+* Runnable examples for downstream users, each with in-memory inputs and a
+  test module pinning its output to independently derived values:
+  `bunny-codec` `decode_compressed_mesh` and `mesh_hash` (the latter needs
+  the default `mesh-hash` feature), `bunny-broadphase` `bvh_ray_query` and
+  `bunny-geom` `float_boundary`. The gate's `--all-targets` Clippy and test
+  commands build them and run their tests; see `docs/CODE_DOJO.md#examples`.
+  Closes flyingrobots/bunny#131.
+
 * `bunny-mesh`: topology validation under the contract identity
   `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
   reports index-degenerate triangles, geometrically degenerate triangles
