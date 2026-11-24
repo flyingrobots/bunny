@@ -72,7 +72,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_001_issue_example_is_not_an_intersection"
 oracle = "The issue's example is None; the old routine saturated and returned Some."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-002"
@@ -81,7 +81,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_002_defect_boundary_is_the_saturating_radius"
 oracle = "Old routine None below radius 199_032_864_766_431 raw and Some from it; the fix exact on both sides."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-003"
@@ -90,7 +90,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_003_touching_ordinary_magnitudes"
 oracle = "Hand-derived touching cases (3-4-12-13) and one raw unit either side, checked against the limb oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-004"
@@ -99,7 +99,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_004_touching_extreme_magnitudes"
 oracle = "Hand-derived touching cases at gaps up to 2^64 - 1 and radius magnitude 2^63, one raw unit either side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-005"
@@ -108,7 +108,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_005_raw_range_corners_match_the_oracle"
 oracle = "Independent base-2^32 limb oracle over 30 184 corner cases."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-006"
@@ -117,7 +117,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_006_seeded_full_range_matches_the_oracle"
 oracle = "Independent base-2^32 limb oracle over 200 000 seeded full-range cases."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-007"
@@ -126,7 +126,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_007_ordinary_magnitudes_unchanged"
 oracle = "Copy of the routine before #501 over 240 000 seeded ordinary cases outside the rounding band, and the limb oracle on all."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-008"
@@ -135,7 +135,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/aabb_sphere_exact_tests.rs::aso_tp_008_rounding_band_is_exact_now"
 oracle = "Limb oracle on 200 000 seeded small cases; every changed answer within 2^33 raw units squared of touching."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "ASO-TP-009"
@@ -144,9 +144,24 @@ evidence = "manual-audit"
 artifact = "docs/topics/aabb-sphere-overlap/test-plan.md#mutation-checks"
 oracle = "Each rule of the kernel broken on purpose fails at least one case above."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule of the kernel broken on purpose, one at a time, with the cases that fail.
+Each rule below was broken on purpose in a local copy of `crates/bunny-query/src/closest.rs`,
+one at a time, and `cargo test --locked -p bunny-query --test aabb_sphere_exact_tests --test
+closest_raw_tests --test query_tests` was run; the source was restored after each. The
+unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `<=` replaced by `<` | Touching meets | 002, 003, 004, 005, 006 |
+| The sum of squares wraps (`wrapping_add`) | A sum past `u128` is `None` | 005, 006 |
+| The `z` term dropped | Three axes | 003, 004, 005, 006, 007, 008 |
+| A negative radius returns `None` | The radius sign is ignored | 003, 004, 005, 006, 007, 008 |
+| Both squares truncated to Q32.32 (`>> 32`) before comparing | No rounding | 003, 005, 008 |
+| Each gap capped at `i64::MAX` | Gaps up to `2^64 - 1` | 004, 005, 006 |
+| The radius magnitude capped at `i64::MAX` | Radius magnitude up to `2^63` | 004, 005 |
+| The centre returned instead of the closest point | `Some(closest_point_aabb(..))` | 002 to 008 |
+| The routine before flyingrobots/bunny#501 restored | Exact for every input | 001 to 006, 008 (the first push of this branch) |

@@ -15,6 +15,7 @@ evidence exist.
 
 | Chapter | Owns |
 | --- | --- |
+| [`topics/aabb-sphere-overlap/`](topics/aabb-sphere-overlap/) | `aabb_intersects_sphere`: the exact rule (squared distance to the closest box point against the squared radius on raw integers, touching included, no rounding or saturation), the box read as given, the radius sign ignored, and which answers changed in flyingrobots/bunny#501. |
 | [`topics/angle-trigonometry/`](topics/angle-trigonometry/) | Binary angles (`FixedAngle`), conversions from and to turns, degrees and radians (unsigned and signed), table-based deterministic sine and cosine, `atan2`, `atan`, `asin` and `acos`, with error bounds. |
 | [`topics/ascii-ply/`](topics/ascii-ply/) | The ASCII PLY triangle-mesh profiles `bunny-ascii-ply-triangle-mesh/1` read by `parse_ascii_ply` and `/2` read by `parse_ascii_ply_v2`, which adds `s`/`t` or `u`/`v` texture coordinates, their line, whitespace and comment rules and error contract, the caller-chosen limits of `parse_ascii_ply_with_limits`, and the exact integer-only decimal to Q32.32 conversion rule `bunny-decimal-q32-32/1`. |
 | [`topics/binary-stl/`](topics/binary-stl/) | The binary STL import profile `bunny-binary-stl-triangle-mesh/1` read by `parse_binary_stl`: the exact length rule, coordinates converted by `FixedQ32_32::try_from_f32` with typed refusals naming the triangle, vertex and axis, stored vertex order kept without welding, and the stored normal and attribute ignored. |

@@ -445,7 +445,7 @@ fn aso_tp_006_seeded_full_range_matches_the_oracle() {
     let (mut met, mut missed) = (0_usize, 0_usize);
     for _ in 0..EXTREME_CASES {
         let mut draw =
-            || if seeds.next() % 8 == 0 { seeds.pick(&special) } else { seeds.any_i64() };
+            || if seeds.next().is_multiple_of(8) { seeds.pick(&special) } else { seeds.any_i64() };
         let min = [draw(), draw(), draw()];
         let max = [draw(), draw(), draw()];
         let centre = [draw(), draw(), draw()];

@@ -22,18 +22,31 @@ Files read:
 - `CONTRIBUTING.md`
 
 Files edited:
+- `crates/bunny-query/src/closest.rs` (only `aabb_intersects_sphere` and its rustdoc)
 - `crates/bunny-query/tests/aabb_sphere_exact_tests.rs`
+- `crates/bunny-query/README.md` (one line)
+- `docs/topics/aabb-sphere-overlap/README.md`
 - `docs/topics/aabb-sphere-overlap/test-plan.md`
+- `docs/README.md` (one row)
+- `CHANGELOG.md` (one bullet under Fixed)
 - `.repo-respect/receipts/2026-11-24-aabb-sphere-exact.md`
 
 Topic docs:
-New topic `docs/topics/aabb-sphere-overlap/` with ledger ASO-REQ-001 to -003 and ASO-TP-001 to -009.
+New topic `docs/topics/aabb-sphere-overlap/` with ledger ASO-REQ-001 to -003 and ASO-TP-001 to -009, all implemented, and recorded mutation checks.
 
 Generated artifacts:
 None.
 
 Checks run:
-- `cargo test --locked -p bunny-query --test aabb_sphere_exact_tests` (on `main`'s kernel: seven of eight cases fail, reproducing the defect; ASO-TP-007 passes)
+- `cargo test --locked -p bunny-query --test aabb_sphere_exact_tests` (on `main`'s kernel: seven of eight cases fail, reproducing the defect; ASO-TP-007 passes; with the fix all eight pass)
+- Eight mutations of the kernel, each failing at least one case (test plan, Mutation Checks)
+- `cargo fmt --all --check`
+- `cargo test --locked --workspace --all-targets --all-features`
+- `cargo clippy --locked -p bunny-query --all-targets --all-features -- -D warnings` (Rust 1.100.0)
+- `cargo run --locked -p xtask -- code-dojo-generated`
+- `cargo run --locked -p xtask -- code-dojo-rust --all`
+- `cargo run --locked -p xtask -- code-dojo-determinism --enforce`
+- `cargo run --locked -p xtask -- code-dojo-perf-groups`
 - `cargo run --locked -p xtask -- topic-docs`
 - `cargo run --locked -p xtask -- repo-respect check --branch`
 
