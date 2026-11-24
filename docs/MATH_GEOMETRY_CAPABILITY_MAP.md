@@ -166,6 +166,9 @@ Current surface:
 - `FixedLine3`, `FixedTriangle3` (exact degeneracy test), `FixedCapsule3` and
   `FixedObb3` (checked axis tolerances), with `ShapeError` and float boundary
   constructors (`docs/topics/shape-library/`)
+- `FixedSegment2`, `FixedRay2`, `FixedAabb2` and `FixedCircle2` with exact
+  closed-boundary containment, overlap, segment-intersection and closest-point
+  queries (`docs/topics/planar-geometry/`)
 - validated fixed/float boundary conversions
 - ray and closest-point query inputs
 
