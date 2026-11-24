@@ -39,6 +39,22 @@ None.
 Checks run:
 First commit (tests and planned cases only): the new tests fail to compile (the helpers do not
 exist); topic-docs and repo-respect check --branch clean.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features (157
+test results, all ok); cargo run --locked -p xtask -- code-dojo-generated; code-dojo-rust
+--all; code-dojo-determinism --enforce; code-dojo-perf-groups; topic-docs; repo-respect check
+--branch. cargo clippy --locked -p bunny-geom --lib --test transform_bounds_tests
+--all-features -D warnings: clean (the whole-crate run stops on 1.100-only lints in
+polygon_clip_tests.rs, a file this change does not touch). cargo build -p bunny-geom
+--no-default-features and its transform_bounds_tests: ok. RUSTDOCFLAGS=-D warnings cargo doc
+-p bunny-geom: clean.
+Mutations: thirteen, each applied to the kernel, run with cargo test --locked -q -p bunny-geom
+--no-fail-fast --test transform_bounds_tests, and restored; each failed at least one case (the
+test plan's table).
+Python model (unbounded integers, Fraction, math.isqrt): the goldens TRS-TP-058 pin; posted on
+the pull request.
+Not run locally: wasm-pack (CI's WebAssembly job), cargo deny and markdownlint-cli2 (CI's Dojo
+job), the bare-metal no-std gate (needs rustup; CI runs it).
 
 Known risks:
 The bounds contain the exact image, not the rounded `checked_transform_point` image of every

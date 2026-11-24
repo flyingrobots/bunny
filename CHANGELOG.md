@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-geom`: transform-aware bounds that contain the exact image. `FixedAabb3::transformed_bounds`, `from_transformed_points` (a mesh by its vertex slice), `from_transformed_triangle` and `from_transformed_sphere` return the smallest raw box containing the exact image under a `FixedAffine3`: the floor and ceiling of exact wide-integer extremes, under 1 raw outside per face, with no intermediate range check and `BoundsError` refusals (`InvertedBox`, `NoPoints`, `NegativeRadius`, `OutOfRange` exactly when a face leaves `i64`). The sphere's reach is decided in 256-bit integers with no square root rounded. `docs/topics/transform/` (TRS-REQ-020 to -023, TRS-TP-050 to -060). Refs flyingrobots/bunny#119.
+
 * `bunny-mesh`: topology validation under the contract identity
   `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
   reports index-degenerate triangles, geometrically degenerate triangles

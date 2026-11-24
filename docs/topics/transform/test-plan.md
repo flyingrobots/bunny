@@ -449,7 +449,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_050_box_bounds_under_identity_translation_rotation_scale_and_mixed"
 oracle = "Hand-derived exact hulls; the big-integer oracle for the mixed transform."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-051"
@@ -458,7 +458,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_051_box_refusals_one_raw_unit_either_side"
 oracle = "Hand-derived thresholds, one raw unit either side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-052"
@@ -467,7 +467,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_052_seeded_boxes_match_the_big_integer_oracle"
 oracle = "Big-integer eight-corner extremes over seeded boxes."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-053"
@@ -476,7 +476,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_053_points_and_triangles"
 oracle = "Hand-derived point and triangle images; from_points under the identity."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-054"
@@ -485,7 +485,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_054_seeded_points_match_the_big_integer_oracle"
 oracle = "Big-integer point extremes over seeded point sets."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-055"
@@ -494,7 +494,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_055_sphere_bounds_under_identity_translation_rotation_scale_and_mixed"
 oracle = "Hand-derived ellipsoid extents; the big-integer oracle for the mixed transform."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-056"
@@ -503,7 +503,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_056_sphere_refusals_one_raw_unit_either_side"
 oracle = "Hand-derived thresholds, one raw unit either side."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-057"
@@ -512,7 +512,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_057_seeded_spheres_match_the_big_integer_oracle"
 oracle = "Big-integer squared comparisons over seeded spheres; containment in the box bounds."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-058"
@@ -521,7 +521,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/transform_bounds_tests.rs::trs_tp_058_pinned_goldens"
 oracle = "Raw goldens from the Python model, floor and ceiling of Fraction extremes."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-059"
@@ -530,7 +530,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/transform/test-plan.md#mutations"
 oracle = "Each rule of the transform-aware bounds broken on purpose fails at least one case."
 tier = "manual"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "TRS-TP-060"
@@ -539,7 +539,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/transform/README.md#transform-aware-bounds"
 oracle = "The chapter states the rounding, overflow rule, widths and relation to the eight-corner hull."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutations
@@ -577,6 +577,26 @@ or `crates/bunny-linalg/src/fixed_affine3_normal.rs`, `ray_box_transform_tests` 
 | The normal by the inverse, not its transpose | TRS-TP-026, TRS-TP-028, TRS-TP-030 |
 | The normal by the linear part | TRS-TP-026, TRS-TP-027, TRS-TP-028, TRS-TP-030 |
 | The normal by the transpose, without the inverse | TRS-TP-026, TRS-TP-027, TRS-TP-028, TRS-TP-030 |
+
+The transform-aware bounds mutations (TRS-TP-059) were applied to
+`crates/bunny-geom/src/transform_bounds.rs` or `transform_bounds/wide.rs`, `transform_bounds_tests`
+run, and the kernel restored:
+
+| Mutation | Fails |
+| --- | --- |
+| The box minimum face rounded up (ceiling, not floor) | TRS-TP-050, TRS-TP-051, TRS-TP-052, TRS-TP-057, TRS-TP-058 |
+| The box extremes taken from the minimum corner only | TRS-TP-050, TRS-TP-051, TRS-TP-052, TRS-TP-057, TRS-TP-058 |
+| An inverted box accepted | TRS-TP-051 |
+| The remainders' carry dropped from the exact sum | TRS-TP-052, TRS-TP-054, TRS-TP-057, TRS-TP-058 |
+| The ceiling always one above the floor | TRS-TP-050, TRS-TP-051, TRS-TP-052, TRS-TP-053, TRS-TP-054, TRS-TP-058 |
+| The point fold keeps the greater low face | TRS-TP-053, TRS-TP-054, TRS-TP-058 |
+| The translation ignored | TRS-TP-050, TRS-TP-051, TRS-TP-052, TRS-TP-053, TRS-TP-054, TRS-TP-055, TRS-TP-057, TRS-TP-058 |
+| An out-of-range face saturated instead of refused | TRS-TP-051, TRS-TP-052, TRS-TP-053, TRS-TP-054, TRS-TP-056, TRS-TP-057 |
+| A negative radius taken as its magnitude | TRS-TP-056 |
+| The sphere reach along a column, not a row | TRS-TP-055, TRS-TP-057, TRS-TP-058 |
+| The sphere's low face from the high-side search | TRS-TP-055, TRS-TP-057, TRS-TP-058 |
+| The reach search returns one past the least | TRS-TP-055, TRS-TP-056, TRS-TP-057, TRS-TP-058 |
+| The reach compared with `>` instead of `>=` | TRS-TP-055, TRS-TP-056, TRS-TP-057 |
 
 ## Determinism Obligations And Evidence
 

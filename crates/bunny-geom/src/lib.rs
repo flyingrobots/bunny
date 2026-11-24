@@ -30,6 +30,7 @@ mod conversions;
 mod plane;
 mod predicates;
 mod transform;
+mod transform_bounds;
 
 pub use plane::{
     FixedPlane3, FixedSegment3, PlaneSide, PlaneSpan, PolygonClip, PolygonClipError, SegmentClip,
