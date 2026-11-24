@@ -46,6 +46,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/topics/frustum/` (FRUSTUM-REQ-001 to -007, FRUSTUM-TP-001 to -016).
   Additive. Refs flyingrobots/bunny#146.
 
+* `bunny-geom`: exact geometric predicates under the contract identity
+  `bunny-predicates/1` (`PREDICATES_CONTRACT_ID`). `orientation2(a, b, c)`
+  (`CounterClockwise`, `Clockwise`, `Collinear`, in the canonical `+Y`-up
+  plane) and `orientation3(a, b, c, d)` (`Front`, `Behind`, `Coplanar`, the
+  right-hand normal side) return the sign of the exact determinant for every
+  representable input, `i64::MIN` and `i64::MAX` included. The exact values
+  are `doubled_signed_area2` and `sextupled_signed_volume3`, an
+  `ExactDeterminant` held in a private 256-bit integer; `signed_area2_rounded`
+  and `signed_volume3_rounded` round them once to Q32.32, ties to even, `None`
+  outside `i64`, and round a nonzero value of at most half a raw unit to zero.
+  `barycentric2(p, a, b, c)` returns exact numerators over a positive
+  denominator (`None` for a zero-area triangle), with an exact
+  `TriangleLocation` (`Outside`, then `OnVertex`, `OnEdge`, `Inside`), the
+  closed and open containment forms, and `weights_rounded`, each weight rounded
+  once and their sum within one raw unit of 1.0. `barycentric3_coplanar` does
+  the same for a point exactly in the plane of a 3D triangle and refuses one
+  that is not. See `docs/topics/predicates/`. Closes flyingrobots/bunny#145.
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;
