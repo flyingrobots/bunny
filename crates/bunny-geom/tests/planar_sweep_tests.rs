@@ -85,7 +85,7 @@ fn moved(p: FixedVec2, dx: i128, dy: i128) -> FixedVec2 {
 fn random_box(state: &mut u64) -> FixedAabb2 {
     let (x0, x1, y0, y1) =
         (coordinate(state), coordinate(state), coordinate(state), coordinate(state));
-    if next(state) % 4 == 0 {
+    if next(state).is_multiple_of(4) {
         FixedAabb2::new(v(x0, y0), v(x1, y1))
     } else {
         FixedAabb2::new(v(x0.min(x1), y0.min(y1)), v(x0.max(x1), y0.max(y1)))
@@ -98,9 +98,9 @@ fn near_box(state: &mut u64, aabb: FixedAabb2) -> FixedVec2 {
     let pick = |state: &mut u64, lo: i64, hi: i64| match next(state) % 3 {
         0 => lo,
         1 => hi,
-        _ => sat((i128::from(lo) + i128::from(hi)) / 2),
+        _ => lo.midpoint(hi),
     };
-    if next(state) % 5 == 0 {
+    if next(state).is_multiple_of(5) {
         return v(coordinate(state), coordinate(state));
     }
     let x = pick(state, aabb.min.x.raw(), aabb.max.x.raw());
@@ -132,7 +132,7 @@ fn pythagorean(state: &mut u64) -> (i128, i128, i128) {
 /// A radius from the generator's construction moved by up to one raw unit, or a random one,
 /// negative one time in sixteen.
 fn radius(state: &mut u64, exact: i128) -> FixedQ32_32 {
-    if next(state) % 16 == 0 {
+    if next(state).is_multiple_of(16) {
         return raw(-1 - (spread(state).unsigned_abs() >> 1).cast_signed());
     }
     raw(sat(exact + i128::from(jitter(state))))
@@ -202,7 +202,8 @@ fn planar_tp_009_seeded_box_and_circle_queries_match_the_oracle() {
         let around = if next(&mut state).is_multiple_of(2) {
             FixedCircle2::new(moved(near, dx, dy), radius(&mut state, length))
         } else {
-            FixedCircle2::new(near, radius(&mut state, i128::from(small(&mut state, 2).abs())))
+            let reach = i128::from(small(&mut state, 2).abs());
+            FixedCircle2::new(near, radius(&mut state, reach))
         };
         let touches = around.overlaps_aabb(&aabb);
         let expected = planar_oracle::circle_meets_box(around, aabb);
@@ -216,7 +217,7 @@ fn planar_tp_009_seeded_box_and_circle_queries_match_the_oracle() {
         counts[5] += u32::from(touches);
     }
     println!("planar_tp_009 box_contains,boxes_meet,inverted,circle_contains,circles_meet,circle_box={counts:?}");
-    assert_eq!(counts, [0, 0, 0, 0, 0, 0], "seed={SEED_BOXES:#018x}");
+    assert_eq!(counts, [16_727, 25_113, 7_407, 26_979, 24_075, 23_026], "seed={SEED_BOXES:#018x}");
 }
 
 /// Four points of one of six kinds: on one lattice line at small or any magnitude, the same
@@ -225,14 +226,15 @@ fn planar_tp_009_seeded_box_and_circle_queries_match_the_oracle() {
 fn four_points(state: &mut u64) -> (u64, [FixedVec2; 4]) {
     let kind = next(state) % 6;
     let mut out = match kind {
-        0 | 2 => line_points(
-            state,
-            [small(state, 1 << 10), small(state, 1 << 10)],
-            [small(state, 9), small(state, 9)],
-            6,
-        ),
+        0 | 2 => {
+            let base = [small(state, 1 << 10), small(state, 1 << 10)];
+            let step = [small(state, 9), small(state, 9)];
+            line_points(state, base, step, 6)
+        }
         1 | 3 => {
-            line_points(state, [spread(state), spread(state)], [spread(state), spread(state)], 3)
+            let base = [spread(state), spread(state)];
+            let step = [spread(state), spread(state)];
+            line_points(state, base, step, 3)
         }
         4 => [0; 4].map(|_| v(small(state, 3), small(state, 3))),
         _ => [0; 4].map(|_| v(extreme(state), extreme(state))),
@@ -307,7 +309,7 @@ fn planar_tp_010_seeded_segment_predicates_match_the_oracle() {
         counts[4] += u32::from(a == b || c == d);
     }
     println!("planar_tp_010 meet,endpoint_on,line_meet,nudged_meet,zero_length={counts:?}");
-    assert_eq!(counts, [0, 0, 0, 0, 0], "seed={SEED_SEGMENTS:#018x}");
+    assert_eq!(counts, [29_595, 25_853, 14_595, 8_942, 6_981], "seed={SEED_SEGMENTS:#018x}");
 }
 
 #[wasm_bindgen_test(unsupported = test)]
@@ -344,5 +346,5 @@ fn planar_tp_011_seeded_segment_closest_points_match_the_oracle() {
         counts[4] += u32::from(a == b);
     }
     println!("planar_tp_011 start,end,between,tie,zero_length={counts:?}");
-    assert_eq!(counts, [0, 0, 0, 0, 0], "seed={SEED_CLOSEST:#018x}");
+    assert_eq!(counts, [12_943, 12_898, 11_657, 492, 2_502], "seed={SEED_CLOSEST:#018x}");
 }

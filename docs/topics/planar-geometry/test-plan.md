@@ -119,10 +119,10 @@ run.
 | PLANAR-TP-006 | PLANAR-REQ-006, PLANAR-REQ-009 | Constructed: both ends, the interior, the line past each end, one raw unit off the line, axis-aligned segments, a zero-length segment, and the diagonal and anti-diagonal of the raw range; both endpoint orders and the oracle. | `crates/bunny-geom/tests/planar_tests.rs::planar_tp_006_segment_containment_is_closed_and_exact` |
 | PLANAR-TP-007 | PLANAR-REQ-007, PLANAR-REQ-009 | Constructed: a crossing, an endpoint on the interior and one raw unit short, shared endpoints, collinear overlap, touch, gap and nesting, parallel segments one raw unit apart, lines crossing outside a segment, zero-length segments, and the diagonals of the raw range crossing at `(-1/2, -1/2)` on and past an end; every order and the oracle. | `crates/bunny-geom/tests/planar_tests.rs::planar_tp_007_segment_intersection_is_closed_and_exact` |
 | PLANAR-TP-008 | PLANAR-REQ-008, PLANAR-REQ-009 | Hand-derived points, each checked against the Python model and the oracle: interior feet, parameters at and past each end, ties of half a raw unit going to even on both axes, the same tie from an odd start (where rounding the offset would differ), zero-length segments, the diagonal of the raw range with ties at `-1/2`, `1/2` and `3/2`, and an offset of `2^64 - 2` raw units that does not fit `i64`; both endpoint orders. | `crates/bunny-geom/tests/planar_tests.rs::planar_tp_008_segment_closest_point_rounds_once_to_even` |
-| PLANAR-TP-009 | PLANAR-REQ-002, PLANAR-REQ-003, PLANAR-REQ-004, PLANAR-REQ-005, PLANAR-REQ-009 | 40 000 seeded cases (seed printed): boxes a quarter inverted, points on or one raw unit off their boundary, points `(3k, 4k)` from a centre with radius `5k` moved by one raw unit, tangent circles, and circles near a box, at every magnitude; every answer equals the oracle and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_009_seeded_box_and_circle_queries_match_the_oracle` |
-| PLANAR-TP-010 | PLANAR-REQ-006, PLANAR-REQ-007, PLANAR-REQ-009 | 60 000 seeded quadruples (seed printed): on one lattice line, the same with one raw unit moved, small values with shared and repeated points, any magnitude and the ends of the range; intersection in every order and containment of each endpoint equal the oracle, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_010_seeded_segment_predicates_match_the_oracle` |
-| PLANAR-TP-011 | PLANAR-REQ-008, PLANAR-REQ-009 | 40 000 seeded segment and point pairs from the same generator (seed printed): each coordinate is the oracle's exact value rounded once, ties to even, the result is in the endpoints' box and the same for both endpoint orders, and the outcome counts (ties included) are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_011_seeded_segment_closest_points_match_the_oracle` |
-| PLANAR-TP-012 | PLANAR-REQ-002, PLANAR-REQ-003, PLANAR-REQ-004, PLANAR-REQ-005, PLANAR-REQ-006, PLANAR-REQ-007, PLANAR-REQ-008 | Each rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
+| PLANAR-TP-009 | PLANAR-REQ-002, PLANAR-REQ-003, PLANAR-REQ-004, PLANAR-REQ-005, PLANAR-REQ-009 | 40 000 seeded cases (seed `0x0149_0001_0000_0009`, printed): boxes a quarter inverted, points on or one raw unit off their boundary, points `(3k, 4k)` from a centre with radius `5k` moved by one raw unit, tangent circles, and circles near a box, at every magnitude; every answer equals the oracle and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_009_seeded_box_and_circle_queries_match_the_oracle` |
+| PLANAR-TP-010 | PLANAR-REQ-006, PLANAR-REQ-007, PLANAR-REQ-009 | 60 000 seeded quadruples (seed `0x0149_0001_0000_000A`, printed): on one lattice line, the same with one raw unit moved, small values with shared and repeated points, any magnitude and the ends of the range; intersection in every order and containment of each endpoint equal the oracle, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_010_seeded_segment_predicates_match_the_oracle` |
+| PLANAR-TP-011 | PLANAR-REQ-008, PLANAR-REQ-009 | 40 000 seeded segment and point pairs from the same generator (seed `0x0149_0001_0000_000B`, printed): each coordinate is the oracle's exact value rounded once, ties to even, the result is in the endpoints' box and the same for both endpoint orders, and the outcome counts (ties included) are pinned. | `crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_011_seeded_segment_closest_points_match_the_oracle` |
+| PLANAR-TP-012 | PLANAR-REQ-001, PLANAR-REQ-002, PLANAR-REQ-003, PLANAR-REQ-004, PLANAR-REQ-005, PLANAR-REQ-006, PLANAR-REQ-007, PLANAR-REQ-008 | Each rule broken on purpose fails at least one case above. | [Mutation checks](#mutation-checks) |
 
 ```toml
 [[case]]
@@ -132,7 +132,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_001_constructors_refuse_only_their_stated_inputs"
 oracle = "Constructed inputs on and one raw unit either side of each refusal."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-002"
@@ -141,7 +141,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_002_box_containment_and_overlap_are_closed"
 oracle = "Constructed raw boxes and points, each also checked against the interval oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-003"
@@ -150,7 +150,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_003_box_closest_point_clamps_exactly"
 oracle = "Constructed raw points, each also checked against the candidate oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-004"
@@ -159,7 +159,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_004_circle_containment_is_closed_and_exact"
 oracle = "Pythagorean triples on and one raw unit off the circle, each also checked against the big-integer oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-005"
@@ -168,7 +168,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_005_circle_overlaps_are_closed_and_exact"
 oracle = "Tangent and one-raw-unit-short constructions, each also checked against the Minkowski-sum oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-006"
@@ -177,7 +177,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_006_segment_containment_is_closed_and_exact"
 oracle = "Constructed raw points, each also checked against the parametric oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-007"
@@ -186,7 +186,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_007_segment_intersection_is_closed_and_exact"
 oracle = "Constructed raw segments, each also checked against the parametric-solve oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-008"
@@ -195,7 +195,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_tests.rs::planar_tp_008_segment_closest_point_rounds_once_to_even"
 oracle = "Hand-derived raw points from the Python model, each also checked against the big-integer oracle by multiplying back."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-009"
@@ -204,7 +204,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_009_seeded_box_and_circle_queries_match_the_oracle"
 oracle = "Independent big-integer and interval oracles over 40 000 seeded boundary-hugging cases."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-010"
@@ -213,7 +213,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_010_seeded_segment_predicates_match_the_oracle"
 oracle = "Independent parametric-solve oracle over 60 000 seeded, deliberately collinear and touching quadruples."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-011"
@@ -222,19 +222,63 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_sweep_tests.rs::planar_tp_011_seeded_segment_closest_points_match_the_oracle"
 oracle = "Independent big-integer oracle over 40 000 seeded segment and point pairs, checked by multiplying back."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-012"
-requirements = ["PLANAR-REQ-002", "PLANAR-REQ-003", "PLANAR-REQ-004", "PLANAR-REQ-005", "PLANAR-REQ-006", "PLANAR-REQ-007", "PLANAR-REQ-008"]
+requirements = ["PLANAR-REQ-001", "PLANAR-REQ-002", "PLANAR-REQ-003", "PLANAR-REQ-004", "PLANAR-REQ-005", "PLANAR-REQ-006", "PLANAR-REQ-007", "PLANAR-REQ-008"]
 evidence = "manual-audit"
 artifact = "docs/topics/planar-geometry/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule of the requirements above is broken on purpose in a local copy of the
-kernel, the planar test files are run, and the case that fails is recorded here.
+Each rule below was broken on purpose in a local copy of `crates/bunny-geom/src/planar.rs`,
+`crates/bunny-geom/src/planar/segment.rs` or `crates/bunny-geom/src/wide.rs`, and `cargo
+test --locked --no-fail-fast -p bunny-geom --test planar_tests --test planar_sweep_tests`
+was run; the source was restored after each. The unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| `is_ordered` uses `<` (refuses flat boxes) | Flat and point boxes are valid | 001, 002, 003, 005, 009 |
+| `FixedCircle2::try_new` refuses a zero radius | Zero radius accepted | 001 |
+| Box containment excludes the boundary | Closed box | 002, 009, 011 |
+| `overlaps` skips the ordered check | Inverted box is empty | 002, 009 |
+| `overlaps` uses `<` on one `x` bound | Touching boxes overlap | 002, 009 |
+| `overlaps` drops one `y` comparison | Intervals intersect on both axes | 002, 009 |
+| `closest_point` clamps an inverted box | `None` for an inverted box | 003, 005, 009 |
+| The clamp keeps a value above the maximum | Per-axis clamp | 003, 005, 009 |
+| Circle containment excludes the circle | Closed disc | 004, 005, 009 |
+| A negative radius contains points | Negative radius is empty | 004, 005, 009 |
+| `overlaps_circle` uses `r1 - r2` | Radius sum | 005, 009 |
+| `overlaps_circle` skips the radius sign check | Negative radius is empty | 005, 009 |
+| `overlaps_aabb` tests only the centre | Closest point in the disc | 005, 009 |
+| The squared distance drops `dy` | Exact squared distance | 004, 005, 009 |
+| Segment containment skips the endpoint box | Past an end is not on it | 006, 010 |
+| Segment containment skips the orientation | Off the line is not on it | 006, 010 |
+| The endpoint box checks `x` only | Both axes | 006, 007, 010 |
+| `intersects` reads proper crossings only | Touching counts | 007, 010 |
+| `intersects` skips the second segment's endpoints on the first | Every endpoint tested | 007, 010 |
+| `intersects` reads an `f64` orientation | Exact sign | 007 (the diagonals of the raw range), 010 |
+| `closest_point` rounds the offset from `a` | Round the coordinate | 008, 011 |
+| `closest_point` does not clamp below zero | Parameter clamped to `[0, 1]` | 008, 011 |
+| `closest_point` does not clamp above one | Parameter clamped to `[0, 1]` | 008, 011 |
+| Ties go away from zero | Ties to even | 008, 011 |
+| Ties go toward zero | Ties to even | 008, 011 |
+| Ties go to the odd neighbour | Ties to even | 008, 011 |
+| The quotient is truncated, not rounded | Round to nearest | 008, 011 |
+
+One mutation survived and is equivalent: replacing the strict "one `CounterClockwise`, one
+`Clockwise`" test of `intersects` by "the two orientations differ". The difference is a pair
+with one `Collinear`. Say `c` is exactly on the line of `a`-`b` and `d` is not. If `c` is on
+the segment `a`-`b`, the segments meet and both versions say so through the endpoint test.
+If `c` is past an end, `a` and `b` lie on one side of `c` along their line. Then `a` and `b`
+are on the same side of the line `c`-`d`, or both on it, and that pair is not "different"
+either. The two tests therefore agree on every input. The strict form is kept because it
+states the crossing rule directly.
+
+The `wide.rs` mutations also change the shared rounding of `bunny-predicates/1`, whose
+own mutation table records what they break there.

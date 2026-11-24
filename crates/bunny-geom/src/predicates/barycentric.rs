@@ -3,8 +3,8 @@
 use bunny_linalg::{FixedVec2, FixedVec3};
 use bunny_num::FixedQ32_32;
 
-use super::wide::Wide;
 use super::{det2, det3, ExactDeterminant};
+use crate::wide::Wide;
 
 /// A vertex of a triangle `(a, b, c)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
