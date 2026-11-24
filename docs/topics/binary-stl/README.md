@@ -109,7 +109,10 @@ One rule, with no exceptions:
 - **Degenerate triangles are kept.** A triangle with repeated or collinear vertices is
   returned in its place; nothing is dropped. Topology validation is a separate step:
   `bunny_mesh::validate_topology` ([mesh topology](../mesh-topology/README.md)), which takes a
-  quantized mesh; this reader does not call it.
+  quantized mesh; this reader does not call it. It matches edges by vertex index, and this
+  reader does not weld, so no two triangles share an index: on this output every edge of
+  every non-degenerate triangle is a `BoundaryEdge`, a closed solid included. Weld equal
+  positions into shared vertices first for the edge findings to mean anything.
 - **Zero triangles is a mesh.** An 84-byte file with count 0 is accepted as an empty mesh, as
   the PLY readers accept a zero-count mesh.
 
