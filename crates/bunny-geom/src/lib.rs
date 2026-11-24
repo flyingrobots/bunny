@@ -25,11 +25,27 @@ use bunny_linalg::{FixedUnitVec3, FixedVec3, Vec3};
 // dojo: allow float-boundary -- imports the f32 DTO alias for Sphere3
 use bunny_num::{is_finite, FixedQ32_32, Scalar};
 
+mod bounds;
 mod conversions;
 mod plane;
+mod predicates;
+mod transform;
 
 pub use plane::{
     FixedPlane3, FixedSegment3, PlaneSide, PlaneSpan, PolygonClip, PolygonClipError, SegmentClip,
+};
+pub use transform::{TransformError, TransformedRay3};
+
+pub use bounds::{BoundsError, BOUNDS_CONTRACT_ID};
+
+mod frustum;
+
+pub use frustum::{FixedFrustum, FrustumClass, FrustumSphereError};
+pub use predicates::{
+    barycentric2, barycentric3_coplanar, doubled_signed_area2, orientation2, orientation3,
+    sextupled_signed_volume3, signed_area2_rounded, signed_volume3_rounded, ExactBarycentric,
+    ExactDeterminant, Orientation2, Orientation3, TriangleEdge, TriangleLocation, TriangleVertex,
+    PREDICATES_CONTRACT_ID,
 };
 
 /// Error type for bounding shape constructors.
@@ -181,3 +197,10 @@ impl FixedSphere3 {
         }
     }
 }
+
+mod shapes;
+
+pub use shapes::{
+    FixedCapsule3, FixedLine3, FixedObb3, FixedTriangle3, ShapeError, OBB_AXIS_DOT_TOLERANCE_RAW,
+    OBB_AXIS_LENGTH_TOLERANCE_RAW,
+};

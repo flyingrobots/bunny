@@ -21,11 +21,14 @@ use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
 
+mod bounds;
 #[cfg(feature = "mesh-hash")]
 mod hash;
 
 #[cfg(feature = "mesh-hash")]
 pub use hash::compute_mesh_hash;
+
+pub use bounds::{mesh_bounds, MeshBoundsError};
 
 const QUANTIZATION_STEPS: u128 = u16::MAX as u128;
 
@@ -232,3 +235,11 @@ impl IndexBufferLayout<'_> {
         self.len() == 0
     }
 }
+
+mod topology;
+
+pub use topology::{
+    edge_scratch_len, face_scratch_len, validate_topology, EdgeSlot, FaceSlot, TopologyError,
+    TopologyFinding, TopologyKind, TopologyReport, TopologyScratch, TopologySeverity,
+    MESH_TOPOLOGY_CONTRACT_ID,
+};
