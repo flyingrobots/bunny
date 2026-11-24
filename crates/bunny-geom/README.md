@@ -17,6 +17,34 @@ queries, collision detection, and ray-casting.
   segments, triangles and AABBs (`PlaneSpan`), segment clipping and convex
   polygon clipping (`clip_polygon`, into a caller buffer) to the closed front
   half-space; see `docs/topics/plane-clipping/README.md`.
+* **Bounds helpers** (`bunny-bounds/1`): `FixedAabb3::from_points`,
+  `from_triangle`, `merge`, `expand`, `expand_axes`, `from_sphere` and
+  `bounding_sphere`, exact on raw values, with typed `BoundsError` refusals for
+  no points, inverted boxes, inverting shrinks, negative radii and the raw range;
+  the bounding sphere's radius is rounded outward so it contains every corner.
+  See `docs/topics/bounding-volumes/README.md`.
+* **Ray and box transforms**: `FixedRay3::checked_transform` maps a ray by a
+  `FixedAffine3` into a `TransformedRay3` whose direction is not renormalised,
+  so a parameter `t` keeps its meaning: each component of the point at `t` on
+  the transformed ray is within `3/2 (1 + |t|)` raw of the exact image of the
+  point at `t` on the original. That bounds the position, not `t`: near a
+  grazing hit a small change in position can move or remove the hit;
+  `FixedAabb3::checked_transform` returns the hull of the eight mapped
+  corners. Typed `TransformError` refusals for inverted boxes, overflow and a
+  zero direction; see `docs/topics/transform/README.md#rays-boxes-and-normals`.
+* **FixedLine3 / FixedTriangle3 / FixedCapsule3 / FixedObb3**: the infinite
+  line (the ray's unit-direction rule), the triangle with an exact degeneracy
+  test over the full raw range, the capsule (segment and non-negative radius)
+  and the oriented box (centre, axis columns within the rotation contracts'
+  length and orthogonality tolerances, non-negative half extents), refusing
+  with `ShapeError`; each, and the segment and plane, has a `try_from_float`.
+  See `docs/topics/shape-library/README.md`.
+* **FixedFrustum**: Six planes facing into the frustum; `contains_point`
+  gives `Option<bool>`, and `classify_aabb` (`Option<FrustumClass>`) and
+  `classify_sphere` (`Result<FrustumClass, FrustumSphereError>`) give
+  `Inside`, `Intersecting` or `Outside`, with `Outside` certain and `Intersecting`
+  conservative, and `from_clip_matrix` extracts the planes of a clip matrix
+  exactly for Bunny's `[0, 1]` depth range; see `docs/topics/frustum/README.md`.
 * **Exact predicates** (`bunny-predicates/1`): `orientation2` and
   `orientation3` return the exact sign of the 2D and 3D orientation
   determinants for every representable input; `doubled_signed_area2` and

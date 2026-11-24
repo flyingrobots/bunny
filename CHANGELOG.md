@@ -11,6 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-mesh`: topology validation under the contract identity
+  `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
+  reports index-degenerate triangles, geometrically degenerate triangles
+  (collinear or coincident positions, decided exactly in `i64` on the `u16`
+  coordinates with no tolerance), exact and flipped duplicate faces, and
+  boundary, winding-inconsistent and non-manifold edges. It returns them as
+  `TopologyFinding` records in one total order (kind, then fields), each kind
+  with a fixed `TopologySeverity`. It does not allocate: the caller provides
+  `n` `FaceSlot`s and `3 n` `EdgeSlot`s of scratch and an output slice, and a
+  `TopologyReport` counts every finding, so a short output is detectable.
+  Refusals (`TopologyError`) reuse `IndexBufferLayout::is_valid` unchanged.
+  The Stanford bunny fixture has 10 exact and 73 flipped duplicate faces, 60
+  boundary edges and 141 non-manifold edges. `docs/topics/mesh-topology/`
+  (MTOPO-REQ-001 to -007, MTOPO-TP-001 to -016). Closes
+  flyingrobots/bunny#122.
+
+* `bunny-geom`: `FixedFrustum`, six `FixedPlane3` values (left, right, bottom,
+  top, near, far) each with its front facing into the frustum, the inside the
+  closed set in front of or on all six, held as given. `contains_point`
+  returns `Option<bool>`; `classify_aabb` returns `Option<FrustumClass>` and
+  `classify_sphere` `Result<FrustumClass, FrustumSphereError>` (`Inside`,
+  `Intersecting`, `Outside`) by one rule over the six `PlaneSpan` answers: a
+  `Behind` plane is `Outside` even when another plane overflows, then overflow
+  is `None` (`FrustumSphereError::Overflow` for spheres), then a straddled plane
+  is `Intersecting`. `Outside` and `Inside` are exact in the rounded distances;
+  `Intersecting` is conservative and includes shapes near an edge or corner
+  that meet no frustum point. Spheres compare `D^2 2^64` with `R^2 |N|^2`
+  exactly in 256 bits, with no square root; a negative radius is
+  `NegativeRadius`. `from_clip_matrix` extracts the planes `r3 + r0`,
+  `r3 - r0`, `r3 + r1`, `r3 - r1`, `r2` and `r3 - r2` of a clip matrix for the
+  `[0, 1]` depth range, exactly and unnormalised, `None` on overflow; each
+  computed distance is within 3/2 raw units of the exact clip inequality. See
+  `docs/topics/frustum/` (FRUSTUM-REQ-001 to -007, FRUSTUM-TP-001 to -016).
+  Additive. Refs flyingrobots/bunny#146.
+
 * `bunny-geom`: exact geometric predicates under the contract identity
   `bunny-predicates/1` (`PREDICATES_CONTRACT_ID`). `orientation2(a, b, c)`
   (`CounterClockwise`, `Clockwise`, `Collinear`, in the canonical `+Y`-up
@@ -57,6 +92,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OrthographicCamera::ray` within a measured `2^6` raw. Refs
   flyingrobots/bunny#150.
 
+* `bunny-geom`: geometry-level shape types `FixedLine3`, `FixedTriangle3`,
+  `FixedCapsule3` and `FixedObb3`, refusing with a new `#[non_exhaustive]`
+  `ShapeError` (`GeomError` is unchanged). The line is a point and a
+  `FixedUnitVec3`, normalized by the ray's rule. The triangle keeps vertex
+  order; `is_degenerate` is the exact zero test of the raw cross product over
+  the full range (65-bit edges, 129-bit products compared as sign and `u128`
+  magnitude, no rounding), `new` accepts degenerate triangles and `try_new`
+  refuses them. The capsule is a segment and a radius; `try_new` refuses a
+  negative radius and accepts zero radii and zero-length segments. The
+  oriented box is a centre, a `FixedMat3` of axis columns and half extents;
+  `try_new` refuses negative half extents, column lengths more than 11 raw
+  units from one and column dot products beyond 12 raw units, exactly, the
+  `bunny-rotation/1` column contract, so the rotation and look-rotation
+  constructors' matrices are accepted. Each new shape, and `FixedSegment3` and
+  `FixedPlane3`, gains a `try_from_float` built on the existing component
+  conversions. Additive: no existing item changes. See
+  `docs/topics/shape-library/` (SHAPE-REQ-001 to -008, SHAPE-TP-001 to -012).
+  Refs flyingrobots/bunny#115.
+
 * `bunny-geom`: classify a segment, a triangle or an AABB against a
   `FixedPlane3`. `classify_segment`, `classify_triangle` and `classify_aabb`
   return `Option<PlaneSpan>` (`Front`, `Behind`, `Straddling`, `Coplanar`),
@@ -95,6 +149,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `None` outside `[0, 1]`. `CatmullRom3::control_bounds()` is the union of the
   segments' control boxes, not the box of the points. Closes
   flyingrobots/bunny#152.
+
+* `bunny-geom`: box helpers on `FixedAabb3` under `bunny-bounds/1`
+  (`BOUNDS_CONTRACT_ID`). `from_points(&[FixedVec3])` and `from_triangle` are
+  each axis's exact minimum and maximum (no points is `BoundsError::NoPoints`);
+  `merge` is the smallest box containing both; `expand(margin)` and
+  `expand_axes` move each face by the margin, exact in `i128`, refusing
+  `InvertedBox`, then `ShrinkInvertsBox`, then `OutOfRange`, never saturating;
+  `from_sphere` is `centre -/+ r` (`NegativeRadius`, `OutOfRange`);
+  `bounding_sphere` rounds each midpoint once, ties to even, and takes the
+  ceiling of the exact root to the farthest corner, so it contains all eight
+  corners (`OutOfRange` above `i64::MAX`). Every helper refuses an inverted box,
+  as `FixedAabb3::try_new` does. `bunny-mesh`: `mesh_bounds` bounds the vertices
+  a mesh's triangles use (`MeshBoundsError::EmptyMesh`, `IndexOutOfRange {
+  triangle }`). Dedicated tests pin the existing `union_aabb`,
+  `TraceSphere::bounds` and `TraceTriangle::bounds` as they behave today. Closes
+  flyingrobots/bunny#151.
+
+* `bunny-geom` and `bunny-linalg`: ray, box and normal transforms under a
+  `FixedAffine3`, the remainder of flyingrobots/bunny#108.
+  `FixedRay3::checked_transform` maps the origin as a point and the unit
+  direction as a vector into a `TransformedRay3`, not renormalised, so the
+  image of the point at `t` is the transformed ray at the same `t` (within
+  `3/2 (1 + |t|)` raw); `try_into_ray` renormalises. `FixedAabb3::checked_transform`
+  is the per-axis hull of the eight corners mapped by `checked_transform_point`,
+  each face within 3/2 raw of the exact hull. Both return the typed
+  `TransformError` (`InvertedBox`, `OutOfRange`, `DegenerateDirection`).
+  `FixedAffine3::checked_transform_normal` maps a normal by the inverse
+  transpose of the linear part, within 3/2 raw of the exact product of the
+  rounded inverse, `None` when the inverse does not exist or the product
+  overflows. The transform chapter documents what a non-uniform scale does to
+  normals and bounds.
 
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
