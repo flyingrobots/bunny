@@ -50,6 +50,14 @@ math for graphics pipelines.
   quarter turns), and `rotation_axis_angle(axis, angle)` evaluates Rodrigues'
   formula on a `FixedUnitVec3` axis with one ties-to-even rounding per entry.
   Right-hand rule, column vectors; bounds in `docs/topics/rotation/`.
+* **Quaternions (`bunny-quaternion/1`)**: `FixedUnitQuat`, stored as
+  `(x, y, z, w)` with length within one raw unit of one. `try_normalize`
+  rounds the exact unit direction once per component and refuses only zero;
+  `try_from_unit` checks the band exactly. The Hamilton product (`a * b`
+  applies `b` first) is renormalised in the same single rounding;
+  `rotate_vec3` and `to_mat3` divide the exact `q v q*` by `|q|^2` and round
+  once per component (`None` on overflow); `from_axis_angle` takes a
+  `FixedUnitVec3` and a `FixedAngle`. Bounds in `docs/topics/quaternion/`.
 * **Transform Composition (`bunny-transform/1`)**:
   `FixedAffine3::from_trs(translation, rotation, scale)` is `T * R * S` (scale,
   then rotate, then translate), and `rotate_about_point` and
