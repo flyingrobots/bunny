@@ -15,17 +15,32 @@ pub fn closest_point_aabb(aabb: &FixedAabb3, point: FixedVec3) -> FixedVec3 {
 }
 
 /// Checks whether an AABB and a sphere overlap, and returns the closest point on the AABB.
+///
+/// Let `p = closest_point_aabb(aabb, sphere.center)`, `c` the centre and `r` the magnitude of
+/// the radius, all as raw integers. The result is `Some(p)` exactly when
+/// `(p.x - c.x)^2 + (p.y - c.y)^2 + (p.z - c.z)^2 <= r^2`, touching (equality) included, and
+/// `None` otherwise. The comparison is exact for every representable box, centre and radius:
+/// nothing is rounded and nothing saturates, so there is no error path. Each gap is below
+/// `2^64`, each square below `2^128` (in `u128`), a radius square at most `2^126`, and a sum of
+/// squares that passes `u128` is above every radius square, so it is `None`.
+///
+/// The box is read as given: `closest_point_aabb` clamps each axis to the minimum first, then
+/// the maximum, so an inverted box is neither swapped nor empty. The sign of the radius is
+/// ignored. Before flyingrobots/bunny#501 the squares were rounded Q32.32 products with
+/// saturating sums, which reported every box as met once the radius reached
+/// `199_032_864_766_431` raw; see `docs/topics/aabb-sphere-overlap/`.
 #[must_use]
 pub fn aabb_intersects_sphere(aabb: &FixedAabb3, sphere: &FixedSphere3) -> Option<FixedVec3> {
     let closest = closest_point_aabb(aabb, sphere.center);
-    let diff = closest - sphere.center;
-    let dist_sq = diff.dot(diff);
-    let r2 = sphere.radius * sphere.radius;
-    if dist_sq <= r2 {
-        Some(closest)
-    } else {
-        None
-    }
+    let gap_sq = |p: FixedQ32_32, c: FixedQ32_32| {
+        let gap = u128::from(p.to_raw().abs_diff(c.to_raw()));
+        gap * gap
+    };
+    let dist_sq = gap_sq(closest.x, sphere.center.x)
+        .checked_add(gap_sq(closest.y, sphere.center.y))?
+        .checked_add(gap_sq(closest.z, sphere.center.z))?;
+    let radius = u128::from(sphere.radius.to_raw().unsigned_abs());
+    (dist_sq <= radius * radius).then_some(closest)
 }
 
 /// Computes the closest point on a triangle to a target point.

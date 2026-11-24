@@ -603,6 +603,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-query`: `aabb_intersects_sphere` decides overlap exactly, comparing the squared distance from the centre to the closest box point with the squared radius on raw integers in `u128` (touching included), and no longer reports a sphere whose rounded Q32.32 squared radius saturated as meeting every box. **Behaviour change:** inputs with a radius magnitude of `199_032_864_766_431` raw (about 46 341 units) or more now meet only the boxes within the radius, and inputs whose exact squared distance and squared radius differ by at most `2^33` raw units squared may change in either direction, since the old rounded products could order them wrongly (a zero radius one raw unit from a box was met and is not now). Every other input, including inverted boxes (read as given) and negative radii (sign ignored), gets the same answer, and the signature and returned point are unchanged. `docs/topics/aabb-sphere-overlap/` (ASO-REQ-001 to -003, ASO-TP-001 to -009). Closes flyingrobots/bunny#501.
+
 * Docs: the optics chapter no longer repeats the `### Orthonormal Frame`
   heading (flyingrobots/bunny#346), and the release-packaging chapter says
   that packaging does not build documentation and names the gate step that

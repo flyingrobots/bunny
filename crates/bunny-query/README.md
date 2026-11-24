@@ -12,6 +12,7 @@ targets.
 * Ray intersections for spheres, AABBs, and triangles.
 * Closest-point queries for AABBs, triangles, and segment pairs.
 * AABB-sphere overlap with deterministic contact point output.
+* `aabb_intersects_sphere` is exact for every representable input: no rounding or saturation (flyingrobots/bunny#501); see `docs/topics/aabb-sphere-overlap/`.
 * Checked ray-intersection arithmetic: `ray_intersects_sphere` and
   `ray_intersects_triangle` return `None` when an intermediate Q32.32
   operation overflows instead of accepting saturated geometry as a hit.
