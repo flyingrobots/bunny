@@ -464,6 +464,19 @@ manifest (parsed as TOML, so every spelling of the table counts), or in the
 file and line. It runs right after the Rust source rules and has no waiver.
 The chapter is [`topics/lint-policy/`](topics/lint-policy/).
 
+## Examples
+
+The runnable examples under `crates/<crate>/examples/` need no gate step of
+their own. The workspace Clippy and test commands of the full gate, and the
+test command of the determinism matrix, all pass `--all-targets`, which builds
+every example and runs the `#[cfg(test)]` module inside it: each example pins
+its output there against values derived without it, so an example that stops
+compiling or starts printing something else fails the gate. Examples are
+library code to the Rust AST policy: the panic, size and, in core crates,
+`float-boundary` rules apply, with waivers as anywhere else. An example that
+needs a feature names it in its crate's `[[example]] required-features`, so
+the no-default-features commands skip it.
+
 ## Generated Artifacts
 
 The full gate and the pre-commit gate regenerate `bunny-wesley`'s contract

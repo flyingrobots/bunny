@@ -11,6 +11,7 @@ mod compressed_encode;
 mod obj;
 mod ply;
 mod ply_ascii;
+mod stl;
 
 pub use compressed::{
     decode_compressed_mesh, CompressedIndexWidth, CompressedMesh, CompressedMeshError,
@@ -29,4 +30,8 @@ pub use ply_ascii::{
     AsciiPlyTextureCoordinate, AsciiPlyTextureCoordinates, AsciiPlyTriangles, AsciiPlyVertex,
     AsciiPlyVertices, DecimalError, ASCII_PLY_PROFILE_ID, ASCII_PLY_PROFILE_V2_ID,
     DECIMAL_Q32_32_ID, MAX_FRACTIONAL_SIGNIFICANT_DIGITS,
+};
+pub use stl::{
+    parse_binary_stl, StlError, StlMesh, StlTriangles, StlVertex, StlVertices,
+    BINARY_STL_MAX_TRIANGLES, BINARY_STL_PROFILE_ID,
 };

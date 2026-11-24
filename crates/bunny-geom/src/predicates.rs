@@ -11,13 +11,12 @@ use bunny_linalg::{FixedVec2, FixedVec3};
 use bunny_num::FixedQ32_32;
 
 mod barycentric;
-mod wide;
 
+use crate::wide::{self, Wide};
 pub use barycentric::{
     barycentric2, barycentric3_coplanar, ExactBarycentric, TriangleEdge, TriangleLocation,
     TriangleVertex,
 };
-use wide::Wide;
 
 /// The identity string of the exact predicate contract.
 pub const PREDICATES_CONTRACT_ID: &str = "bunny-predicates/1";
