@@ -195,7 +195,10 @@ fn segment_pair(
 ) -> (FixedVec3, FixedVec3) {
     let query = SegmentQuery::new(p1, q1, p2, q2);
     let dots = SegmentDots::new(&query);
-    let params = SegmentParams::new(&dots).clamp_s(&dots).clamp_t(&dots);
+    // Exactly parallel directions take the parallel rule even when the rounded `a e - b^2` is
+    // not zero: the skew formulas divide rounding noise by rounding noise there.
+    let parallel = dots.denom == FixedQ32_32::ZERO || exactly_parallel(p1, q1, p2, q2);
+    let params = SegmentParams::new(&dots, parallel).clamp_s(&dots).clamp_t(&dots);
     let s = clamp(ratio_or_zero(params.s_num, params.s_denom), FixedQ32_32::ZERO, FixedQ32_32::ONE);
     let t = clamp(ratio_or_zero(params.t_num, params.t_denom), FixedQ32_32::ZERO, FixedQ32_32::ONE);
     (p1 + query.d1 * s, p2 + query.d2 * t)
@@ -247,8 +250,8 @@ struct SegmentParams {
 }
 
 impl SegmentParams {
-    fn new(dots: &SegmentDots) -> Self {
-        if dots.denom == FixedQ32_32::ZERO {
+    fn new(dots: &SegmentDots, parallel: bool) -> Self {
+        if parallel {
             return Self::parallel(dots);
         }
         Self::skew(dots).clamp_initial_s(dots)
@@ -306,6 +309,33 @@ impl SegmentParams {
         self.s_denom = max;
         self
     }
+}
+
+/// Whether the raw directions `q1 - p1` and `q2 - p2` are parallel, exactly: every component
+/// of their cross product, computed without rounding, is zero. A zero direction is parallel to
+/// every direction.
+fn exactly_parallel(p1: FixedVec3, q1: FixedVec3, p2: FixedVec3, q2: FixedVec3) -> bool {
+    let [ax, ay, az] = raw_difference(p1, q1);
+    let [bx, by, bz] = raw_difference(p2, q2);
+    same_product(ay, bz, az, by) && same_product(az, bx, ax, bz) && same_product(ax, by, ay, bx)
+}
+
+/// The exact raw difference `b - a`; every component has magnitude below `2^64`.
+fn raw_difference(a: FixedVec3, b: FixedVec3) -> [i128; 3] {
+    let diff = |a: FixedQ32_32, b: FixedQ32_32| i128::from(b.raw()) - i128::from(a.raw());
+    [diff(a.x, b.x), diff(a.y, b.y), diff(a.z, b.z)]
+}
+
+/// Whether `a * b == c * d` exactly, for operands of magnitude below `2^64`.
+fn same_product(a: i128, b: i128, c: i128, d: i128) -> bool {
+    exact_product(a, b) == exact_product(c, d)
+}
+
+/// The exact product as `(negative, magnitude)`, with zero never negative. Both magnitudes are
+/// below `2^64`, so their product is below `2^128` and fits `u128`.
+const fn exact_product(a: i128, b: i128) -> (bool, u128) {
+    let magnitude = a.unsigned_abs() * b.unsigned_abs();
+    (magnitude != 0 && (a < 0) != (b < 0), magnitude)
 }
 
 fn ratio_or_zero(numer: FixedQ32_32, denom: FixedQ32_32) -> FixedQ32_32 {

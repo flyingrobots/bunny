@@ -39,6 +39,7 @@ Checks run:
   (CLOSEST-TP-020, -021, -025, -026, -027).
 - Zero-length fix: CLOSEST-TP-020, -021, -027 pass; -025 and -026 still fail on the parallel
   pairs.
+- Parallel fix: all eight tests pass.
 
 Known risks:
 - A behaviour change to a public function for degenerate and exactly parallel inputs.

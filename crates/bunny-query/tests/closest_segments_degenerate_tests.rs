@@ -177,11 +177,22 @@ impl Wide {
         Self::normalized(self.negative, out)
     }
 
+    /// The number of significant bits of the magnitude.
+    fn bit_len(&self) -> u32 {
+        let top = self.len();
+        let Some(limb) = top.checked_sub(1).map(|i| self.magnitude[i]) else {
+            return 0;
+        };
+        u32::try_from(64 * top).expect("small") - limb.leading_zeros()
+    }
+
     /// `ceil(self / rhs)` for `self >= 0`, `rhs > 0` and a quotient below `2^64`.
     fn div_ceil_u64(self, rhs: Self) -> u64 {
         let mut rem = self;
         let mut q = 0_u64;
-        for bit in (0..64).rev() {
+        // The quotient has at most `bit_len(self) - bit_len(rhs) + 1` bits.
+        let top = (self.bit_len() + 1).saturating_sub(rhs.bit_len()).min(64);
+        for bit in (0..top).rev() {
             let step = rhs.shl(bit);
             if step <= rem {
                 rem = rem.sub(step);
@@ -323,12 +334,8 @@ impl Problem {
     /// fraction.
     fn squared_distance(&self, pair: &Pair) -> (Wide, Wide) {
         let mut sum = Wide::ZERO;
-        for k in 0..3 {
-            let wk = pair
-                .den
-                .mul_i(self.r[k])
-                .add(pair.sn.mul_i(self.d1[k]))
-                .sub(pair.tn.mul_i(self.d2[k]));
+        for ((rk, d1k), d2k) in self.r.iter().zip(&self.d1).zip(&self.d2) {
+            let wk = pair.den.mul_i(*rk).add(pair.sn.mul_i(*d1k)).sub(pair.tn.mul_i(*d2k));
             sum = sum.add(wk.mul(wk));
         }
         (sum, pair.den.mul(pair.den))
@@ -624,6 +631,7 @@ impl Arrangement {
 
 /// One case of `arrangement`, or `None` when the draw has another exact shape (counted and
 /// skipped). Every coordinate stays below `2^40` raw.
+#[allow(clippy::many_single_char_names)]
 fn arrangement_case(seeds: &mut Seeds, arrangement: Arrangement, scale: usize) -> Option<Segments> {
     let base = seeds.triple(1 << 38);
     let u = direction(seeds, scale);
@@ -785,7 +793,7 @@ fn closest_tp_022_a_zero_length_first_segment_and_two_points() {
 #[wasm_bindgen_test(unsupported = test)]
 fn closest_tp_023_one_raw_unit_segments_against_a_point() {
     let start = units(3, -2, 1);
-    for axis in 0..3 {
+    for axis in [0, 1, 2] {
         let mut end = start;
         end[axis] += 1;
         for point in [units(0, 0, 0), units(3, -2, 1), plus(start, [5, 5, 5]), [-7, 9, ONE]] {
