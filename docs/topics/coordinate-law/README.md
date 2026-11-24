@@ -227,8 +227,9 @@ The perspective builder takes the tangent of half the vertical field of view,
 so Bunny needs no trigonometry to build it. After the matrix, `w_clip =
 -z_view`, and NDC is the component-wise division by `w_clip`. A point behind
 the camera has `w_clip < 0`; callers clip before dividing. Bunny does not yet
-expose a clip or divide helper, unprojection, or rays; viewport conversion is
-defined in [Viewport Conversion](#viewport-conversion).
+expose a clip or divide helper; viewport conversion is defined in
+[Viewport Conversion](#viewport-conversion) and its inverse to a world ray in
+[Unprojection](#unprojection).
 
 Both builders use checked Q32.32 arithmetic and return `ProjectionError`
 instead of panicking or saturating:
@@ -295,6 +296,127 @@ NDC raw value are both odd.
 Errors (`ViewportError`): `EmptyExtent` for a zero width or height, and
 `Overflow` when a result does not fit Q32.32. Sizes are unsigned, so a negative
 size cannot be expressed. Nothing panics or saturates.
+
+## Unprojection
+
+`Viewport::try_unproject(coordinate, clip_from_view, view_from_world)` in
+`bunny-linalg` (`bunny-unproject/1`, `UNPROJECT_CONTRACT_ID`) returns the
+world-space ray through a viewport coordinate, for picking code that holds only
+the matrices. The cameras in `bunny-optics` generate rays from their own
+parameters; this is the matrix-side inverse, and its rays agree with theirs
+(below).
+
+**Input.** `coordinate` is a continuous viewport coordinate (`FixedVec2`) in
+[Viewport Conversion](#viewport-conversion)'s convention: origin at the
+top-left corner, `y` down, integers on pixel corners, so the centre of pixel
+`(i, j)` is `(i + 1/2, j + 1/2)` and a camera's `PixelSample` is
+`(x + sub_x, y + sub_y)`. The closed rectangle `[0, width] x [0, height]` is
+accepted, edges included, as boundary contact is inclusive elsewhere in this
+law. `clip_from_view` must have one of the two shapes the builders produce,
+with any entry values: perspective rows `(m00, 0, 0, 0)`, `(0, m11, 0, 0)`,
+`(0, 0, m22, m23)`, `(0, 0, -1, 0)`, or orthographic with last row
+`(0, 0, 0, 1)`. `view_from_world` must be affine (last row `(0, 0, 0, 1)`)
+with any invertible linear part.
+
+**Output.** A `ViewportRay { origin, direction }`: `origin` is the world point
+the coordinate unprojects to at NDC depth `0` (the near plane) and
+`origin + direction` the point at depth `1` (the far plane), so `t` in
+`[0, 1]` spans the depth range. The direction is not normalized; its length is
+the near-to-far distance along that line (`far - near` on the axis of an
+orthographic view, longer off axis for a perspective one). `TraceRay::new`
+accepts direction components up to `1.0`, so a caller that wants a trace ray
+scales it.
+
+**The exact ray.** Write `ONE = 2^32` and raw values `X`, `Y`, `W`, `H` and
+`p, q, r, s` for `m00, m11, m22, m23`. The viewport step is the exact inverse
+of `try_ndc_to_viewport`'s formula before its floor, not `try_viewport_to_ndc`
+(which floors): `x_ndc = ax / (W ONE)` with `ax = 2 X - W ONE`, and
+`y_ndc = ay / (H ONE)` with `ay = H ONE - 2 Y`. The projection step is the
+analytic inverse, divide included, at depths `0` and `1`:
+
+```text
+perspective   depth-0 point  (ax s / (W p r), ay s / (H q r), -s / r)
+              depth-1 point  the depth-0 point times r / (r + ONE)
+orthographic  depth-0 point  (ax / (W p), ay / (H q), -s / r)
+              direction      (0, 0, ONE / r)
+```
+
+in units. With `E = W H p q r` every view-space value is an integer over `E`
+(or over `E (r + ONE)` and `r` for the directions). The view step is
+`A^-1 (v - t)` with the exact adjugate inverse of the raw linear part `A`
+(`A^-1 = ONE adj(A) / det(A)` in units), not the transpose. So each output is
+one exact ratio:
+
+```text
+origin_i    = ONE  * sum_j adj_ij (ONE N_j - t_j E) / (E det A)
+direction_i = ONE^2 * sum_j adj_ij D_j / (F det A)
+```
+
+with `N / E` the depth-0 point and `D / F` the direction in view space.
+
+**Rounding and bound.** Nothing is rounded before the end. Each of the six
+components is its exact ratio rounded once to nearest, ties to even: within
+half a raw unit of the exact value for these matrices. This is the general
+inverse of `clip_from_world = clip_from_view * view_from_world`, not an
+approximation of it: CL-TP-018 checks the result bit for bit against Cramer's
+rule on the full product in unbounded integers. `FixedMat4::try_inverse` is
+not used; it rounds every minor and has no stated bound.
+
+**Widths.** With every raw entry below `2^63` in magnitude and `W, H < 2^32`:
+`|ax|, |ay| < 2^64`, `|E| < 2^253`, `|F| < 2^317`, `|adj_ij| <= 2^127` and
+`|det A| < 2^192`. The largest numerator is below `2^478` and the largest
+denominator below `2^509`, so the kernel's 512-bit signed integers hold every
+intermediate exactly. No float is used.
+
+**Refusals** (`UnprojectError`), checked in this order, each tested on and one
+raw unit either side of its threshold (CL-TP-015 to CL-TP-017):
+
+| Variant | Condition |
+| --- | --- |
+| `OutsideViewport` | `X < 0`, `X > W ONE`, `Y < 0` or `Y > H ONE` (raw) |
+| `UnsupportedProjection` | an entry outside the shape is nonzero, or the last row is neither `(0, 0, -1, 0)` nor `(0, 0, 0, 1)` exactly |
+| `SingularProjection` | `m00 = 0`, `m11 = 0`, or perspective `m23 = 0`, or orthographic `m22 = 0` |
+| `PointAtInfinity` | perspective homogeneous `w = (z_ndc + m22) / m23` is zero: `m22 = 0` (depth 0) or `m22 = -1.0` (depth 1) |
+| `PointBehindCamera` | that `w` is negative at depth `0` or `1`: the sign of `m22` or of `m22 + 1.0` differs from the sign of `m23` |
+| `UnsupportedView` | the last row of `view_from_world` is not `(0, 0, 0, 1)` exactly |
+| `SingularView` | `det A = 0`, decided on the exact raw entries |
+| `Overflow` | a rounded component is outside `i64` (origin first, then direction) |
+| `DegenerateRay` | the rounded direction is zero (the exact one never is) |
+
+A builder's matrix has the accepted shape and signs (`m23 < 0` and
+`m22 <= -1.0` for a perspective one), but its rounded entries can still be
+refused: `m22` rounds to exactly `-1.0` (`PointAtInfinity`) when
+`far / (far - near)` is within half a raw unit of one, and `m23`, or an
+orthographic `m22`, rounds to zero (`SingularProjection`) for extreme depth
+ranges. A perspective matrix with `m23 > 0` and `m22 > 0` (a
+reversed depth range, near and far swapped) is accepted, and its ray still runs
+from the depth-0 point to the depth-1 point, toward the camera.
+
+**Agreement with the cameras.** For 2 400 seeded samples each, the ray
+unprojected through `try_look_at(position, position + look, up)`,
+`try_perspective(tan, W / H, 2^-10, 1024)` (or `try_orthographic` with the
+camera's half extents, near `0`) and `Viewport::try_new(W, H)` lies along
+`PinholeCamera::ray` (or `OrthographicCamera::ray`) of the same `PixelSample`
+(CL-TP-020, CL-TP-021): the directions point the same way, the camera direction is
+within `2^4` raw of the unprojected line, the unprojected origin within `2^4`
+raw of the camera ray, and the camera's origin within `2^4` raw of the
+unprojected line, worst over both cameras. The asserted tolerance, `2^6` raw
+for each, is measured, not proven: the two sides round differently (the camera
+floors its direction to raw units, the builders round each entry and the
+look-at basis), and no closed-form bound is derived for the difference. There
+is no convention mismatch; a flipped handedness, `y` direction or pixel centre
+misses by many orders of magnitude. For the perspective camera the unprojected
+origin is on the near plane, not at the eye, so the origins are compared as
+distances from each other's lines.
+
+**Round trip.** A world point projected exactly, rounded once to raw NDC and
+mapped by `try_ndc_to_viewport` (floor) lands within `W / 4 + 1` raw pixel
+units of its exact viewport coordinate on `x` (`H / 4 + 1` on `y`). At the
+point's clip `w` that moves the line by at most `2 delta w / (W |m00|)` view
+units on `x` (and `y` alike), carried to world by `A^-1`; the kernel adds under
+`1 + |t|` raw at the point's parameter `t`. CL-TP-019 checks each point's
+distance from the unprojected ray against that bound, derived per case in exact
+rationals from those step bounds.
 
 ## Camera Image Convention
 

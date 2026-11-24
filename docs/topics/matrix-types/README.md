@@ -146,21 +146,23 @@ No matrix inverse API panics for singular input.
 
 ## Transform Boundaries
 
-`FixedAffine2` and `FixedAffine3` are affine transform types only. They do not
-claim camera transform, projection matrix, normal matrix, or bounds propagation
-semantics.
+`FixedAffine2` and `FixedAffine3` are affine transform types. They do not claim
+camera transform or projection matrix semantics. Surface normals, rays and
+axis-aligned boxes have their own transforms, documented in the
+[transform chapter](../transform/README.md#rays-boxes-and-normals):
+`FixedAffine3::checked_transform_normal` (the inverse transpose of the linear
+part) in `bunny-linalg`, and `FixedRay3::checked_transform` and
+`FixedAabb3::checked_transform` (the hull of the eight mapped corners) in
+`bunny-geom`. `FixedAffine2` has none of these.
 
 `FixedMat4` is a matrix type. Apart from the projection and look-at builders below, it does
 not claim to be an affine transform, camera transform, normal matrix, or bounds
 propagation API.
 
-Future transform-specific APIs must name the semantic kind they transform:
-
-- normals may need inverse-transpose handling;
-- bounds require explicit propagation rules;
-- viewport conversion requires its own origin convention.
-
-Those semantics are reserved for later roadmap slices.
+Transform-specific APIs name the semantic kind they transform: a normal maps by
+the inverse transpose, a box by an explicit hull rule, and viewport conversion
+has its own origin convention (`Viewport`, defined in the
+[coordinate law](../coordinate-law/README.md#viewport-conversion)).
 
 ## Projection Matrices
 

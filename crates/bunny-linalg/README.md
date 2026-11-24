@@ -28,6 +28,13 @@ math for graphics pipelines.
 * **Viewport Mapping**: `Viewport::try_ndc_to_viewport` and
   `try_viewport_to_ndc` convert between NDC and continuous top-left, y-down
   viewport coordinates with floored raw rounding and typed `ViewportError`s.
+* **Unprojection (`bunny-unproject/1`)**: `Viewport::try_unproject(coordinate,
+  clip_from_view, view_from_world)` returns the world `ViewportRay` from the
+  NDC depth-0 point to the depth-1 point through a continuous viewport
+  coordinate. Every step is inverted exactly in 512-bit integers and each
+  component rounded once, ties to even; bit-equal to the general inverse of
+  `clip_from_world`. Only the builders' two projection shapes and affine views
+  are accepted; refusals are typed `UnprojectError`s.
 * **Look-At View Matrix**: `FixedMat4::try_look_at(eye, target, up)` builds a
   right-handed `view_from_world` matrix (camera looks down `-Z`). The basis is
   orthonormal within 2 raw units; degenerate input, including an `up` that is
@@ -49,6 +56,12 @@ math for graphics pipelines.
   `scale_about_point` are `T(p) * R * T(-p)` and `T(p) * S * T(-p)`, the pivot
   fixed exactly. One ties-to-even rounding per product; `None` on overflow;
   bounds in `docs/topics/transform/`.
+* **Normal Transform**: `FixedAffine3::checked_transform_normal(n)` maps a
+  surface normal by the inverse transpose of the linear part (`try_inverse`,
+  transposed, times `n`), so it stays perpendicular to transformed tangents
+  under a non-uniform scale. Not renormalised; within 3/2 raw of the exact
+  product of the rounded inverse; `None` when the inverse does not exist or
+  the product overflows. See `docs/topics/transform/README.md#normals`.
 * **Geometric Operations**: Native dot products, cross products (for
   `FixedVec3`), squared lengths, lengths, and normalization.
 * **Exact Lerp (`bunny-lerp/1`)**: `FixedVec3::lerp(a, b, t)` and

@@ -21,6 +21,9 @@ layout, and quantization bounds cannot collide.
   [`docs/topics/mesh-topology`](../../docs/topics/mesh-topology/README.md).
 * SHA-256 mesh hashes with domain, bounds, vertex, and face framing
   (`compute_mesh_hash`, `mesh-hash` feature).
+* `mesh_bounds`: the exact box of the vertices a mesh's triangles use, with
+  typed `MeshBoundsError` refusals for an empty mesh and an out-of-range index;
+  see `docs/topics/bounding-volumes/README.md`.
 
 ## Cargo Features
 

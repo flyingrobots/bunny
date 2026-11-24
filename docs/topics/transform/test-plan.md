@@ -3,7 +3,9 @@
 This document defines how Bunny proves [`bunny-transform/1`](README.md):
 `FixedAffine3::from_trs`, `FixedAffine3::rotate_about_point` and
 `FixedAffine3::scale_about_point`, and the composition bound of `checked_mul_affine`. It
-answers flyingrobots/bunny#312.
+answers flyingrobots/bunny#312. It also proves the ray, box and normal transforms of
+flyingrobots/bunny#108: `FixedRay3::checked_transform` and `FixedAabb3::checked_transform` in
+`bunny-geom`, and `FixedAffine3::checked_transform_normal` in `bunny-linalg`.
 
 ## Scope
 
@@ -11,9 +13,11 @@ answers flyingrobots/bunny#312.
   formulas, the single rounding of each product, the bounds in raw units, the overflow
   thresholds, and the acceptance of zero and negative scales.
 - The bound on the two groupings of a product of three affine transforms.
+- The ray image (origin and direction, not renormalised) and its parameter bound; the box hull
+  of the eight rounded corners; the inverse-transpose normal; each refusal and threshold.
 
-Out of scope: normals under a non-uniform scale, decomposing a transform, and the ray and
-bounds helpers of flyingrobots/bunny#108.
+Out of scope: decomposing a transform, a bound on `try_inverse` against the exact inverse, a
+padded or centre-and-extents box transform, and transforms of spheres, triangles or meshes.
 
 ## Requirements
 
@@ -27,6 +31,11 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | TRS-REQ-003 | `rotate_about_point(p, R)` is `T(p) * R * T(-p)`: linear part `R`, translation `p - R p` with `R p` from `checked_mul_vec3`, within 3/2 raw of the exact value; `checked_transform_point(p)` is exactly `p`; `None` exactly when a rounded product, a partial sum or the subtraction leaves the range. | `README.md#rounding-and-bounds` |
 | TRS-REQ-004 | `scale_about_point(p, s)` is `T(p) * S * T(-p)`: linear part `diag(s)`, translation `p_i - s_i p_i` rounded once, within 1/2 raw; the pivot maps onto itself exactly; `None` exactly on overflow; zero and negative scales are accepted. | `README.md#refusals` |
 | TRS-REQ-005 | For three affine transforms, each entry of `(A * B) * C` and of `A * (B * C)` by `checked_mul_affine` is within the documented bound of the exact product `A B C`. | `README.md#composition` |
+| TRS-REQ-010 | `FixedRay3::checked_transform(&a)` gives a `TransformedRay3` whose origin is `a.checked_transform_point(origin)` and whose direction is `a.checked_transform_vector` of the stored unit direction, not renormalised: each component within 3/2 raw of the exact value, and `origin' + t direction'` within `3/2 (1 + abs(t))` raw of the exact image of `origin + t direction` for every real `t`. | `README.md#rays` |
+| TRS-REQ-011 | The ray transform is `Err(OutOfRange)` exactly when the point or the vector transform is `None` (the origin is checked first) and `Err(DegenerateDirection)` exactly when the rounded direction is the zero vector; `TransformedRay3::try_into_ray` renormalises with `FixedRay3::try_new`, after which `t` no longer carries over. | `README.md#rays` |
+| TRS-REQ-012 | `FixedAabb3::checked_transform(&a)` is `Err(InvertedBox)` exactly when a minimum is above its maximum, before any arithmetic; otherwise the per-axis minimum and maximum of the eight corners mapped by `checked_transform_point`, so it contains every rounded corner and each face is within 3/2 raw of the exact hull's; a point box gives the point transform; `Err(OutOfRange)` exactly when a corner's transform is `None`. | `README.md#boxes` |
+| TRS-REQ-013 | `FixedAffine3::checked_transform_normal(n)` is `linear.try_inverse()` transposed times `n` by `checked_mul_vec3`: within 3/2 raw of the exact product of the rounded inverse and `n`, the translation ignored, `None` exactly when `try_inverse` is `None` or a rounded product or partial sum leaves the range; where the inverse and every product are exact, `n' . (L t)` equals `n . t` exactly. | `README.md#normals` |
+| TRS-REQ-014 | The chapter states what a non-uniform scale does to normals (the inverse transpose, then renormalisation) and to bounds (the axis-aligned box of a transformed box is a hull larger than the image; a bounding sphere does not stay a sphere), with worked examples. | `README.md#non-uniform-scale` |
 
 ```toml
 [[requirement]]
@@ -53,6 +62,31 @@ status = "active"
 id = "TRS-REQ-005"
 summary = "Both groupings of a product of three affine transforms are within the documented bound of the exact product."
 status = "active"
+
+[[requirement]]
+id = "TRS-REQ-010"
+summary = "The ray image is the point transform of the origin and the vector transform of the direction, not renormalised; origin' + t direction' is within 3/2 (1 + |t|) raw of the exact image."
+status = "active"
+
+[[requirement]]
+id = "TRS-REQ-011"
+summary = "Ray transform refusals: OutOfRange exactly when a point or vector transform is None, origin first; DegenerateDirection exactly when the rounded direction is zero; try_into_ray renormalises."
+status = "active"
+
+[[requirement]]
+id = "TRS-REQ-012"
+summary = "The box transform refuses an inverted box first, is the per-axis hull of the eight rounded corners, each face within 3/2 raw of the exact hull, and OutOfRange exactly when a corner overflows."
+status = "active"
+
+[[requirement]]
+id = "TRS-REQ-013"
+summary = "checked_transform_normal is the rounded inverse transposed times n, within 3/2 raw of that exact product, None exactly when try_inverse is None or the product overflows."
+status = "active"
+
+[[requirement]]
+id = "TRS-REQ-014"
+summary = "The chapter documents how non-uniform scale affects normals and bounds, with worked examples."
+status = "active"
 ```
 
 ## Oracles
@@ -73,6 +107,24 @@ value, and that each pivot maps onto itself. The goldens come from it; it also f
 `from_trs` thresholds of TRS-TP-006 by bisection. The model is posted on the pull request for
 flyingrobots/bunny#312, not kept in the tree.
 
+The ray, box and normal tests have their own oracles, written in their files and sharing no
+code with the kernels. `oracle_apply` (in `ray_box_transform_tests.rs`) rounds each product by
+`div_euclid` and twice the remainder, range-checks every product, partial sum and translation
+sum with `i64::try_from`, and gives the expected bits and refusal of every point, vector and
+corner. `exact` carries the exact `row . p + t` as `q * 2^32 + r` with `0 <= r < 2^32`, so the
+exact hull faces of full-range boxes are compared without leaving `i128`. The ray parameter
+bound is decided in units of `2^-96` in a domain where every term fits `i128`: linear entries
+below `2^39` raw, origins and translations below `2^46`, `t` below `2^46` raw. The normal
+oracle (in `normal_transform_tests.rs`) takes the rounded inverse from `FixedMat3::try_inverse`
+as given, because the rule is stated against it, and multiplies, rounds and range-checks on its
+own; the rounded inverse itself is pinned by TRS-TP-030.
+
+A second Python model, written from the [chapter](README.md) with unbounded integers, applies
+the documented rules (including `try_inverse`, rounded minors, determinant and division) to the
+golden inputs of TRS-TP-029 and TRS-TP-030, and checks in `Fraction` that every ray, box and
+normal component is within 3/2 raw of its exact value. The goldens come from it. It is posted on
+the pull request for flyingrobots/bunny#108, not kept in the tree.
+
 ## Fixtures
 
 None. TRS-TP-005 draws 10 000 cases from seed `0xB002_0312_0000_0001` with a 64-bit LCG: a
@@ -83,6 +135,19 @@ right by 0 to 63 bits, so every magnitude up to the range limit occurs. Of the c
 `0xB002_0312_0000_0001 ^ 8`, each transform `from_trs` of a translation within 4096, the
 product `rotation_x(a) * rotation_z(b)` of two seeded angles and a scale within 4 in each
 component (zero and negative included). Every failure message names the seed and the case.
+
+TRS-TP-022 draws 10 000 full-range rays from seed `0xB002_0108_0000_0001` (each raw component a
+uniform 64-bit pattern shifted right by 0 to 63 bits; the direction is `FixedUnitVec3::new` of
+such a vector, and the 1 095 draws it refuses are skipped): 4 115 are in range, 4 790
+`OutOfRange` and none degenerate (degenerate directions are covered by TRS-TP-021). It then
+draws 10 000 rays in the moderate domain of the parameter bound from seed `0xB002_0108_0000_0001
+^ 2`. TRS-TP-025 draws 10 000 full-range boxes from seed `0xB002_0108_0000_0001 ^ 1`, each box
+the per-axis minimum and maximum of two seeded points: 2 370 are in range. TRS-TP-028 draws
+10 000 matrices and normals from seed `0xB002_0108_0000_0002`, each raw component below `2^36`
+and shifted right by 28 to 63 bits: 6 662 are in range, 3 335 are `None` from `try_inverse` and 3
+from the product. It then draws 10 000 exactly invertible transforms from seed
+`0xB002_0108_0000_0002 ^ 1`: scales `+-2^k` units for `k` in `-8..=8`, rows permuted, and
+vectors whose raw components are multiples of `2^12` below `2^39`. The tests pin these counts.
 
 ## Test Cases
 
@@ -97,6 +162,19 @@ component (zero and negative included). Every failure message names the seed and
 | TRS-TP-007 | Exact cases | TRS-REQ-002, TRS-REQ-004 | A zero scale gives determinant exactly zero and no inverse; the scale `(-1, 1, 1)` gives determinant exactly `-1` and the mirror image; a zero scale about a pivot maps every point onto the pivot. | `crates/bunny-linalg/tests/transform_tests.rs::trs_tp_007_zero_and_negative_scales_are_accepted` |
 | TRS-TP-008 | Seeded bound | TRS-REQ-005 | 10 000 seeded triples: every entry of `(A * B) * C` and `A * (B * C)` is within its documented bound of the exact `A B C`, decided exactly in `i128`. | `crates/bunny-linalg/tests/transform_tests.rs::trs_tp_008_composition_is_associative_within_the_rounding_bound` |
 | TRS-TP-009 | Mutation | TRS-REQ-001, TRS-REQ-002, TRS-REQ-003, TRS-REQ-004 | Each rule broken on purpose fails at least one case above. | [Mutations](#mutations) |
+| TRS-TP-020 | Hand-derived | TRS-REQ-010, TRS-REQ-011 | Scale `(2, 1, 1)` then translate `(1, 0, 0)`: the ray from `(1, 0, 0)` along `+X` maps to origin `(3, 0, 0)` and direction `(2, 0, 0)`; the original point at `t = 3`, `(4, 0, 0)`, maps to `(9, 0, 0)`, the transformed ray at the same `t`; renormalised, the direction is `+X` and `t = 3` reaches `(6, 0, 0)`. The identity and a translation keep the direction. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_020_ray_image_keeps_its_parameter` |
+| TRS-TP-021 | Boundary | TRS-REQ-011 | `m00 = i64::MAX` raw times the unit `+X` (`2^32`) is `i64::MAX`, `2^32 + 1` is `OutOfRange`, `2^32 - 1` fits; the same at `i64::MIN`; an origin reaching `i64::MAX` through the translation, one raw unit past; a zero scale collapsing `+X` is `DegenerateDirection`; `m00 = 1` raw rounds `d_x = 2^31 - 1` and the tie `2^31` to zero (degenerate) and `2^31 + 1` to 1 raw; an out-of-range origin with a zero direction is `OutOfRange`. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_021_ray_refusals_one_raw_unit_either_side` |
+| TRS-TP-022 | Seeded oracle | TRS-REQ-010, TRS-REQ-011 | 10 000 seeded full-range rays: the result and bits equal the oracle's; the in-range, out-of-range and degenerate counts are pinned. 10 000 seeded rays in a moderate domain: `origin' + t direction'` is within `3/2 (1 + abs(t))` raw of the exact image of `origin + t direction`, decided exactly in `i128`. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_022_seeded_rays_match_the_oracle_and_the_parameter_bound` |
+| TRS-TP-023 | Hand-derived | TRS-REQ-012 | An eighth turn about `+Z` (entries `c = round(2^32 / sqrt 2)` raw) maps the unit cube to the hull `(-c, 0, 0)` to `(c, 2c, 1)`, about twice the cube's volume; a negative scale with a translation swaps which corner is the minimum; the identity gives the box back and a translation moves both corners by it; a point box gives the point transform as a point box. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_023_box_hull_of_a_rotated_cube_and_a_point` |
+| TRS-TP-024 | Boundary | TRS-REQ-012 | A minimum above its maximum on each axis is `InvertedBox` (as `FixedAabb3::try_new` refuses it), an equal pair is accepted, and an inverted box is refused even under an overflowing transform; a maximum reaching `i64::MAX` and a minimum reaching `i64::MIN` through the translation, one raw unit past each; the product `2 x` at `x = 2^62 - 1` and `2^62` raw. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_024_box_refusals_one_raw_unit_either_side` |
+| TRS-TP-025 | Seeded oracle | TRS-REQ-012 | 10 000 seeded full-range boxes: `OutOfRange` exactly when an oracle corner is out of range; otherwise each face equals the minimum or maximum of the eight oracle corners and is within 3/2 raw of the exact hull face; the in-range count is pinned. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_025_seeded_boxes_contain_every_rounded_corner` |
+| TRS-TP-026 | Hand-derived | TRS-REQ-013 | Scale `(2, 1, 1)`: the normal `(1, 1, 0)` maps to `(1/2, 1, 0)` and the tangent `(1, -1, 0)` to `(2, -1, 0)`, dot product exactly 0, while the linear image `(2, 1, 0)` gives 3; the translation is ignored; a quarter turn gives the vector transform; a uniform scale 2 gives `n / 2`; the mirror `(-1, 1, 1)` maps `+X` to `-X`. | `crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_026_non_uniform_scale_keeps_normals_perpendicular` |
+| TRS-TP-027 | Boundary | TRS-REQ-013 | A zero scale is `None`; `diag(1, 1, 1)` raw is nonsingular but its rounded determinant is zero, `None`; the inverse entry of `2` raw is `2^63` raw (`None`), of `3` raw `0x5555_5555_5555_5555`; that entry times `n_x = 1.5 - 1` raw fits, `1.5` and `1.5 + 1` raw are `None`, `-1.5` gives `i64::MIN` and `-1.5 - 1` raw is `None`. | `crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_027_normal_refusals_one_raw_unit_either_side` |
+| TRS-TP-028 | Seeded oracle | TRS-REQ-013 | 10 000 seeded matrices and normals: the result equals the oracle applied to the rounded inverse, within 3/2 raw of the exact product; the in-range and `None` counts are pinned. 10 000 seeded exactly invertible transforms (power-of-two scales, signed permutations): `n' . (M t)` equals `n . t` exactly. | `crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_028_seeded_normals_match_the_oracle` |
+| TRS-TP-029 | Pinned golden | TRS-REQ-010, TRS-REQ-012 | Raw ray image and box hull for one sheared, non-uniformly scaled transform with rounding in every product, from the Python model. Runs in the WebAssembly gate. | `crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_029_pinned_goldens` |
+| TRS-TP-030 | Pinned golden | TRS-REQ-013 | The rounded inverse and normal image for the same matrix, and the exact dot products of the normal image and of the linear image with a transformed tangent, from the Python model. Runs in the WebAssembly gate. | `crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_030_pinned_normal_golden` |
+| TRS-TP-031 | Mutation | TRS-REQ-010, TRS-REQ-011, TRS-REQ-012, TRS-REQ-013 | Each rule of the ray, box and normal transforms broken on purpose fails at least one case above. | [Mutations](#mutations) |
+| TRS-TP-032 | Documentation audit | TRS-REQ-014 | The chapter's section on non-uniform scale states the normal rule, the hull rule and the sphere rule, with the worked examples of TRS-TP-023 and TRS-TP-026. | [Non-uniform scale](README.md#non-uniform-scale) |
 
 ```toml
 [[case]]
@@ -179,6 +257,123 @@ artifact = "docs/topics/transform/test-plan.md#mutations"
 oracle = "Each rule broken on purpose fails at least one case."
 tier = "manual"
 status = "implemented"
+
+[[case]]
+id = "TRS-TP-020"
+requirements = ["TRS-REQ-010", "TRS-REQ-011"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_020_ray_image_keeps_its_parameter"
+oracle = "Hand-derived ray image at a fixed parameter; renormalisation."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-021"
+requirements = ["TRS-REQ-011"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_021_ray_refusals_one_raw_unit_either_side"
+oracle = "Hand-derived thresholds, one raw unit either side."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-022"
+requirements = ["TRS-REQ-010", "TRS-REQ-011"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_022_seeded_rays_match_the_oracle_and_the_parameter_bound"
+oracle = "Independent i128 oracle; exact parameter bound over seeded rays."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-023"
+requirements = ["TRS-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_023_box_hull_of_a_rotated_cube_and_a_point"
+oracle = "Hand-derived corner images of a rotated cube."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-024"
+requirements = ["TRS-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_024_box_refusals_one_raw_unit_either_side"
+oracle = "Hand-derived thresholds, one raw unit either side."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-025"
+requirements = ["TRS-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_025_seeded_boxes_contain_every_rounded_corner"
+oracle = "Independent i128 corner oracle and exact hull faces over seeded boxes."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-026"
+requirements = ["TRS-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_026_non_uniform_scale_keeps_normals_perpendicular"
+oracle = "Hand-derived inverse transposes and dot products."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-027"
+requirements = ["TRS-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_027_normal_refusals_one_raw_unit_either_side"
+oracle = "Hand-derived thresholds, one raw unit either side."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-028"
+requirements = ["TRS-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_028_seeded_normals_match_the_oracle"
+oracle = "Independent i128 product oracle; exact dot products."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-029"
+requirements = ["TRS-REQ-010", "TRS-REQ-012"]
+evidence = "test"
+test = "crates/bunny-geom/tests/ray_box_transform_tests.rs::trs_tp_029_pinned_goldens"
+oracle = "Raw goldens from the Python model, each checked in Fraction against the exact value."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-030"
+requirements = ["TRS-REQ-013"]
+evidence = "test"
+test = "crates/bunny-linalg/tests/normal_transform_tests.rs::trs_tp_030_pinned_normal_golden"
+oracle = "Raw goldens from the Python model, each checked in Fraction against the exact value."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-031"
+requirements = ["TRS-REQ-010", "TRS-REQ-011", "TRS-REQ-012", "TRS-REQ-013"]
+evidence = "manual-audit"
+artifact = "docs/topics/transform/test-plan.md#mutations"
+oracle = "Each rule of the ray, box and normal transforms broken on purpose fails at least one case."
+tier = "manual"
+status = "implemented"
+
+[[case]]
+id = "TRS-TP-032"
+requirements = ["TRS-REQ-014"]
+evidence = "manual-audit"
+artifact = "docs/topics/transform/README.md#non-uniform-scale"
+oracle = "The chapter states the normal, hull and sphere rules with worked examples."
+tier = "manual"
+status = "implemented"
 ```
 
 ## Mutations
@@ -198,6 +393,24 @@ the kernel restored; each fails the named cases.
 | `scale_about_point` permutes the scale components | TRS-TP-002, TRS-TP-003, TRS-TP-004, TRS-TP-005, TRS-TP-006 |
 
 TRS-TP-008 tests the existing `checked_mul_affine` and no kernel line of this contract.
+
+The ray, box and normal mutations (TRS-TP-031) were applied to `crates/bunny-geom/src/transform.rs`
+or `crates/bunny-linalg/src/fixed_affine3_normal.rs`, `ray_box_transform_tests` and
+`normal_transform_tests` run, and the kernel restored:
+
+| Mutation | Fails |
+| --- | --- |
+| The ray direction mapped as a point (translated) | TRS-TP-020, TRS-TP-022, TRS-TP-029 |
+| The ray origin mapped as a vector (not translated) | TRS-TP-020, TRS-TP-021, TRS-TP-022, TRS-TP-029 |
+| The ray direction renormalised | TRS-TP-020, TRS-TP-021, TRS-TP-022, TRS-TP-029 |
+| A zero ray direction accepted | TRS-TP-021 |
+| An inverted box accepted | TRS-TP-024 |
+| The box hull of the minimum and maximum corners only | TRS-TP-023, TRS-TP-025, TRS-TP-029 |
+| An out-of-range corner skipped instead of refused | TRS-TP-024, TRS-TP-025 |
+| The corner's `y` chosen by the `z` bit | TRS-TP-025, TRS-TP-029 |
+| The normal by the inverse, not its transpose | TRS-TP-026, TRS-TP-028, TRS-TP-030 |
+| The normal by the linear part | TRS-TP-026, TRS-TP-027, TRS-TP-028, TRS-TP-030 |
+| The normal by the transpose, without the inverse | TRS-TP-026, TRS-TP-027, TRS-TP-028, TRS-TP-030 |
 
 ## Determinism Obligations And Evidence
 
