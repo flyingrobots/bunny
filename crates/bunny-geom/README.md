@@ -67,6 +67,12 @@ that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
 * Future collision, swept-volume, and richer shape coverage is tracked in
   `ROADMAP.md` rather than claimed as current `bunny-geom` behavior.
 
+## Examples
+
+| Command | Shows |
+| --- | --- |
+| `cargo run -p bunny-geom --example float_boundary` | A float ray and box converted into `FixedRay3` and `FixedAabb3` with their exact raw values, and one typed `GeomError` refusal each for NaN, an infinity, a value outside Q32.32, a zero ray direction and an inverted float and fixed box. |
+
 ## License
 
 Apache-2.0.

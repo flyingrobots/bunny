@@ -28,6 +28,12 @@ buffer is large enough for the requested operation.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 
+## Examples
+
+| Command | Shows |
+| --- | --- |
+| `cargo run -p bunny-broadphase --example bvh_ray_query` | `build_bvh_sah` into caller-sized buffers over four `TraceTriangle`s, `closest_hit` with its hit distance, facing and barycentrics, `any_hit` for a ray that misses, and a ray refused for leaving the trace domain. |
+
 ## License
 
 Apache-2.0.

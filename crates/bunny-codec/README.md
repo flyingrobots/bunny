@@ -73,3 +73,13 @@ The compressed decoder is covered by:
   independent decimal-string oracle on seeded inputs, a refusal corpus with one
   typed error and line number per case, and a native allocation witness
   (`tests/ply_ascii_*.rs`).
+
+## Examples
+
+The inputs are built in memory and no example reads a file, so the examples
+ship in the published package with nothing missing.
+
+| Command | Shows |
+| --- | --- |
+| `cargo run -p bunny-codec --example decode_compressed_mesh` | A tetrahedron encoded in the compressed profile v1, decoded with `decode_compressed_mesh`, its vertices dequantized with `bunny_mesh::dequantize_vertex` and its triangles read back, and the typed refusal of a stream one byte short. |
+| `cargo run -p bunny-codec --example mesh_hash` | The same tetrahedron read from OBJ, ASCII PLY and binary PLY, converted to Q32.32 and quantized against `mesh_bounds`, giving one `compute_mesh_hash` value for all three. Needs the default `mesh-hash` feature. |
