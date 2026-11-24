@@ -28,6 +28,7 @@ use bunny_num::{is_finite, FixedQ32_32, Scalar};
 mod bounds;
 mod conversions;
 mod plane;
+mod predicates;
 mod transform;
 
 pub use plane::{
@@ -36,6 +37,16 @@ pub use plane::{
 pub use transform::{TransformError, TransformedRay3};
 
 pub use bounds::{BoundsError, BOUNDS_CONTRACT_ID};
+
+mod frustum;
+
+pub use frustum::{FixedFrustum, FrustumClass, FrustumSphereError};
+pub use predicates::{
+    barycentric2, barycentric3_coplanar, doubled_signed_area2, orientation2, orientation3,
+    sextupled_signed_volume3, signed_area2_rounded, signed_volume3_rounded, ExactBarycentric,
+    ExactDeterminant, Orientation2, Orientation3, TriangleEdge, TriangleLocation, TriangleVertex,
+    PREDICATES_CONTRACT_ID,
+};
 
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

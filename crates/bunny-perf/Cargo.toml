@@ -14,7 +14,7 @@ path = "src/main.rs"
 workspace = true
 
 [features]
-default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "pixel", "trace_compact", "trace_counted", "build", "sah", "shade", "normals", "smooth", "texture"]
+default = ["num", "linalg", "query", "angle", "scene", "trace", "prepared", "sample", "pixel", "trace_compact", "trace_counted", "build", "sah", "shade", "normals", "smooth", "texture", "convert", "sweep"]
 # Each group compiles only against the APIs it times, so `cargo xtask perf --base <rev>` can
 # build the same harness against an older Bunny that lacks a newer group.
 num = []
@@ -46,11 +46,23 @@ normals = []
 smooth = ["trace", "shade"]
 # Texture coordinates and bilinear lookups (`bunny-texture-bilinear/1`) on seeded hits.
 texture = []
+# Q32.32 conversions at the f32 boundary (`try_from_f32`, `to_f32`).
+convert = []
+# `sweep_and_prune` of `bunny-broadphase` on a seeded scene of boxes.
+sweep = []
+# Mesh quantization and the mesh hash (`bunny-mesh`), and decoding from each `bunny-codec`
+# format, on a seeded height-field grid. Not in `default`, so the default build of this
+# harness does not pull in either crate (or `sha2`); `cargo xtask perf` and
+# `code-dojo-perf-groups` build every group the manifest declares, so both still run there.
+mesh = ["dep:bunny-mesh"]
+codec = ["dep:bunny-codec", "dep:bunny-mesh"]
 
 [dependencies]
 bunny-broadphase = { path = "../bunny-broadphase", version = "0.7.1" }
+bunny-codec = { path = "../bunny-codec", version = "0.7.1", optional = true }
 bunny-geom = { path = "../bunny-geom", version = "0.7.1" }
 bunny-linalg = { path = "../bunny-linalg", version = "0.7.1" }
+bunny-mesh = { path = "../bunny-mesh", version = "0.7.1", optional = true }
 bunny-num = { path = "../bunny-num", version = "0.7.1" }
 bunny-optics = { path = "../bunny-optics", version = "0.7.1" }
 bunny-query = { path = "../bunny-query", version = "0.7.1" }
