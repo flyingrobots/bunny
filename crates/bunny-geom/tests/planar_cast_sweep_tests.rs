@@ -112,7 +112,8 @@ fn direction(state: &mut u64) -> FixedUnitVec2 {
     }
 }
 
-/// A ray and a point `o + k d` on it (clamped), `k` a small or large count of directions,
+/// A ray and a point `o + k d` on it (clamped), `k` a small or large count of directions, up
+/// to about `2^32` so that some contacts are beyond the parameter range,
 /// sometimes negative so the point is behind the origin.
 fn ray_and_target(state: &mut u64) -> (FixedRay2, FixedVec2, [i128; 2]) {
     let d = direction(state);
@@ -120,7 +121,7 @@ fn ray_and_target(state: &mut u64) -> (FixedRay2, FixedVec2, [i128; 2]) {
     let k = if next(state).is_multiple_of(2) {
         i128::from(small(state, 12))
     } else {
-        i128::from(spread(state) >> 33)
+        i128::from(spread(state) >> 31)
     };
     let step = wide(d.into_inner());
     (FixedRay2::new(o, d), offset(o, k, step, [0, 0]), step)
@@ -232,8 +233,12 @@ fn planar_tp_018_seeded_ray_queries_match_the_oracle() {
         parallel_hits += u32::from(hit.is_hit() && parallel(r, s));
     }
     println!("planar_tp_018 [hit,at_zero,beyond] box,circle,segment={counts:?} parallel_hits={parallel_hits}");
-    assert_eq!(counts, [[0; 3]; 3], "seed={SEED_RAYS:#018x}");
-    assert_eq!(parallel_hits, 0, "seed={SEED_RAYS:#018x}");
+    assert_eq!(
+        counts,
+        [[8_788, 3_958, 4], [8_879, 4_183, 2], [9_330, 2_521, 105]],
+        "seed={SEED_RAYS:#018x}"
+    );
+    assert_eq!(parallel_hits, 4_001, "seed={SEED_RAYS:#018x}");
 }
 
 /// A polygon of zero to eight vertices: on a small lattice (many repeated and collinear
@@ -303,5 +308,5 @@ fn planar_tp_019_seeded_point_in_polygon_matches_the_oracle() {
         counts[3] += u32::from(winding.is_some_and(|w| w.abs() > 1));
     }
     println!("planar_tp_019 inside,boundary,outside,winding_above_one={counts:?}");
-    assert_eq!(counts, [0; 4], "seed={SEED_POLYGONS:#018x}");
+    assert_eq!(counts, [4_342, 3_841, 21_817, 106], "seed={SEED_POLYGONS:#018x}");
 }

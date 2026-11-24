@@ -156,6 +156,13 @@ fn planar_tp_014_ray_circle_hits_are_closed_and_exact() {
     check_circle(shallow, circle(U, 2, 0), MISS);
     check_circle(shallow, circle(U, 3, 1), MISS);
     check_circle(shallow, circle(10 * U, 0, U), at(38_654_705_664));
+    // A first root just below a rounding boundary: with `w_y = 3 10^9`, `k = w_y^2` and
+    // `r = k + 1`, `r^2 - w_y^2 = k^2 + k + 1`, whose square root is `k + 1/2` plus about
+    // `4.2 10^-20`, under `2^-64`. From the centre `(k + 2, w_y)` the root is `3/2` minus that,
+    // which rounds to 1; `(2^32 b - floor(sqrt(V))) / a` would be the tie `3/2`, rounding to 2.
+    let k = 9_000_000_000_000_000_000;
+    check_circle(o, circle(k + 2, 3_000_000_000, k + 1), at(1));
+    check_circle(o, circle(k + 3, 3_000_000_000, k + 1), at(2));
     // At the ends of the range: the parameter `2^63 - 1` fits and `2^63` does not.
     let far = ray(MIN, 0, X);
     check_circle(far, circle(MAX - 1, 0, MAX), at(MAX));
@@ -217,7 +224,9 @@ fn planar_tp_015_ray_segment_hits_are_closed_and_exact() {
     check_segment(shallow, seg((U, 1), (2 * U, 2)), at(U));
     check_segment(shallow, seg((U, 0), (U, 1)), at(U));
     check_segment(shallow, seg((U, 2), (U, 3)), MISS);
-    check_segment(shallow, seg((U + 1, 0), (U + 1, 1)), at(U + 1));
+    // At `x = 2^32 + 1` the ray is at `y = 1 + 2^-32`, just above the first segment.
+    check_segment(shallow, seg((U + 1, 0), (U + 1, 1)), MISS);
+    check_segment(shallow, seg((U + 1, 1), (U + 1, 2)), at(U + 1));
     // At the ends of the range.
     let far = ray(MIN, 0, X);
     check_segment(far, seg((-1, MIN), (-1, MAX)), at(MAX));

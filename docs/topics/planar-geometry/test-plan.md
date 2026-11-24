@@ -186,7 +186,9 @@ run.
 | PLANAR-TP-017 | PLANAR-REQ-014, PLANAR-REQ-015 | Constructed: zero, one and two vertices, repeated consecutive vertices, a collinear run, one repeated point, zero-area polygons doubling back, a bow tie, a pentagram whose centre has winding number 2 (inside; the oracle's even-odd count says outside), and a square traced twice; every starting vertex, both windings and the oracle. | `crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_017_polygon_degenerate_and_self_intersecting_inputs` |
 | PLANAR-TP-018 | PLANAR-REQ-010, PLANAR-REQ-011, PLANAR-REQ-012, PLANAR-REQ-013 | 30 000 seeded rays (seed `0x0149_0002_0000_0012`, printed) with axis, shallow and random directions, each against a box with a corner by a point on the ray, a circle near tangency to the ray's line, and a segment across, along or ending on that line, each moved by a raw unit; every hit decision and parameter equals the oracle, `intersects_` agrees with `hit_`, segment endpoint order does not matter, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_018_seeded_ray_queries_match_the_oracle` |
 | PLANAR-TP-019 | PLANAR-REQ-014, PLANAR-REQ-015 | 30 000 seeded polygons of zero to eight vertices (seed `0x0149_0002_0000_0013`, printed) on a small lattice, of any magnitude and from the ends of the range, with points on and a raw unit off their vertices and edge midpoints; every classification equals the oracle's winding number, is unchanged by reversal and rotation, and the outcome counts are pinned. | `crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_019_seeded_point_in_polygon_matches_the_oracle` |
-| PLANAR-TP-020 | PLANAR-REQ-010, PLANAR-REQ-011, PLANAR-REQ-012, PLANAR-REQ-013, PLANAR-REQ-014, PLANAR-REQ-015 | Each rule of the second slice broken on purpose fails at least one case above. | [Mutation checks of the second slice](#mutation-checks-of-the-second-slice) |
+| PLANAR-TP-021 | PLANAR-REQ-013 | Exhaustive small grid, checked by squaring with no square root: the circle root rounding over `a` in `1..=10`, `2^33`, `3 2^33` and `2^35`, every `b` in `1..=16` and every discriminant in `0..=b^2`, covering perfect and non-perfect squares, both halves of `(s, s + 1)`, and 114 exact ties (pinned). | `crates/bunny-geom/src/planar/ray/root.rs::tests::planar_tp_021_first_root_rounds_once_on_a_small_exhaustive_grid` |
+| PLANAR-TP-022 | PLANAR-REQ-013 | Constructed: the 256-bit integer square root of `k^2`, `k^2 - 1` and `k^2 + 2k` for `k` from 1 to `2^128 - 1` (so up to `2^256 - 1`), and of 0 to 4. | `crates/bunny-geom/src/wide.rs::tests::planar_tp_022_isqrt_is_exact_at_squares_and_one_either_side` |
+| PLANAR-TP-020 | PLANAR-REQ-010, PLANAR-REQ-011, PLANAR-REQ-012, PLANAR-REQ-013, PLANAR-REQ-014, PLANAR-REQ-015 | Each rule of the second slice broken on purpose fails at least one case above; one equivalent mutation is argued. | [Mutation checks of the second slice](#mutation-checks-of-the-second-slice) |
 
 ```toml
 [[case]]
@@ -304,7 +306,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_013_ray_box_hits_are_closed_and_exact"
 oracle = "Constructed raw rays and boxes on and one raw unit either side of each contact, each also checked against the edge-by-edge oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-014"
@@ -313,7 +315,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_014_ray_circle_hits_are_closed_and_exact"
 oracle = "Pythagorean chords and tangents and irrational roots, each also checked against the nearest-point and square-root-free quadratic oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-015"
@@ -322,7 +324,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_ray_tests.rs::planar_tp_015_ray_segment_hits_are_closed_and_exact"
 oracle = "Constructed raw rays and segments, parallel and collinear included, each also checked against the line-side interpolation oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-016"
@@ -331,7 +333,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_016_point_in_polygon_is_exact_and_closed"
 oracle = "Constructed raw polygons and points on and one raw unit either side of edges and vertices, each also checked against the crossing-abscissa winding oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-017"
@@ -340,7 +342,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_polygon_tests.rs::planar_tp_017_polygon_degenerate_and_self_intersecting_inputs"
 oracle = "Constructed degenerate and self-intersecting polygons, each also checked against the crossing-abscissa winding oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-018"
@@ -349,7 +351,7 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_018_seeded_ray_queries_match_the_oracle"
 oracle = "Independent big-integer oracles over 30 000 seeded rays with contact-hugging boxes, circles and segments."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-019"
@@ -358,7 +360,25 @@ evidence = "test"
 test = "crates/bunny-geom/tests/planar_cast_sweep_tests.rs::planar_tp_019_seeded_point_in_polygon_matches_the_oracle"
 oracle = "Independent crossing-abscissa winding oracle over 30 000 seeded polygons and boundary-hugging points."
 tier = "fast"
-status = "planned"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-021"
+requirements = ["PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/src/planar/ray/root.rs::tests::planar_tp_021_first_root_rounds_once_on_a_small_exhaustive_grid"
+oracle = "Exhaustive small grid checked by squaring, with no square root."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PLANAR-TP-022"
+requirements = ["PLANAR-REQ-013"]
+evidence = "test"
+test = "crates/bunny-geom/src/wide.rs::tests::planar_tp_022_isqrt_is_exact_at_squares_and_one_either_side"
+oracle = "Squares built by multiplication and one either side, up to 2^256 - 1."
+tier = "fast"
+status = "implemented"
 
 [[case]]
 id = "PLANAR-TP-020"
@@ -367,7 +387,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/planar-geometry/test-plan.md#mutation-checks-of-the-second-slice"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
@@ -421,5 +441,53 @@ own mutation table records what they break there.
 
 ## Mutation Checks Of The Second Slice
 
-Planned: each rule of the ray queries and point in polygon broken on purpose in a local
-copy of the kernel, with the cases recorded here.
+Each rule below was broken on purpose in a local copy of `crates/bunny-geom/src/planar/ray.rs`,
+`crates/bunny-geom/src/planar/ray/root.rs`, `crates/bunny-geom/src/planar/polygon.rs` or
+`crates/bunny-geom/src/wide.rs`, and `cargo test --locked --no-fail-fast -p bunny-geom --lib
+--test planar_ray_tests --test planar_polygon_tests --test planar_cast_sweep_tests` was run
+with `RUSTFLAGS=--cap-lints=warn`, so that a mutation leaving code unused still compiles; the
+source was restored after each. The unmutated source passed every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| A zero direction component ignores the origin's slab | Off-slab origin misses | 013, 018 |
+| The hit test is `entry < exit` | Grazing hits | 013, 018 |
+| The entry is not clamped at zero | `t >= 0` | 013, 018 |
+| Entry and exit are not swapped for `d < 0` | Slab order by sign | 013, 018 |
+| The box hit is decided on rounded bounds | Exact decision | 013 (the `(1, 3 2^-32)` corner), 018 |
+| `hit_aabb` returns the exit | Least parameter | 013, 018 |
+| A parameter above `i64::MAX` saturates to `At(MAX)` | `Beyond` | 013, 014, 015, 018 |
+| A tangent is a miss | Closed disc | 014, 018 |
+| A circle behind the origin is not refused | `b > 0` | 014, 018 |
+| The origin-in-disc case is dropped | Zero from inside | 014, 018 |
+| A negative radius is not refused | Negative radius is empty | 014, 018 |
+| The circle root is `b + sqrt(D)` | First root | 014, 018, 021 |
+| The floor root is rounded without the irrational adjustment | Rounded once from the exact root | 014 (the root `3/2 - 4.2 10^-20`), 021 |
+| The `V <= s^2 + s` test is inverted | Which half of `(s, s + 1)` | 021 |
+| `isqrt` returns one more | Exact square root | 021, 022 |
+| `u > 1` is accepted | Within the segment | 015, 018 |
+| `t < 0` is accepted | Ahead of the origin | 015, 018 |
+| `u < 0` is accepted | Within the segment | 015, 018 |
+| A parallel segment off the line is read as collinear | Parallel misses | 015, 018 |
+| A collinear segment returns its far end | Least parameter | 015, 018 |
+| A collinear entry is not clamped at zero | `t >= 0` | 015, 018 |
+| A collinear segment behind the origin is accepted | `t >= 0` | 015, 018 |
+| Ties go up (shared `round_div`) | Ties to even | 015, 018, 021 |
+| The quotient is truncated (shared `round_div`) | Round to nearest | 015, 018, 021 |
+| The polygon boundary test is skipped | Boundary is three-way | 016, 017, 019 |
+| The polygon boundary is only its vertices | Edges are boundary | 016, 017, 019 |
+| The closing edge is omitted | `v[n - 1]` to `v[0]` | 016, 017, 019 |
+| A rising edge is closed at the top | Half-open rule | 016, 017, 019 |
+| A rising edge is open at the bottom | Half-open rule | 016, 017, 019 |
+| Even-odd parity replaces the winding number | Nonzero rule | 017 (the pentagram, the square traced twice), 019 |
+| Falling edges are ignored | Signed winding | 016, 017, 019 |
+| A rising edge counts a point on its right | Orientation side | 016, 017, 019 |
+
+One mutation survived and is equivalent: removing the `is_ordered` refusal at the start of
+the ray-box test. On an axis where the box is inverted (`lo > hi`), a zero direction
+component cannot put the origin in `[lo, hi]`, which is empty, and a nonzero one gives an
+entry fraction above the exit fraction, so `max(entries) <= min(exits)` already fails. The
+explicit refusal is kept because it states the empty-set rule directly.
+
+The `wide.rs` mutations also change the shared rounding of `bunny-predicates/1` and of the
+segment closest point, whose own mutation tables record what they break there.

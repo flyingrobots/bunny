@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-geom`: 2D ray queries and point in polygon under `bunny-planar/1`, a
+  second slice of flyingrobots/bunny#149. `FixedRay2::intersects_aabb`,
+  `intersects_circle` and `intersects_segment` decide a closed hit exactly on
+  the direction's raw value as given (slab fractions; the discriminant
+  `|d|^2 r^2 - (w x d)^2` in 256 bits; Cramer's rule with the parallel and
+  collinear cases specified); grazing and endpoint contacts hit. `hit_aabb`,
+  `hit_circle` and `hit_segment` return a `RayHit2`: `Miss`, `At(t)` with the
+  least exact parameter rounded once, ties to even (the circle root from an
+  exact 256-bit integer square root), or `Beyond` when it rounds above
+  `i64::MAX`. `FixedPolygon2` borrows a vertex slice (`no_std`, no `alloc`)
+  and `classify_point` returns `PolygonLocation::Inside`, `Boundary` or
+  `Outside` from exact `orientation2` signs, by the nonzero winding rule;
+  degenerate and self-intersecting input is accepted, not detected.
+  `docs/topics/planar-geometry/` (PLANAR-REQ-010 to -015, PLANAR-TP-013 to
+  -022). Refs flyingrobots/bunny#149.
+
 * `bunny-codec`: binary STL import under `bunny-binary-stl-triangle-mesh/1`.
   `parse_binary_stl` reads an 80-byte header (not interpreted), a little-endian
   `u32` triangle count and 50-byte records into a borrowed, fully validated

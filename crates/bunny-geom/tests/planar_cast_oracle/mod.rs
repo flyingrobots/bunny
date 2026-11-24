@@ -219,8 +219,8 @@ pub(crate) fn parameter_is(fraction: Option<&Fraction>, hit: RayHit2) -> bool {
 pub(crate) fn winding(vertices: &[FixedVec2], p: FixedVec2) -> Option<i64> {
     let n = vertices.len();
     let mut total = 0_i64;
-    for i in 0..n {
-        let (a, b) = (vertices[i], vertices[(i + 1) % n]);
+    for (i, &a) in vertices.iter().enumerate() {
+        let b = vertices[(i + 1) % n];
         if on_segment(a, b, p) {
             return None;
         }
@@ -246,8 +246,8 @@ pub(crate) fn winding(vertices: &[FixedVec2], p: FixedVec2) -> Option<i64> {
 pub(crate) fn crossings_odd(vertices: &[FixedVec2], p: FixedVec2) -> Option<bool> {
     let n = vertices.len();
     let mut odd = false;
-    for i in 0..n {
-        let (a, b) = (vertices[i], vertices[(i + 1) % n]);
+    for (i, &a) in vertices.iter().enumerate() {
+        let b = vertices[(i + 1) % n];
         if on_segment(a, b, p) {
             return None;
         }

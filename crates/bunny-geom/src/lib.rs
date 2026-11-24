@@ -212,4 +212,7 @@ pub use shapes::{
 
 mod planar;
 
-pub use planar::{FixedAabb2, FixedCircle2, FixedRay2, FixedSegment2, PLANAR_CONTRACT_ID};
+pub use planar::{
+    FixedAabb2, FixedCircle2, FixedPolygon2, FixedRay2, FixedSegment2, PolygonLocation, RayHit2,
+    PLANAR_CONTRACT_ID,
+};

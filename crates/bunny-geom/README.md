@@ -58,7 +58,12 @@ queries, collision detection, and ray-casting.
   containment, overlap and closest point, circle containment and overlap with
   a circle or a box, segment containment and intersection from the exact
   `orientation2`, and the closest point on a segment rounded once per axis,
-  ties to even; see `docs/topics/planar-geometry/README.md`.
+  ties to even. `FixedRay2` against a box, a circle or a segment decides every
+  hit exactly on the direction as given and returns the first hit parameter
+  rounded once, ties to even (`RayHit2`). `FixedPolygon2` borrows a vertex
+  slice and classifies a point exactly as inside, on the boundary or outside
+  (`PolygonLocation`, the nonzero winding rule); see
+  `docs/topics/planar-geometry/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects
