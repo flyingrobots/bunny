@@ -52,6 +52,10 @@ Not run locally: wasm-pack and any 32-bit target (no wasm32 or i686 standard lib
 machine; CI's WebAssembly job runs the wasm_bindgen_test cases on wasm32), cargo deny and
 markdownlint-cli2 (not installed; CI's Dojo job runs them).
 
+After merging origin/main (flyingrobots/bunny#485 landed, CHANGELOG conflict resolved
+keeping both entries): the chapter names `bunny_mesh::validate_topology` in place of the
+open pull request; workspace tests and topic-docs rerun clean.
+
 Known risks:
 The rules the issue did not fix are choices listed in the pull request for the owner:
 trailing bytes refused, empty mesh accepted, normals ignored rather than exposed, no

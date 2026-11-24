@@ -107,8 +107,9 @@ One rule, with no exceptions:
 - **The attribute byte count is ignored.** It is not validated and not interpreted; some
   exporters store a colour there, and this profile does not read it.
 - **Degenerate triangles are kept.** A triangle with repeated or collinear vertices is
-  returned in its place; nothing is dropped. Topology validation is a separate step
-  (flyingrobots/bunny#485).
+  returned in its place; nothing is dropped. Topology validation is a separate step:
+  `bunny_mesh::validate_topology` ([mesh topology](../mesh-topology/README.md)), which takes a
+  quantized mesh; this reader does not call it.
 - **Zero triangles is a mesh.** An 84-byte file with count 0 is accepted as an empty mesh, as
   the PLY readers accept a zero-count mesh.
 
