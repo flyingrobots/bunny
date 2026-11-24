@@ -39,6 +39,12 @@ queries, collision detection, and ray-casting.
   length and orthogonality tolerances, non-negative half extents), refusing
   with `ShapeError`; each, and the segment and plane, has a `try_from_float`.
   See `docs/topics/shape-library/README.md`.
+* **FixedFrustum**: Six planes facing into the frustum; `contains_point`
+  gives `Option<bool>`, and `classify_aabb` (`Option<FrustumClass>`) and
+  `classify_sphere` (`Result<FrustumClass, FrustumSphereError>`) give
+  `Inside`, `Intersecting` or `Outside`, with `Outside` certain and `Intersecting`
+  conservative, and `from_clip_matrix` extracts the planes of a clip matrix
+  exactly for Bunny's `[0, 1]` depth range; see `docs/topics/frustum/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects

@@ -37,6 +37,10 @@ pub use transform::{TransformError, TransformedRay3};
 
 pub use bounds::{BoundsError, BOUNDS_CONTRACT_ID};
 
+mod frustum;
+
+pub use frustum::{FixedFrustum, FrustumClass, FrustumSphereError};
+
 /// Error type for bounding shape constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeomError {

@@ -27,6 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (MTOPO-REQ-001 to -007, MTOPO-TP-001 to -016). Closes
   flyingrobots/bunny#122.
 
+* `bunny-geom`: `FixedFrustum`, six `FixedPlane3` values (left, right, bottom,
+  top, near, far) each with its front facing into the frustum, the inside the
+  closed set in front of or on all six, held as given. `contains_point`
+  returns `Option<bool>`; `classify_aabb` returns `Option<FrustumClass>` and
+  `classify_sphere` `Result<FrustumClass, FrustumSphereError>` (`Inside`,
+  `Intersecting`, `Outside`) by one rule over the six `PlaneSpan` answers: a
+  `Behind` plane is `Outside` even when another plane overflows, then overflow
+  is `None` (`FrustumSphereError::Overflow` for spheres), then a straddled plane
+  is `Intersecting`. `Outside` and `Inside` are exact in the rounded distances;
+  `Intersecting` is conservative and includes shapes near an edge or corner
+  that meet no frustum point. Spheres compare `D^2 2^64` with `R^2 |N|^2`
+  exactly in 256 bits, with no square root; a negative radius is
+  `NegativeRadius`. `from_clip_matrix` extracts the planes `r3 + r0`,
+  `r3 - r0`, `r3 + r1`, `r3 - r1`, `r2` and `r3 - r2` of a clip matrix for the
+  `[0, 1]` depth range, exactly and unnormalised, `None` on overflow; each
+  computed distance is within 3/2 raw units of the exact clip inequality. See
+  `docs/topics/frustum/` (FRUSTUM-REQ-001 to -007, FRUSTUM-TP-001 to -016).
+  Additive. Refs flyingrobots/bunny#146.
+
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;
