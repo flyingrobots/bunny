@@ -29,8 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * `bunny-geom`: `FixedFrustum`, six `FixedPlane3` values (left, right, bottom,
   top, near, far) each with its front facing into the frustum, the inside the
-  closed set in front of or on all six, held as given. `contains_point`,
-  `classify_aabb` and `classify_sphere` return `FrustumClass` (`Inside`,
+  closed set in front of or on all six, held as given. `contains_point`
+  returns `Option<bool>`; `classify_aabb` returns `Option<FrustumClass>` and
+  `classify_sphere` `Result<FrustumClass, FrustumSphereError>` (`Inside`,
   `Intersecting`, `Outside`) by one rule over the six `PlaneSpan` answers: a
   `Behind` plane is `Outside` even when another plane overflows, then overflow
   is `None` (`FrustumSphereError::Overflow` for spheres), then a straddled plane

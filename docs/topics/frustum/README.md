@@ -170,8 +170,13 @@ exact, so `E` is also the exact value of `normal . p - offset`. `signed_distance
 three products, each by at most half a raw unit, and adds exactly, so the computed distance
 is within 3/2 raw units of `E`. Therefore:
 
-- a point with `E > 3/2` raw for all six planes is inside, and one with `E < -3/2` raw for
-  some plane is outside;
+- when no plane's signed distance overflows, a point with `E > 3/2` raw for all six planes
+  is inside;
+- a point with `E < -3/2` raw for some plane whose signed distance does not overflow is
+  outside, whatever the other planes do;
+- when a signed distance overflows and no plane is `Behind`, there is no answer (`None`),
+  however clear of the faces the point is. A plane whose distance overflows cannot be the
+  one that proves the point outside;
 - a point within 3/2 raw units of a face can be classified either way. Faces are not exact.
 
 Example: for the pyramid, one raw unit beyond the far face, `z = -3 - 2^-32`, gives
