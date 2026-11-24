@@ -51,7 +51,7 @@ list:
 
 | Crate | Excluded together | Why |
 | --- | --- | --- |
-| `bunny-codec` | `tests/fixtures/stanford-bunny-ascii/` and `tests/ply_ascii_stanford_tests.rs` | The 143 KB Stanford asset is the only large fixture. |
+| `bunny-codec` | `tests/fixtures/stanford-bunny-ascii/`, `tests/ply_ascii_stanford_tests.rs` and `tests/ply_ascii_stanford_topology_tests.rs` | The 143 KB Stanford asset is the only large fixture. |
 | `bunny-contract` | `tests/generated_version_tests.rs` | It compares the generated files at the repository root, outside the crate. |
 
 The excluded tests still run in the repository, in `cargo test --workspace`.

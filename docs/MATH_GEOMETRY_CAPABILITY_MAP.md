@@ -163,6 +163,9 @@ Current surface:
 - `FixedSphere3`
 - `FixedPlane3` and `FixedSegment3` with checked segment clipping and
   `clip_polygon` for convex polygons
+- `FixedLine3`, `FixedTriangle3` (exact degeneracy test), `FixedCapsule3` and
+  `FixedObb3` (checked axis tolerances), with `ShapeError` and float boundary
+  constructors (`docs/topics/shape-library/`)
 - validated fixed/float boundary conversions
 - ray and closest-point query inputs
 
