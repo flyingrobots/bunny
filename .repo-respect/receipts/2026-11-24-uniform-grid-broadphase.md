@@ -18,8 +18,16 @@ flyingrobots/bunny#485 (crates/bunny-mesh/src/topology/: the caller-scratch mode
 xtask/src/{code_dojo.rs,topic_docs.rs} (limits, case statuses)
 
 Files edited:
+crates/bunny-broadphase/src/uniform_grid.rs (new: API, contract ID, the call)
+crates/bunny-broadphase/src/uniform_grid/cell.rs (new: GridCellSize, floor quantization, cell ranges)
+crates/bunny-broadphase/src/uniform_grid/key.rs (new: GridKey, grid_key_count, key fill and sort)
+crates/bunny-broadphase/src/uniform_grid/pairs.rs (new: runs, first-shared-cell rule, report, sink)
+crates/bunny-broadphase/src/uniform_grid/error.rs (new: UniformGridError)
+crates/bunny-broadphase/src/lib.rs (module and exports, appended)
 crates/bunny-broadphase/tests/uniform_grid_tests.rs (new)
 crates/bunny-broadphase/tests/uniform_grid_allocation_tests.rs (new)
+crates/bunny-broadphase/README.md, CHANGELOG.md, docs/README.md (topic row, sorted position)
+docs/topics/uniform-grid/README.md (new chapter)
 docs/topics/uniform-grid/test-plan.md (new: GRID-REQ-001 to -009, GRID-TP-001 to -015)
 .repo-respect/receipts/2026-11-24-uniform-grid-broadphase.md
 
@@ -33,9 +41,23 @@ None.
 Checks run:
 First commit (tests and planned cases only): the grid tests fail to compile, because
 `bunny_broadphase::uniform_grid` does not exist yet.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned 1.96.0):
+cargo fmt --all --check; cargo test --locked --workspace --all-targets --all-features;
+cargo run --locked -p xtask -- code-dojo-generated; code-dojo-rust --all; code-dojo-determinism
+--enforce; code-dojo-perf-groups; topic-docs (zero duplicate IDs); repo-respect check --branch.
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p bunny-broadphase clean. cargo clippy --locked
+-p bunny-broadphase --all-targets --all-features -- -D warnings clean.
+Mutations: ten, each applied to the kernel, run with cargo test --no-fail-fast -p
+bunny-broadphase --test uniform_grid_tests --test uniform_grid_allocation_tests, and restored;
+each failed at least one case (the test plan's table).
+Not run locally: wasm-pack (CI's WebAssembly job), cargo deny and markdownlint-cli2 (CI's Dojo
+job), the pinned 1.96.0 clippy.
 
 Known risks:
-To be completed with the kernel.
+The candidate tests in one cell are quadratic in the boxes it holds, as an all-pairs scan is;
+the cost is reported (`candidate_tests`) and documented, not bounded. A box many cells wide
+needs many keys; the count is exact and refused when it does not fit, with no per-box cap.
+`TooManyBoxes` is not exercised (it needs more than u32::MAX boxes).
 
 Human reviewer:
 James Ross (maintainer); review pending.

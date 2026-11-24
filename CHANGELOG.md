@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-broadphase`: a uniform grid broadphase under `bunny-uniform-grid/1`.
+  `uniform_grid_pairs(boxes, cell_size, keys, pairs)` reports every pair of
+  overlapping `FixedAabb3` boxes (closed: touching counts) exactly once, as
+  `(lower index, higher index)` in ascending lexicographic order, the form and
+  order of `sweep_and_prune`, with which it agrees on every tested input. A
+  cell is `floor(raw / cell_raw)` on each axis, exact for the whole raw range
+  (`GridCellSize::cell_of`); a box occupies the cells of its min to its max
+  inclusive. Candidates come from sorting (cell, box) `GridKey`s in caller
+  scratch, whose exact size `grid_key_count` computes with overflow detected;
+  there is no hashing and no allocation. A short pair buffer holds the first
+  pairs in order and `GridPairReport` counts them all. Typed refusals
+  (`UniformGridError`) for non-positive cell sizes, inverted boxes, key count
+  overflow and short key scratch. `docs/topics/uniform-grid/` (GRID-REQ-001
+  to -009, GRID-TP-001 to -015). Closes flyingrobots/bunny#121.
+
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;

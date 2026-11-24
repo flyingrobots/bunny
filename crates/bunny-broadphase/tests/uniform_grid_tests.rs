@@ -207,19 +207,14 @@ fn seeded_box(rng: &mut Lcg, cells: i64, cell: i64, max_extent: i64) -> FixedAab
     bx(min, max)
 }
 
-/// Seeded scene kinds. Coordinates sit on cell boundaries and one raw unit either side about
-/// half the time; some boxes are zero-extent; some are duplicated.
-fn seeded_scene(
-    seed: u64,
-    count: usize,
-    cells: i64,
-    cell: i64,
-    max_extent: i64,
-) -> Vec<FixedAabb3> {
+/// `count` seeded boxes on a grid of 1.0 units, corners within `cells` units of the origin
+/// and extents up to `max_extent` units. Coordinates sit on a unit boundary and one raw unit
+/// either side about half the time; some boxes are zero-extent; some are duplicated.
+fn seeded_scene(seed: u64, count: usize, cells: i64, max_extent: i64) -> Vec<FixedAabb3> {
     let mut rng = Lcg(seed);
     let mut boxes = Vec::with_capacity(count);
     while boxes.len() < count {
-        let b = seeded_box(&mut rng, cells, cell, max_extent);
+        let b = seeded_box(&mut rng, cells, ONE, max_extent);
         boxes.push(b);
         if rng.below(8) == 0 && boxes.len() < count {
             boxes.push(b);
@@ -277,7 +272,7 @@ fn grid_tp_002_cell_of_is_floor_division_on_raw_values() {
         }
     }
     println!("grid_tp_002: {checked} coordinates checked");
-    assert_eq!(checked, 0, "every size and boundary offset was checked (recorded count)");
+    assert_eq!(checked, 230, "every size and boundary offset was checked (recorded count)");
 
     // Hand-derived values: the half-open cell [k s, (k + 1) s), so a boundary belongs to the
     // upper cell and a negative value to the cell below zero.
@@ -347,7 +342,7 @@ fn grid_tp_004_key_count_overflow_is_refused_with_the_box_index() {
     );
     // 2^21 cells per axis is 2^63 keys: it fits a 64-bit usize, and two of them do not.
     let big = bx([0; 3], [(1 << 21) - 1; 3]);
-    let first = if usize::BITS == 64 { 1 } else { 0 };
+    let first = usize::from(usize::BITS == 64);
     if usize::BITS == 64 {
         assert_eq!(grid_key_count(&[big], size(1)), Ok(1 << 63));
     }
@@ -391,12 +386,13 @@ fn grid_tp_005_inverted_boxes_and_short_key_scratch_are_refused_before_anything_
     // A box is checked whole before the next one: the lowest failing index wins, of either kind.
     let all = bx([MIN; 3], [MAX; 3]);
     let inverted = bx([1, 0, 0], [0, 0, 0]);
+    let small = bx([0; 3], [1; 3]);
     assert_eq!(
-        grid_key_count(&[ok, inverted, all], size(1)),
+        grid_key_count(&[small, inverted, all], size(1)),
         Err(UniformGridError::InvertedBox { index: 1 })
     );
     assert_eq!(
-        grid_key_count(&[ok, all, inverted], size(1)),
+        grid_key_count(&[small, all, inverted], size(1)),
         Err(UniformGridError::KeyCountOverflow { index: 1 })
     );
 
@@ -521,25 +517,25 @@ fn scenes() -> Vec<Scene> {
     out.push(Scene {
         name: "scattered",
         seed: 0x5CA7_7E2D,
-        boxes: seeded_scene(0x5CA7_7E2D, 400, 20, ONE, 3),
+        boxes: seeded_scene(0x5CA7_7E2D, 400, 20, 3),
         cells: vec![ONE, 3 * ONE + 7, 5 * ONE],
     });
     // A dense cluster: 250 boxes in a few cells.
     out.push(Scene {
         name: "dense",
         seed: 0xDE45_E001,
-        boxes: seeded_scene(0xDE45_E001, 250, 2, ONE, 1),
+        boxes: seeded_scene(0xDE45_E001, 250, 2, 1),
         cells: vec![ONE, ONE / 2 + 3, 4 * ONE],
     });
     // Boxes spanning up to 8 cells a side.
     out.push(Scene {
         name: "many-cells",
         seed: 0x3A11_CE11,
-        boxes: seeded_scene(0x3A11_CE11, 80, 10, ONE, 7),
+        boxes: seeded_scene(0x3A11_CE11, 80, 10, 7),
         cells: vec![ONE, 2 * ONE + 1],
     });
     // One box larger than the whole occupied region among small boxes.
-    let mut huge = seeded_scene(0x4B16_B0C5, 150, 8, ONE, 1);
+    let mut huge = seeded_scene(0x4B16_B0C5, 150, 8, 1);
     huge.insert(37, bx([-20 * ONE; 3], [20 * ONE; 3]));
     out.push(Scene {
         name: "huge",
@@ -550,14 +546,19 @@ fn scenes() -> Vec<Scene> {
     // Identical boxes and points.
     let mut same = vec![bx([ONE; 3], [2 * ONE; 3]); 12];
     same.extend(vec![bx([2 * ONE; 3], [2 * ONE; 3]); 5]);
-    same.extend(seeded_scene(0x1DE7_1CA1, 40, 3, ONE, 1));
-    out.push(Scene { name: "identical", seed: 0x1DE7_1CA1, boxes: same, cells: vec![ONE, 3] });
+    same.extend(seeded_scene(0x1DE7_1CA1, 40, 3, 1));
+    out.push(Scene {
+        name: "identical",
+        seed: 0x1DE7_1CA1,
+        boxes: same,
+        cells: vec![ONE, ONE / 3],
+    });
     out
 }
 
 /// The recorded pair count of each seeded scene (equal for every cell size).
 const PINNED: [(&str, usize); 5] =
-    [("scattered", 0), ("dense", 0), ("many-cells", 0), ("huge", 0), ("identical", 0)];
+    [("scattered", 70), ("dense", 326), ("many-cells", 50), ("huge", 170), ("identical", 158)];
 
 #[wasm_bindgen_test(unsupported = test)]
 fn grid_tp_008_seeded_scenes_equal_the_all_pairs_scan() {
@@ -601,7 +602,7 @@ fn grid_tp_009_seeded_scenes_at_the_extremes_of_the_raw_range() {
     }
     let expected = oracle_pairs(&boxes);
     println!("grid_tp_009: seed {SEED:#x}: {} boxes, {} pairs", boxes.len(), expected.len());
-    assert_eq!(expected.len(), 0, "recorded pair count");
+    assert_eq!(expected.len(), 3180, "recorded pair count");
     for cell in [1 << 62, MAX, (1 << 61) + 3] {
         assert_eq!(assert_matches_oracle(&boxes, size(cell)), expected.len());
     }
@@ -634,7 +635,7 @@ fn grid_tp_010_pairs_equal_sweep_and_prune_on_the_same_input() {
 #[wasm_bindgen_test(unsupported = test)]
 fn grid_tp_011_output_does_not_depend_on_scratch_contents_or_input_order() {
     const SEED: u64 = 0x0DE7_E2A1;
-    let boxes = seeded_scene(SEED, 300, 12, ONE, 3);
+    let boxes = seeded_scene(SEED, 300, 12, 3);
     let cell = size(2 * ONE + 1);
     let expected = oracle_pairs(&boxes);
     let required = grid_key_count(&boxes, cell).unwrap();
@@ -649,7 +650,7 @@ fn grid_tp_011_output_does_not_depend_on_scratch_contents_or_input_order() {
     let garbage: Vec<GridKey> = (0..required)
         .map(|_| {
             GridKey::new(
-                [rng.signed(MAX), rng.signed(3), MIN],
+                [rng.signed(1 << 60), rng.signed(3), MIN],
                 u32::try_from(rng.below(1 << 32)).unwrap(),
             )
         })
@@ -679,7 +680,8 @@ fn grid_tp_011_output_does_not_depend_on_scratch_contents_or_input_order() {
     let mut mapped: Vec<(u32, u32)> = grid_pairs(&permuted, cell)
         .into_iter()
         .map(|(a, b)| {
-            let (a, b) = (order[a as usize] as u32, order[b as usize] as u32);
+            let index = |i: u32| u32::try_from(order[usize::try_from(i).unwrap()]).unwrap();
+            let (a, b) = (index(a), index(b));
             (a.min(b), a.max(b))
         })
         .collect();
@@ -692,7 +694,7 @@ fn grid_tp_011_output_does_not_depend_on_scratch_contents_or_input_order() {
 #[wasm_bindgen_test(unsupported = test)]
 fn grid_tp_012_a_short_pair_buffer_holds_the_first_pairs_and_the_total_counts_all() {
     const SEED: u64 = 0x5807_7B0F;
-    let boxes = seeded_scene(SEED, 60, 4, ONE, 2);
+    let boxes = seeded_scene(SEED, 120, 4, 2);
     let cell = size(ONE);
     let expected = oracle_pairs(&boxes);
     println!("grid_tp_012: seed {SEED:#x}: {} boxes, {} pairs", boxes.len(), expected.len());

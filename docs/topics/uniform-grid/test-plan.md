@@ -114,8 +114,8 @@ scene's box and pair counts.
 | GRID-TP-005 | Refusals | GRID-REQ-004, GRID-REQ-007 | Inverted boxes on each axis are refused at the lowest index; the lowest failing box wins whether inverted or overflowing; key scratch of required - 1 is refused naming both sizes; required and longer scratch run and leave the tail untouched; no boxes give an empty complete report. | Hand-derived errors; untouched sentinels. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_005_inverted_boxes_and_short_key_scratch_are_refused_before_anything_is_written` |
 | GRID-TP-006 | Cell edges | GRID-REQ-003, GRID-REQ-005 | Boxes touching exactly at a cell boundary, one raw unit apart and one raw unit overlapping, at a positive boundary, at zero and at negative boundaries; a zero-extent box on a boundary; corner contact on all three axes. | The all-pairs scan and the sorted oracle keys, and hand-written pair lists. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_006_boxes_with_faces_on_cell_boundaries` |
 | GRID-TP-007 | Range extremes | GRID-REQ-002, GRID-REQ-005 | Boxes at i64::MIN and i64::MAX raw with cells of 1 raw, 1.0, 2^62 and i64::MAX; the lowest and highest cells are pinned. | The all-pairs scan and the oracle keys. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_007_boxes_at_the_extremes_of_the_raw_range` |
-| GRID-TP-008 | Seeded equality | GRID-REQ-005, GRID-REQ-006 | Five seeded scenes (scattered, dense cluster, boxes over many cells, one box larger than the occupied region, identical boxes and points), each at two or three cell sizes including non-powers of two: keys, key count and pairs equal the oracle; pair counts pinned. | The all-pairs scan and the oracle keys. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_008_seeded_scenes_equal_the_all_pairs_scan` |
-| GRID-TP-009 | Seeded extremes | GRID-REQ-005 | 120 seeded boxes with corners among the ends of the raw range, zero and plus or minus 2^62, at three wide cell sizes. | The all-pairs scan and the oracle keys. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_009_seeded_scenes_at_the_extremes_of_the_raw_range` |
+| GRID-TP-008 | Seeded equality | GRID-REQ-005, GRID-REQ-006 | Five seeded scenes (scattered, dense cluster, boxes over many cells, one box larger than the occupied region, identical boxes and points), each at two or three cell sizes including non-powers of two: keys, key count and pairs equal the oracle; pair counts pinned (70, 326, 50, 170 and 158). | The all-pairs scan and the oracle keys. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_008_seeded_scenes_equal_the_all_pairs_scan` |
+| GRID-TP-009 | Seeded extremes | GRID-REQ-005 | 120 seeded boxes with corners among the ends of the raw range, zero and plus or minus 2^62, at three wide cell sizes; 3 180 pairs, pinned. | The all-pairs scan and the oracle keys. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_009_seeded_scenes_at_the_extremes_of_the_raw_range` |
 | GRID-TP-010 | Same as sweep | GRID-REQ-006 | On every seeded scene of GRID-TP-008, the grid's pairs equal sweep_and_prune's output element for element. | sweep_and_prune and the all-pairs scan. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_010_pairs_equal_sweep_and_prune_on_the_same_input` |
 | GRID-TP-011 | Scratch and order | GRID-REQ-006 | Key scratch zeroed, filled with seeded garbage, and holding a previous run's keys reversed, and a pair buffer of stale values, give identical pairs, keys and reports; a seeded permutation of the input gives the permuted pairs. | The all-pairs scan. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_011_output_does_not_depend_on_scratch_contents_or_input_order` |
 | GRID-TP-012 | Short buffer | GRID-REQ-007 | For every pair buffer length from 0 to the pair count plus 2: written is the smaller of the two, total is exact, the written prefix equals the oracle's prefix, and the rest is untouched. | The all-pairs scan. | `crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_012_a_short_pair_buffer_holds_the_first_pairs_and_the_total_counts_all` |
@@ -131,7 +131,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_001_cell_size_must_be_positive"
 oracle = "Hand-listed values on each side of zero."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-002"
@@ -140,7 +140,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_002_cell_of_is_floor_division_on_raw_values"
 oracle = "Truncating i128 division corrected by the remainder's sign."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-003"
@@ -149,7 +149,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_003_a_box_occupies_the_cells_of_its_min_to_its_max_inclusive"
 oracle = "Hand-derived cell ranges."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-004"
@@ -158,7 +158,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_004_key_count_overflow_is_refused_with_the_box_index"
 oracle = "Exact u128 key count of the oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-005"
@@ -167,7 +167,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_005_inverted_boxes_and_short_key_scratch_are_refused_before_anything_is_written"
 oracle = "Hand-derived errors; untouched sentinels."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-006"
@@ -176,7 +176,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_006_boxes_with_faces_on_cell_boundaries"
 oracle = "The all-pairs scan and the sorted oracle keys, and hand-written pair lists."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-007"
@@ -185,7 +185,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_007_boxes_at_the_extremes_of_the_raw_range"
 oracle = "The all-pairs scan and the oracle keys."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-008"
@@ -194,7 +194,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_008_seeded_scenes_equal_the_all_pairs_scan"
 oracle = "The all-pairs scan and the oracle keys."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-009"
@@ -203,7 +203,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_009_seeded_scenes_at_the_extremes_of_the_raw_range"
 oracle = "The all-pairs scan and the oracle keys."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-010"
@@ -212,7 +212,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_010_pairs_equal_sweep_and_prune_on_the_same_input"
 oracle = "sweep_and_prune and the all-pairs scan."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-011"
@@ -221,7 +221,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_011_output_does_not_depend_on_scratch_contents_or_input_order"
 oracle = "The all-pairs scan."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-012"
@@ -230,7 +230,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_012_a_short_pair_buffer_holds_the_first_pairs_and_the_total_counts_all"
 oracle = "The all-pairs scan."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-013"
@@ -239,7 +239,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_tests.rs::grid_tp_013_pairs_sharing_many_cells_are_reported_once"
 oracle = "Hand-derived counts."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-014"
@@ -248,7 +248,7 @@ evidence = "test"
 test = "crates/bunny-broadphase/tests/uniform_grid_allocation_tests.rs::grid_tp_014_uniform_grid_pairs_allocates_zero_times"
 oracle = "Thread-scoped allocation count."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "GRID-TP-015"
@@ -257,32 +257,44 @@ evidence = "manual-audit"
 artifact = "docs/topics/uniform-grid/test-plan.md#mutation-checks"
 oracle = "Each deliberate mutation makes at least one case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule below will be broken on purpose in the kernel, the grid
-tests run, and the cases that fail recorded here.
+Each mutation below was applied to the kernel on the host (then restored),
+`cargo test --locked --no-fail-fast -p bunny-broadphase --test
+uniform_grid_tests --test uniform_grid_allocation_tests` was run, and the
+cases that failed were recorded.
 
-- floor quantization replaced by truncating division;
-- a box's cells taken up to the cell of its max exclusive;
-- the first-shared-cell rule removed (duplicates);
-- the exact overlap filter removed (false positives);
-- the key sort removed;
-- the short-buffer selection keeping the wrong pairs.
+| Mutation | Cases that fail |
+| --- | --- |
+| Floor replaced by truncation toward zero (`div_euclid` to `/` in `cell_of`) | GRID-TP-002, 003, 005, 006, 007, 008, 009, 011. The pairs alone would not show it (any monotone quantization finds the same pairs); the cells and keys do. |
+| Half-open boxes: the last cell taken from `max` one raw unit lower | GRID-TP-003, 004, 005, 006, 007, 008, 009, 010, 011, 013. |
+| A box's span on an axis without the `+ 1` | GRID-TP-003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013. |
+| The first-shared-cell rule removed (a pair is reported in every shared cell) | GRID-TP-006, 008, 009, 010, 011, 012, 013. |
+| The exact overlap filter removed | GRID-TP-006, 008, 009, 010, 011, 012, 013. |
+| The first shared cell taken as the smaller, not the larger, of the low cells | GRID-TP-005, 006, 007, 008, 009, 010, 011, 012. |
+| The key sort removed | GRID-TP-005, 006, 007, 008, 009, 010, 011, 012, 013, 014. |
+| A full pair buffer keeps larger pairs instead of smaller ones | GRID-TP-012. |
+| The final sort of the written pairs removed | GRID-TP-005, 006, 007, 008, 009, 010, 011, 012. |
+| Inverted boxes accepted | GRID-TP-005. |
 
 ## Determinism Obligations And Evidence
 
 The kernel uses only integer arithmetic (`i64`, `i128`, `u128`, `u64`,
 `usize`) with checked or proven results, in-place sorts of distinct keys and
-distinct pairs, and no floating point, maps, host randomness, time or
+distinct pairs, and no floating point, maps, hashing, host randomness, time or
 parallel scheduling. The seeded cases run in `cargo test --workspace` on
 Linux, macOS and Windows in the `determinism-matrix` CI job and under
-WebAssembly in `wasm-headless`, where they must equal the same oracle and the
-same pinned pair counts.
+WebAssembly in `wasm-headless` (except the allocation case, which is not built
+for `wasm32`, as the crate's other allocation tests are not), where they must
+equal the same oracle and the same pinned pair counts. GRID-TP-004 states its
+expected box index for both 32-bit and 64-bit `usize`.
 
 ## Gaps
 
 - `TooManyBoxes` (more than `u32::MAX` boxes) is not exercised: it would need
-  more than four billion boxes.
+  more than four billion boxes. On a 32-bit target it cannot occur.
+- No timing is claimed and no performance case exists; `sweep_and_prune` has
+  none either.
