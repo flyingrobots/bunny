@@ -30,6 +30,11 @@ mod conversions;
 mod plane;
 mod predicates;
 mod transform;
+// The 256-bit integer shared by the predicates and the 2D queries marks its crate-private
+// items `pub`, as `clippy::redundant_pub_crate` asks; the workspace's `unreachable_pub` lint
+// disagrees, and is allowed on the module, as in `bunny-optics`.
+#[allow(unreachable_pub)]
+mod wide;
 mod transform_bounds;
 
 pub use plane::{
@@ -204,4 +209,14 @@ mod shapes;
 pub use shapes::{
     FixedCapsule3, FixedLine3, FixedObb3, FixedTriangle3, ShapeError, OBB_AXIS_DOT_TOLERANCE_RAW,
     OBB_AXIS_LENGTH_TOLERANCE_RAW,
+};
+
+mod planar;
+
+pub use planar::{FixedAabb2, FixedCircle2, FixedRay2, FixedSegment2, PLANAR_CONTRACT_ID};
+
+mod sat;
+
+pub use sat::{
+    sat_obb_obb, sat_triangle_aabb, ObbAxis, SatClass, TriangleAabbAxis, SAT_CONTRACT_ID,
 };

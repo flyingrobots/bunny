@@ -230,7 +230,7 @@ status = "implemented"
 
 Each rule below was broken on purpose in a local copy of
 `crates/bunny-geom/src/predicates.rs`, `crates/bunny-geom/src/predicates/barycentric.rs`
-or `crates/bunny-geom/src/predicates/wide.rs`, and `cargo test --locked --no-fail-fast -p
+or `crates/bunny-geom/src/wide.rs`, and `cargo test --locked --no-fail-fast -p
 bunny-geom --test predicate_orientation_tests --test predicate_barycentric_tests --test
 predicate_sweep_tests` was run; the source was restored after each. The unmutated source
 passed every case. The first three replace the exact sign with a rounded computation.

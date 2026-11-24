@@ -7,31 +7,35 @@
 //! magnitude hold every intermediate exactly, with room to spare, and no operation here can
 //! carry out of the top limb for any input the predicates pass it.
 //!
+//! The 2D queries of `bunny-planar/1` (`crate::planar`) use it too, under the same kind of
+//! bound: a squared distance or squared radius sum is below `2^129`, and the largest value,
+//! a closest-point numerator `a d + (b - a) n`, is below `2^63 2^129 + 2^64 2^129 < 2^194`.
+//!
 //! This is one more private wide integer in the workspace; flyingrobots/bunny#424 tracks
-//! sharing one. Only the operations the predicates need are here.
+//! sharing one. Only the operations the predicates and the 2D queries need are here.
 
 /// Number of 64-bit limbs in a magnitude.
 const LIMBS: usize = 4;
 
 /// A 256-bit magnitude in little-endian 64-bit limbs.
-pub(super) type Limbs = [u64; LIMBS];
+pub type Limbs = [u64; LIMBS];
 
 /// A sign and a 256-bit magnitude; zero is never negative.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(super) struct Wide {
+pub struct Wide {
     negative: bool,
     magnitude: Limbs,
 }
 
 impl Wide {
     /// The exact value `a - b`, whose magnitude is at most `2^64 - 1`.
-    pub(super) fn difference(a: i64, b: i64) -> Self {
+    pub fn difference(a: i64, b: i64) -> Self {
         let value = i128::from(a) - i128::from(b);
         Self::from_u128(value < 0, value.unsigned_abs())
     }
 
     /// The value `2^k` for `k < 64`.
-    pub(super) const fn power_of_two(k: u32) -> Self {
+    pub const fn power_of_two(k: u32) -> Self {
         Self { negative: false, magnitude: [1 << k, 0, 0, 0] }
     }
 
@@ -44,28 +48,28 @@ impl Wide {
     }
 
     /// Whether the value is zero.
-    pub(super) fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         is_zero(&self.magnitude)
     }
 
     /// Whether the value is below zero.
-    pub(super) const fn is_negative(&self) -> bool {
+    pub const fn is_negative(&self) -> bool {
         self.negative
     }
 
     /// The magnitude, little-endian.
-    pub(super) const fn magnitude(&self) -> Limbs {
+    pub const fn magnitude(&self) -> Limbs {
         self.magnitude
     }
 
     /// `-self`.
-    pub(super) fn negated(self) -> Self {
+    pub fn negated(self) -> Self {
         Self::signed(!self.negative, self.magnitude)
     }
 
     /// `self * rhs`. The exact product must be below `2^256`, as every product the predicates
     /// form is (below `2^192`); limbs above the fourth are not formed.
-    pub(super) fn times(self, rhs: Self) -> Self {
+    pub fn times(self, rhs: Self) -> Self {
         let mut out = [0_u64; LIMBS];
         for (i, &a) in self.magnitude.iter().enumerate() {
             let mut carry = 0_u128;
@@ -80,7 +84,7 @@ impl Wide {
 
     /// `self + rhs`. The exact sum must be below `2^256` in magnitude, as every sum the
     /// predicates form is (below `2^195`).
-    pub(super) fn plus(self, rhs: Self) -> Self {
+    pub fn plus(self, rhs: Self) -> Self {
         if self.negative == rhs.negative {
             return Self::signed(self.negative, add(&self.magnitude, &rhs.magnitude));
         }
@@ -90,13 +94,13 @@ impl Wide {
     }
 
     /// `self - rhs`, under the bound of [`Self::plus`].
-    pub(super) fn minus(self, rhs: Self) -> Self {
+    pub fn minus(self, rhs: Self) -> Self {
         self.plus(rhs.negated())
     }
 
     /// `self / divisor` rounded once to nearest, ties to even, as an `i64`; `None` when the
     /// rounded quotient is outside `i64`. `divisor` is a positive magnitude below `2^255`.
-    pub(super) fn round_div(self, divisor: &Limbs) -> Option<i64> {
+    pub fn round_div(self, divisor: &Limbs) -> Option<i64> {
         let (quotient, remainder) = divide(&self.magnitude, divisor);
         let twice = add(&remainder, &remainder);
         let odd = quotient.first().is_some_and(|limb| limb & 1 == 1);

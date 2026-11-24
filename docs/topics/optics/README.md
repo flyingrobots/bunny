@@ -1234,7 +1234,6 @@ same hits: about 104 ns more, 2.5 times the flat cost. Besides `smooth_normal`
 `TriangleSurface`); see [Accuracy And Cost](#accuracy-and-cost).
 
 ### Orthonormal Frame
-### Orthonormal Frame
 
 `ShadingFrame::new(normal)` builds the tangent and bitangent of Duff,
 Burgess, Christensen, Hery, Kensler, Liani and Villemin ("Building an
