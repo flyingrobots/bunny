@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Degeneracy inventory (`docs/topics/degeneracy/`, DEGEN-REQ-001 to -010, DEGEN-TP-001 to -080): what each public shape constructor and query in `bunny-geom`, `bunny-query`, `bunny-broadphase` and `bunny-mesh` does today with degenerate input, each cell pinned by a characterization test, and the inconsistencies between them. No behaviour changes; the uniform policy is an open decision. Refs flyingrobots/bunny#116.
+
 * `bunny-codec`: binary STL import under `bunny-binary-stl-triangle-mesh/1`.
   `parse_binary_stl` reads an 80-byte header (not interpreted), a little-endian
   `u32` triangle count and 50-byte records into a borrowed, fully validated
