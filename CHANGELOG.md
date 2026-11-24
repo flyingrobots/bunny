@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `bunny-codec`: binary STL import under `bunny-binary-stl-triangle-mesh/1`.
+  `parse_binary_stl` reads an 80-byte header (not interpreted), a little-endian
+  `u32` triangle count and 50-byte records into a borrowed, fully validated
+  `StlMesh` with Q32.32 `StlVertex` positions, converted by
+  `FixedQ32_32::try_from_f32` unchanged. The length must be exactly
+  `84 + 50 n` (computed in `u64`; shorter, truncated or trailing bytes are
+  refused); NaN, infinite and out-of-range coordinates are typed `StlError`s
+  naming the triangle, vertex and axis. Stored vertex order is kept, triangle
+  `i` is `(3i, 3i+1, 3i+2)` with no welding, the stored normal and attribute
+  byte count are ignored, degenerate triangles are kept. ASCII STL is out of
+  scope. `docs/topics/binary-stl/` (STL-REQ-001 to -007, STL-TP-001 to -022
+  and -030). Closes flyingrobots/bunny#127.
+
 * `bunny-linalg`, `bunny-geom` and `bunny-query`: a default `std` feature, as
   `bunny-num` has. With default features off each crate is `#![no_std]` and
   needs only `core` (no `alloc`), with every public item and the same bits;

@@ -9,37 +9,38 @@
 #![allow(dead_code)]
 
 /// `1.0` as binary32 bits.
-pub const ONE: u32 = 0x3F80_0000;
+pub(crate) const ONE: u32 = 0x3F80_0000;
 /// `0.5`.
-pub const HALF: u32 = 0x3F00_0000;
+pub(crate) const HALF: u32 = 0x3F00_0000;
 /// `-2.25`.
-pub const MINUS_TWO_AND_A_QUARTER: u32 = 0xC010_0000;
+pub(crate) const MINUS_TWO_AND_A_QUARTER: u32 = 0xC010_0000;
 /// `0.125`.
-pub const EIGHTH: u32 = 0x3E00_0000;
+pub(crate) const EIGHTH: u32 = 0x3E00_0000;
 /// A quiet NaN, a signalling NaN, a negative quiet NaN, `+inf` and `-inf`.
-pub const NON_FINITE: [u32; 5] = [0x7FC0_0000, 0x7F80_0001, 0xFFC0_0000, 0x7F80_0000, 0xFF80_0000];
+pub(crate) const NON_FINITE: [u32; 5] =
+    [0x7FC0_0000, 0x7F80_0001, 0xFFC0_0000, 0x7F80_0000, 0xFF80_0000];
 
 /// The raw Q32.32 value of `1.0`.
-pub const RAW_ONE: i64 = 1 << 32;
+pub(crate) const RAW_ONE: i64 = 1 << 32;
 
 /// One STL facet: the stored normal, three vertices and the attribute byte count, each
 /// coordinate as binary32 bits.
 #[derive(Clone, Copy, Debug)]
-pub struct Facet {
-    pub normal: [u32; 3],
-    pub vertices: [[u32; 3]; 3],
-    pub attribute: u16,
+pub(crate) struct Facet {
+    pub(crate) normal: [u32; 3],
+    pub(crate) vertices: [[u32; 3]; 3],
+    pub(crate) attribute: u16,
 }
 
 impl Facet {
     /// A facet with a zero normal and a zero attribute byte count.
-    pub const fn new(vertices: [[u32; 3]; 3]) -> Self {
+    pub(crate) const fn new(vertices: [[u32; 3]; 3]) -> Self {
         Self { normal: [0; 3], vertices, attribute: 0 }
     }
 }
 
 /// An 80-byte header holding `text` followed by zero bytes.
-pub fn header(text: &[u8]) -> [u8; 80] {
+pub(crate) fn header(text: &[u8]) -> [u8; 80] {
     let mut bytes = [0_u8; 80];
     for (slot, byte) in bytes.iter_mut().zip(text) {
         *slot = *byte;
@@ -49,7 +50,7 @@ pub fn header(text: &[u8]) -> [u8; 80] {
 
 /// The bytes of a binary STL file with `count` written as the triangle count, whatever the
 /// number of `facets` that follow.
-pub fn stl_with_count(header: &[u8; 80], count: u32, facets: &[Facet]) -> Vec<u8> {
+pub(crate) fn stl_with_count(header: &[u8; 80], count: u32, facets: &[Facet]) -> Vec<u8> {
     let mut bytes = header.to_vec();
     bytes.extend_from_slice(&count.to_le_bytes());
     for facet in facets {
@@ -62,14 +63,14 @@ pub fn stl_with_count(header: &[u8; 80], count: u32, facets: &[Facet]) -> Vec<u8
 }
 
 /// The bytes of a well-formed binary STL file holding `facets`.
-pub fn stl(facets: &[Facet]) -> Vec<u8> {
+pub(crate) fn stl(facets: &[Facet]) -> Vec<u8> {
     let count = u32::try_from(facets.len()).expect("test meshes are small");
     stl_with_count(&header(b"bunny binary STL test fixture"), count, facets)
 }
 
 /// The unit tetrahedron with vertices `(0,0,0)`, `(1,0,0)`, `(0,1,0)`, `(0,0,1)`, each face
 /// counter-clockwise seen from outside, with its outward normal stored unnormalised.
-pub fn tetrahedron() -> [Facet; 4] {
+pub(crate) fn tetrahedron() -> [Facet; 4] {
     let (o, x, y, z) = ([0, 0, 0], [ONE, 0, 0], [0, ONE, 0], [0, 0, ONE]);
     let minus = |bits: u32| bits | 0x8000_0000;
     [
@@ -81,24 +82,24 @@ pub fn tetrahedron() -> [Facet; 4] {
 }
 
 /// A 64-bit linear congruential generator (Knuth's MMIX constants), the high bits used.
-pub struct Seeds(pub u64);
+pub(crate) struct Seeds(pub(crate) u64);
 
 impl Seeds {
-    pub fn next(&mut self) -> u64 {
+    pub(crate) fn next(&mut self) -> u64 {
         self.0 =
             self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         self.0 >> 11
     }
 
-    pub fn below(&mut self, bound: u64) -> u64 {
+    pub(crate) fn below(&mut self, bound: u64) -> u64 {
         self.next() % bound
     }
 
-    pub fn word(&mut self) -> u32 {
+    pub(crate) fn word(&mut self) -> u32 {
         u32::try_from(self.next() & 0xFFFF_FFFF).expect("masked to 32 bits")
     }
 
-    pub fn byte(&mut self) -> u8 {
+    pub(crate) fn byte(&mut self) -> u8 {
         u8::try_from(self.next() & 0xFF).expect("masked to 8 bits")
     }
 }
@@ -106,7 +107,7 @@ impl Seeds {
 /// Binary32 bit patterns on and around every boundary of the conversion: zeros, the
 /// smallest subnormal, exact ties at `2^-33` and `3 * 2^-33`, the last values in range and
 /// the first out of it at both ends, the largest finite values and the non-finite ones.
-pub const SPECIAL_BITS: [u32; 18] = [
+pub(crate) const SPECIAL_BITS: [u32; 18] = [
     0x0000_0000, // +0
     0x8000_0000, // -0
     0x0000_0001, // smallest subnormal
@@ -129,7 +130,7 @@ pub const SPECIAL_BITS: [u32; 18] = [
 
 /// A coordinate: usually a modest value with a random significand, sometimes a boundary
 /// pattern, sometimes any 32 bits at all.
-pub fn coordinate(seeds: &mut Seeds) -> u32 {
+pub(crate) fn coordinate(seeds: &mut Seeds) -> u32 {
     match seeds.below(64) {
         0 => seeds.word(),
         1 | 2 => SPECIAL_BITS[usize::try_from(seeds.below(18)).expect("small")],
@@ -143,7 +144,7 @@ pub fn coordinate(seeds: &mut Seeds) -> u32 {
 }
 
 /// A random facet built from [`coordinate`], with random normal bits and attribute.
-pub fn facet(seeds: &mut Seeds) -> Facet {
+pub(crate) fn facet(seeds: &mut Seeds) -> Facet {
     let mut vertices = [[0_u32; 3]; 3];
     for slot in vertices.iter_mut().flatten() {
         *slot = coordinate(seeds);

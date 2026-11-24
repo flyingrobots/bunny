@@ -70,7 +70,8 @@ fn stl_tp_002_tetrahedron_reads_in_file_order_without_welding() {
 #[wasm_bindgen_test(unsupported = test)]
 fn stl_tp_003_coordinates_convert_exactly() {
     let facet = Facet::new([[HALF, MINUS_TWO_AND_A_QUARTER, EIGHTH], [ONE, HALF, 0], [0, 0, 0]]);
-    let mesh = parse_binary_stl(&stl(&[facet])).expect("one facet");
+    let bytes = stl(&[facet]);
+    let mesh = parse_binary_stl(&bytes).expect("one facet");
     let got = vertices(&mesh);
     assert_eq!(got[0], vertex(1 << 31, -(9 << 30), 1 << 29));
     assert_eq!(got[1], vertex(RAW_ONE, 1 << 31, 0));
@@ -118,8 +119,8 @@ fn stl_tp_006_stored_normals_and_attributes_are_ignored() {
     for normal in normals {
         for attribute in [0, 1, 0x7FFF, 0xFFFF] {
             let changed = facets.map(|f| Facet { normal, attribute, ..f });
-            let mesh =
-                parse_binary_stl(&stl(&changed)).expect("normals and attributes are ignored");
+            let bytes = stl(&changed);
+            let mesh = parse_binary_stl(&bytes).expect("normals and attributes are ignored");
             assert_eq!(Ok((vertices(&mesh), triangles(&mesh))), reference);
         }
     }
@@ -131,8 +132,10 @@ fn stl_tp_007_winding_is_kept_and_degenerate_triangles_are_kept() {
     // Clockwise against an outward +z normal: not reordered from the normal.
     let reversed = Facet { normal: [0, 0, ONE], vertices: [a, c, b], attribute: 0 };
     let point = Facet::new([b, b, b]);
-    let collinear = Facet::new([a, b, [ONE | 0x0080_0000, 0, 0]]);
-    let mesh = parse_binary_stl(&stl(&[reversed, point, collinear])).expect("degenerates are kept");
+    // 0x4000_0000 is 2.0.
+    let collinear = Facet::new([a, b, [0x4000_0000, 0, 0]]);
+    let bytes = stl(&[reversed, point, collinear]);
+    let mesh = parse_binary_stl(&bytes).expect("degenerates are kept");
     let (va, vb, vc) = (vertex(0, 0, 0), vertex(RAW_ONE, 0, 0), vertex(0, RAW_ONE, 0));
     let two = vertex(2 * RAW_ONE, 0, 0);
     assert_eq!(vertices(&mesh), [va, vc, vb, vb, vb, vb, va, vb, two]);
@@ -281,7 +284,8 @@ fn stl_tp_014_the_range_ends_and_ties_follow_try_from_f32() {
     ];
     for (bits, raw) in cases {
         let facet = Facet::new([[bits, 0, 0], [0, bits, 0], [0, 0, bits]]);
-        let mesh = parse_binary_stl(&stl(&[facet])).expect("in range");
+        let bytes = stl(&[facet]);
+        let mesh = parse_binary_stl(&bytes).expect("in range");
         assert_eq!(
             vertices(&mesh),
             [vertex(raw, 0, 0), vertex(0, raw, 0), vertex(0, 0, raw)],
@@ -300,7 +304,10 @@ fn f32_from(bits: u32) -> f32 {
 #[wasm_bindgen_test(unsupported = test)]
 fn stl_tp_015_errors_display_their_position_and_are_errors() {
     let cases = [
-        (StlError::TooShort { length: 83 }, "STL input is 83 bytes, shorter than the 84-byte header and triangle count"),
+        (
+            StlError::TooShort { length: 83 },
+            "STL input is 83 bytes, shorter than the 84-byte header and triangle count",
+        ),
         (
             mismatch(4, 283),
             "STL declares 4 triangles, which needs exactly 284 bytes; the input is 283 bytes",

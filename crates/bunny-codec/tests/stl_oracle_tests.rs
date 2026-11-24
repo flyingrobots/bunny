@@ -95,10 +95,10 @@ fn oracle(bytes: &[u8]) -> Outcome {
         let base = 84 + 50 * usize::try_from(triangle).expect("small test files");
         for vertex in 0..3_u8 {
             let mut position = [0_i64; 3];
-            for axis in 0..3_u8 {
+            for (axis, slot) in (0..3_u8).zip(position.iter_mut()) {
                 let at = base + 12 + 12 * usize::from(vertex) + 4 * usize::from(axis);
                 match oracle_raw(word_at(bytes, at)) {
-                    Ok(raw) => position[usize::from(axis)] = raw,
+                    Ok(raw) => *slot = raw,
                     Err(Bad::NonFinite) => return Outcome::NonFinite { triangle, vertex, axis },
                     Err(Bad::OutOfRange) => return Outcome::OutOfRange { triangle, vertex, axis },
                 }
@@ -207,7 +207,7 @@ fn stl_tp_020_seeded_files_match_the_independent_reader_bit_for_bit() {
         assert_eq!(observed(&bytes), oracle(&bytes), "special case {case}: {bits:#x}");
     }
     assert!(
-        tally.mesh >= 800 && tally.non_finite >= 150 && tally.out_of_range >= 600,
+        tally.mesh >= 1_000 && tally.non_finite >= 500 && tally.out_of_range >= 700,
         "seed {SEED:#x}: {tally:?}"
     );
 }
@@ -263,11 +263,11 @@ fn stl_tp_021_random_and_mutated_bytes_never_panic_and_match_the_oracle() {
         tally.add(&expected);
     }
     assert!(
-        tally.mesh >= 2_000
-            && tally.too_short >= 500
-            && tally.length >= 5_000
-            && tally.non_finite >= 200
-            && tally.out_of_range >= 500,
+        tally.mesh >= 3_000
+            && tally.too_short >= 1_500
+            && tally.length >= 10_000
+            && tally.non_finite >= 600
+            && tally.out_of_range >= 1_000,
         "seed {:#x}: {tally:?}",
         SEED ^ 0xF0
     );
