@@ -587,6 +587,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `bunny-query`: `closest_points_segments` returns the closest points of a
+  zero-length segment and of exactly parallel segments
+  (flyingrobots/bunny#506). **Behaviour change**, for exactly two kinds of
+  input; every other input gives the same bits as before, checked against a
+  frozen copy of the previous routine on 100 000 seeded pairs of
+  non-degenerate, non-parallel segments:
+  1. **A zero-length second segment** (`p2 == q2` raw). The answer is now the
+     mirror of the call with the point first. Before, it was `p1` whatever
+     the point. In the seeded sweep that was outside the bound on 2 045 of
+     4 000 cases, up to about 24 units away; the other 1 955 keep their bits.
+     Example: for `(0,0,0)-(2,0,0)` and the point `(1,1,0)`, the first point
+     was `(0,0,0)` and is now `(1,0,0)` (raw `[4294967296, 0, 0]`).
+  2. **Exactly parallel or collinear segments whose rounded `a e - b^2` is not
+     zero.** They now take the parallel rule that pairs with a zero rounded
+     denominator always took. Before, some answers were not a closest pair, up
+     to about 0.8 units from every closest pair. In the sweep, 54 of 216 changed
+     parallel answers and 60 of 576 changed collinear answers were wrong; the
+     rest move to another closest pair, by rounding or along the overlap.
+     Example: `(-237815078086, 116379279042, -166771290285)-(-237815078086,
+     93027424914, -166771290285)` against `(-270306501171, 122193399589,
+     -218072046061)-(-270306501171, 91057594085, -218072046061)` (raw) gave
+     the two ends `q1` and `q2`, whose y differ by 1 969 830 829 raw, and now
+     gives `p1` and `(-270306501171, 116379279045, -218072046061)`.
+
+  A zero-length first segment, two points, and parallel pairs with a zero
+  rounded denominator are unchanged. The rustdoc states the roundings and,
+  below `2^45` raw, the raw-unit bound for a point against a segment and for
+  parallel segments. The signature is unchanged. New chapter
+  `docs/topics/closest-point/` (CLOSEST-REQ-010 to -014, CLOSEST-TP-020 to
+  -028).
+
 * Docs: the optics chapter no longer repeats the `### Orthonormal Frame`
   heading (flyingrobots/bunny#346), and the release-packaging chapter says
   that packaging does not build documentation and names the gate step that

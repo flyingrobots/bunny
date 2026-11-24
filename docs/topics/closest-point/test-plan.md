@@ -101,7 +101,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_020_the_issue_example_returns_the_closest_point_of_the_first_segment"
 oracle = "Hand-derived raw answer, also checked against the exact oracle."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-021"
@@ -110,7 +110,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_021_a_zero_length_second_segment_gives_the_closest_point_of_the_first"
 oracle = "Hand-derived raw answers, the exact oracle bound and the mirrored call."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-022"
@@ -119,7 +119,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_022_a_zero_length_first_segment_and_two_points"
 oracle = "Hand-derived raw answers, the exact oracle bound and the frozen previous routine."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-023"
@@ -128,7 +128,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_023_one_raw_unit_segments_against_a_point"
 oracle = "The exact oracle bound."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-024"
@@ -137,7 +137,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_024_non_degenerate_non_parallel_pairs_are_bit_identical"
 oracle = "The frozen previous routine, bit for bit, over 100 000 seeded pairs, seed printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-025"
@@ -146,7 +146,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_025_seeded_arrangements_against_the_exact_oracle"
 oracle = "Exact big-integer oracle over 36 000 seeded pairs in nine arrangements, seed printed."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-026"
@@ -155,7 +155,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_026_parallel_segments_take_the_parallel_rule"
 oracle = "Hand-derived raw answers, the frozen previous routine and the exact oracle bound."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-027"
@@ -164,7 +164,7 @@ evidence = "test"
 test = "crates/bunny-query/tests/closest_segments_degenerate_tests.rs::closest_tp_027_the_ends_of_the_raw_range_are_pinned"
 oracle = "Hand-derived saturated raw answers."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CLOSEST-TP-028"
@@ -173,7 +173,7 @@ evidence = "manual-audit"
 artifact = "docs/topics/closest-point/test-plan.md#mutation-checks"
 oracle = "Each rule broken on purpose makes at least one implemented case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 The existing goldens of `closest_points_segments` are not changed:
@@ -183,5 +183,25 @@ The existing goldens of `closest_points_segments` are not changed:
 
 ## Mutation Checks
 
-Planned: each rule of the fix broken on purpose in a local copy of
-`crates/bunny-query/src/closest.rs`, the tests run, and the source restored.
+Each rule below was broken on purpose in a local copy of `crates/bunny-query/src/closest.rs`.
+Then `cargo test --locked --no-fail-fast -p bunny-query --test
+closest_segments_degenerate_tests --test closest_raw_tests --test query_tests --test
+property_tests` was run, and the source was restored after each. The unmutated source passed
+every case.
+
+| Mutation | Rule broken | Cases that fail |
+| --- | --- | --- |
+| The zero-length branch removed (the routine before the fix) | CLOSEST-REQ-011 | 020, 021, 025, 027 |
+| The mirrored pair not swapped back | CLOSEST-REQ-011 | 020, 021, 022, 023, 025, 027 |
+| The first segment tested for zero length instead of the second | CLOSEST-REQ-011 | 020, 021, 022, 025, 027 |
+| Zero length decided by the rounded `d2 . d2 == 0`, not raw equality | CLOSEST-REQ-010 | 024 |
+| The exact parallel test removed (only the rounded `a e - b^2 == 0`) | CLOSEST-REQ-013 | 025, 026 |
+| Every pair treated as parallel | CLOSEST-REQ-010 | 024, 025, `closest_point_raw_q32_32_outputs`, `test_closest_points_segments`, `prop_closest_segment_query_is_symmetric_for_bounded_values` |
+| The sign of each exact product ignored | CLOSEST-REQ-010, CLOSEST-REQ-013 | 024, 025 |
+| One component of the exact cross product dropped | CLOSEST-REQ-010 | 024, 025, `closest_point_raw_q32_32_outputs`, `test_closest_points_segments` |
+
+One mutation survives: taking the parallel test on the saturated differences `q - p` instead
+of the exact raw differences. A difference saturates only when a component exceeds `2^63`
+raw. Then `a` or `e` saturates too, and on every pair tried the two rules gave the same
+bits. CLOSEST-TP-026 pins two such pairs at the ends of the raw range, one exactly parallel
+and one not, but neither tells the two tests apart.

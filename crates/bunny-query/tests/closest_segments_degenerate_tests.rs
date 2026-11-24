@@ -51,7 +51,13 @@ fn kernel(s: Segments) -> (Raw3, Raw3) {
 }
 
 fn reference(s: Segments) -> (Raw3, Raw3) {
-    let (c1, c2) = reference_closest_points_segments(v(s[0]), v(s[1]), v(s[2]), v(s[3]));
+    let (c1, c2) = reference_closest_points_segments(v(s[0]), v(s[1]), v(s[2]), v(s[3]), false);
+    (raw(c1), raw(c2))
+}
+
+/// The previous routine's parallel branch, taken whatever the rounded denominator.
+fn parallel_rule(s: Segments) -> (Raw3, Raw3) {
+    let (c1, c2) = reference_closest_points_segments(v(s[0]), v(s[1]), v(s[2]), v(s[3]), true);
     (raw(c1), raw(c2))
 }
 
@@ -856,6 +862,9 @@ fn closest_tp_025_seeded_arrangements_against_the_exact_oracle() {
                     "{context}, case {drawn}: {s:?} gave {got:?}, error {} raw",
                     k.error
                 );
+                if matches!(shape(s), Shape::Parallel | Shape::Collinear) {
+                    assert_eq!(got, parallel_rule(s), "{context}, case {drawn}: {s:?}");
+                }
                 if got != previous {
                     let parallel_rerouted = matches!(shape(s), Shape::Parallel | Shape::Collinear)
                         && rounded_denominator(s) != 0;
@@ -945,6 +954,26 @@ fn closest_tp_026_parallel_segments_take_the_parallel_rule() {
     let before = judge(s, reference(s), |p| documented_bounds(p).expect("parallel"));
     assert!(!before.ok && before.error > 1 << 30, "old error {} raw", before.error);
     assert_documented(s, "parallel, rounded denominator nonzero");
+    assert_eq!(kernel(s), parallel_rule(s));
+
+    // Parallelism is decided on the exact raw directions, not on the saturated differences.
+    // At the ends of the raw range `a = d1 . d1` saturates, and both rules give the same bits
+    // on these two pairs; they are pinned, not endorsed (flyingrobots/bunny#116, D5).
+    // `q1 - p1` is exactly `(2^64 - 1, MAX / D, 0)` raw, with `D = 1_532_540_863` a divisor of
+    // `MAX`, and saturates to `(MAX, MAX / D, 0)`, which is parallel to `(D, 1, 0)`; the exact
+    // directions are not parallel, so the pair keeps the previous routine's answer.
+    let d = 1_532_540_863;
+    let not_parallel =
+        [[i64::MIN, 0, 0], [i64::MAX, i64::MAX / d, 0], [0, ONE, 0], [d, ONE + 1, 0]];
+    assert_eq!(shape(not_parallel), Shape::General);
+    assert_eq!(kernel(not_parallel), reference(not_parallel));
+    assert_eq!(kernel(not_parallel), ([-1, i64::MAX / d, 0], [0, ONE, 0]));
+    // The exact directions `(2^32 + 1) (2^32 - 1, 1, 0)` and `(2^32 - 1, 1, 0)` are parallel,
+    // but the first saturates to `(MAX, 2^32 + 1, 0)`, which is not: the parallel rule.
+    let (long, short) = ([i64::MAX, (1 << 32) + 1, 0], [(1 << 32) - 1, ONE + 1, 0]);
+    let parallel = [[i64::MIN, 0, 0], long, [0, ONE, 0], short];
+    assert_eq!(shape(parallel), Shape::Parallel);
+    assert_eq!(kernel(parallel), parallel_rule(parallel));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1018,14 +1047,16 @@ fn closest_tp_024_non_degenerate_non_parallel_pairs_are_bit_identical() {
 // ---------------------------------------------------------------------------------------
 // The previous routine, frozen: `closest_points_segments` as it was before
 // flyingrobots/bunny#506, with its helpers inlined, used only as the bit-identity reference.
+// With `force_parallel` it takes its parallel branch whatever the rounded denominator.
 // ---------------------------------------------------------------------------------------
 
-#[allow(clippy::many_single_char_names, clippy::similar_names)]
+#[allow(clippy::many_single_char_names, clippy::similar_names, clippy::too_many_arguments)]
 fn reference_closest_points_segments(
     p1: FixedVec3,
     q1: FixedVec3,
     p2: FixedVec3,
     q2: FixedVec3,
+    force_parallel: bool,
 ) -> (FixedVec3, FixedVec3) {
     let zero = FixedQ32_32::ZERO;
     let d1 = q1 - p1;
@@ -1039,7 +1070,7 @@ fn reference_closest_points_segments(
     let denom = a * e - b * b;
 
     let (mut s_num, mut s_denom, mut t_num, mut t_denom);
-    if denom == zero {
+    if force_parallel || denom == zero {
         (s_num, s_denom, t_num, t_denom) = (zero, FixedQ32_32::ONE, f, e);
     } else {
         (s_num, s_denom, t_num, t_denom) = (b * f - e * c, denom, a * f - b * c, denom);
