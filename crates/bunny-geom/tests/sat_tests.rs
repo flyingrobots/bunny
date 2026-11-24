@@ -161,6 +161,29 @@ fn sat_tp_003_only_an_edge_pair_separates_crossed_diamonds() {
     // Swapped, the same axis is edge pair (1, 2).
     let b = obb([reach + ONE / 16, 0, 0], b_axes, [ONE; 3]);
     assert_eq!(sat_obb_obb(&b, &a), separated(ObbAxis::EdgePair { first: 1, second: 2 }));
+    // Five edge pairs separate and no face does; row-major order reports (0, 1), where a
+    // column-major order would report (1, 0). Found by a seeded search over the corner
+    // projections of the oracle.
+    let turn = |axis: [i64; 3], angle: u64| {
+        FixedMat3::rotation_axis_angle(
+            FixedUnitVec3::new(pt(axis)).expect("a nonzero axis"),
+            FixedAngle::from_raw(angle),
+        )
+    };
+    let first = obb(
+        [0, 0, 0],
+        turn([-7_911_362_751, 7_137_576_335, -5_636_116_897], 0x4243_0000_0000_0000),
+        [ONE; 3],
+    );
+    let second = obb(
+        [-2 * ONE, 2 * ONE, -2 * ONE],
+        turn([5_764_569_947, 5_669_941_795, 1_680_110_895], 0xCA3F_0000_0000_0000),
+        [ONE; 3],
+    );
+    assert_eq!(
+        boxes(&first, &second, "several edge pairs"),
+        separated(ObbAxis::EdgePair { first: 0, second: 1 })
+    );
 }
 
 #[wasm_bindgen_test(unsupported = test)]

@@ -75,7 +75,7 @@ fn pt(v: [i64; 3]) -> FixedVec3 {
 fn permutation(rng: &mut Rng) -> ([usize; 3], [i64; 3], FixedMat3) {
     let perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
     let perm = perms[rng.below(6)];
-    let signs = [(); 3].map(|()| if rng.next() % 2 == 0 { 1 } else { -1 });
+    let signs = [(); 3].map(|()| if rng.next() & 1 == 0 { 1 } else { -1 });
     let mut rows = [[0_i64; 3]; 3];
     for (column, (&row, &sign)) in perm.iter().zip(&signs).enumerate() {
         rows[row][column] = sign * ONE;
@@ -137,7 +137,7 @@ fn sat_tp_011_seeded_box_pairs_match_the_oracles() {
         let context = format!("seed={SEED_OBB:#x} small case={case}");
         // Small boxes: centres within 8 raw units and half extents up to 8, so every
         // Minkowski difference point is below 2^39 and the hull runs in checked i128.
-        let (a, b) = if case % 2 == 0 {
+        let (a, b) = if case.is_multiple_of(2) {
             // Exact axes placed in contact: on each world axis the gap between the boxes is
             // zero (contact), or one raw unit either way, or the boxes simply overlap.
             let (pa, _, ma) = permutation(&mut rng);
@@ -186,8 +186,8 @@ fn sat_tp_011_seeded_box_pairs_match_the_oracles() {
             _ => rotation(rng),
         };
         let (ma, mb) = (axes(&mut rng), axes(&mut rng));
-        let mb = if case % 4 == 0 { ma } else { mb };
-        let (a, b) = if case % 3 == 0 {
+        let mb = if case.is_multiple_of(4) { ma } else { mb };
+        let (a, b) = if case.is_multiple_of(3) {
             // Face to face on exact columns: the second box is the first moved by m columns
             // a_0, with g_0 = m 2^32 - h_0 + delta, delta in -1..=1.
             let m = 1 + rng.within(3).abs();
@@ -217,7 +217,10 @@ fn sat_tp_011_seeded_box_pairs_match_the_oracles() {
             let b = FixedObb3::try_new(pt(c(&mut rng)), mb, pt(h(&mut rng))).expect("valid");
             (a, b)
         };
-        large.add(&check_boxes(&a, &b, case % LARGE_OBB_HULL_EVERY == 0, &context), obb_edge);
+        large.add(
+            &check_boxes(&a, &b, case.is_multiple_of(LARGE_OBB_HULL_EVERY), &context),
+            obb_edge,
+        );
     }
     println!("seed={SEED_OBB:#x} small={small:?} large={large:?}");
     assert!(
@@ -275,7 +278,7 @@ fn sat_tp_012_seeded_triangles_and_boxes_match_the_oracles() {
             0 => {
                 // On a box face plane, or one raw unit off it.
                 let k = rng.below(3);
-                let plane = if rng.next() % 2 == 0 { lo[k].max(hi[k]) } else { lo[k].min(hi[k]) };
+                let plane = if rng.next() & 1 == 0 { lo[k].max(hi[k]) } else { lo[k].min(hi[k]) };
                 let off = rng.within(1);
                 for p in &mut v {
                     p[k] = plane.saturating_add(off);
@@ -283,7 +286,7 @@ fn sat_tp_012_seeded_triangles_and_boxes_match_the_oracles() {
             }
             1 => {
                 // Edge 0 through a box corner (exactly collinear in 3D), or one raw unit off.
-                let corner = [0, 1, 2].map(|k| if rng.next() % 2 == 0 { lo[k] } else { hi[k] });
+                let corner = [0, 1, 2].map(|k| if rng.next() & 1 == 0 { lo[k] } else { hi[k] });
                 let d = [(); 3].map(|()| rng.within(64));
                 let (s, t) = (1 + rng.within(64).abs(), 1 + rng.within(64).abs());
                 let off = [(); 3].map(|()| rng.within(1));
@@ -292,7 +295,7 @@ fn sat_tp_012_seeded_triangles_and_boxes_match_the_oracles() {
             }
             2 => {
                 // A degenerate triangle: a repeated vertex or three collinear points.
-                if rng.next() % 2 == 0 {
+                if rng.next() & 1 == 0 {
                     v[2] = v[rng.below(2)];
                 } else {
                     v[2] = [0, 1, 2].map(|k| v[0][k] / 2 + v[1][k] / 2);
@@ -302,7 +305,7 @@ fn sat_tp_012_seeded_triangles_and_boxes_match_the_oracles() {
             3 => {
                 // Swap lo and hi on some axes: the inverted box is the same box.
                 for k in 0..3 {
-                    if rng.next() % 2 == 0 {
+                    if rng.next() & 1 == 0 {
                         core::mem::swap(&mut lo[k], &mut hi[k]);
                     }
                 }

@@ -44,11 +44,26 @@ None.
 
 Checks run:
 First commit (tests only): the new tests fail to compile, as the API does not exist yet.
+Kernel commit, each its own command on the host (local Rust 1.100.0; CI uses the pinned
+1.96.0): cargo fmt --all --check; cargo test --locked --workspace --all-targets
+--all-features (155 test result lines, none failed); cargo run --locked -p xtask --
+code-dojo-generated; code-dojo-rust --all (clean after replacing indexing with destructuring
+and splitting one function); code-dojo-determinism --enforce; code-dojo-perf-groups;
+topic-docs (zero duplicate IDs, 13 cases implemented); repo-respect check --branch. cargo
+build and cargo test -p bunny-geom --no-default-features pass (22 result lines).
+RUSTDOCFLAGS="-D warnings" cargo doc -p bunny-geom clean. cargo clippy -p bunny-geom on the
+library and the two new test targets with -D warnings: clean (the pre-existing
+assert_is_empty lint of the newer toolchain remains in the untouched polygon_clip_tests.rs).
+Mutations: twenty-two, each applied to the kernel, run with the two new test files, and
+restored; each failed at least one case (the test plan's table). Column-major edge order
+first survived; a searched configuration was added to SAT-TP-003.
+Not run locally: wasm-pack (CI's WebAssembly job), the bare-metal no-std gate (needs
+rustup), cargo deny and markdownlint-cli2 (CI's Dojo job), the pinned 1.96.0 clippy.
 
 Known risks:
 One more private wide integer in the workspace (flyingrobots/bunny#424 tracks sharing one).
 The constructed OBB cases at unit scale run the brute-force hull oracle in unbounded
-integers, which is slow in debug builds (about 20 seconds for the two new test files).
+integers, which is slow in debug builds (about 25 seconds for each of the two new test files).
 
 Human reviewer:
 James Ross (maintainer); review pending.

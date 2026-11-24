@@ -52,6 +52,12 @@ queries, collision detection, and ray-casting.
   round them once to Q32.32. `barycentric2` and `barycentric3_coplanar` return
   exact barycentric numerators with an exact inside, on-edge, on-vertex or
   outside classification; see `docs/topics/predicates/README.md`.
+* **Separating-axis tests** (`bunny-sat/1`): `sat_obb_obb` and
+  `sat_triangle_aabb` classify two oriented boxes, or a triangle against an
+  axis-aligned box, as `Separated`, `Touching` or `Overlapping`, exactly (no
+  rounding, no normalised axes, no overflow), with the first separating or
+  touching axis in a documented order; see
+  `docs/topics/convex-collision/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects
