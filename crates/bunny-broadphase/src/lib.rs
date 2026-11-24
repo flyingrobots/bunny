@@ -42,3 +42,5 @@ pub use traversal::{intersect_aabb, intersect_ray, TraversalError};
 pub use uniform_grid::{
     grid_key_count, uniform_grid_pairs, GridCellSize, GridKey, GridPairReport, UniformGridError,
 };
+pub mod refit;
+pub use refit::{refit_bvh, RefitError};

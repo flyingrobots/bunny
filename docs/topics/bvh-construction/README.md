@@ -2,8 +2,9 @@
 
 This chapter defines Bunny's current contract for building bounding volume
 hierarchies in `bunny-broadphase`: the flat node format both builders write,
-the quartile builder `build_bvh`, and the binned surface-area-heuristic (SAH)
-builder `build_bvh_sah`. The traversals that read these trees
+the quartile builder `build_bvh`, the binned surface-area-heuristic (SAH)
+builder `build_bvh_sah`, and `refit_bvh`, which gives a built tree new
+primitive boxes without changing its shape. The traversals that read these trees
 (`intersect_aabb`, `intersect_ray`, `closest_hit`, `any_hit`) are described in
 the [ray-tracing chapter](../ray-tracing/README.md#closest-hit-traversal).
 
@@ -16,6 +17,8 @@ exported from `bunny_broadphase` as `build_bvh` and `build_bvh_sah`, with
 `BvhNode`. The SAH builder's parameters are public constants in
 `bunny_broadphase::bvh`: `SAH_BIN_COUNT`, `SAH_MAX_LEAF_SIZE`,
 `SAH_MAX_DEPTH`, `SAH_TRAVERSAL_COST` and `SAH_INTERSECTION_COST`.
+Refit is implemented in `crates/bunny-broadphase/src/refit.rs` and exported as
+`refit_bvh`, with its error type `RefitError`.
 
 Evidence is listed in the [test plan](test-plan.md). Timings of both builders
 and of traversal through their trees are in the
@@ -209,3 +212,108 @@ The visitor traversals `intersect_ray` and `intersect_aabb` report every
 primitive in each leaf they reach, so which primitives they report, and in
 what order, depends on the tree. A tree from one builder is not a substitute
 for golden data recorded with the other.
+
+## Refit
+
+`refit_bvh` updates a built tree for primitives that have moved: the same
+primitives, in the same order, with new boxes. It keeps the tree's topology
+and primitive order and replaces only the bounds.
+
+```rust,ignore
+fn refit_bvh(nodes: &mut [BvhNode], prim_indices: &[u32], primitives: &[FixedAabb3])
+    -> Result<(), RefitError>;
+```
+
+### Refit Buffers
+
+- `nodes` is the used node slice a builder filled (the first `used` nodes;
+  the root is node 0), taken mutably. Only the `bounds` field of each node is
+  written.
+- `prim_indices` is the primitive-index buffer the builder filled, taken
+  immutably: refit cannot change the primitive order.
+- `primitives` holds one new box per primitive, indexed as the input to the
+  build was. Its length must equal the number of slots the leaves list, which
+  for a built tree is the number of primitives it was built over.
+- There is no scratch buffer, no allocation and no recursion.
+
+### Post-Condition
+
+After `Ok(())`, for every node of the slice:
+
+- a leaf's bounds are the union of the new boxes of the primitives it lists;
+- an interior node's bounds are the union of its two children's bounds.
+
+The union of boxes is, per axis, the least `min` and the greatest `max` of
+their raw values, so nothing is rounded and every bound is one of the input
+values. An inverted box (a `min` above its `max` on some axis) is accepted and
+unioned the same way, because both builders accept it and union it the same
+way: refit accepts exactly the boxes the builders accept. The result is a
+function of the topology, `prim_indices` and `primitives` only, so refitting
+a tree to the boxes it was built over gives back the same bits, and
+refitting to other boxes and then back restores it bit for bit.
+
+### Order And The Single Pass
+
+Both builders reserve a node's two children at the end of the nodes written
+so far ([Buffers And Node Format](#buffers-and-node-format)), so every
+interior node's first child has a larger index than the node itself, and a
+tree has one more leaf than interior nodes. `refit_bvh` relies on the first
+fact: it walks the nodes once from the last to the first, so both children of
+a node are updated before the node. A test checks both facts on the output of
+both builders (BVH-TP-040).
+
+### Refusals And All-Or-Nothing
+
+Refit checks the whole buffer before it writes anything, so a refused refit
+leaves the buffer exactly as it was, with no scratch copy: a validating pass
+over every node, then the writing pass. The errors are `RefitError` values,
+and the first fault found in this order is reported:
+
+1. each node from first to last: an interior node whose children are not both
+   inside the slice (`InvalidNodeIndex`), or whose first child is at or before
+   the node itself (`ChildNotAfterParent`; every cycle has such a node, and a
+   node slice with unused stale nodes after the tree usually fails here); a
+   leaf whose slots are not all inside `prim_indices`
+   (`InvalidPrimitiveRange`);
+2. a slice without exactly one more leaf than interior nodes (`NotATree`);
+3. a box count other than the number of slots the leaves list
+   (`PrimitiveCountMismatch`);
+4. each leaf from first to last: a listed primitive with no box
+   (`InvalidPrimitiveIndex`).
+
+The node checks and the count make every index refit uses valid and rule out
+cycles. They are not a proof that the nodes form a tree, and refit does not
+check that `prim_indices` is a permutation: a shared child pair with
+unreachable leaves can pass the count, and a primitive listed twice is not
+detected. Refit still writes the post-condition for every node of such a
+buffer; it does not make a malformed tree into a good one.
+
+### What Refit Preserves
+
+**Ordering.** Refit changes no order: the topology, the leaf ranges and
+`prim_indices` are untouched. The searches that break ties by lowest
+primitive index (`closest_hit`, `any_hit` and their compact forms) answer
+independently of the tree
+([ray-tracing chapter](../ray-tracing/README.md#correctness-the-answer-does-not-depend-on-the-tree)),
+so refit cannot change which of several equally near primitives wins.
+
+**Correctness, not quality.** A refitted tree satisfies the same bound rule a
+built tree does (every node's box contains every primitive below it), so the
+searches on it return what they return on a tree rebuilt over the moved
+boxes, and what a test of every primitive returns. For `intersect_aabb`,
+which reports whole leaves, the primitives whose own box overlaps the query
+are the same set. This holds however badly the motion fits the old tree:
+primitives swapping places, collapsing to one point or spreading out. A
+refitted tree's boxes can overlap far more than a rebuilt tree's, so its
+searches can do more work. That degradation is expected and is not measured
+here: no timing or quality measure is part of this contract, and when to
+rebuild is the caller's decision.
+
+**The compact layout.** Refit applies to the standard layout only. A compact
+tree from `compact_bvh` is not refitted in place; convert the refitted tree
+again with `compact_bvh`.
+
+### Not Covered
+
+Refit keeps the topology. Inserting or removing primitives, changing a
+tree's shape after a motion, and deciding when to rebuild are not provided.
