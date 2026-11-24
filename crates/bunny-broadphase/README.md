@@ -25,7 +25,17 @@ buffer is large enough for the requested operation.
 * Counted forms of the compact searches (`compact_closest_hit_counted`,
   `compact_any_hit_counted`) that also return a `TraversalCounts` record of
   the box tests, visits and primitive tests one search made.
+* Refit of a built tree to moved primitives (`refit_bvh`): exact new bounds
+  with the topology and primitive order unchanged, in one pass with no
+  allocation, refusing a malformed buffer without writing to it. See
+  `docs/topics/bvh-construction/` in the repository.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
+* A uniform grid broadphase (`uniform_grid_pairs`, `bunny-uniform-grid/1`)
+  with exact integer cell coordinates (`floor(raw / cell_raw)`), sorted
+  (cell, box) keys in caller scratch sized by `grid_key_count`, and the same
+  pairs in the same order as `sweep_and_prune`; a short pair buffer keeps the
+  first pairs and the report counts all of them. See `docs/topics/uniform-grid/`
+  in the repository.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 
 ## Examples

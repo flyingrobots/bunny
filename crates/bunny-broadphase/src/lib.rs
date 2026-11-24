@@ -26,6 +26,7 @@ pub mod counts;
 pub mod sweep_and_prune;
 #[allow(clippy::module_name_repetitions)]
 pub mod traversal;
+pub mod uniform_grid;
 pub mod utils;
 
 pub use bvh::{build_bvh, build_bvh_sah, BvhNode};
@@ -38,3 +39,8 @@ pub use compact_hit::{
 pub use counts::TraversalCounts;
 pub use sweep_and_prune::sweep_and_prune;
 pub use traversal::{intersect_aabb, intersect_ray, TraversalError};
+pub use uniform_grid::{
+    grid_key_count, uniform_grid_pairs, GridCellSize, GridKey, GridPairReport, UniformGridError,
+};
+pub mod refit;
+pub use refit::{refit_bvh, RefitError};
