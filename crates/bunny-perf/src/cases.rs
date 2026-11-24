@@ -57,7 +57,9 @@ use bunny_num::FixedQ32_32;
     feature = "trace_counted",
     feature = "shade",
     feature = "texture",
-    feature = "normals"
+    feature = "normals",
+    feature = "convert",
+    feature = "mesh"
 ))]
 pub(crate) const BATCH: usize = 1024;
 #[cfg(any(
@@ -125,6 +127,14 @@ pub(crate) fn all() -> Vec<Case> {
     cases.extend(crate::smooth::smooth_cases());
     #[cfg(feature = "texture")]
     cases.extend(crate::texture::texture_cases());
+    #[cfg(feature = "convert")]
+    cases.extend(crate::convert::convert_cases());
+    #[cfg(feature = "sweep")]
+    cases.extend(crate::sweep::sweep_cases());
+    #[cfg(feature = "mesh")]
+    cases.extend(crate::mesh::mesh_cases());
+    #[cfg(feature = "codec")]
+    cases.extend(crate::codec::codec_cases());
     cases
 }
 

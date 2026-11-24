@@ -30,6 +30,12 @@ buffer is large enough for the requested operation.
   allocation, refusing a malformed buffer without writing to it. See
   `docs/topics/bvh-construction/` in the repository.
 * Deterministic sweep-and-prune pair generation with sorted pair output.
+* A uniform grid broadphase (`uniform_grid_pairs`, `bunny-uniform-grid/1`)
+  with exact integer cell coordinates (`floor(raw / cell_raw)`), sorted
+  (cell, box) keys in caller scratch sized by `grid_key_count`, and the same
+  pairs in the same order as `sweep_and_prune`; a short pair buffer keeps the
+  first pairs and the report counts all of them. See `docs/topics/uniform-grid/`
+  in the repository.
 * Q32.32 fixed-point geometry throughout the core broadphase path.
 
 ## License
