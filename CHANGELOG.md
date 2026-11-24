@@ -66,6 +66,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/topics/planar-geometry/` (PLANAR-REQ-001 to -009, PLANAR-TP-001 to
   -012). Refs flyingrobots/bunny#149.
 
+* `bunny-geom`: exact separating-axis tests under the contract identity
+  `bunny-sat/1` (`SAT_CONTRACT_ID`), first slice of flyingrobots/bunny#147.
+  `sat_obb_obb` (two `FixedObb3`) and `sat_triangle_aabb` (a `FixedTriangle3`
+  and a `FixedAabb3`) return `SatClass`: `Separated { axis }` at the first
+  candidate axis whose projections are disjoint, `Touching { axis }` at the
+  first whose projections share one end point, or `Overlapping`. The axes
+  (`ObbAxis`: the three face normals of each box, then the nine edge cross
+  products; `TriangleAabbAxis`: the three box faces, the triangle face, then
+  the nine edge cross products) are raw integer vectors, never normalised,
+  and exactly zero axes are skipped. Exact for every accepted input: 256-bit
+  intermediates for the boxes, the exact predicates for the triangle; no
+  refusal, no overflow, no `alloc`. Degenerate triangles and flat or point
+  boxes are classified, and an inverted box is the box with the same corners.
+  The minimum translation axis is not in this slice.
+  `docs/topics/convex-collision/` (SAT-REQ-001 to -005, SAT-TP-001 to -013).
+
+* `bunny-codec`: an encoder for the Bunny compressed mesh profile v1 that
+  `decode_compressed_mesh` reads. `encode_compressed_mesh` returns the stream
+  as a `Vec<u8>` of exactly its length (one allocation);
+  `encode_compressed_mesh_into` writes it to the front of a caller buffer and
+  allocates nothing; `encoded_compressed_mesh_len` gives the length. The index
+  width is the caller's `IndexBufferLayout` variant, so the bytes depend on the
+  records alone: every encoded mesh decodes to its input, and the committed
+  fixture's records encode to its committed bytes. Meshes the decoder would
+  refuse are refused with `CompressedMeshEncodeError`, in a stated order. The
+  profile, the decoder and the fixture are unchanged.
+  `docs/topics/compressed-mesh/` (CMESH-REQ-001 to -007, CMESH-TP-001 to
+  -013). Closes flyingrobots/bunny#124.
+
 * `bunny-mesh`: topology validation under the contract identity
   `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
   reports index-degenerate triangles, geometrically degenerate triangles
