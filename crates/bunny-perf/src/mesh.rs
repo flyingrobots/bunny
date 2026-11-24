@@ -100,5 +100,5 @@ mod tests {
         assert_eq!(codes.iter().map(|q| q.y).max(), Some(u16::MAX));
     }
 
-    const QUANTIZED_DIGEST: u64 = 0;
+    const QUANTIZED_DIGEST: u64 = 0x3427_8AF6_737C_44DC;
 }

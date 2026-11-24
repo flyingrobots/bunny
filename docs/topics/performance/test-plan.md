@@ -13,6 +13,8 @@ This plan covers:
 - the regression threshold used by CI
 - building the harness against a revision that lacks newer feature groups
 - the fidelity rule that every optimization must satisfy
+- the deterministic inputs, observable work and decoded results of the conversion, mesh, codec
+  and sweep-and-prune cases
 
 Timing numbers themselves are measurements, not test oracles: no test asserts that a
 kernel runs in a given number of nanoseconds.
@@ -52,6 +54,8 @@ contract graph consumed by `cargo run --locked -p xtask -- topic-docs`.
 | PERF-REQ-012 | The evidence file names the base reference, the full base and candidate SHAs, the target triple, the flags (rounds, code alignment, `RUSTFLAGS`, harness arguments, runner, threshold) and whether the working tree was dirty by `git status --porcelain`. | `README.md#evidence-files` |
 | PERF-REQ-013 | Evidence is opt-in: without `--evidence` the command prints the same table, appends the same summary and exits with the same status as before, and an existing evidence file is never overwritten. | `README.md#evidence-files` |
 | PERF-REQ-014 | Each line kind of `bunny-perf-evidence/1` is defined by a JSON Schema (draft 2020-12) under `schemas/bunny/perf-evidence/v1/`: every line the writer produces validates against the schema for its kind, deliberately wrong lines do not, and the fields the writer emits are exactly the fields each schema requires, in the same order. | `README.md#evidence-files` |
+| PERF-REQ-015 | The conversion, mesh, codec and sweep-and-prune cases time work the optimizer cannot remove, on inputs built before timing from a fixed seed: every input is the same bytes on every construction, every result feeds the checksum through `black_box`, each decode reads back every vertex and triangle of the mesh it was given, and the sweep finds exactly the overlapping pairs. | `README.md#adding-a-case` |
+| PERF-REQ-016 | Every Bunny crate the harness depends on is one the generated standalone manifest can point at, so no feature group fails to build, and goes unmeasured, on both sides. | `README.md#adding-a-case` |
 
 ```toml
 [[requirement]]
@@ -123,13 +127,26 @@ status = "active"
 id = "PERF-REQ-014"
 summary = "Each line kind of `bunny-perf-evidence/1` is defined by a JSON Schema (draft 2020-12) under `schemas/bunny/perf-evidence/v1/`: every line the writer produces validates against the schema for its kind, deliberately wrong lines do not, and the fields the writer emits are exactly the fields each schema requires, in the same order."
 status = "active"
+
+[[requirement]]
+id = "PERF-REQ-015"
+summary = "The conversion, mesh, codec and sweep-and-prune cases time work the optimizer cannot remove, on inputs built before timing from a fixed seed: every input is the same bytes on every construction, every result feeds the checksum through `black_box`, each decode reads back every vertex and triangle of the mesh it was given, and the sweep finds exactly the overlapping pairs."
+status = "active"
+
+[[requirement]]
+id = "PERF-REQ-016"
+summary = "Every Bunny crate the harness depends on is one the generated standalone manifest can point at, so no feature group fails to build, and goes unmeasured, on both sides."
+status = "active"
 ```
 
 Each optimization adds its equivalence or error-bound cases under PERF-REQ-001.
 
 ## Fixtures
 
-No external fixtures. Tests build synthetic `bunny-perf` output and manifests in memory. The
+The `xtask` tests use no external fixtures: they build synthetic `bunny-perf` output and
+manifests in memory. The harness's own tests (PERF-TP-070 to PERF-TP-085) build the case inputs
+in memory from fixed seeds, and one of them also decodes `bunny-codec`'s committed Stanford
+bunny fixture (`crates/bunny-codec/tests/fixtures/stanford-bunny-ascii/bun_zipper_res3.ply`). The
 evidence tests record constructed rounds through `Measured::record`, the same seam
 `run_interleaved` uses, so no harness is built or timed; the dirty flag is tested on
 constructed `git status --porcelain` text, never by dirtying the real tree. The schema tests read the two
@@ -207,6 +224,23 @@ ignoring it. Both test files parse JSON with the test-only reader in
 | PERF-TP-068 | Schema | PERF-REQ-014 | Each schema file parses, names draft 2020-12, is an object schema with `additionalProperties: false`, requires every property in property order, describes every property, and fixes `schema` and `kind` with `const`; every real line of the kind has exactly the required keys, in that order. Removing a field from `required`, or renaming or adding a field in the writer, fails this case. | `xtask/src/perf_evidence/tests/schema.rs::the_schema_files_are_well_formed_and_match_the_writer_fields` |
 | PERF-TP-069 | Schema | PERF-REQ-014 | The test validator refuses, rather than ignores, a keyword or form outside its stated subset: `pattern`, `format`, an unknown type, `additionalProperties: true`, a numeric `const`, `$ref`. | `xtask/src/perf_evidence/tests/schema.rs::the_validator_refuses_keywords_it_does_not_implement` |
 | PERF-TP-006 | Build | PERF-REQ-005 | The generated manifest is standalone and points at the given crates. | `xtask/src/perf.rs::tests::harness_manifest_points_at_the_given_crates` |
+| PERF-TP-070 | Inputs | PERF-REQ-015 | The seeded grid has 4 096 vertices and 7 938 triangles, every coordinate a multiple of `2^-16` and every height in `[-1, 1)`. | `crates/bunny-perf/src/grid.rs::tests::the_grid_has_the_stated_size_and_steps` |
+| PERF-TP-071 | Inputs | PERF-REQ-015 | The grid is the same bytes on two constructions, of the stated length, with the recorded FNV-1a digest. | `crates/bunny-perf/src/grid.rs::tests::the_grid_is_the_same_on_every_construction` |
+| PERF-TP-072 | Inputs | PERF-REQ-015 | The decimal writer's text reads back to the same raw value through an exact `i128` reader that shares nothing with it, at 0, ±1/4, 1, 3/2 and ±2^-16, with no trailing zeros. | `crates/bunny-perf/src/grid.rs::tests::decimals_are_exact_and_short` |
+| PERF-TP-073 | Inputs | PERF-REQ-015 | The ASCII PLY, binary PLY, OBJ and compressed encodings are the same bytes on two constructions, with the recorded lengths and FNV-1a digests. | `crates/bunny-perf/src/codec.rs::tests::every_input_is_the_same_on_every_construction` |
+| PERF-TP-074 | Decode | PERF-REQ-015 | Each of the four decodes reads 4 096 vertices and 7 938 triangles, and the triangles' index sum equals the grid's. | `crates/bunny-perf/src/codec.rs::tests::every_decoder_reads_the_whole_grid` |
+| PERF-TP-075 | Decode | PERF-REQ-015 | ASCII PLY decodes to the grid's exact Q32.32 positions, binary PLY and OBJ to the exact `f32` of each (`to_f32`), and the compressed mesh to `quantize_vertex` of each, compared by the decode checksum's coordinate fold. | `crates/bunny-perf/src/codec.rs::tests::every_decoder_returns_the_grid_values` |
+| PERF-TP-076 | Decode | PERF-REQ-015 | The ASCII PLY decode reads the committed Stanford bunny fixture whole: 1 889 vertices and 3 851 triangles. | `crates/bunny-perf/src/codec.rs::tests::the_ascii_decode_reads_the_committed_stanford_fixture` |
+| PERF-TP-077 | Smoke | PERF-REQ-015 | Each `codec/` case runs once without timing, in the stated order, and returns the same checksum on a second run and from a second construction; none returns the failure value `-1`. | `crates/bunny-perf/src/codec.rs::tests::every_codec_case_runs_and_its_checksum_is_stable` |
+| PERF-TP-078 | Inputs | PERF-REQ-015 | The quantized grid is the same bytes on two constructions, with the recorded FNV-1a digest. | `crates/bunny-perf/src/mesh.rs::tests::the_quantized_grid_is_the_same_on_every_construction` |
+| PERF-TP-079 | Inputs | PERF-REQ-015 | The quantized heights reach both 0 and `u16::MAX`, so the quantize inputs span the whole code range. | `crates/bunny-perf/src/mesh.rs::tests::the_quantized_heights_span_the_range` |
+| PERF-TP-080 | Smoke | PERF-REQ-015 | Each `mesh/` case runs once without timing, in the stated order, and returns the same non-zero checksum on a second run and from a second construction. | `crates/bunny-perf/src/mesh.rs::tests::every_mesh_case_runs_and_its_checksum_is_stable` |
+| PERF-TP-081 | Inputs | PERF-REQ-015 | The 27 648 sweep boxes are the same bytes on two constructions, with the recorded FNV-1a digest. | `crates/bunny-perf/src/sweep.rs::tests::the_scene_is_the_same_on_every_construction` |
+| PERF-TP-082 | Oracle | PERF-REQ-015 | `sweep_and_prune` fits the buffer, finds between a quarter and twice as many pairs as boxes (9 482), and returns exactly the sorted pairs that a separate test over boxes sorted by `min.x` finds with its own overlap test. | `crates/bunny-perf/src/sweep.rs::tests::the_sweep_finds_every_overlapping_pair` |
+| PERF-TP-083 | Smoke | PERF-REQ-015 | `broadphase/sweep_and_prune` runs once without timing and returns the same checksum on a second run and from a second construction; it is not the failure value `-1`. | `crates/bunny-perf/src/sweep.rs::tests::the_sweep_case_runs_and_its_checksum_is_stable` |
+| PERF-TP-084 | Inputs | PERF-REQ-015 | The 1 024 conversion inputs are the same on two constructions, with the recorded raw sum, and every `f32` image converts back. | `crates/bunny-perf/src/convert.rs::tests::the_values_are_the_same_on_every_construction` |
+| PERF-TP-085 | Smoke | PERF-REQ-015 | Each conversion case runs once without timing, in the stated order, and returns the same non-zero checksum on a second run and from a second construction. | `crates/bunny-perf/src/convert.rs::tests::every_convert_case_runs_and_its_checksum_is_stable` |
+| PERF-TP-086 | Build | PERF-REQ-016 | Every `bunny-*` dependency in the harness manifest, `bunny-mesh` and `bunny-codec` among them, is in `BASE_CRATES`, and the generated manifest points at both. | `xtask/src/perf.rs::tests::every_crate_the_harness_depends_on_is_a_base_crate` |
 
 ```toml
 [[case]]
@@ -781,6 +815,159 @@ requirements = ["PERF-REQ-014"]
 evidence = "test"
 test = "xtask/src/perf_evidence/tests/schema.rs::the_validator_refuses_keywords_it_does_not_implement"
 oracle = "The test validator refuses, rather than ignores, a keyword or form outside its stated subset: `pattern`, `format`, an unknown type, `additionalProperties: true`, a numeric `const`, `$ref`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-070"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/grid.rs::tests::the_grid_has_the_stated_size_and_steps"
+oracle = "The seeded grid has 4 096 vertices and 7 938 triangles, every coordinate a multiple of `2^-16` and every height in `[-1, 1)`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-071"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/grid.rs::tests::the_grid_is_the_same_on_every_construction"
+oracle = "The grid is the same bytes on two constructions, of the stated length, with the recorded FNV-1a digest."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-072"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/grid.rs::tests::decimals_are_exact_and_short"
+oracle = "The decimal writer's text reads back to the same raw value through an exact `i128` reader that shares nothing with it, at 0, ±1/4, 1, 3/2 and ±2^-16, with no trailing zeros."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-073"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/codec.rs::tests::every_input_is_the_same_on_every_construction"
+oracle = "The ASCII PLY, binary PLY, OBJ and compressed encodings are the same bytes on two constructions, with the recorded lengths and FNV-1a digests."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-074"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/codec.rs::tests::every_decoder_reads_the_whole_grid"
+oracle = "Each of the four decodes reads 4 096 vertices and 7 938 triangles, and the triangles' index sum equals the grid's."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-075"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/codec.rs::tests::every_decoder_returns_the_grid_values"
+oracle = "ASCII PLY decodes to the grid's exact Q32.32 positions, binary PLY and OBJ to the exact `f32` of each (`to_f32`), and the compressed mesh to `quantize_vertex` of each, compared by the decode checksum's coordinate fold."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-076"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/codec.rs::tests::the_ascii_decode_reads_the_committed_stanford_fixture"
+oracle = "The ASCII PLY decode reads the committed Stanford bunny fixture whole: 1 889 vertices and 3 851 triangles."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-077"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/codec.rs::tests::every_codec_case_runs_and_its_checksum_is_stable"
+oracle = "Each `codec/` case runs once without timing, in the stated order, and returns the same checksum on a second run and from a second construction; none returns the failure value `-1`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-078"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/mesh.rs::tests::the_quantized_grid_is_the_same_on_every_construction"
+oracle = "The quantized grid is the same bytes on two constructions, with the recorded FNV-1a digest."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-079"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/mesh.rs::tests::the_quantized_heights_span_the_range"
+oracle = "The quantized heights reach both 0 and `u16::MAX`, so the quantize inputs span the whole code range."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-080"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/mesh.rs::tests::every_mesh_case_runs_and_its_checksum_is_stable"
+oracle = "Each `mesh/` case runs once without timing, in the stated order, and returns the same non-zero checksum on a second run and from a second construction."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-081"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/sweep.rs::tests::the_scene_is_the_same_on_every_construction"
+oracle = "The 27 648 sweep boxes are the same bytes on two constructions, with the recorded FNV-1a digest."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-082"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/sweep.rs::tests::the_sweep_finds_every_overlapping_pair"
+oracle = "`sweep_and_prune` fits the buffer, finds between a quarter and twice as many pairs as boxes (9 482), and returns exactly the sorted pairs that a separate test over boxes sorted by `min.x` finds with its own overlap test."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-083"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/sweep.rs::tests::the_sweep_case_runs_and_its_checksum_is_stable"
+oracle = "`broadphase/sweep_and_prune` runs once without timing and returns the same checksum on a second run and from a second construction; it is not the failure value `-1`."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-084"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/convert.rs::tests::the_values_are_the_same_on_every_construction"
+oracle = "The 1 024 conversion inputs are the same on two constructions, with the recorded raw sum, and every `f32` image converts back."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-085"
+requirements = ["PERF-REQ-015"]
+evidence = "test"
+test = "crates/bunny-perf/src/convert.rs::tests::every_convert_case_runs_and_its_checksum_is_stable"
+oracle = "Each conversion case runs once without timing, in the stated order, and returns the same non-zero checksum on a second run and from a second construction."
+tier = "fast"
+status = "implemented"
+
+[[case]]
+id = "PERF-TP-086"
+requirements = ["PERF-REQ-016"]
+evidence = "test"
+test = "xtask/src/perf.rs::tests::every_crate_the_harness_depends_on_is_a_base_crate"
+oracle = "Every `bunny-*` dependency in the harness manifest, `bunny-mesh` and `bunny-codec` among them, is in `BASE_CRATES`, and the generated manifest points at both."
 tier = "fast"
 status = "implemented"
 ```

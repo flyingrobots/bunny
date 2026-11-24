@@ -85,5 +85,5 @@ mod tests {
         }
     }
 
-    const VALUES_SUM: i64 = 0;
+    const VALUES_SUM: i64 = -110_693_189_570_048;
 }

@@ -104,9 +104,10 @@ mod tests {
         assert_eq!(fnv1a(&first), SCENE_DIGEST);
     }
 
-    /// The sweep finds pairs, fits the buffer (run with `--nocapture` to see the count), and finds exactly the pairs a brute-force
-    /// all-pairs test finds over boxes near each other in `x` (an oracle that shares no code
-    /// with `sweep_and_prune`).
+    /// The sweep fits the buffer, finds pairs (run with `--nocapture` to see how many), and
+    /// finds exactly the pairs that a separate test finds: every pair of boxes, sorted by
+    /// `min.x`, whose `x` ranges meet, checked with its own overlap test (sharing no code with
+    /// `sweep_and_prune`).
     #[test]
     fn the_sweep_finds_every_overlapping_pair() {
         let boxes = boxes();
@@ -154,5 +155,5 @@ mod tests {
         assert_ne!(value, -1);
     }
 
-    const SCENE_DIGEST: u64 = 0;
+    const SCENE_DIGEST: u64 = 0x35E2_8255_03A3_12F1;
 }

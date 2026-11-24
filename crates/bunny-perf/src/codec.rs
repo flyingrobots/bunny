@@ -250,5 +250,10 @@ mod tests {
     }
 
     /// `(length, FNV-1a)` of the ASCII PLY, binary PLY, OBJ and compressed inputs.
-    const INPUT_DIGESTS: [(usize, u64); 4] = [(0, 0), (0, 0), (0, 0), (0, 0)];
+    const INPUT_DIGESTS: [(usize, u64); 4] = [
+        (244_676, 0x2CFB_4600_E4B3_1C19),
+        (152_521, 0x14A3_BC5A_85B8_F8A1),
+        (252_717, 0x63C1_C72D_7B62_5F10),
+        (72_280, 0x3098_4B6B_696C_A4E4),
+    ];
 }

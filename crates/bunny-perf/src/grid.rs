@@ -22,8 +22,10 @@ pub(crate) const GRID_SEED: u64 = 0xB002_0130_9E2F_0001;
 /// Vertices per side.
 pub(crate) const SIDE: u32 = 64;
 /// `SIDE * SIDE`.
+#[cfg(test)]
 pub(crate) const VERTICES: usize = 4096;
 /// `2 * (SIDE - 1)^2`.
+#[cfg(test)]
 pub(crate) const TRIANGLES: usize = 7938;
 
 pub(crate) struct Grid {
@@ -276,8 +278,7 @@ mod tests {
         let scaled = (whole << 32) + (numerator << 32) / 10_i128.pow(digits);
         i64::try_from(if negative { -scaled } else { scaled }).unwrap_or(0)
     }
-}
 
-/// FNV-1a of [`grid_bytes`] of [`grid`], recorded from this generator.
-#[cfg(test)]
-const GRID_DIGEST: u64 = 0;
+    /// FNV-1a of [`grid_bytes`] of [`grid`], recorded from this generator.
+    const GRID_DIGEST: u64 = 0xFBF7_7330_62D7_74A0;
+}
