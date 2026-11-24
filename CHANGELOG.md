@@ -95,6 +95,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TraceSphere::bounds` and `TraceTriangle::bounds` as they behave today. Closes
   flyingrobots/bunny#151.
 
+* `bunny-geom` and `bunny-linalg`: ray, box and normal transforms under a
+  `FixedAffine3`, the remainder of flyingrobots/bunny#108.
+  `FixedRay3::checked_transform` maps the origin as a point and the unit
+  direction as a vector into a `TransformedRay3`, not renormalised, so the
+  image of the point at `t` is the transformed ray at the same `t` (within
+  `3/2 (1 + |t|)` raw); `try_into_ray` renormalises. `FixedAabb3::checked_transform`
+  is the per-axis hull of the eight corners mapped by `checked_transform_point`,
+  each face within 3/2 raw of the exact hull. Both return the typed
+  `TransformError` (`InvertedBox`, `OutOfRange`, `DegenerateDirection`).
+  `FixedAffine3::checked_transform_normal` maps a normal by the inverse
+  transpose of the linear part, within 3/2 raw of the exact product of the
+  rounded inverse, `None` when the inverse does not exist or the product
+  overflows. The transform chapter documents what a non-uniform scale does to
+  normals and bounds.
+
 * Code Dojo: a rustdoc step in the full gate (`code-dojo-rustdoc` on its own)
   runs `cargo doc --locked --workspace --no-deps --all-features` with
   `RUSTDOCFLAGS="-D warnings"`, so a broken intra-doc link fails CI

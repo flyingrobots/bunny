@@ -23,6 +23,15 @@ queries, collision detection, and ray-casting.
   no points, inverted boxes, inverting shrinks, negative radii and the raw range;
   the bounding sphere's radius is rounded outward so it contains every corner.
   See `docs/topics/bounding-volumes/README.md`.
+* **Ray and box transforms**: `FixedRay3::checked_transform` maps a ray by a
+  `FixedAffine3` into a `TransformedRay3` whose direction is not renormalised,
+  so a parameter `t` keeps its meaning: each component of the point at `t` on
+  the transformed ray is within `3/2 (1 + |t|)` raw of the exact image of the
+  point at `t` on the original. That bounds the position, not `t`: near a
+  grazing hit a small change in position can move or remove the hit;
+  `FixedAabb3::checked_transform` returns the hull of the eight mapped
+  corners. Typed `TransformError` refusals for inverted boxes, overflow and a
+  zero direction; see `docs/topics/transform/README.md#rays-boxes-and-normals`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects
