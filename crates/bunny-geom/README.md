@@ -52,6 +52,13 @@ queries, collision detection, and ray-casting.
   round them once to Q32.32. `barycentric2` and `barycentric3_coplanar` return
   exact barycentric numerators with an exact inside, on-edge, on-vertex or
   outside classification; see `docs/topics/predicates/README.md`.
+* **2D primitives** (`bunny-planar/1`): `FixedSegment2`, `FixedRay2`,
+  `FixedAabb2` and `FixedCircle2` with the 3D types' constructors and errors,
+  and exact closed-boundary queries for every representable input: box
+  containment, overlap and closest point, circle containment and overlap with
+  a circle or a box, segment containment and intersection from the exact
+  `orientation2`, and the closest point on a segment rounded once per axis,
+  ties to even; see `docs/topics/planar-geometry/README.md`.
 * **Boundary conversions**: Float-to-fixed ingress is fallible and validating
   through `try_into_fixed`, `try_from_float`, and `TryFrom`; fixed-to-float
   egress is infallible through `into_float` and `From<Fixed*>`. Ingress rejects
@@ -75,7 +82,8 @@ that builds it for `thumbv7em-none-eabihf`, a target with no `std`.
 
 ## Related Crates
 
-* `bunny-query` owns ray, triangle, closest-point, and overlap solvers.
+* `bunny-query` owns the 3D ray, triangle, closest-point, and overlap solvers;
+  the 2D queries of `bunny-planar/1` are methods on the 2D types here.
 * `bunny-broadphase` owns BVH and sweep-and-prune acceleration structures.
 * Future collision, swept-volume, and richer shape coverage is tracked in
   `ROADMAP.md` rather than claimed as current `bunny-geom` behavior.

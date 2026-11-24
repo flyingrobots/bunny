@@ -47,7 +47,7 @@ Widths, with `L = 2^64 - 1`:
   alternate corners of the cube.
 
 The kernel holds every intermediate in a private 256-bit sign-and-magnitude integer
-(`crates/bunny-geom/src/predicates/wide.rs`), so no input overflows and nothing is
+(`crates/bunny-geom/src/wide.rs`), so no input overflows and nothing is
 discarded. The workspace has other private wide integers of the same kind;
 flyingrobots/bunny#424 tracks sharing one.
 

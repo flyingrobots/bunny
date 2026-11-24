@@ -32,6 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commands build them and run their tests; see `docs/CODE_DOJO.md#examples`.
   Closes flyingrobots/bunny#131.
 
+* `bunny-geom`: 2D primitives and exact queries under the contract identity
+  `bunny-planar/1` (`PLANAR_CONTRACT_ID`), a first slice of
+  flyingrobots/bunny#149. `FixedSegment2`, `FixedRay2`, `FixedAabb2` and
+  `FixedCircle2`, with `new` and `try_new` refusing as the 3D constructors do
+  (`GeomError::InvalidAabbBounds`, `NegativeSphereRadius`,
+  `InvalidRayDirection`; no variant added). Exact closed-boundary queries over
+  the full raw range: `FixedAabb2::contains_point`, `overlaps` and
+  `closest_point` (an inverted box is empty, `None`);
+  `FixedCircle2::contains_point`, `overlaps_circle` and `overlaps_aabb`
+  (squared distances in 256 bits; a negative radius is empty); and
+  `FixedSegment2::contains_point` and `intersects` from the exact
+  `orientation2` signs. `FixedSegment2::closest_point` clamps the exact
+  parameter and rounds each coordinate once, ties to even, within half a raw
+  unit. The predicates' private 256-bit integer
+  moves to `crates/bunny-geom/src/wide.rs` to be shared, unchanged.
+  `docs/topics/planar-geometry/` (PLANAR-REQ-001 to -009, PLANAR-TP-001 to
+  -012). Refs flyingrobots/bunny#149.
+
 * `bunny-mesh`: topology validation under the contract identity
   `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
   reports index-degenerate triangles, geometrically degenerate triangles
