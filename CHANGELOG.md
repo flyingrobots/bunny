@@ -66,6 +66,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The minimum translation axis is not in this slice.
   `docs/topics/convex-collision/` (SAT-REQ-001 to -005, SAT-TP-001 to -013).
 
+* `bunny-codec`: an encoder for the Bunny compressed mesh profile v1 that
+  `decode_compressed_mesh` reads. `encode_compressed_mesh` returns the stream
+  as a `Vec<u8>` of exactly its length (one allocation);
+  `encode_compressed_mesh_into` writes it to the front of a caller buffer and
+  allocates nothing; `encoded_compressed_mesh_len` gives the length. The index
+  width is the caller's `IndexBufferLayout` variant, so the bytes depend on the
+  records alone: every encoded mesh decodes to its input, and the committed
+  fixture's records encode to its committed bytes. Meshes the decoder would
+  refuse are refused with `CompressedMeshEncodeError`, in a stated order. The
+  profile, the decoder and the fixture are unchanged.
+  `docs/topics/compressed-mesh/` (CMESH-REQ-001 to -007, CMESH-TP-001 to
+  -013). Closes flyingrobots/bunny#124.
+
 * `bunny-mesh`: topology validation under the contract identity
   `bunny-mesh-topology/1` (`MESH_TOPOLOGY_CONTRACT_ID`). `validate_topology`
   reports index-degenerate triangles, geometrically degenerate triangles
