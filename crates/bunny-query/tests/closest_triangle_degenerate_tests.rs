@@ -14,7 +14,7 @@
 
 use bunny_linalg::FixedVec3;
 use bunny_num::FixedQ32_32;
-use bunny_query::closest_point_triangle;
+use bunny_query::{closest_point_triangle, closest_points_segments};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const ONE: i64 = bunny_num::fixed_q32_32::ONE_RAW;
@@ -73,15 +73,15 @@ fn squared_distance(a: [i128; 3], b: [i128; 3]) -> i128 {
 }
 
 fn oracle(t: [Raw3; 3], p: Raw3) -> Exact {
-    let w = t.map(wide);
+    let vertices = t.map(wide);
     let p = wide(p);
-    let mut ends = (w[0], w[1]);
-    let mut longest = squared_distance(w[0], w[1]);
+    let mut ends = (vertices[0], vertices[1]);
+    let mut longest = squared_distance(vertices[0], vertices[1]);
     for (i, j) in [(0, 2), (1, 2)] {
-        let len = squared_distance(w[i], w[j]);
+        let len = squared_distance(vertices[i], vertices[j]);
         if len > longest {
             longest = len;
-            ends = (w[i], w[j]);
+            ends = (vertices[i], vertices[j]);
         }
     }
     let (a, b) = ends;
@@ -102,14 +102,14 @@ fn oracle(t: [Raw3; 3], p: Raw3) -> Exact {
 }
 
 /// The documented bound for component `k`, in raw units:
-/// `1 + min(|d_k|, ceil(|d_k| / 2^33) + ceil(2^34 |d_k| / |d|^2))` for the hull edge `d`.
+/// `1 + min(|d_k|, ceil(|d_k| / 2^33) + ceil(2^35 |d_k| / |d|^2))` for the hull edge `d`.
 fn bound(exact: &Exact, k: usize) -> i128 {
     let d = exact.edge[k].abs();
     if exact.edge_len_sq == 0 {
         return 1;
     }
     let ceil_div = |n: i128, m: i128| (n + m - 1) / m;
-    let rounding = ceil_div(d, 1_i128 << 33) + ceil_div(d << 34, exact.edge_len_sq);
+    let rounding = ceil_div(d, 1_i128 << 33) + ceil_div(d << 35, exact.edge_len_sq);
     1 + d.min(rounding)
 }
 
@@ -143,6 +143,19 @@ fn exactly_degenerate(t: [Raw3; 3]) -> bool {
         (m != 0 && (a < 0) != (b < 0), m)
     };
     [(1, 2), (2, 0), (0, 1)].iter().all(|&(i, j)| signed(e1[i], e2[j]) == signed(e1[j], e2[i]))
+}
+
+/// The answer the documented rule gives: `closest_points_segments(p, p, a, b).1` for the
+/// farthest pair of vertices `(a, b)` in vertex order, the first such pair on a tie.
+fn delegated(t: [Raw3; 3], p: Raw3) -> Raw3 {
+    let w = t.map(wide);
+    let mut ends = (0, 1);
+    for (i, j) in [(0, 2), (1, 2)] {
+        if squared_distance(w[i], w[j]) > squared_distance(w[ends.0], w[ends.1]) {
+            ends = (i, j);
+        }
+    }
+    raw(closest_points_segments(v(p), v(p), v(t[ends.0]), v(t[ends.1])).1)
 }
 
 fn assert_contract(t: [Raw3; 3], p: Raw3, context: &str) -> Raw3 {
@@ -403,7 +416,7 @@ fn closest_tp_005_seeded_degenerate_triangles_match_the_oracle() {
     let mut seeds = Seeds(SWEEP_SEED);
     let mut worst = 0;
     for (class, name) in CLASSES.iter().enumerate() {
-        let mut reference_wrong = 0;
+        let (mut reference_wrong, mut changed) = (0, 0);
         for scale in 0..4 {
             for index in 0..SWEEP_CASES_PER_FAMILY {
                 let (t, p) = degenerate_case(&mut seeds, class, scale);
@@ -416,21 +429,26 @@ fn closest_tp_005_seeded_degenerate_triangles_match_the_oracle() {
                      {got:?}, error {} raw",
                     error_ceil(got, &exact)
                 );
+                assert_eq!(got, delegated(t, p), "seed {SWEEP_SEED:#x}, {name}, case {index}");
                 worst = worst.max(error_ceil(got, &exact));
-                if !within_bound(reference(t, p), &exact) {
+                let previous = reference(t, p);
+                if !within_bound(previous, &exact) {
                     reference_wrong += 1;
+                }
+                if previous != got {
+                    changed += 1;
                 }
             }
         }
         println!(
             "closest_tp_005: seed {SWEEP_SEED:#x}, {name}: {} cases, previous routine outside \
-             the bound on {reference_wrong}",
+             the bound on {reference_wrong}, answer changed on {changed}",
             4 * SWEEP_CASES_PER_FAMILY
         );
         // The previous routine was exact for three equal vertices and wrong for a repeated
         // first edge and for collinear distinct vertices.
         match class {
-            3 => assert_eq!(reference_wrong, 0, "{name}"),
+            3 => assert_eq!((reference_wrong, changed), (0, 0), "{name}"),
             0 => assert!(reference_wrong > 1_000, "{name}: {reference_wrong}"),
             4..=6 => assert!(reference_wrong > 100, "{name}: {reference_wrong}"),
             _ => {}
