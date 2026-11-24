@@ -10,6 +10,8 @@ use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_mesh::{IndexBufferLayout, QuantizedVertex, Triangle16, Triangle32};
 use bunny_num::FixedQ32_32;
+use std::fmt::Write as _;
+
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const CANONICAL_HEX: &str = include_str!("fixtures/canonical_compressed_triangle.bunny.hex");
@@ -27,7 +29,11 @@ enum OracleTriangles<'a> {
     W32(&'a [Triangle32]),
 }
 
-fn oracle_bytes(bounds: &FixedAabb3, vertices: &[QuantizedVertex], triangles: &OracleTriangles<'_>) -> Vec<u8> {
+fn oracle_bytes(
+    bounds: &FixedAabb3,
+    vertices: &[QuantizedVertex],
+    triangles: &OracleTriangles<'_>,
+) -> Vec<u8> {
     let (width, count, stride) = match triangles {
         OracleTriangles::W16(faces) => (16_u8, faces.len(), 6_u64),
         OracleTriangles::W32(faces) => (32_u8, faces.len(), 12_u64),
@@ -84,13 +90,18 @@ fn parse_hex(input: &str) -> Vec<u8> {
     let digits: Vec<u8> = input.bytes().filter(|byte| !byte.is_ascii_whitespace()).collect();
     assert_eq!(digits.len() % 2, 0, "hex must contain byte pairs");
     digits
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
         .collect()
 }
 
 fn to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut text, byte| {
+        write!(text, "{byte:02x}").unwrap();
+        text
+    })
 }
 
 fn vec3(x: i64, y: i64, z: i64) -> FixedVec3 {
@@ -102,14 +113,22 @@ fn unit_bounds() -> FixedAabb3 {
 }
 
 fn fixture_vertices() -> [QuantizedVertex; 3] {
-    [QuantizedVertex::new(0, 0, 0), QuantizedVertex::new(u16::MAX, 0, 0), QuantizedVertex::new(0, u16::MAX, 0)]
+    [
+        QuantizedVertex::new(0, 0, 0),
+        QuantizedVertex::new(u16::MAX, 0, 0),
+        QuantizedVertex::new(0, u16::MAX, 0),
+    ]
 }
 
 // ---------------------------------------------------------------------------------------------
 // Round-trip helpers: decode with the real decoder and compare every record.
 // ---------------------------------------------------------------------------------------------
 
-fn assert_round_trip(bounds: &FixedAabb3, vertices: &[QuantizedVertex], triangles: IndexBufferLayout<'_>) -> Vec<u8> {
+fn assert_round_trip(
+    bounds: &FixedAabb3,
+    vertices: &[QuantizedVertex],
+    triangles: IndexBufferLayout<'_>,
+) -> Vec<u8> {
     let bytes = encode_compressed_mesh(bounds, vertices, triangles).expect("valid mesh encodes");
     assert_eq!(encoded_compressed_mesh_len(vertices, triangles), Ok(bytes.len()));
     let mesh = decode_compressed_mesh(&bytes).expect("encoded mesh decodes");
@@ -123,26 +142,39 @@ fn assert_round_trip(bounds: &FixedAabb3, vertices: &[QuantizedVertex], triangle
         IndexBufferLayout::Width16(faces) => {
             assert_eq!(mesh.index_width(), CompressedIndexWidth::Width16);
             for (index, face) in faces.iter().enumerate() {
-                assert_eq!(mesh.triangle(index), Ok(CompressedTriangle::Width16(*face)), "triangle {index}");
+                assert_eq!(
+                    mesh.triangle(index),
+                    Ok(CompressedTriangle::Width16(*face)),
+                    "triangle {index}"
+                );
             }
         }
         IndexBufferLayout::Width32(faces) => {
             assert_eq!(mesh.index_width(), CompressedIndexWidth::Width32);
             for (index, face) in faces.iter().enumerate() {
-                assert_eq!(mesh.triangle(index), Ok(CompressedTriangle::Width32(*face)), "triangle {index}");
+                assert_eq!(
+                    mesh.triangle(index),
+                    Ok(CompressedTriangle::Width32(*face)),
+                    "triangle {index}"
+                );
             }
         }
     }
     let mut into = vec![0_u8; bytes.len()];
-    assert_eq!(encode_compressed_mesh_into(bounds, vertices, triangles, &mut into), Ok(bytes.len()));
+    assert_eq!(
+        encode_compressed_mesh_into(bounds, vertices, triangles, &mut into),
+        Ok(bytes.len())
+    );
     assert_eq!(into, bytes, "the two entry points write the same bytes");
     bytes
 }
 
 /// Reads every record of a decoded view back out and encodes it again.
 fn reencode(mesh: CompressedMesh<'_>) -> Vec<u8> {
-    let vertices: Vec<QuantizedVertex> = (0..mesh.vertex_count()).map(|i| mesh.vertex(i).unwrap()).collect();
-    let triangles: Vec<CompressedTriangle> = (0..mesh.triangle_count()).map(|i| mesh.triangle(i).unwrap()).collect();
+    let vertices: Vec<QuantizedVertex> =
+        (0..mesh.vertex_count()).map(|i| mesh.vertex(i).unwrap()).collect();
+    let triangles: Vec<CompressedTriangle> =
+        (0..mesh.triangle_count()).map(|i| mesh.triangle(i).unwrap()).collect();
     match mesh.index_width() {
         CompressedIndexWidth::Width16 => {
             let faces: Vec<Triangle16> = triangles
@@ -152,7 +184,8 @@ fn reencode(mesh: CompressedMesh<'_>) -> Vec<u8> {
                     CompressedTriangle::Width32(_) => panic!("width mismatch"),
                 })
                 .collect();
-            encode_compressed_mesh(&mesh.bounds(), &vertices, IndexBufferLayout::Width16(&faces)).unwrap()
+            encode_compressed_mesh(&mesh.bounds(), &vertices, IndexBufferLayout::Width16(&faces))
+                .unwrap()
         }
         CompressedIndexWidth::Width32 => {
             let faces: Vec<Triangle32> = triangles
@@ -162,7 +195,8 @@ fn reencode(mesh: CompressedMesh<'_>) -> Vec<u8> {
                     CompressedTriangle::Width16(_) => panic!("width mismatch"),
                 })
                 .collect();
-            encode_compressed_mesh(&mesh.bounds(), &vertices, IndexBufferLayout::Width32(&faces)).unwrap()
+            encode_compressed_mesh(&mesh.bounds(), &vertices, IndexBufferLayout::Width32(&faces))
+                .unwrap()
         }
     }
 }
@@ -181,7 +215,8 @@ struct Lcg(u64);
 
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        self.0 =
+            self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
     fn below(&mut self, bound: u64) -> u64 {
@@ -225,8 +260,8 @@ fn seeded_mesh(seed: u64) -> SeededMesh {
     let mut min = [0_i64; 3];
     let mut max = [0_i64; 3];
     for (lo, hi) in min.iter_mut().zip(max.iter_mut()) {
-        let a = rng.next() as i64;
-        let b = rng.next() as i64;
+        let a = rng.next().cast_signed();
+        let b = rng.next().cast_signed();
         (*lo, *hi) = (a.min(b), a.max(b));
     }
     let bounds = FixedAabb3::new(vec3(min[0], min[1], min[2]), vec3(max[0], max[1], max[2]));
@@ -268,13 +303,15 @@ const SEEDED_PINS: [(u64, usize, u64); 8] = [
 fn cmesh_tp_001_encoding_the_committed_fixture_records_reproduces_its_bytes() {
     let fixture = parse_hex(CANONICAL_HEX);
     let faces = [Triangle16::new(0, 1, 2)];
-    let bytes = assert_round_trip(&unit_bounds(), &fixture_vertices(), IndexBufferLayout::Width16(&faces));
+    let bytes =
+        assert_round_trip(&unit_bounds(), &fixture_vertices(), IndexBufferLayout::Width16(&faces));
     assert_eq!(to_hex(&bytes), to_hex(&fixture));
     assert_canonical(&fixture);
 
     // The width-32 form of the same mesh, as `compressed_tests.rs` derives it from the fixture.
     let wide = [Triangle32::new(0, 1, 2)];
-    let bytes = assert_round_trip(&unit_bounds(), &fixture_vertices(), IndexBufferLayout::Width32(&wide));
+    let bytes =
+        assert_round_trip(&unit_bounds(), &fixture_vertices(), IndexBufferLayout::Width32(&wide));
     let mut expected = fixture[..94].to_vec();
     expected[9] = 32;
     expected[20] = 30;
@@ -351,7 +388,8 @@ fn cmesh_tp_004_every_accepted_stream_tested_reencodes_to_itself() {
     for (seed, _, _) in SEEDED_PINS {
         let mesh = seeded_mesh(seed);
         // Both widths of every seeded mesh: its indices all fit u16 (fewer than 301 vertices).
-        let narrow = oracle_bytes(&mesh.bounds, &mesh.vertices, &OracleTriangles::W16(&mesh.width16));
+        let narrow =
+            oracle_bytes(&mesh.bounds, &mesh.vertices, &OracleTriangles::W16(&mesh.width16));
         let wide = oracle_bytes(&mesh.bounds, &mesh.vertices, &OracleTriangles::W32(&mesh.width32));
         assert_canonical(&narrow);
         assert_canonical(&wide);
@@ -364,10 +402,26 @@ fn cmesh_tp_004_every_accepted_stream_tested_reencodes_to_itself() {
 // ---------------------------------------------------------------------------------------------
 
 fn points(count: usize) -> Vec<QuantizedVertex> {
-    (0..count).map(|i| QuantizedVertex::new((i % 65_536) as u16, (i / 65_536) as u16, 7)).collect()
+    (0..count)
+        .map(|i| {
+            QuantizedVertex::new(
+                u16::try_from(i % 65_536).unwrap(),
+                u16::try_from(i / 65_536).unwrap(),
+                7,
+            )
+        })
+        .collect()
 }
 
-fn encode_error(bounds: &FixedAabb3, vertices: &[QuantizedVertex], triangles: IndexBufferLayout<'_>) -> CompressedMeshEncodeError {
+fn narrow_index(index: u32) -> u16 {
+    u16::try_from(index).unwrap()
+}
+
+fn encode_error(
+    bounds: &FixedAabb3,
+    vertices: &[QuantizedVertex],
+    triangles: IndexBufferLayout<'_>,
+) -> CompressedMeshEncodeError {
     let first = encode_compressed_mesh(bounds, vertices, triangles).expect_err("refused");
     let mut sentinel = vec![0xA5_u8; 128];
     assert_eq!(encode_compressed_mesh_into(bounds, vertices, triangles, &mut sentinel), Err(first));
@@ -429,7 +483,9 @@ fn cmesh_tp_006_width16_holds_at_most_65536_vertices() {
     );
     assert_eq!(
         encoded_compressed_mesh_len(&over, IndexBufferLayout::Width16(&faces)),
-        Err(CompressedMeshEncodeError::Width16VertexCapacity { vertex_count: WIDTH16_CAPACITY + 1 })
+        Err(CompressedMeshEncodeError::Width16VertexCapacity {
+            vertex_count: WIDTH16_CAPACITY + 1
+        })
     );
     let wide = [Triangle32::new(65_536, 0, 1)];
     assert_round_trip(&bounds, &over, IndexBufferLayout::Width32(&wide));
@@ -449,14 +505,18 @@ fn cmesh_tp_007_indices_below_the_vertex_count_are_accepted_and_the_first_other_
             encode_error(&bounds, &vertices, IndexBufferLayout::Width32(&wide)),
             CompressedMeshEncodeError::IndexOutOfBounds { triangle: 1, index: 5 }
         );
-        let narrow = [Triangle16::new(0, 1, 2), Triangle16::new(idx[0] as u16, idx[1] as u16, idx[2] as u16)];
+        let narrow = [
+            Triangle16::new(0, 1, 2),
+            Triangle16::new(narrow_index(idx[0]), narrow_index(idx[1]), narrow_index(idx[2])),
+        ];
         assert_eq!(
             encode_error(&bounds, &vertices, IndexBufferLayout::Width16(&narrow)),
             CompressedMeshEncodeError::IndexOutOfBounds { triangle: 1, index: 5 }
         );
     }
     // The first offending triangle wins, and within it the first offending corner.
-    let wide = [Triangle32::new(0, 0, 0), Triangle32::new(0, 9, u32::MAX), Triangle32::new(7, 0, 0)];
+    let wide =
+        [Triangle32::new(0, 0, 0), Triangle32::new(0, 9, u32::MAX), Triangle32::new(7, 0, 0)];
     assert_eq!(
         encode_error(&bounds, &vertices, IndexBufferLayout::Width32(&wide)),
         CompressedMeshEncodeError::IndexOutOfBounds { triangle: 1, index: 9 }
@@ -483,7 +543,8 @@ fn cmesh_tp_008_bounds_inverted_on_any_axis_are_refused_and_flat_or_extreme_acce
     }
     let flat = FixedAabb3::new(vec3(5, 5, 5), vec3(5, 5, 5));
     assert_round_trip(&flat, &vertices, IndexBufferLayout::Width16(&faces));
-    let whole = FixedAabb3::new(vec3(i64::MIN, i64::MIN, i64::MIN), vec3(i64::MAX, i64::MAX, i64::MAX));
+    let whole =
+        FixedAabb3::new(vec3(i64::MIN, i64::MIN, i64::MIN), vec3(i64::MAX, i64::MAX, i64::MAX));
     assert_round_trip(&whole, &vertices, IndexBufferLayout::Width16(&faces));
 }
 
@@ -515,7 +576,12 @@ fn cmesh_tp_009_refusals_are_checked_in_the_documented_order() {
     // The indices before the output size.
     let mut empty: [u8; 0] = [];
     assert_eq!(
-        encode_compressed_mesh_into(&unit_bounds(), &points(3), IndexBufferLayout::Width16(&bad_face), &mut empty),
+        encode_compressed_mesh_into(
+            &unit_bounds(),
+            &points(3),
+            IndexBufferLayout::Width16(&bad_face),
+            &mut empty
+        ),
         Err(CompressedMeshEncodeError::IndexOutOfBounds { triangle: 0, index: 9 })
     );
 }
@@ -541,7 +607,10 @@ fn cmesh_tp_010_the_output_buffer_must_hold_the_stream_and_its_tail_is_untouched
     }
     for extra in [0, 1, 64] {
         let mut out = vec![0xA5_u8; required + extra];
-        assert_eq!(encode_compressed_mesh_into(&unit_bounds(), &vertices, layout, &mut out), Ok(required));
+        assert_eq!(
+            encode_compressed_mesh_into(&unit_bounds(), &vertices, layout, &mut out),
+            Ok(required)
+        );
         assert_eq!(out[..required], fixture[..]);
         assert!(out[required..].iter().all(|byte| *byte == 0xA5), "the tail is untouched");
     }
@@ -564,6 +633,6 @@ fn cmesh_tp_011_errors_display_their_values() {
         let text = error.to_string();
         assert!(text.contains(needle), "{text:?} names {needle}");
     }
-    assert!(!CompressedMeshEncodeError::InvalidBounds.to_string().is_empty());
-    assert!(!CompressedMeshEncodeError::LengthOverflow.to_string().is_empty());
+    assert_ne!(CompressedMeshEncodeError::InvalidBounds.to_string(), "");
+    assert_ne!(CompressedMeshEncodeError::LengthOverflow.to_string(), "");
 }

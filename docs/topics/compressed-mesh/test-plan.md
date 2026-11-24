@@ -122,7 +122,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_001_encoding_the_committed_fixture_records_reproduces_its_bytes"
 oracle = "The committed hex."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-002"
@@ -131,7 +131,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_002_constructed_extremes_match_the_independent_model_byte_for_byte"
 oracle = "The Python model's hex and the test-local writer."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-003"
@@ -140,7 +140,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_003_seeded_meshes_round_trip_and_match_the_pinned_model"
 oracle = "The Python model's pins and the test-local writer."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-004"
@@ -149,7 +149,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_004_every_accepted_stream_tested_reencodes_to_itself"
 oracle = "The accepted stream itself."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-005"
@@ -158,7 +158,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_005_counts_from_one_to_one_million_are_accepted_and_others_refused"
 oracle = "Hand-derived errors and length; the test-local writer."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-006"
@@ -167,7 +167,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_006_width16_holds_at_most_65536_vertices"
 oracle = "Hand-derived errors."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-007"
@@ -176,7 +176,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_007_indices_below_the_vertex_count_are_accepted_and_the_first_other_refused"
 oracle = "Hand-derived errors."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-008"
@@ -185,7 +185,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_008_bounds_inverted_on_any_axis_are_refused_and_flat_or_extreme_accepted"
 oracle = "Hand-derived errors."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-009"
@@ -194,7 +194,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_009_refusals_are_checked_in_the_documented_order"
 oracle = "Hand-derived errors."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-010"
@@ -203,7 +203,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_010_the_output_buffer_must_hold_the_stream_and_its_tail_is_untouched"
 oracle = "The committed hex; sentinels."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-011"
@@ -212,7 +212,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_tests.rs::cmesh_tp_011_errors_display_their_values"
 oracle = "Hand-listed substrings."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-012"
@@ -221,7 +221,7 @@ evidence = "test"
 test = "crates/bunny-codec/tests/compressed_encode_allocation_tests.rs::cmesh_tp_012_the_encoder_allocates_only_the_returned_stream"
 oracle = "Thread-scoped allocation count."
 tier = "fast"
-status = "planned"
+status = "implemented"
 
 [[case]]
 id = "CMESH-TP-013"
@@ -230,13 +230,34 @@ evidence = "manual-audit"
 artifact = "docs/topics/compressed-mesh/test-plan.md#mutation-checks"
 oracle = "Each deliberate mutation makes at least one case fail."
 tier = "manual"
-status = "planned"
+status = "implemented"
 ```
 
 ## Mutation Checks
 
-Planned: each rule of the encoder broken on purpose, with the cases that fail
-recorded here.
+Each mutation below was applied to the encoder on the host (then restored),
+`cargo test --locked --no-fail-fast -p bunny-codec --test
+compressed_encode_tests --test compressed_encode_allocation_tests` was run, and
+the cases that failed were recorded.
+
+| Mutation | Cases that fail |
+| --- | --- |
+| Version byte 2 | CMESH-TP-001, 002, 003, 004, 005, 006, 007, 008, 010 |
+| Non-zero flags | CMESH-TP-001, 002, 003, 004, 005, 006, 007, 008, 010 |
+| Vertex `x` and `y` swapped | CMESH-TP-001, 002, 003, 004, 005, 006, 007, 010 |
+| Vertex count written big-endian | CMESH-TP-001, 002, 003, 004, 005, 006, 007, 008, 010 |
+| Bounds max written before min | CMESH-TP-001, 002, 003, 004, 005, 006, 007, 008, 010 |
+| Width-32 stride taken as 6 in the payload length | CMESH-TP-001, 002, 003, 004, 005, 006, 007 |
+| Width-16 corners `v1` and `v2` swapped | CMESH-TP-001, 003, 004, 006, 010 |
+| Zero counts accepted | CMESH-TP-005, 009 |
+| Count limit 1 000 001 | CMESH-TP-005 |
+| Width-16 capacity 65 535 | CMESH-TP-006 |
+| Index equal to the vertex count accepted | CMESH-TP-007, 012 |
+| The last offending corner reported, not the first | CMESH-TP-007 |
+| Bounds check removed | CMESH-TP-008, 009 |
+| Bounds checked after the indices | CMESH-TP-009 |
+| The whole output buffer written (tail zeroed) | CMESH-TP-010 |
+| The allocating encoder allocates before validating | CMESH-TP-012 |
 
 ## Determinism Obligations And Evidence
 

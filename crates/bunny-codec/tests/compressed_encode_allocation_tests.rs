@@ -4,7 +4,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use bunny_codec::{encode_compressed_mesh, encode_compressed_mesh_into, encoded_compressed_mesh_len};
+use bunny_codec::{
+    encode_compressed_mesh, encode_compressed_mesh_into, encoded_compressed_mesh_len,
+};
 use bunny_geom::FixedAabb3;
 use bunny_linalg::FixedVec3;
 use bunny_mesh::{IndexBufferLayout, QuantizedVertex, Triangle32};

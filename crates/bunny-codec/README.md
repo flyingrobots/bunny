@@ -11,6 +11,7 @@
 | `parse_ascii_ply_with_limits` | The same profile, refusing a declared vertex or face count or a line past an `AsciiPlyLimits` | The same, and none either |
 | `parse_obj_text` | Supported OBJ text triangle mesh | Borrowed source view, zero allocations after warm-up |
 | `decode_compressed_mesh` | Bunny-native compressed mesh profile v1 | Borrowed byte-section view, zero allocations after warm-up |
+| `encode_compressed_mesh`, `encode_compressed_mesh_into` | Encoder for the same profile, canonical bytes that decode to the input ([`docs/topics/compressed-mesh`](../../docs/topics/compressed-mesh/README.md)) | One `Vec<u8>` of exactly the stream's length, or none into a caller buffer |
 
 The compressed profile decodes into `bunny-mesh` record concepts through checked
 accessors:
