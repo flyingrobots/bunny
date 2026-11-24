@@ -26,7 +26,7 @@ angle.sin_cos()`:
 | `rotation_z(angle)` | `(c, -s, 0)`, `(s, c, 0)`, `(0, 0, 1)` | `+X` to `+Y`, `+Y` to `-X` |
 
 Composition is not part of this contract: `checked_mul_mat3` composes right to left as it
-always has, and its products round.
+always has, and its products round. Quaternion rotations are [`bunny-quaternion/1`](../quaternion/README.md).
 
 ## Axis Rotations
 
